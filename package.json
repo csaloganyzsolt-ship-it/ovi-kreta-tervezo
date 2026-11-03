@@ -1,0 +1,9 @@
+{
+  "name": "ovi-kreta-tervezo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node scripts/check-site.js",
+    "start": "python3 -m http.server 8000"
+  }
+}

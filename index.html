@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ovi-Kréta Tervező Asszisztens</title>
+    <style>
+      :root {
+        --bg: #f7f3ee;
+        --panel: #fffdfb;
+        --card: #ffffff;
+        --soft: #f2e9df;
+        --soft-2: #eadfd4;
+        --primary: #b88f74;
+        --primary-dark: #8d6852;
+        --accent: #d9c4b1;
+        --mint: #dfeee6;
+        --blue: #dfeaf7;
+        --text: #2d2a2d;
+        --muted: #6a5e5b;
+        --border: #eaded0;
+        --success: #7aa983;
+        --shadow: 0 18px 40px rgba(98, 76, 60, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(180deg, #f6f1eb 0%, #faf7f4 100%);
+        color: var(--text);
+      }
+
+      body {
+        min-height: 100vh;
+        padding: 32px 18px;
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+      }
+
+      .topbar {
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(234, 222, 208, 0.9);
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 22px;
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--mint), var(--blue));
+        color: var(--primary-dark);
+        font-size: 22px;
+      }
+
+      .tiny-link {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 10px 16px;
+        color: var(--primary-dark);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .app {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1.3fr) 420px;
+        gap: 22px;
+      }
+
+      .panel {
+        background: rgba(255,255,255,0.72);
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .wizard {
+        padding: 22px 18px;
+      }
+
+      .wizard-header {
+        margin: 0 0 20px;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .wizard-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .wizard-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 12px;
+        border-radius: 18px;
+        color: var(--muted);
+        border: 1px solid transparent;
+        background: transparent;
+        transition: 0.2s ease;
+      }
+
+      .wizard-item.active {
+        background: linear-gradient(135deg, rgba(184,143,116,0.12), rgba(217,196,177,0.18));
+        border-color: rgba(184,143,116,0.18);
+        color: var(--text);
+      }
+
+      .wizard-number {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--soft);
+        color: var(--primary-dark);
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .wizard-item.active .wizard-number {
+        background: var(--primary);
+        color: white;
+      }
+
+      .content {
+        padding: 24px;
+      }
+
+      .step-panel {
+        display: none;
+        animation: fadeIn 0.25s ease;
+      }
+
+      .step-panel.active {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      h1, h2, h3, p {
+        margin-top: 0;
+      }
+
+      h2 {
+        font-size: clamp(1.6rem, 2vw, 2.2rem);
+        margin-bottom: 10px;
+      }
+
+      .subhead {
+        color: var(--muted);
+        margin-bottom: 22px;
+        line-height: 1.6;
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 0.95rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      input, select, textarea {
+        width: 100%;
+        background: rgba(255,255,255,0.9);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 14px;
+        padding: 14px 16px;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      .segmented {
+        display: inline-flex;
+        background: var(--soft);
+        border-radius: 16px;
+        padding: 6px;
+        width: 100%;
+        gap: 6px;
+      }
+
+      .segment {
+        flex: 1 1 0;
+        border: none;
+        background: transparent;
+        padding: 12px 10px;
+        border-radius: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .segment.active {
+        background: white;
+        color: var(--text);
+        box-shadow: 0 6px 16px rgba(98,76,60,0.08);
+      }
+
+      .check-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        color: var(--text);
+      }
+
+      .check-item input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .slider-wrap {
+        margin-top: 12px;
+      }
+
+      input[type="range"] {
+        accent-color: var(--primary);
+        padding: 0;
+        border: none;
+        background: transparent;
+      }
+
+      .slider-labels {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 8px;
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        background: linear-gradient(135deg, rgba(223,238,230,0.7), rgba(223,234,247,0.7));
+        border-radius: 18px;
+        padding: 16px 18px;
+        border: 1px solid rgba(122,169,131,0.2);
+      }
+
+      .switch {
+        position: relative;
+        width: 64px;
+        height: 36px;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: #d9d3ce;
+        border-radius: 999px;
+        transition: 0.2s ease;
+      }
+
+      .slider:before {
+        content: "";
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        left: 4px;
+        top: 4px;
+        background: white;
+        border-radius: 50%;
+        transition: 0.2s ease;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+      }
+
+      .switch input:checked + .slider {
+        background: linear-gradient(135deg, var(--success), #8fd0a3);
+      }
+
+      .switch input:checked + .slider:before {
+        transform: translateX(28px);
+      }
+
+      .inline-box {
+        margin-top: 20px;
+        padding: 18px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(242,233,223,0.6));
+        border: 1px solid var(--border);
+      }
+
+      .inline-box h3 {
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+      }
+
+      .mini-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .tag {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: white;
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+
+      .footer-actions {
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 16px;
+        padding: 14px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn.secondary {
+        background: #f5efe9;
+        color: var(--text);
+      }
+
+      .btn.primary {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        box-shadow: 0 12px 18px rgba(141,104,82,0.2);
+      }
+
+      .preview {
+        padding: 20px 18px;
+      }
+
+      .preview-box {
+        background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(247,243,238,0.9));
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 18px;
+      }
+
+      .preview-hidden {
+        opacity: 0.8;
+        filter: grayscale(0.05);
+      }
+
+      .preview-empty {
+        min-height: 420px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(244,239,234,0.8));
+        border: 1px dashed var(--border);
+        border-radius: 22px;
+        color: var(--muted);
+        text-align: center;
+        padding: 26px;
+      }
+
+      .preview-empty strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text);
+        font-size: 1.1rem;
+      }
+
+      .preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+
+      .preview-header h3 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      .status-pill {
+        background: rgba(122,169,131,0.12);
+        color: var(--success);
+        border-radius: 999px;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .summary-box {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+
+      .summary-box p {
+        margin: 0;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .result-card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 16px 14px;
+        margin-bottom: 14px;
+      }
+
+      .result-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .result-top strong {
+        font-size: 0.96rem;
+      }
+
+      .copy-btn {
+        background: var(--soft);
+        border: 1px solid var(--border);
+        padding: 7px 10px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        color: var(--primary-dark);
+        cursor: pointer;
+      }
+
+      .result-card p {
+        margin-bottom: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .download-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .download-btn {
+        border: 1px solid var(--border);
+        background: white;
+        padding: 12px 10px;
+        border-radius: 14px;
+        font-weight: 700;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        border: 1px solid var(--border);
+        background: white;
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .chip.active {
+        background: linear-gradient(135deg, rgba(184,143,116,0.1), rgba(217,196,177,0.2));
+        color: var(--primary-dark);
+        border-color: rgba(184,143,116,0.25);
+      }
+
+      .add-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(223,238,230,0.5));
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 16px;
+        margin-top: 16px;
+      }
+
+      .history-panel {
+        display: none;
+        margin-top: 14px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 12px;
+      }
+
+      .history-panel.open {
+        display: block;
+      }
+
+      .history-item {
+        width: 100%;
+        text-align: left;
+        margin-top: 8px;
+        background: var(--soft);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+        color: var(--text);
+      }
+
+      .output-mode {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .mode-pill {
+        border: 1px solid var(--border);
+        background: white;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+
+      .mode-pill.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+      }
+
+      @media (max-width: 1100px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .wizard {
+          order: 2;
+        }
+
+        .content {
+          order: 1;
+        }
+
+        .preview {
+          order: 3;
+        }
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding: 20px 12px;
+        }
+
+        .field-grid,
+        .check-grid,
+        .download-row {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .footer-actions {
+          flex-direction: column-reverse;
+        }
+
+        .btn {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">✦</div>
+          <span>Ovi-Kréta Tervező Asszisztens</span>
+        </div>
+      </header>
+
+      <main class="app">
+        <aside class="panel wizard">
+          <p class="wizard-header">Folyamat</p>
+          <div class="wizard-list">
+            <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span>Alapadatok</span></button>
+            <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span>A mi csoportunk</span></button>
+            <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span>Konkrétumok</span></button>
+            <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span>Generálás</span></button>
+          </div>
+        </aside>
+
+        <section class="panel content">
+          <div class="step-panel active" data-step="1">
+            <h2>1. Alapadatok</h2>
+            <p class="subhead">A legfontosabb adminisztratív és tartalmi adatok gyors és egyszerű kitöltése.</p>
+
+            <div class="field-grid">
+              <div class="field">
+                <label>Időtartam</label>
+                <div class="segmented" data-group="duration">
+                  <button class="segment active" type="button" data-value="Napi">Napi</button>
+                  <button class="segment" type="button" data-value="Heti">Heti</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Korcsoport</label>
+                <select data-field="group">
+                  <option>Kiscsoport</option>
+                  <option>Középső csoport</option>
+                  <option selected>Nagycsoport</option>
+                  <option>Vegyes csoport</option>
+                </select>
+              </div>
+
+              <div class="field full">
+                <label>Téma / projekt címe</label>
+                <input type="text" data-field="theme" value="Őszi falevelek" />
+              </div>
+
+              <div class="field full">
+                <label>Melyik nevelési területek lesznek fókuszban?</label>
+                <div class="check-grid">
+                  <label class="check-item"><input type="checkbox" checked /> Külső világ tevékeny megismerése</label>
+                  <label class="check-item"><input type="checkbox" checked /> Verselés, mesélés</label>
+                  <label class="check-item"><input type="checkbox" /> Ének, zene, énekes játék</label>
+                  <label class="check-item"><input type="checkbox" checked /> Rajzolás, mintázás, kézimunka</label>
+                  <label class="check-item"><input type="checkbox" /> Mozgás</label>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>OH-kompatibilis sablonkifejezések</label>
+                <div class="quick-actions">
+                  <button class="chip active" type="button">finommotorika fejlesztése</button>
+                  <button class="chip active" type="button">szociális kompetenciák erősítése</button>
+                  <button class="chip" type="button">szabálytudat erősítése</button>
+                  <button class="chip" type="button">beszédfejlesztés</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Saját megjegyzés / egyéni kiegészítés</label>
+                <textarea data-field="custom-note" placeholder="Pl. A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni.">A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-panel" data-step="2">
+            <h2>2. A mi csoportunk</h2>
+            <p class="subhead">Itt adható meg a csoport hangulata és az egyes speciális igények, hogy az AI személyre szabottabban dolgozzon.</p>
+
+            <div class="field-grid">
+              <div class="field">
+                <label>Hány gyerek van a csoportban?</label>
+                <input type="number" value="20" />
+              </div>
+
+              <div class="field">
+                <label>Csoport energiaszintje</label>
+                <div class="slider-wrap">
+                  <input type="range" min="0" max="100" value="65" />
+                  <div class="slider-labels">
+                    <span>Nyugodt</span>
+                    <span>Forgalmas</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Iskola-előkészítős gyermekek</label>
+                <div class="toggle-row">
+                  <span>Van/Nincs</span>
+                  <label class="switch">
+                    <input type="checkbox" checked />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>OH-kompatibilis sablonkifejezések</label>
+                <div class="quick-actions">
+                  <button class="chip active" type="button">figyelem tartósítása</button>
+                  <button class="chip" type="button">szabálytudat erősítése</button>
+                  <button class="chip active" type="button">differenciált feladatok</button>
+                  <button class="chip" type="button">kommunikációs készségek</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Speciális nevelési igények</label>
+                <div class="inline-box">
+                  <h3>Milyen kiemelt figyelmet igénylő gyerekek vannak jelen?</h3>
+                  <div class="check-grid">
+                    <label class="check-item"><input type="checkbox" /> Figyelemzavar / hiperaktivitás</label>
+                    <label class="check-item"><input type="checkbox" /> Beszédfejlődési elmaradás</label>
+                    <label class="check-item"><input type="checkbox" /> Autizmus spektrumzavar</label>
+                    <label class="check-item"><input type="checkbox" /> Mozgásfejlődési elmaradás</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Saját válasz / más szempont</label>
+                <textarea placeholder="Itt írhat be saját megfigyelést, például: egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz.">Egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz, ezért a lépésekben többet használok képi támogatást.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-panel" data-step="3">
+            <h2>3. Konkrétumok és kívánságok</h2>
+            <p class="subhead">Itt írhatja le a már előre megfogalmazott mese-, vers- vagy dalkívánságokat, eszközöket és célokat.</p>
+
+            <div class="field-grid">
+              <div class="field full">
+                <label>Van kötelező mese, vers vagy dal?</label>
+                <textarea>Mindig legyen benne a „Süni, süni, sünikém” című dal.</textarea>
+              </div>
+
+              <div class="field full">
+                <label>Saját ötletek, eszközök, amiket felhasználnál</label>
+                <textarea>Gyűjtöttünk gesztenyét és faleveleket, szeretném felhasználni a barkácsoláshoz és a természetes anyagok megfigyeléséhez.</textarea>
+              </div>
+
+              <div class="field full">
+                <label>OH-kompatibilis célkifejezések</label>
+                <div class="quick-actions">
+                  <button class="chip active" type="button">megfigyelés fejlesztése</button>
+                  <button class="chip" type="button">kreativitás fejlesztése</button>
+                  <button class="chip active" type="button">ritmusérzék fejlesztése</button>
+                  <button class="chip" type="button">tempó és önszabályozás</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Korábbi terv behívása</label>
+                <button class="btn secondary" id="loadPreviousBtn" type="button">Tavalyi terv újrahasznosítása</button>
+                <div class="history-panel" id="historyPanel">
+                  <button class="history-item" type="button" data-theme="Őszi falevelek" data-text="A tavalyi őszi tervet frissítem, több falépcsős megfigyelési feladattal és kézműves elemmel.">Őszi falevelek – korábbi terv</button>
+                  <button class="history-item" type="button" data-theme="Téli állatok" data-text="A téli állatok témáját újrahasznosítom, hangsúlyozva a mozgásos játékokat és a csendes megfigyelést.">Téli állatok – korábbi terv</button>
+                  <button class="history-item" type="button" data-theme="Márton-nap" data-text="Márton-napra szánt terv: népköltészeti elemekkel és közös készítő tevékenységgel.">Márton-nap – korábbi terv</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Saját válasz vagy külön kérés</label>
+                <textarea placeholder="Ha van konkrét elképzelésed, itt tudod beírni.">Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-panel" data-step="4">
+            <h2>4. Várakozás és generálás</h2>
+            <p class="subhead">Az AI a háttérben összerakja a tervezetet, a Kréta rubrikáinak megfelelően.</p>
+
+            <div class="inline-box">
+              <h3>Generálási folyamat</h3>
+              <div class="mini-badges">
+                <span class="tag">Célok összeállítása</span>
+                <span class="tag">Tevékenységek kiválasztása</span>
+                <span class="tag">Differenciálás beépítése</span>
+                <span class="tag">Kréta formátumra igazítás</span>
+              </div>
+            </div>
+
+            <div class="add-card">
+              <label>Választható kimeneti forma</label>
+              <div class="output-mode" style="margin-top: 12px;">
+                <button class="mode-pill active" type="button" data-mode="Kréta">Kréta</button>
+                <button class="mode-pill" type="button" data-mode="Szülői tájékoztató">Szülői tájékoztató</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn secondary" id="backBtn" type="button">Vissza</button>
+            <button class="btn primary" id="nextBtn" type="button">Következő lépés</button>
+          </div>
+        </section>
+
+        <aside class="panel preview preview-hidden" id="previewPanel">
+          <div class="preview-box" id="previewBox">
+            <div class="preview-empty" id="previewEmpty">
+              <div>
+                <strong>Generálásra vár...</strong>
+                <span>A végső terv itt jelenik meg a 4. lépésben.</span>
+              </div>
+            </div>
+
+            <div id="previewContent" style="display: none;">
+              <div class="preview-header">
+                <h3>Végeredmény</h3>
+                <span class="status-pill">Kész</span>
+              </div>
+
+              <div class="summary-box">
+                <p><strong>Projekt:</strong> Őszi falevelek • <strong>Kor:</strong> Nagycsoport • <strong>Időtartam:</strong> Napi</p>
+              </div>
+
+              <div class="result-card">
+                <div class="result-top">
+                  <strong>Cél- és feladatrendszer</strong>
+                  <button class="copy-btn" type="button">Másolás</button>
+                </div>
+                <p>Megfigyelés, beszédfejlesztés, finommotorika és kreativitás fejlesztése az őszi természet és a falevelek témájában.</p>
+              </div>
+
+              <div class="result-card">
+                <div class="result-top">
+                  <strong>Tevékenységek</strong>
+                  <button class="copy-btn" type="button">Másolás</button>
+                </div>
+                <p>Levelek gyűjtése, rajzolás, ritmusjáték, mesehallgatás és kézműves tevékenység a tananyaghoz igazítva.</p>
+              </div>
+
+              <div class="result-card">
+                <div class="result-top">
+                  <strong>Kiemelt differenciálás</strong>
+                  <button class="copy-btn" type="button">Másolás</button>
+                </div>
+                <p>A csoport energiaszintje alapján rövidebb, célzottabb blokkok és mozgásos levezető játékok.</p>
+              </div>
+
+              <div class="result-card">
+                <div class="result-top">
+                  <strong>Szülői tájékoztató</strong>
+                  <button class="copy-btn" type="button">Másolás</button>
+                </div>
+                <p>Őszi falevelek témájában sokféle mozgásos és kézműves tevékenység várja a gyerekeket, miközben a finommotorika és a természet megfigyelése is fejlődik.</p>
+              </div>
+
+              <div class="download-row">
+                <button class="download-btn" type="button">PDF</button>
+                <button class="download-btn" type="button">DOCX</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script>
+      const steps = Array.from(document.querySelectorAll('.step-panel'));
+      const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
+      const nextBtn = document.getElementById('nextBtn');
+      const backBtn = document.getElementById('backBtn');
+      const summaryBox = document.querySelector('.summary-box p');
+      const loadPreviousBtn = document.getElementById('loadPreviousBtn');
+      const historyPanel = document.getElementById('historyPanel');
+      const previewPanel = document.getElementById('previewPanel');
+      const previewEmpty = document.getElementById('previewEmpty');
+      const previewContent = document.getElementById('previewContent');
+      let currentStep = 0;
+      let previewReady = false;
+
+      function updateSummary() {
+        const duration = document.querySelector('.segment.active[data-group="duration"]')?.dataset.value || 'Napi';
+        const theme = document.querySelector('input[data-field="theme"]')?.value || 'Téma';
+        const group = document.querySelector('select[data-field="group"]')?.value || 'Nagycsoport';
+        summaryBox.innerHTML = `<strong>Projekt:</strong> ${theme} • <strong>Kor:</strong> ${group} • <strong>Időtartam:</strong> ${duration}`;
+      }
+
+      function renderPreview() {
+        const showPreview = currentStep >= 3 && previewReady;
+        previewPanel.classList.toggle('preview-hidden', !showPreview);
+        previewEmpty.style.display = showPreview ? 'none' : 'grid';
+        previewContent.style.display = showPreview ? 'block' : 'none';
+      }
+
+      function renderStep() {
+        steps.forEach((panel, index) => {
+          panel.classList.toggle('active', index === currentStep);
+        });
+
+        wizardItems.forEach((item, index) => {
+          item.classList.toggle('active', index === currentStep);
+        });
+
+        backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
+        nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
+        renderPreview();
+      }
+
+      document.querySelectorAll('.segment').forEach((button) => {
+        button.addEventListener('click', () => {
+          const group = button.closest('[data-group]');
+          group.querySelectorAll('.segment').forEach((item) => item.classList.remove('active'));
+          button.classList.add('active');
+          updateSummary();
+        });
+      });
+
+      document.querySelectorAll('input[data-field="theme"], select[data-field="group"]').forEach((field) => {
+        field.addEventListener('input', updateSummary);
+        field.addEventListener('change', updateSummary);
+      });
+
+      document.querySelectorAll('.chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          chip.classList.toggle('active');
+        });
+      });
+
+      document.querySelectorAll('.mode-pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          document.querySelectorAll('.mode-pill').forEach((item) => item.classList.remove('active'));
+          pill.classList.add('active');
+        });
+      });
+
+      loadPreviousBtn.addEventListener('click', () => {
+        historyPanel.classList.toggle('open');
+      });
+
+      document.querySelectorAll('.history-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const themeField = document.querySelector('input[data-field="theme"]');
+          const customField = document.querySelector('textarea[data-field="custom-note"]');
+          const theme = item.dataset.theme;
+          const text = item.dataset.text;
+          if (themeField) themeField.value = theme;
+          if (customField) customField.value = text;
+          updateSummary();
+          historyPanel.classList.remove('open');
+        });
+      });
+
+      nextBtn.addEventListener('click', () => {
+        if (currentStep < steps.length - 1) {
+          currentStep += 1;
+          renderStep();
+        } else {
+          previewReady = true;
+          renderPreview();
+          nextBtn.textContent = 'Tervezet elkészítése';
+          nextBtn.disabled = true;
+          nextBtn.style.opacity = '0.7';
+          nextBtn.style.cursor = 'default';
+        }
+      });
+
+      backBtn.addEventListener('click', () => {
+        if (currentStep > 0) {
+          currentStep -= 1;
+          renderStep();
+        }
+      });
+
+      wizardItems.forEach((item) => {
+        item.addEventListener('click', () => {
+          currentStep = Number(item.dataset.step);
+          renderStep();
+        });
+      });
+
+      document.querySelectorAll('.copy-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const text = btn.closest('.result-card').querySelector('p').textContent;
+          try {
+            await navigator.clipboard.writeText(text);
+            const original = btn.textContent;
+            btn.textContent = 'Másolva';
+            setTimeout(() => { btn.textContent = original; }, 1200);
+          } catch (err) {
+            btn.textContent = 'Hiba';
+            setTimeout(() => { btn.textContent = 'Másolás'; }, 1200);
+          }
+        });
+      });
+
+      renderStep();
+      updateSummary();
+    </script>
+  </body>
+</html>
