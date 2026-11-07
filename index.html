@@ -2339,7 +2339,11 @@
         try {
           const payload = buildGenerationPayload();
 
-          const response = await fetch(`${getApiBaseUrl()}/api/generate`, {
+          const apiBaseUrl = getApiBaseUrl();
+          if (!apiBaseUrl) {
+            throw new Error('A generáló szerver (backend) címe nincs beállítva. Add meg az apiBaseUrl értékét a config.js fájlban.');
+          }
+          const response = await fetch(`${apiBaseUrl}/api/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
