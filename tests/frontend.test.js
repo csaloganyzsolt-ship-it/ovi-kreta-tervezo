@@ -404,6 +404,6 @@ test('preview is built from A4 page containers and the export element is not fix
   const doc = window.document;
   assert.ok(doc.querySelectorAll('#resultDocument .a4-page').length >= 1);
   assert.equal(doc.querySelectorAll('#resultDocument .a4-page tbody tr').length, 4);
-  const { element } = window.buildExportElement('main');
+  const element = window.makePageElement('<p>x</p>', 'portrait', 12);
   assert.doesNotMatch(element.style.cssText, /position|z-index|display|visibility/);
 });

@@ -784,12 +784,11 @@
       .document-sheet[data-margin="comfortable"] { padding: 12mm 14mm; }
       .document-sheet[data-margin="spacious"] { padding: 15mm 16mm; }
 
-      /* A hyphens: auto átfedő szöveget okoz a html2canvas képen, ezért exportnál kikapcsolva. */
-      .document-sheet.export-sheet,
-      .document-sheet.export-sheet * {
+      /* Az előnézet és az export azonos szövegbeállítást használ, hogy a tördelés mindenhol egyezzen. */
+      .document-sheet,
+      .document-sheet * {
         hyphens: manual;
         -webkit-hyphens: manual;
-        overflow-wrap: normal;
         text-rendering: optimizeSpeed;
       }
 
@@ -1165,6 +1164,9 @@
         .content,
         .preview-empty,
         .preview-header,
+        .main-form-layout,
+        .document-tabs,
+        #generationErrorBanner,
         .export-settings-panel,
         .download-row,
         .footer-actions,
@@ -1189,6 +1191,7 @@
           display: block;
           width: 100%;
           max-width: none;
+          margin: 0 !important;
           grid-template-columns: none;
         }
 
@@ -1380,7 +1383,8 @@
         }
         html[data-theme="dark"] .document-shell { background: #1a1614; }
 
-        #resultDocument.document-sheet {
+        #resultDocument.document-sheet,
+        .document-sheet.a4-host.a4-host {
           width: max-content;
           max-width: none;
           min-width: 100%;
@@ -1410,10 +1414,10 @@
         }
         .a4-page-body { display: flow-root; }
 
-        #resultDocument[data-orientation="landscape"] .a4-page { width: 297mm; min-height: 210mm; }
-        #resultDocument[data-margin="compact"] { --page-margin: 10mm; }
-        #resultDocument[data-margin="comfortable"] { --page-margin: 12mm; }
-        #resultDocument[data-margin="spacious"] { --page-margin: 15mm; }
+        .a4-host[data-orientation="landscape"] .a4-page { width: 297mm; min-height: 210mm; }
+        .a4-host[data-margin="compact"] { --page-margin: 10mm; }
+        .a4-host[data-margin="comfortable"] { --page-margin: 12mm; }
+        .a4-host[data-margin="spacious"] { --page-margin: 15mm; }
       }
 
       .a4-page { break-after: page; page-break-after: always; }
@@ -1421,11 +1425,10 @@
 
       @media print {
         .a4-page {
-          width: 100% !important;
           min-height: 0 !important;
-          padding: 0 !important;
           box-shadow: none !important;
           margin: 0 !important;
+          overflow: hidden;
         }
         #resultDocument { display: block !important; }
       }
@@ -1815,7 +1818,7 @@
               </div>
 
               <div class="document-shell">
-                <div class="document-sheet" id="resultDocument" data-margin="comfortable"></div>
+                <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
               <div class="download-row">
@@ -2994,57 +2997,82 @@
       const PAGE_MM = { portrait: [210, 297], landscape: [297, 210] };
 
       // Renders one document into an off-screen sheet using its own orientation and margin.
-      function buildExportElement(docId) {
+      // Ugyanazt a tördelést (paginateDocument) használja, mint az előnézet, így a PDF/DOCX lapról lapra megegyezik vele.
+      async function buildPagesForDoc(docId) {
         const { orientation, margin } = getDocSettings(docId);
         const marginMm = MARGIN_MM[margin] || MARGIN_MM.comfortable;
-        const contentWidth = PAGE_MM[orientation][0] - marginMm * 2;
-        const element = document.createElement('div');
-        element.className = 'document-sheet export-sheet';
-        element.dataset.margin = margin;
-        element.dataset.orientation = orientation;
-        // Nincs position/z-index: az html2pdf egy overlay-be klónozza az elemet, ahol a fixed + negatív z-index üres képet adott.
-        element.style.cssText = `width:${contentWidth}mm;min-height:0;max-width:none;padding:0;margin:0;box-shadow:none;background:#fff;`;
-        element.innerHTML = buildDocumentHtml(lastResult, lastResult.request || buildGenerationPayload(), docId);
-        return { element, orientation, marginMm, contentWidth };
-      }
-
-      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
-
-      async function renderPdfBlob(docId) {
-        const { element, orientation, marginMm, contentWidth } = buildExportElement(docId);
-        // Látható, de a képernyőn kívüli, nem vágó (overflow: visible) tároló valós méretekkel.
         const host = document.createElement('div');
-        host.style.cssText = `position:absolute;left:-10000px;top:0;width:${contentWidth}mm;overflow:visible;pointer-events:none;`;
-        host.appendChild(element);
+        host.className = 'document-sheet a4-host';
+        host.dataset.margin = margin;
+        host.dataset.orientation = orientation;
+        host.style.cssText = 'position:absolute;left:-10000px;top:0;';
+        host.innerHTML = buildDocumentHtml(lastResult, lastResult.request || buildGenerationPayload(), docId);
         document.body.appendChild(host);
         try {
           if (document.fonts?.ready) await document.fonts.ready;
           await nextFrame();
-          await nextFrame();
-          if (!element.offsetHeight || !element.offsetWidth) {
-            throw new Error('A dokumentum nem látható vagy nulla méretű, ezért a PDF nem készíthető el.');
-          }
-          return await window.html2pdf().set({
-            margin: [marginMm, marginMm, marginMm, marginMm],
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation },
-            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', 'h3', '.doc-meta-block'] }
-          }).from(element).outputPdf('blob');
+          paginateDocument(host);
+          const pages = Array.from(host.querySelectorAll('.a4-page-body')).map((body) => body.innerHTML);
+          return { pages, orientation, marginMm };
         } finally {
           host.remove();
         }
       }
 
-      function renderDocxBlob(docId) {
-        const { element, orientation, marginMm } = buildExportElement(docId);
-        {
-          const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
-          const exportOverrides = '.document-sheet{width:auto!important;min-height:0!important;padding:0!important;box-shadow:none!important;position:static!important;}';
-          const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}\n${exportOverrides}</style></head><body>${element.outerHTML}</body></html>`;
-          const twips = Math.round(marginMm * 56.7);
-          return window.htmlDocx.asBlob(html, { orientation, margins: { top: twips, right: twips, bottom: twips, left: twips } });
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+      function makePageElement(bodyHtml, orientation, marginMm) {
+        const [width, height] = PAGE_MM[orientation];
+        const element = document.createElement('div');
+        element.className = 'document-sheet export-sheet';
+        // Nincs position/z-index: az html2pdf overlay-be klónozza az elemet, ahol a fixed + negatív z-index üres képet adott.
+        element.style.cssText = `width:${width}mm;height:${height - 0.6}mm;min-height:0;max-width:none;padding:${marginMm}mm;margin:0;box-sizing:border-box;overflow:hidden;box-shadow:none;background:#fff;`;
+        element.innerHTML = bodyHtml;
+        return element;
+      }
+
+      async function renderPdfBlob(docId) {
+        const { pages, orientation, marginMm } = await buildPagesForDoc(docId);
+        const [width, height] = PAGE_MM[orientation];
+        const host = document.createElement('div');
+        host.style.cssText = `position:absolute;left:-10000px;top:0;width:${width}mm;overflow:visible;pointer-events:none;`;
+        document.body.appendChild(host);
+        const options = {
+          margin: 0,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation }
+        };
+        try {
+          const elements = pages.map((html) => host.appendChild(makePageElement(html, orientation, marginMm)));
+          await nextFrame();
+          await nextFrame();
+          if (elements.some((element) => !element.offsetHeight || !element.offsetWidth)) {
+            throw new Error('A dokumentum nem látható vagy nulla méretű, ezért a PDF nem készíthető el.');
+          }
+          const pdf = await window.html2pdf().set(options).from(elements[0]).toPdf().get('pdf');
+          while (pdf.internal.getNumberOfPages() > 1) pdf.deletePage(pdf.internal.getNumberOfPages());
+          for (let index = 1; index < elements.length; index += 1) {
+            const canvas = await window.html2pdf().set(options).from(elements[index]).toCanvas().get('canvas');
+            pdf.addPage('a4', orientation);
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, width, height);
+          }
+          return pdf.output('blob');
+        } finally {
+          host.remove();
         }
+      }
+
+      async function renderDocxBlob(docId) {
+        const { pages, orientation, marginMm } = await buildPagesForDoc(docId);
+        const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
+        const exportOverrides = '.document-sheet{width:auto!important;min-height:0!important;padding:0!important;box-shadow:none!important;position:static!important;}';
+        const body = pages
+          .map((html, index) => `<div${index ? ' style="page-break-before:always;"' : ''}>${html}</div>`)
+          .join('');
+        const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}\n${exportOverrides}</style></head><body><div class="document-sheet export-sheet" style="width:auto;padding:0;margin:0;">${body}</div></body></html>`;
+        const twips = Math.round(marginMm * 56.7);
+        return window.htmlDocx.asBlob(html, { orientation, margins: { top: twips, right: twips, bottom: twips, left: twips } });
       }
 
       function getActiveDocument() {
@@ -3065,7 +3093,7 @@
         downloadBlob(await renderPdfBlob(doc.id), `${doc.fileBase}.pdf`);
       }
 
-      function exportAsDocx() {
+      async function exportAsDocx() {
         if (!window.htmlDocx) {
           alert('A DOCX export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
           return;
@@ -3075,7 +3103,7 @@
           return;
         }
         const doc = getActiveDocument();
-        downloadBlob(renderDocxBlob(doc.id), `${doc.fileBase}.docx`);
+        downloadBlob(await renderDocxBlob(doc.id), `${doc.fileBase}.docx`);
       }
 
       async function exportAllAsZip() {
@@ -3094,7 +3122,7 @@
             const doc = list[index];
             button.textContent = `ZIP készítése... ${index + 1}/${list.length}`;
             zip.file(`${doc.fileBase}.pdf`, await renderPdfBlob(doc.id));
-            zip.file(`${doc.fileBase}.docx`, renderDocxBlob(doc.id));
+            zip.file(`${doc.fileBase}.docx`, await renderDocxBlob(doc.id));
           }
           downloadBlob(await zip.generateAsync({ type: 'blob' }), 'ovi-kreta-heti-terv.zip');
         } catch (error) {
@@ -3304,6 +3332,21 @@
       printBtn.type = 'button';
       printBtn.className = 'download-btn';
       printBtn.textContent = 'Nyomtatás';
+      // A nyomtatás ugyanazt a lapméretet és margót használja, mint az előnézet (a @page nem lehet dokumentumonként eltérő, ezért dinamikus).
+      function applyPrintPageStyle() {
+        const { orientation, margin } = getDocSettings();
+        const [width, height] = PAGE_MM[orientation];
+        const marginMm = MARGIN_MM[margin] || MARGIN_MM.comfortable;
+        let style = document.getElementById('dynamicPrintStyle');
+        if (!style) {
+          style = document.createElement('style');
+          style.id = 'dynamicPrintStyle';
+          document.head.appendChild(style);
+        }
+        style.textContent = `@page { size: A4 ${orientation}; margin: 0; }
+          @media print { .a4-page { width: ${width}mm !important; height: ${height - 0.5}mm !important; padding: ${marginMm}mm !important; box-sizing: border-box; } }`;
+      }
+      window.addEventListener('beforeprint', applyPrintPageStyle);
       printBtn.addEventListener('click', () => window.print());
       const downloadRow = document.querySelector('.download-row');
       if (downloadRow) {
