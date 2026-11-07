@@ -256,11 +256,10 @@ test('network errors show a real error without document content', async (t) => {
   assert.match(window.document.querySelector('#generationErrorBanner').textContent, /Network unavailable/);
   assert.equal(window.document.querySelector('#resultDocument').textContent.trim(), '');
 });
-test('weekly plan renders the frame table and five day sheets', async (t) => {
-  const window = await loadApp(t);
+function weeklyResult(window) {
   const days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
   const row = { ido: '10 perc', tevekenyseg_menete: ['Egy', 'Kettő'], modszerek_megjegyzesek: 'Megfigyelés' };
-  window.renderResultDocument({
+  return {
     is_weekly: true,
     summary: 'Heti projekt',
     heti_keretterv: {
@@ -268,13 +267,62 @@ test('weekly plan renders the frame table and five day sheets', async (t) => {
       teruletek_heti_eloszlasa: days.map((nap) => ({ nap, fo_terulet: 'T', mikrocsoportos_tevekenyseg: 'M' })),
       eszkozok: ['levél'], felhasznalt_irodalom: ''
     },
-    napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'Komplex', napi_cel: 'C', kidolgozas_tablazat: [row] })),
+    napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'Mese és vers', napi_cel: 'C', kidolgozas_tablazat: [row] })),
     request: makePayload({ duration: 'Heti', planMode: 'weekly' })
-  });
+  };
+}
+
+test('weekly plan renders as six tabbed documents with per-document settings', async (t) => {
+  const window = await loadApp(t);
   const doc = window.document;
-  assert.equal(doc.querySelectorAll('.document-day-sheet').length, 5);
-  assert.equal(doc.querySelectorAll('.document-day-sheet .official-table tbody tr').length, 5);
-  assert.equal(doc.querySelectorAll('.official-table').length, 6);
+  window.renderResultDocument(weeklyResult(window));
+  const tabs = [...doc.querySelectorAll('#documentTabs .doc-tab')];
+  assert.equal(tabs.map((tab) => tab.textContent).join('|'), 'Heti Keretterv|Hétfő|Kedd|Szerda|Csütörtök|Péntek');
+  assert.equal(doc.querySelector('#documentTabs').hidden, false);
+  assert.equal(doc.querySelector('#downloadZipBtn').hidden, false);
+  assert.equal(doc.querySelectorAll('#resultDocument .official-table').length, 1);
+  assert.match(doc.querySelector('#resultDocument').textContent, /Területek heti eloszlása/);
+
+  tabs[1].click();
+  assert.match(doc.querySelector('#resultDocument').textContent, /Napi tervezet – Hétfő/);
+  assert.equal(doc.querySelectorAll('.document-day-sheet .official-table tbody tr').length, 1);
+
+  const orientation = doc.querySelector('[data-export="orientation"]');
+  orientation.value = 'landscape';
+  orientation.dispatchEvent(new window.Event('change'));
+  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'landscape');
+  doc.querySelectorAll('#documentTabs .doc-tab')[2].click();
+  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'portrait');
+  assert.equal(orientation.value, 'portrait');
+  doc.querySelectorAll('#documentTabs .doc-tab')[1].click();
+  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'landscape');
+
+  const files = window.getDocumentList(weeklyResult(window)).map((item) => item.fileBase);
+  assert.equal(files.slice(0, 3).join('|'), '00_Heti_Keretterv|01_Hetfo_Mese_es_vers|02_Kedd_Mese_es_vers');
+
+  const draft = window.collectDraftState();
+  assert.equal(draft.docSettings['nap-0'].orientation, 'landscape');
+  window.clearDraftState();
+  assert.equal(JSON.stringify(window.getDocSettings('nap-0')), JSON.stringify({ orientation: 'portrait', margin: 'comfortable' }));
+});
+
+test('the summary checklist lists every setting, including the new ones', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  doc.querySelector('[data-field="blacklist"]').value = 'gyurma';
+  doc.querySelector('[data-field="available-tools"]').value = 'xilofon';
+  window.updateSummary();
+  const text = doc.querySelector('#summaryChecklist').textContent;
+  for (const label of ['Óvoda:', 'Óvodapedagógus:', 'Csoport neve:', 'Korcsoport:', 'Időtartam:', 'Dátum:', 'Téma:',
+    'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Energiaszint:', 'Iskola-előkészítő', 'Speciális nevelési igények',
+    'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök: xilofon', 'Kötelező mese/vers/dal:', 'Saját ötletek', 'Kiválasztott célkifejezések:',
+    'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
+    'Részletességi szint:', 'Modell: Gyors – Gemini 3.1 Pro', 'Kimeneti forma:']) {
+    assert.ok(text.includes(label), `Missing summary line: ${label}`);
+  }
+  doc.querySelector('#premiumQuality').checked = true;
+  window.updateSummary();
+  assert.match(doc.querySelector('#summaryChecklist').textContent, /Prémium – Gemini 4 Argon/);
 });
 
 test('new fields reach the payload, survive a draft round trip and are cleared by the clean slate button', async (t) => {

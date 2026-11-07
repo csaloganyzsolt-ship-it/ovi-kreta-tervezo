@@ -18,3 +18,4 @@ Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni
 - **Biztonság:** A `GEMINI_API_KEY` és más titkos adat soha, semmilyen formában nem kerülhet be a frontendbe, sem a git commitokba! Mindig környezeti változóból (`process.env`) olvassa a backend.
 - **Tervezetek kidolgozottsága:** Az óvodai napi és heti tervezetek generálásakor szigorúan tilos az elcsépelt, ismétlődő sablonok használata (pl. ne ismételje a "szemléltetés, frontális munka" kifejezést). Mindig életszerű, differenciált, módszertanilag gazdag leírásokat kell kikényszeríteni az AI promptban.
 - **Formázás:** A tömbként érkező bekezdéseket a felületen mindig `<br><br>` tagekkel, olvashatóan kell renderelni.
+- **Összegző lista teljessége:** A 4. lépés összefoglaló listájának kivétel nélkül minden létező és jövőbeli beállítási mezőt meg kell jeleníteni a felhasználó számára.

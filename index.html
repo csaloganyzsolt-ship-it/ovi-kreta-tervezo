@@ -86,6 +86,67 @@
         --primary-text: #8d6852; color: #1d2329; background: white;
       }
 
+      .document-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+      .document-tabs[hidden] { display: none; }
+      .doc-tab {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        border-radius: 10px 10px 0 0;
+        padding: 8px 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .doc-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+      .download-zip { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+      .summary-section {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--soft);
+        color: var(--text);
+      }
+      .summary-section strong { display: block; margin-bottom: 6px; color: var(--primary-text); }
+      .summary-section .summary-items { display: grid; gap: 4px; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+      .summary-section .summary-items div { overflow-wrap: anywhere; }
+
+      .generation-loader {
+        margin-top: 18px;
+        padding: 18px;
+        border: 1px dashed var(--primary);
+        border-radius: 16px;
+        background: var(--card);
+        color: var(--text);
+        text-align: center;
+        display: grid;
+        gap: 8px;
+        justify-items: center;
+      }
+      .generation-loader[hidden] { display: none; }
+      .loader-stage { display: flex; align-items: flex-end; gap: 10px; height: 64px; }
+      .loader-block { width: 22px; height: 22px; border-radius: 5px; animation: loaderSpin 1.6s linear infinite; }
+      .loader-block.b1 { background: #e57373; }
+      .loader-block.b2 { background: #64b5f6; border-radius: 50%; animation-delay: -0.5s; }
+      .loader-block.b3 { background: #ffd54f; animation-delay: -1s; }
+      .loader-bear { font-size: 44px; line-height: 1; animation: loaderBounce 0.9s ease-in-out infinite; }
+      .loader-pencil { font-size: 30px; display: inline-block; transform-origin: bottom left; animation: loaderDraw 1.2s ease-in-out infinite; }
+      @keyframes loaderBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
+      @keyframes loaderSpin { to { transform: rotate(360deg); } }
+      @keyframes loaderDraw { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(14deg) translateX(6px); } }
+      @media (prefers-reduced-motion: reduce) {
+        .loader-block, .loader-bear, .loader-pencil { animation: none; }
+      }
+
+      html[data-theme="dark"] .doc-tab { background: var(--card); color: var(--text); }
+      html[data-theme="dark"] .doc-tab.active { background: var(--primary); color: #fff; }
+      html[data-theme="dark"] .summary-section,
+      html[data-theme="dark"] .generation-loader { background: var(--card); color: var(--text); border-color: var(--border); }
+      html[data-theme="dark"] .inline-box h3,
+      html[data-theme="dark"] .add-card label,
+      html[data-theme="dark"] .subhead { color: var(--text); }
+      html[data-theme="dark"] .document-shell { border-color: var(--border); }
+
       .theme-toggle {
         border: 1px solid var(--border);
         background: var(--card);
@@ -368,8 +429,8 @@
       }
 
       .document-sheet .document-day-sheet {
-        break-before: page;
-        page-break-before: always;
+        break-before: auto;
+        page-break-before: auto;
         break-inside: auto;
         page-break-inside: auto;
       }
@@ -841,6 +902,36 @@
 
       .document-sheet .official-table thead {
         display: table-header-group;
+      }
+
+      .document-sheet .official-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet h2,
+      .document-sheet h3,
+      .document-sheet .doc-meta-block,
+      .document-sheet .official-meta {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet h2,
+      .document-sheet h3 {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
+      .document-sheet {
+        word-break: normal;
+        overflow-wrap: break-word;
+        hyphens: auto;
+      }
+
+      .document-sheet[data-orientation="landscape"] {
+        width: 297mm;
+        min-height: 210mm;
       }
 
       .document-sheet .official-table p {
@@ -1404,6 +1495,18 @@
 
             <div id="generationErrorBanner" role="alert" hidden style="margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2b8; font-weight: 600; display: none;"></div>
 
+            <div id="generationLoader" class="generation-loader" role="status" aria-live="polite" hidden>
+              <div class="loader-stage" aria-hidden="true">
+                <span class="loader-block b1"></span>
+                <span class="loader-block b2"></span>
+                <span class="loader-bear">🧸</span>
+                <span class="loader-block b3"></span>
+                <span class="loader-pencil">✏️</span>
+              </div>
+              <strong id="generationStatus">Készülünk...</strong>
+              <small id="generationElapsed" class="field-hint"></small>
+            </div>
+
             <div class="inline-box" style="margin-top: 18px;">
               <h3>Generálási folyamat</h3>
               <div class="mini-badges">
@@ -1444,14 +1547,24 @@
                 <span class="status-pill">Kész</span>
               </div>
 
+              <div class="document-tabs" id="documentTabs" role="tablist" aria-label="Dokumentumok" hidden></div>
+
               <div class="export-settings-panel">
                 <h3>Dokumentum beállítások</h3>
+                <p class="field-hint" id="docSettingsScope" style="margin: 0 0 10px;"></p>
                 <div class="export-settings-grid">
                   <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenységek</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="differentiation" /> Differenciálás</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="materials" /> Eszközök</label>
+                </div>
+                <div class="setting-row">
+                  <label for="pageOrientationSelect">Tájolás</label>
+                  <select id="pageOrientationSelect" data-export="orientation">
+                    <option value="portrait" selected>Álló (Portrait)</option>
+                    <option value="landscape">Fekvő (Landscape)</option>
+                  </select>
                 </div>
                 <div class="setting-row">
                   <label for="pageMarginSelect">Oldalmargó</label>
@@ -1470,6 +1583,7 @@
               <div class="download-row">
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
                 <button id="downloadDocxBtn" class="download-btn" type="button">DOCX letöltése</button>
+                <button id="downloadZipBtn" class="download-btn download-zip" type="button" hidden>Összes letöltése ZIP-ben</button>
               </div>
             </div>
           </div>
@@ -1480,6 +1594,7 @@
     <script src="config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
       const steps = Array.from(document.querySelectorAll('.step-panel'));
       const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
@@ -1600,47 +1715,63 @@
 
         const payload = buildGenerationPayload();
         const { selectedGoals, specialNeeds, customNotes } = payload;
-        const customFields = [
-          ['Saját megjegyzés', customNotes.primary || 'Nincs megadva'],
-          ['Csoport megjegyzés', customNotes.groupNote || 'Nincs megadva'],
-          ['Kötelező mese/vers/dal', customNotes.requiredText || 'Nincs megadva'],
-          ['Eszközök és ötletek', customNotes.ideaNote || 'Nincs megadva'],
-          ['Külön kérés', customNotes.customRequest || 'Nincs megadva'],
-        ];
+        const none = 'Nincs megadva';
+        const isWeekly = payload.duration === 'Heti';
+        const progressionLabels = {
+          progressive: 'Szervesen egymásra épülő projekt',
+          area_focused: 'Klasszikus területváltó'
+        };
+        const defaultToolsText = 'Nincs megadva – az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) veszi alapul';
+        const weeklyOnly = (value) => (isWeekly ? value : `${value} (csak heti tervnél érvényes)`);
 
         const sections = [
           ['Alapadatok', [
-            `Óvoda: ${payload.kindergartenName || 'Nincs megadva'}`,
-            `Óvodapedagógus: ${payload.teacherName || 'Nincs megadva'}`,
-            `Csoport: ${payload.groupName || 'Nincs megadva'}`,
+            `Óvoda: ${payload.kindergartenName || none}`,
+            `Óvodapedagógus: ${payload.teacherName || none}`,
+            `Csoport neve: ${payload.groupName || none}`,
             `Korcsoport: ${payload.group}`,
             `Időtartam: ${payload.duration}`,
-            `Napi lebontás: ${payload.includeDailyBreakdown ? 'igen' : 'nem'}`,
-            `Időpont: ${payload.dateValue || 'Nincs megadva'}`,
-            `Részletességi szint: ${payload.detailLevel} / 100`,
-            `Kimeneti forma: ${payload.outputMode}`,
-            `Irodalom megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
-          ]],
-          ['Téma és célok', [
-            `Téma: ${payload.theme || 'Nincs megadva'}`,
-            `Tevékenységi forma: ${payload.tevekenysegForma || 'Nincs megadva'}`,
-            `Előzmény: ${payload.elozmeny || 'Nincs megadva'}`,
+            `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
+            `Téma: ${payload.theme || none}`,
+            `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
+            `Előzmény: ${payload.elozmeny || none}`,
             `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
-            `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
+            `Napi lebontás (heti terv mellé): ${weeklyOnly(payload.includeDailyBreakdown ? 'igen' : 'nem')}`,
+            `Saját megjegyzés: ${customNotes.primary || none}`
           ]],
-          ['Differenciálás', [
-            `Létszám: ${payload.childCount ?? 'Nincs megadva'}`,
+          ['Csoport profilja', [
+            `Gyereklétszám: ${payload.childCount ?? none}`,
             `Energiaszint: ${payload.energyLevel} / 100`,
-            `Iskola-előkészítés: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
-            `Speciális igények: ${specialNeeds.join(', ') || 'Nincs megadva'}`,
+            `Iskola-előkészítő gyermekek: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
+            `Speciális nevelési igények (SNI): ${specialNeeds.join(', ') || none}`,
+            `Csoportmegjegyzés: ${customNotes.groupNote || none}`
           ]],
-          ['Saját szövegek', customFields.map(([label, value]) => `${label}: ${value}`)],
+          ['Eszközkészlet', [
+            `Rendelkezésre álló eszközök: ${payload.availableTools || defaultToolsText}`
+          ]],
+          ['Konkrétumok', [
+            `Kötelező mese/vers/dal: ${customNotes.requiredText || none}`,
+            `Saját ötletek, eszközök: ${customNotes.ideaNote || none}`,
+            `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
+            `Külön kérés: ${customNotes.customRequest || none}`
+          ]],
+          ['Speciális beállítások', [
+            `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
+            `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
+            `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
+            `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
+          ]],
+          ['Generálási beállítások', [
+            `Részletességi szint: ${payload.detailLevel} / 100`,
+            `Modell: ${payload.requestedModel === 'gemini-4-argon' ? 'Prémium – Gemini 4 Argon' : 'Gyors – Gemini 3.1 Pro'}`,
+            `Kimeneti forma: ${payload.outputMode}`
+          ]]
         ];
 
         checklist.innerHTML = sections.map(([heading, items]) => `
-          <div style="padding: 10px 12px; border: 1px solid #dfe6e1; border-radius: 10px; background: #f7faf7;">
-            <strong style="display:block; margin-bottom: 6px; color: #1d4f36;">${escapeHtml(heading)}</strong>
-            <div style="display:grid; gap: 4px; font-size: 0.92rem; color: #2b2f2d; line-height:1.5;">
+          <div class="summary-section">
+            <strong>${escapeHtml(heading)}</strong>
+            <div class="summary-items">
               ${items.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('')}
             </div>
           </div>
@@ -1710,6 +1841,7 @@
           dateValue: getDateValue(),
           includeDailyBreakdown: getWeeklyDailyBreakdown(),
           selectedGoals,
+          docSettings,
           fields: {}
         };
 
@@ -1766,6 +1898,13 @@
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
         syncAdvancedSettingsOpenState();
+        if (draft.docSettings && typeof draft.docSettings === 'object') {
+          docSettings = Object.fromEntries(Object.entries(draft.docSettings).map(([key, value]) => [key, {
+            orientation: value?.orientation === 'landscape' ? 'landscape' : 'portrait',
+            margin: ['compact', 'comfortable', 'spacious'].includes(value?.margin) ? value.margin : 'comfortable'
+          }]));
+        }
+        syncDocControls();
 
         const dateTarget = document.querySelector(getSelectedDuration() === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
         if (dateTarget && draft.dateValue) {
@@ -1825,13 +1964,6 @@
         return { settings, margin };
       }
 
-      function applyExportSettingsToDocument() {
-        const { margin } = getExportSettings();
-        if (resultDocument) {
-          resultDocument.dataset.margin = margin;
-        }
-      }
-
       function validateGeneratedPlan(result) {
         if (!result || typeof result !== 'object' || Array.isArray(result)) {
           throw new Error('A szerver nem dokumentumot tartalmazó JSON objektumot adott vissza.');
@@ -1868,21 +2000,206 @@
         });
       }
 
-      function renderResultDocument(data = lastResult) {
-        if (!data) {
-          resultDocument.replaceChildren();
-          return;
+      const DOC_DEFAULTS = { orientation: 'portrait', margin: 'comfortable' };
+      const WEEKDAY_FILE_NAMES = { 'Hétfő': 'Hetfo', 'Kedd': 'Kedd', 'Szerda': 'Szerda', 'Csütörtök': 'Csutortok', 'Péntek': 'Pentek' };
+      let activeDocId = null;
+      let docSettings = {};
+
+      function asciiSlug(value, maxLength = 32) {
+        return String(value || '')
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+          .slice(0, maxLength).replace(/_+$/, '');
+      }
+
+      function getDocumentList(result = lastResult) {
+        if (result?.is_weekly === true && Array.isArray(result.napok)) {
+          return [
+            { id: 'keret', label: 'Heti Keretterv', fileBase: '00_Heti_Keretterv', kind: 'frame' },
+            ...result.napok.map((day, index) => {
+              const name = day.nap_neve || `Nap_${index + 1}`;
+              const dayPart = WEEKDAY_FILE_NAMES[name] || asciiSlug(name) || `Nap_${index + 1}`;
+              const formPart = asciiSlug(day.tevekenyseg_forma);
+              return {
+                id: `nap-${index}`,
+                label: name,
+                fileBase: `${String(index + 1).padStart(2, '0')}_${dayPart}${formPart ? `_${formPart}` : ''}`,
+                kind: 'day',
+                index
+              };
+            })
+          ];
         }
-        validateGeneratedPlan(data);
-        const result = data;
-        const request = result.request || buildGenerationPayload();
+        return [{ id: 'main', label: 'Tervezet', fileBase: 'ovi-kreta-terv', kind: 'daily' }];
+      }
+
+      function currentDocKey() {
+        return activeDocId || 'main';
+      }
+
+      function getDocSettings(docId = currentDocKey()) {
+        return { ...DOC_DEFAULTS, ...(docSettings[docId] || {}) };
+      }
+
+      function applyDocSettingsToElement(element, docId) {
+        if (!element) return;
+        const { orientation, margin } = getDocSettings(docId);
+        element.dataset.margin = margin;
+        element.dataset.orientation = orientation;
+      }
+
+      function syncDocControls() {
+        const { orientation, margin } = getDocSettings();
+        const marginSelect = document.querySelector('[data-export="margin"]');
+        const orientationSelect = document.querySelector('[data-export="orientation"]');
+        if (marginSelect) marginSelect.value = margin;
+        if (orientationSelect) orientationSelect.value = orientation;
+        const scope = document.getElementById('docSettingsScope');
+        if (scope) {
+          const doc = getDocumentList().find((item) => item.id === currentDocKey());
+          scope.textContent = getDocumentList().length > 1 && doc ? `A beállítások erre a dokumentumra vonatkoznak: ${doc.label}` : '';
+        }
+      }
+
+      function applyExportSettingsToDocument() {
+        applyDocSettingsToElement(resultDocument, currentDocKey());
+      }
+
+      function renderDocumentTabs(list) {
+        const tabs = document.getElementById('documentTabs');
+        const zipBtn = document.getElementById('downloadZipBtn');
+        const multiple = list.length > 1;
+        if (zipBtn) zipBtn.hidden = !multiple;
+        if (!tabs) return;
+        tabs.hidden = !multiple;
+        tabs.innerHTML = multiple ? list.map((doc) => `
+          <button type="button" role="tab" class="doc-tab${doc.id === activeDocId ? ' active' : ''}" data-doc-id="${escapeHtml(doc.id)}" aria-selected="${doc.id === activeDocId}">${escapeHtml(doc.label)}</button>`).join('') : '';
+      }
+
+      function selectDocument(docId) {
+        if (!lastResult || !getDocumentList().some((doc) => doc.id === docId)) return;
+        activeDocId = docId;
+        renderResultDocument(lastResult);
+        persistDraftState();
+      }
+
+      function renderTableColumns(showMethods, orientation) {
+        const landscape = orientation === 'landscape';
+        const time = landscape ? 8 : 10;
+        const methods = landscape ? 28 : 32;
+        const middle = showMethods ? 100 - time - methods : 100 - time;
+        return `<colgroup><col style="width: ${time}%;" /><col style="width: ${middle}%;" />${showMethods ? `<col style="width: ${methods}%;" />` : ''}</colgroup>`;
+      }
+
+      function buildActivityTable(rows, showMethods, orientation) {
+        return `
+          <table class="official-table">
+            ${renderTableColumns(showMethods, orientation)}
+            <thead>
+              <tr>
+                <th>Idő</th>
+                <th>A fejlesztő tevékenység felépítése</th>
+                ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${(Array.isArray(rows) ? rows : []).map((row) => `
+                <tr>
+                  <td>${formatTableCell(row.ido)}</td>
+                  <td>${formatTableCell(row.tevekenyseg_menete)}</td>
+                  ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      }
+
+      function buildMetaBlock(metaRows) {
+        return `
+          <div class="doc-section doc-meta-block">
+            <div class="official-meta">
+              ${metaRows.map(([label, value]) => `
+                <div class="meta-row">
+                  <span class="meta-label">${escapeHtml(label)}</span>
+                  <span class="meta-value">${escapeHtml(value)}</span>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      }
+
+      function buildDocumentHtml(result, request, docId) {
         const { settings } = getExportSettings();
+        const { orientation } = getDocSettings(docId);
         const showMethods = settings.differentiation !== false;
-        if (result.is_weekly === true && Array.isArray(result.napok)) {
-          renderWeeklyDocument(result, request, settings, showMethods);
-          return;
-        }
         const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
+        const outputMode = escapeHtml(request.outputMode || 'Kréta');
+
+        if (result.is_weekly === true && Array.isArray(result.napok)) {
+          const frame = result.heti_keretterv || {};
+          const summary = result.summary || [frame.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
+          const baseMeta = [
+            ['Óvoda', request.kindergartenName || '—'],
+            ['Óvodapedagógus', request.teacherName || '—'],
+            ['Csoport', request.groupName || request.group || '—']
+          ];
+          if (docId !== 'keret') {
+            const day = result.napok[Number(docId.replace('nap-', ''))] || {};
+            return `
+              <div class="doc-header">
+                <h2>Napi tervezet – ${escapeHtml(day.nap_neve || '')}</h2>
+                <span class="doc-meta">${outputMode}</span>
+              </div>
+              ${buildMetaBlock([...baseMeta, ['Téma', frame.tema || '—'], ['Forma', day.tevekenyseg_forma || '—'], ['Napi cél', day.napi_cel || '—']])}
+              ${settings.activities !== false ? `
+                <div class="doc-section document-day-sheet">
+                  <h3>A tevékenység/foglalkozás kidolgozása</h3>
+                  ${buildActivityTable(day.kidolgozas_tablazat, showMethods, orientation)}
+                </div>` : ''}`;
+          }
+
+          const metaRows = [...baseMeta, ['Téma', frame.tema || '—'], ['Heti fő cél', frame.heti_fo_cel || '—']];
+          if (settings.materials !== false) {
+            metaRows.push(['Eszközök', (Array.isArray(frame.eszkozok) ? frame.eszkozok : []).join(', ')]);
+          }
+          const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
+          const gridWidths = orientation === 'landscape' ? [12, 28, 60] : [16, 34, 50];
+          return `
+            <div class="doc-header">
+              <h2>Heti tervezet</h2>
+              <span class="doc-meta">${outputMode}</span>
+            </div>
+            ${settings.summary !== false ? `
+              <div class="doc-section">
+                <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
+              </div>` : ''}
+            ${buildMetaBlock(metaRows)}
+            ${settings.goals !== false ? `
+              <div class="doc-section">
+                <h3>Cél- és feladatrendszer</h3>
+                <p><strong>Nevelési feladatok:</strong> ${escapeHtml(frame.nevelesi_feladatok || '')}</p>
+                <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
+              </div>` : ''}
+            <div class="doc-section doc-table-section">
+              <h3>Területek heti eloszlása</h3>
+              <table class="official-table">
+                <colgroup>${gridWidths.map((width) => `<col style="width: ${width}%;" />`).join('')}</colgroup>
+                <thead><tr><th>Nap</th><th>Fő terület</th><th>Mikrocsoportos tevékenység</th></tr></thead>
+                <tbody>
+                  ${grid.map((row) => `
+                    <tr>
+                      <td>${formatTableCell(row.nap)}</td>
+                      <td>${formatTableCell(row.fo_terulet)}</td>
+                      <td>${formatTableCell(row.mikrocsoportos_tevekenyseg)}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+            ${showLiterature && String(frame.felhasznalt_irodalom || '').trim() ? `
+              <div class="doc-section">
+                <h3>Felhasznált irodalom</h3>
+                ${formatTableCell(frame.felhasznalt_irodalom)}
+              </div>` : ''}`;
+        }
+
         const summary = result.summary || [result.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
         const title = request.outputMode === 'Szülői tájékoztató'
           ? 'Szülői tájékoztató'
@@ -1904,24 +2221,16 @@
           ['Módszerek', result.modszerek.join(', ')]
         ];
 
-        resultDocument.innerHTML = `
+        return `
           <div class="doc-header">
             <h2>${escapeHtml(title)}</h2>
-            <span class="doc-meta">${escapeHtml(request.outputMode || 'Kréta')}</span>
+            <span class="doc-meta">${outputMode}</span>
           </div>
           ${settings.summary !== false ? `
             <div class="doc-section">
               <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
             </div>` : ''}
-          <div class="doc-section">
-            <div class="official-meta">
-              ${metaRows.map(([label, value]) => `
-                <div class="meta-row">
-                  <span class="meta-label">${escapeHtml(label)}</span>
-                  <span class="meta-value">${escapeHtml(value)}</span>
-                </div>`).join('')}
-            </div>
-          </div>
+          ${buildMetaBlock(metaRows)}
           ${settings.goals !== false ? `
             <div class="doc-section">
               <h3>Cél- és feladatrendszer</h3>
@@ -1930,128 +2239,28 @@
           ${settings.activities !== false ? `
             <div class="doc-section doc-table-section">
               <h3>A tevékenység/foglalkozás kidolgozása</h3>
-              <table class="official-table">
-                <colgroup>
-                  <col style="width: 10%;" />
-                  <col style="width: ${showMethods ? '58' : '90'}%;" />
-                  ${showMethods ? '<col style="width: 32%;" />' : ''}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>Idő</th>
-                    <th>A fejlesztő tevékenység felépítése</th>
-                    ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${result.kidolgozas_tablazat.map((row) => `
-                    <tr>
-                      <td>${formatTableCell(row.ido)}</td>
-                      <td>${formatTableCell(row.tevekenyseg_menete)}</td>
-                      ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
-                    </tr>`).join('')}
-                </tbody>
-              </table>
+              ${buildActivityTable(result.kidolgozas_tablazat, showMethods, orientation)}
             </div>` : ''}
           ${showLiterature && result.felhasznalt_irodalom.trim() ? `
             <div class="doc-section">
               <h3>Felhasznált irodalom</h3>
               ${formatTableCell(result.felhasznalt_irodalom)}
-            </div>` : ''}
-        `;
-        applyExportSettingsToDocument();
+            </div>` : ''}`;
       }
 
-      function renderWeeklyDocument(result, request, settings, showMethods) {
-        const frame = result.heti_keretterv || {};
-        const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
-        const summary = result.summary || [frame.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
-        const metaRows = [
-          ['Óvoda', request.kindergartenName || '—'],
-          ['Óvodapedagógus', request.teacherName || '—'],
-          ['Csoport', request.groupName || request.group || '—'],
-          ['Téma', frame.tema || '—'],
-          ['Heti fő cél', frame.heti_fo_cel || '—']
-        ];
-        if (settings.materials !== false) {
-          metaRows.push(['Eszközök', (Array.isArray(frame.eszkozok) ? frame.eszkozok : []).join(', ')]);
+      function renderResultDocument(data = lastResult) {
+        if (!data) {
+          resultDocument.replaceChildren();
+          return;
         }
-        const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
-        const dayTable = (day) => `
-          <table class="official-table">
-            <colgroup>
-              <col style="width: 10%;" />
-              <col style="width: ${showMethods ? '58' : '90'}%;" />
-              ${showMethods ? '<col style="width: 32%;" />' : ''}
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Idő</th>
-                <th>A fejlesztő tevékenység felépítése</th>
-                ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
-              </tr>
-            </thead>
-            <tbody>
-              ${(Array.isArray(day.kidolgozas_tablazat) ? day.kidolgozas_tablazat : []).map((row) => `
-                <tr>
-                  <td>${formatTableCell(row.ido)}</td>
-                  <td>${formatTableCell(Array.isArray(row.tevekenyseg_menete) ? row.tevekenyseg_menete.join('\n\n') : row.tevekenyseg_menete).replace(/<\/p><p>/g, '</p><br><br><p>')}</td>
-                  ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
-                </tr>`).join('')}
-            </tbody>
-          </table>`;
-
-        resultDocument.innerHTML = `
-          <div class="doc-header">
-            <h2>Heti tervezet</h2>
-            <span class="doc-meta">${escapeHtml(request.outputMode || 'Kréta')}</span>
-          </div>
-          ${settings.summary !== false ? `
-            <div class="doc-section">
-              <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
-            </div>` : ''}
-          <div class="doc-section">
-            <div class="official-meta">
-              ${metaRows.map(([label, value]) => `
-                <div class="meta-row">
-                  <span class="meta-label">${escapeHtml(label)}</span>
-                  <span class="meta-value">${escapeHtml(value)}</span>
-                </div>`).join('')}
-            </div>
-          </div>
-          ${settings.goals !== false ? `
-            <div class="doc-section">
-              <h3>Cél- és feladatrendszer</h3>
-              <p><strong>Nevelési feladatok:</strong> ${escapeHtml(frame.nevelesi_feladatok || '')}</p>
-              <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
-            </div>` : ''}
-          <div class="doc-section doc-table-section">
-            <h3>Területek heti eloszlása</h3>
-            <table class="official-table">
-              <colgroup><col style="width: 16%;" /><col style="width: 34%;" /><col style="width: 50%;" /></colgroup>
-              <thead><tr><th>Nap</th><th>Fő terület</th><th>Mikrocsoportos tevékenység</th></tr></thead>
-              <tbody>
-                ${grid.map((row) => `
-                  <tr>
-                    <td>${formatTableCell(row.nap)}</td>
-                    <td>${formatTableCell(row.fo_terulet)}</td>
-                    <td>${formatTableCell(row.mikrocsoportos_tevekenyseg)}</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-          ${showLiterature && String(frame.felhasznalt_irodalom || '').trim() ? `
-            <div class="doc-section">
-              <h3>Felhasznált irodalom</h3>
-              ${formatTableCell(frame.felhasznalt_irodalom)}
-            </div>` : ''}
-          ${settings.activities !== false ? result.napok.map((day) => `
-            <div class="doc-section document-day-sheet">
-              <h3>${escapeHtml(day.nap_neve || '')} – ${escapeHtml(day.tevekenyseg_forma || '')}</h3>
-              <p><strong>Napi cél:</strong> ${escapeHtml(day.napi_cel || '')}</p>
-              ${dayTable(day)}
-            </div>`).join('') : ''}
-        `;
+        validateGeneratedPlan(data);
+        lastResult = data;
+        const request = data.request || buildGenerationPayload();
+        const list = getDocumentList(data);
+        if (!list.some((doc) => doc.id === activeDocId)) activeDocId = list[0].id;
+        resultDocument.innerHTML = buildDocumentHtml(data, request, activeDocId);
+        renderDocumentTabs(list);
+        syncDocControls();
         applyExportSettingsToDocument();
       }
 
@@ -2064,6 +2273,8 @@
 
       function resetGeneratedResult() {
         lastResult = null;
+        activeDocId = null;
+        renderDocumentTabs([]);
         previewReady = false;
         resultDocument.replaceChildren();
         renderPreview();
@@ -2196,6 +2407,11 @@
             return;
           }
 
+          if (field.matches('[data-export="orientation"]')) {
+            field.value = 'portrait';
+            return;
+          }
+
           if (field.matches('[data-field="date-value"], [data-field="week-value"]')) {
             field.value = '';
             return;
@@ -2223,6 +2439,7 @@
         });
 
         localStorage.removeItem(STORAGE_KEYS.draft);
+        docSettings = {};
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
         const advancedSettings = document.getElementById('advancedSettings');
@@ -2374,8 +2591,16 @@
         });
       });
 
-      document.querySelectorAll('[data-export-section], [data-export="margin"]').forEach((control) => {
+      document.querySelectorAll('[data-export-section], [data-export="margin"], [data-export="orientation"]').forEach((control) => {
         control.addEventListener('change', () => {
+          if (control.matches('[data-export="margin"], [data-export="orientation"]')) {
+            const key = currentDocKey();
+            docSettings[key] = {
+              ...getDocSettings(key),
+              [control.dataset.export]: control.value
+            };
+            persistDraftState();
+          }
           if (lastResult) {
             renderResultDocument(lastResult);
           } else {
@@ -2383,6 +2608,12 @@
           }
         });
       });
+
+      document.getElementById('documentTabs').addEventListener('click', (event) => {
+        const tab = event.target.closest('[data-doc-id]');
+        if (tab) selectDocument(tab.dataset.docId);
+      });
+      document.getElementById('downloadZipBtn').addEventListener('click', exportAllAsZip);
 
       loadPreviousBtn.addEventListener('click', () => {
         historyPanel.classList.toggle('open');
@@ -2399,39 +2630,68 @@
         URL.revokeObjectURL(url);
       }
 
-      function exportAsPdf() {
+      const MARGIN_MM = { compact: 10, comfortable: 12, spacious: 15 };
+      const PAGE_MM = { portrait: [210, 297], landscape: [297, 210] };
+
+      // Renders one document into an off-screen sheet using its own orientation and margin.
+      function buildExportElement(docId) {
+        const { orientation, margin } = getDocSettings(docId);
+        const marginMm = MARGIN_MM[margin] || MARGIN_MM.comfortable;
+        const contentWidth = PAGE_MM[orientation][0] - marginMm * 2;
+        const element = document.createElement('div');
+        element.className = 'document-sheet export-sheet';
+        element.dataset.margin = margin;
+        element.dataset.orientation = orientation;
+        element.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${contentWidth}mm;min-height:0;max-width:none;padding:0;margin:0;box-shadow:none;background:#fff;`;
+        element.innerHTML = buildDocumentHtml(lastResult, lastResult.request || buildGenerationPayload(), docId);
+        document.body.appendChild(element);
+        return { element, orientation, marginMm };
+      }
+
+      async function renderPdfBlob(docId) {
+        const { element, orientation, marginMm } = buildExportElement(docId);
+        try {
+          return await window.html2pdf().set({
+            margin: [marginMm, marginMm, marginMm, marginMm],
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', 'h3', '.doc-meta-block'] }
+          }).from(element).outputPdf('blob');
+        } finally {
+          element.remove();
+        }
+      }
+
+      function renderDocxBlob(docId) {
+        const { element, orientation, marginMm } = buildExportElement(docId);
+        try {
+          const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
+          const exportOverrides = '.document-sheet{width:auto!important;min-height:0!important;padding:0!important;box-shadow:none!important;position:static!important;}';
+          const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}\n${exportOverrides}</style></head><body>${element.outerHTML}</body></html>`;
+          const twips = Math.round(marginMm * 56.7);
+          return window.htmlDocx.asBlob(html, { orientation, margins: { top: twips, right: twips, bottom: twips, left: twips } });
+        } finally {
+          element.remove();
+        }
+      }
+
+      function getActiveDocument() {
+        const list = getDocumentList();
+        return list.find((doc) => doc.id === currentDocKey()) || list[0];
+      }
+
+      async function exportAsPdf() {
         if (!window.html2pdf) {
           alert('A PDF export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
           return;
         }
-
-        const exportElement = document.getElementById('resultDocument');
-        if (!exportElement) {
+        if (!lastResult) {
           alert('Nincs megjeleníthető dokumentum a PDF exporthez.');
           return;
         }
-
-        applyExportSettingsToDocument();
-        exportElement.style.display = 'block';
-        exportElement.style.visibility = 'visible';
-        exportElement.style.opacity = '1';
-
-        const opt = {
-          margin: [15, 15, 15, 15],
-          filename: 'ovi-kreta-terv.pdf',
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            scrollX: 0,
-            scrollY: 0
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] }
-        };
-
-        window.html2pdf().set(opt).from(exportElement).save();
+        const doc = getActiveDocument();
+        downloadBlob(await renderPdfBlob(doc.id), `${doc.fileBase}.pdf`);
       }
 
       function exportAsDocx() {
@@ -2439,18 +2699,39 @@
           alert('A DOCX export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
           return;
         }
-
-        const exportElement = document.getElementById('resultDocument');
-        if (!exportElement) {
+        if (!lastResult) {
           alert('Nincs megjeleníthető dokumentum a DOCX exporthoz.');
           return;
         }
+        const doc = getActiveDocument();
+        downloadBlob(renderDocxBlob(doc.id), `${doc.fileBase}.docx`);
+      }
 
-        applyExportSettingsToDocument();
-        const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
-        const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${exportElement.outerHTML}</body></html>`;
-        const blob = window.htmlDocx.asBlob(html, { orientation: 'portrait' });
-        downloadBlob(blob, 'ovi-kreta-terv.docx');
+      async function exportAllAsZip() {
+        if (!window.JSZip || !window.html2pdf || !window.htmlDocx) {
+          alert('Az exportkönyvtárak (JSZip, PDF, DOCX) nem tölthetők be. Ellenőrizd az internetkapcsolatot.');
+          return;
+        }
+        if (!lastResult) return;
+        const button = document.getElementById('downloadZipBtn');
+        const originalLabel = button.textContent;
+        button.disabled = true;
+        try {
+          const zip = new window.JSZip();
+          const list = getDocumentList();
+          for (let index = 0; index < list.length; index += 1) {
+            const doc = list[index];
+            button.textContent = `ZIP készítése... ${index + 1}/${list.length}`;
+            zip.file(`${doc.fileBase}.pdf`, await renderPdfBlob(doc.id));
+            zip.file(`${doc.fileBase}.docx`, renderDocxBlob(doc.id));
+          }
+          downloadBlob(await zip.generateAsync({ type: 'blob' }), 'ovi-kreta-heti-terv.zip');
+        } catch (error) {
+          showGenerationError(`A ZIP letöltés sikertelen: ${error?.message || error}`);
+        } finally {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
       }
 
       function getDetailLevel() {
@@ -2507,14 +2788,49 @@
         };
       }
 
+      const WEEKLY_PHASES = [
+        [0, 'Heti tematikus keret és célok tervezése...'],
+        [30, 'Hétfői és keddi tevékenységek kidolgozása...'],
+        [65, 'Szerdai és csütörtöki játékok és differenciálás összeállítása...'],
+        [100, 'Pénteki záróélmény kidolgozása és Kréta-formázás...']
+      ];
+      const DAILY_PHASES = [
+        [0, 'Ráhangolódás a témára...'],
+        [12, 'A fő tevékenység kidolgozása...'],
+        [28, 'Differenciálás és gyakorlás összeállítása...'],
+        [42, 'Összegzés és Kréta-formázás...']
+      ];
+
+      function startGenerationLoader(payload) {
+        const loader = document.getElementById('generationLoader');
+        const status = document.getElementById('generationStatus');
+        const elapsed = document.getElementById('generationElapsed');
+        const phases = payload.duration === 'Heti' && payload.includeDailyBreakdown ? WEEKLY_PHASES : DAILY_PHASES;
+        const startedAt = Date.now();
+        const tick = () => {
+          const seconds = Math.floor((Date.now() - startedAt) / 1000);
+          const phase = phases.filter(([from]) => seconds >= from).pop();
+          if (status) status.textContent = phase[1];
+          if (elapsed) elapsed.textContent = `Eltelt idő: ${seconds} mp${phases === WEEKLY_PHASES ? ' – a heti terv akár 2–3 percig is eltarthat' : ''}`;
+        };
+        tick();
+        if (loader) loader.hidden = false;
+        const timer = setInterval(tick, 1000);
+        return () => {
+          clearInterval(timer);
+          if (loader) loader.hidden = true;
+        };
+      }
+
       async function generatePlan() {
         hideGenerationErrorBanner();
         resetGeneratedResult();
         nextBtn.disabled = true;
         nextBtn.textContent = 'Generálás...';
+        const payload = buildGenerationPayload();
+        const stopLoader = startGenerationLoader(payload);
 
         try {
-          const payload = buildGenerationPayload();
 
           const apiBaseUrl = getApiBaseUrl();
           if (!apiBaseUrl) {
@@ -2555,6 +2871,7 @@
           const message = error?.message || 'A generálás hiba miatt nem tudott lefutni.';
           showGenerationError(`Generálási hiba: ${message}`);
         } finally {
+          stopLoader();
           nextBtn.disabled = false;
           nextBtn.textContent = 'Tervezet elkészítése';
         }
