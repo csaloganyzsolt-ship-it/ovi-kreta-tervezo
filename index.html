@@ -90,6 +90,12 @@
         gap: 22px;
       }
 
+      .preview {
+        grid-column: 1 / -1;
+        width: 100%;
+        order: 3;
+      }
+
       .panel {
         background: rgba(255,255,255,0.72);
         border: 1px solid var(--border);
@@ -244,6 +250,52 @@
         background: white;
         color: var(--text);
         box-shadow: 0 6px 16px rgba(98,76,60,0.08);
+      }
+
+      .weekly-settings-panel {
+        margin-top: 12px;
+        padding: 14px 16px;
+        border: 1px solid rgba(78,137,100,0.4);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(123,173,136,0.12), rgba(168,210,187,0.16));
+        display: grid;
+        gap: 12px;
+        animation: weeklyPanelIn 0.25s ease-out;
+      }
+      .weekly-settings-panel[hidden] { display: none; }
+      .weekly-check { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; cursor: pointer; }
+      .weekly-check input { margin-top: 3px; }
+      @keyframes weeklyPanelIn {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .document-sheet .document-day-sheet {
+        break-before: page;
+        page-break-before: always;
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+
+      .inline-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        color: var(--text);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .inline-toggle.active {
+        background: linear-gradient(135deg, rgba(123,173,136,0.18), rgba(168,210,187,0.22));
+        border-color: rgba(78,137,100,0.5);
+        color: var(--primary-dark);
       }
 
       .check-grid {
@@ -472,24 +524,258 @@
         color: var(--muted);
       }
 
-      .result-card {
-        background: #fff;
+      .document-shell {
+        background: #f6f4f1;
         border: 1px solid var(--border);
         border-radius: 18px;
-        padding: 16px 14px;
-        margin-bottom: 14px;
+        padding: 0;
       }
 
-      .result-top {
+      .date-inline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .export-settings-panel {
+        margin: 0 0 18px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,239,234,0.72));
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .export-settings-panel h3 {
+        margin: 0 0 12px;
+        font-size: 1rem;
+      }
+
+      .export-settings-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 14px;
+        margin-bottom: 12px;
+      }
+
+      .setting-option {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 8px 10px;
+        font-size: 0.82rem;
+        color: var(--text);
+        width: 100%;
+      }
+
+      .setting-option input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        flex-shrink: 0;
+      }
+
+      .setting-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 10px;
+        gap: 12px;
+        margin-top: 10px;
       }
 
-      .result-top strong {
-        font-size: 0.96rem;
+      .setting-row label {
+        font-size: 0.82rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .setting-row select {
+        border: 1px solid var(--border);
+        background: white;
+        border-radius: 10px;
+        min-width: 150px;
+        padding: 8px 10px;
+      }
+
+      .document-sheet {
+        width: 210mm;
+        min-height: 297mm;
+        max-width: 100%;
+        height: auto;
+        padding: 12mm 14mm;
+        background: white;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        margin: 0 auto;
+        box-sizing: border-box;
+        color: #1d2329;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        transition: padding 0.2s ease;
+      }
+
+      .document-sheet[data-margin="compact"] { padding: 10mm 12mm; }
+      .document-sheet[data-margin="comfortable"] { padding: 12mm 14mm; }
+      .document-sheet[data-margin="spacious"] { padding: 15mm 16mm; }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      .document-sheet .doc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid rgba(142, 129, 116, 0.25);
+        padding-bottom: 18px;
+        margin-bottom: 22px;
+      }
+
+      .document-sheet .doc-header h2 {
+        margin: 0;
+        font-size: 1.65rem;
+        letter-spacing: 0.02em;
+      }
+
+      .document-sheet .doc-meta {
+        font-size: 0.8rem;
+        color: var(--muted);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .document-sheet .doc-section {
+        margin-bottom: 28px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet .doc-day {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(142, 129, 116, 0.2);
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet .doc-day + .doc-day {
+        break-before: page;
+        page-break-before: always;
+      }
+
+      .document-sheet .doc-section h3 {
+        margin: 0 0 10px;
+        font-size: 1.05rem;
+        color: #2d3640;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet .doc-section p,
+      .document-sheet .doc-section li {
+        color: #37434d;
+        line-height: 1.7;
+        margin: 0 0 10px;
+        font-size: 0.98rem;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet .official-meta {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 8px 18px;
+        border: 1px solid rgba(142, 129, 116, 0.2);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: #faf7f4;
+      }
+
+      .document-sheet .meta-row {
+        display: contents;
+      }
+
+      .document-sheet .meta-label {
+        font-weight: 700;
+        color: #2d3640;
+      }
+
+      .document-sheet .meta-value {
+        color: #37434d;
+      }
+
+      .document-sheet .official-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid rgba(142, 129, 116, 0.45);
+        font-size: 0.92rem;
+        table-layout: fixed;
+      }
+
+      .document-sheet .official-table th,
+      .document-sheet .official-table td {
+        border: 1px solid rgba(142, 129, 116, 0.45);
+        vertical-align: top;
+        padding: 10px 8px;
+        text-align: left;
+        color: #2f3b42;
+        overflow-wrap: anywhere;
+        hyphens: auto;
+        line-height: 1.6;
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+
+      .document-sheet .official-table th {
+        background: #f4efe9;
+        font-weight: 700;
+      }
+
+      .document-sheet .doc-table-section,
+      .document-sheet .official-table,
+      .document-sheet .official-table tr {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+
+      .document-sheet .official-table thead {
+        display: table-header-group;
+      }
+
+      .document-sheet .official-table p {
+        font-size: inherit;
+        line-height: inherit;
+        margin: 0 0 0.8em;
+        orphans: 3;
+        widows: 3;
+      }
+
+      .document-sheet .professional-list {
+        margin: 0 0 0 18px;
+        padding: 0;
+        color: #37434d;
+        line-height: 1.7;
+      }
+
+      .document-sheet .doc-section ul,
+      .document-sheet .doc-section ol {
+        margin: 0 0 0 18px;
+        padding: 0;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .document-sheet .doc-section strong {
+        color: #1a2430;
+      }
+
+      .document-sheet .doc-section p:last-child,
+      .document-sheet .doc-section li:last-child {
+        margin-bottom: 0;
       }
 
       .copy-btn {
@@ -500,12 +786,6 @@
         font-size: 0.8rem;
         color: var(--primary-dark);
         cursor: pointer;
-      }
-
-      .result-card p {
-        margin-bottom: 0;
-        color: var(--muted);
-        line-height: 1.55;
       }
 
       .download-row {
@@ -533,19 +813,21 @@
 
       .chip {
         border: 1px solid var(--border);
-        background: white;
-        color: var(--muted);
+        background: #f7f4f2;
+        color: #6f6662;
         border-radius: 999px;
         padding: 8px 12px;
         font-size: 0.82rem;
         font-weight: 600;
         cursor: pointer;
+        transition: all 0.2s ease;
       }
 
       .chip.active {
-        background: linear-gradient(135deg, rgba(184,143,116,0.1), rgba(217,196,177,0.2));
-        color: var(--primary-dark);
-        border-color: rgba(184,143,116,0.25);
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: #ffffff;
+        border-color: var(--primary-dark);
+        box-shadow: 0 10px 16px rgba(141, 104, 82, 0.18);
       }
 
       .add-card {
@@ -617,6 +899,17 @@
 
         .preview {
           order: 3;
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .document-sheet {
+          width: 100%;
+          max-width: 100%;
+          min-height: auto;
+          height: auto;
+          padding: 16mm;
         }
       }
 
@@ -627,8 +920,14 @@
 
         .field-grid,
         .check-grid,
-        .download-row {
+        .download-row,
+        .export-settings-grid {
           grid-template-columns: 1fr;
+        }
+
+        .setting-row {
+          flex-direction: column;
+          align-items: flex-start;
         }
 
         .topbar {
@@ -643,6 +942,71 @@
 
         .btn {
           width: 100%;
+        }
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 12mm;
+        }
+
+        body {
+          background: #fff;
+          padding: 0;
+        }
+
+        .topbar,
+        .wizard,
+        .content,
+        .preview-empty,
+        .preview-header,
+        .export-settings-panel,
+        .download-row,
+        .footer-actions,
+        .btn,
+        .mode-pill,
+        .chip,
+        .history-panel,
+        #loadPreviousBtn,
+        .quick-actions {
+          display: none !important;
+        }
+
+        .page {
+          width: 100%;
+          max-width: none;
+          padding: 0;
+          margin: 0;
+          background: #fff;
+        }
+
+        .app {
+          display: block;
+          width: 100%;
+          max-width: none;
+          grid-template-columns: none;
+        }
+
+        .panel.preview,
+        .preview-box,
+        .preview-content,
+        .document-shell,
+        .document-sheet {
+          display: block !important;
+          width: 100% !important;
+          max-width: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: #fff !important;
+        }
+
+        .document-sheet {
+          min-height: 0;
+          page-break-inside: auto;
+          break-inside: auto;
         }
       }
     </style>
@@ -676,34 +1040,93 @@
               <div class="field">
                 <label>Időtartam</label>
                 <div class="segmented" data-group="duration">
-                  <button class="segment active" type="button" data-value="Napi">Napi</button>
-                  <button class="segment" type="button" data-value="Heti">Heti</button>
+                  <button class="segment active" type="button" data-group="duration" data-value="Napi">Napi</button>
+                  <button class="segment" type="button" data-group="duration" data-value="Heti">Heti</button>
+                </div>
+                <div id="weeklySettingsPanel" class="weekly-settings-panel" hidden>
+                  <label class="weekly-check">
+                    <input type="checkbox" id="includeDailyBreakdown" checked />
+                    <span>Szeretnék mind az 5 napra (Hétfő–Péntek) önálló, részletesen kidolgozott napi tervezetet is a heti keret mellé</span>
+                  </label>
+                  <div class="field">
+                    <label for="weeklyProgressionType">Heti építkezés</label>
+                    <select id="weeklyProgressionType">
+                      <option value="progressive">Szervesen egymásra épülő projekt (Hétfői gyűjtéstől a Pénteki zárásig)</option>
+                      <option value="area_focused">Klasszikus területváltó (Minden nap más nevelési terület áll fókuszban)</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="fridayClosingType">Pénteki lezárás formája</label>
+                    <select id="fridayClosingType">
+                      <option value="Kiállítás a csoportszobában">Kiállítás a csoportszobában</option>
+                      <option value="Dramatikus közös játék">Dramatikus közös játék</option>
+                      <option value="Ünnepi szokás/Kóstoló">Ünnepi szokás/Kóstoló</option>
+                      <option value="Projektzáró élményséta">Projektzáró élményséta</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
               <div class="field">
                 <label>Korcsoport</label>
                 <select data-field="group">
-                  <option>Kiscsoport</option>
-                  <option>Középső csoport</option>
-                  <option selected>Nagycsoport</option>
-                  <option>Vegyes csoport</option>
+                  <option value="Kiscsoport">Kiscsoport</option>
+                  <option value="Középső csoport">Középső csoport</option>
+                  <option value="Nagycsoport" selected>Nagycsoport</option>
+                  <option value="Vegyes csoport">Vegyes csoport</option>
                 </select>
+              </div>
+
+              <div class="field">
+                <label>Óvoda neve</label>
+                <input type="text" data-field="kindergarten-name" placeholder="Pl.: Bölcsőde és Óvoda Péter Pál" />
+              </div>
+
+              <div class="field">
+                <label>Óvodapedagógus neve</label>
+                <input type="text" data-field="teacher-name" placeholder="Pl.: Nagy Eszter" />
+              </div>
+
+              <div class="field full">
+                <label>Csoport neve</label>
+                <input type="text" data-field="group-name" placeholder="Pl.: Napfény csoport" />
               </div>
 
               <div class="field full">
                 <label>Téma / projekt címe</label>
-                <input type="text" data-field="theme" value="Őszi falevelek" />
+                <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
+                <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
+                <div style="margin-top: 12px;">
+                  <button id="clearDraftBtn" class="btn secondary" type="button">Új tervezet / Tiszta lap</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Tevékenységi forma</label>
+                <input type="text" data-field="tevekenyseg-forma" placeholder="Pl.: Ének, zene" />
+              </div>
+
+              <div class="field full">
+                <label>A tevékenység előzménye</label>
+                <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről."></textarea>
+              </div>
+
+              <div class="field full">
+                <label>Időpont</label>
+                <div class="field date-inline" id="dateFieldWrapper">
+                  <input type="date" id="dailyDateField" data-field="date-value" placeholder="Válassz dátumot" />
+                  <input type="week" id="weeklyDateField" data-field="week-value" placeholder="Válassz hetet" style="display:none;" />
+                </div>
               </div>
 
               <div class="field full">
                 <label>Melyik nevelési területek lesznek fókuszban?</label>
                 <div class="check-grid">
-                  <label class="check-item"><input type="checkbox" checked /> Külső világ tevékeny megismerése</label>
-                  <label class="check-item"><input type="checkbox" checked /> Verselés, mesélés</label>
-                  <label class="check-item"><input type="checkbox" /> Ének, zene, énekes játék</label>
-                  <label class="check-item"><input type="checkbox" checked /> Rajzolás, mintázás, kézimunka</label>
-                  <label class="check-item"><input type="checkbox" /> Mozgás</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Külső világ tevékeny megismerése" /> Külső világ tevékeny megismerése</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Ének, zene, énekes játék" /> Ének, zene, énekes játék</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Rajzolás, mintázás, kézimunka" /> Rajzolás, mintázás, kézimunka</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Mozgás" /> Mozgás</label>
                 </div>
               </div>
 
@@ -719,7 +1142,7 @@
 
               <div class="field full">
                 <label>Saját megjegyzés / egyéni kiegészítés</label>
-                <textarea data-field="custom-note" placeholder="Pl. A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni.">A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni.</textarea>
+                <textarea data-field="custom-note" placeholder="Pl.: A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni."></textarea>
               </div>
             </div>
           </div>
@@ -731,13 +1154,13 @@
             <div class="field-grid">
               <div class="field">
                 <label>Hány gyerek van a csoportban?</label>
-                <input type="number" value="20" />
+                <input type="number" min="1" step="1" data-field="child-count" placeholder="Pl.: 20" />
               </div>
 
               <div class="field">
                 <label>Csoport energiaszintje</label>
                 <div class="slider-wrap">
-                  <input type="range" min="0" max="100" value="65" />
+                  <input type="range" min="0" max="100" value="65" data-field="energy-level" />
                   <div class="slider-labels">
                     <span>Nyugodt</span>
                     <span>Forgalmas</span>
@@ -750,7 +1173,7 @@
                 <div class="toggle-row">
                   <span>Van/Nincs</span>
                   <label class="switch">
-                    <input type="checkbox" checked />
+                    <input type="checkbox" checked data-field="has-preschoolers" />
                     <span class="slider"></span>
                   </label>
                 </div>
@@ -770,18 +1193,18 @@
                 <label>Speciális nevelési igények</label>
                 <div class="inline-box">
                   <h3>Milyen kiemelt figyelmet igénylő gyerekek vannak jelen?</h3>
-                  <div class="check-grid">
-                    <label class="check-item"><input type="checkbox" /> Figyelemzavar / hiperaktivitás</label>
-                    <label class="check-item"><input type="checkbox" /> Beszédfejlődési elmaradás</label>
-                    <label class="check-item"><input type="checkbox" /> Autizmus spektrumzavar</label>
-                    <label class="check-item"><input type="checkbox" /> Mozgásfejlődési elmaradás</label>
+                  <div class="check-grid" data-field="special-needs-group">
+                    <label class="check-item"><input type="checkbox" data-sni-label="Figyelemzavar / hiperaktivitás" /> Figyelemzavar / hiperaktivitás</label>
+                    <label class="check-item"><input type="checkbox" data-sni-label="Beszédfejlődési elmaradás" /> Beszédfejlődési elmaradás</label>
+                    <label class="check-item"><input type="checkbox" data-sni-label="Autizmus spektrumzavar" /> Autizmus spektrumzavar</label>
+                    <label class="check-item"><input type="checkbox" data-sni-label="Mozgásfejlődési elmaradás" /> Mozgásfejlődési elmaradás</label>
                   </div>
                 </div>
               </div>
 
               <div class="field full">
                 <label>Saját válasz / más szempont</label>
-                <textarea placeholder="Itt írhat be saját megfigyelést, például: egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz.">Egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz, ezért a lépésekben többet használok képi támogatást.</textarea>
+                <textarea data-field="group-note" placeholder="Pl.: Egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz."></textarea>
               </div>
             </div>
           </div>
@@ -793,12 +1216,12 @@
             <div class="field-grid">
               <div class="field full">
                 <label>Van kötelező mese, vers vagy dal?</label>
-                <textarea>Mindig legyen benne a „Süni, süni, sünikém” című dal.</textarea>
+                <textarea data-field="required-text" placeholder="Pl.: Mindig legyen benne a „Süni, süni, sünikém” című dal."></textarea>
               </div>
 
               <div class="field full">
                 <label>Saját ötletek, eszközök, amiket felhasználnál</label>
-                <textarea>Gyűjtöttünk gesztenyét és faleveleket, szeretném felhasználni a barkácsoláshoz és a természetes anyagok megfigyeléséhez.</textarea>
+                <textarea data-field="idea-note" placeholder="Pl.: Gyűjtöttünk gesztenyét és faleveleket, szeretném felhasználni a barkácsoláshoz."></textarea>
               </div>
 
               <div class="field full">
@@ -814,25 +1237,46 @@
               <div class="field full">
                 <label>Korábbi terv behívása</label>
                 <button class="btn secondary" id="loadPreviousBtn" type="button">Tavalyi terv újrahasznosítása</button>
-                <div class="history-panel" id="historyPanel">
-                  <button class="history-item" type="button" data-theme="Őszi falevelek" data-text="A tavalyi őszi tervet frissítem, több falépcsős megfigyelési feladattal és kézműves elemmel.">Őszi falevelek – korábbi terv</button>
-                  <button class="history-item" type="button" data-theme="Téli állatok" data-text="A téli állatok témáját újrahasznosítom, hangsúlyozva a mozgásos játékokat és a csendes megfigyelést.">Téli állatok – korábbi terv</button>
-                  <button class="history-item" type="button" data-theme="Márton-nap" data-text="Márton-napra szánt terv: népköltészeti elemekkel és közös készítő tevékenységgel.">Márton-nap – korábbi terv</button>
-                </div>
+                <div class="history-panel" id="historyPanel"></div>
               </div>
 
               <div class="field full">
-                <label>Saját válasz vagy külön kérés</label>
-                <textarea placeholder="Ha van konkrét elképzelésed, itt tudod beírni.">Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen.</textarea>
+                <label>Saját kérés vagy további elképzelés</label>
+                <textarea data-field="custom-request" placeholder="Pl.: Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen."></textarea>
+              </div>
+
+              <div class="field full">
+                <label class="check-item" style="display:flex; align-items:center; gap:10px; font-weight:600; color: var(--text);">
+                  <input type="checkbox" data-field="show-literature" />
+                  Felhasznált irodalom megjelenítése a lap alján
+                </label>
+              </div>
+
+              <div class="field full">
+                <label>Generálás hossza és kidolgozottsága</label>
+                <div class="slider-wrap">
+                  <input type="range" min="0" max="100" value="68" data-field="detail-level" />
+                  <div class="slider-labels">
+                    <span>Vázlatos</span>
+                    <span>Részletesen kidolgozott</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div class="step-panel" data-step="4">
-            <h2>4. Várakozás és generálás</h2>
-            <p class="subhead">Az AI a háttérben összerakja a tervezetet, a Kréta rubrikáinak megfelelően.</p>
+            <h2>4. Összegzés és generálás</h2>
+            <p class="subhead">Mielőtt elküldöd a végső generálást, ellenőrizd a beállításokat és a szerkesztett szövegeket.</p>
 
             <div class="inline-box">
+              <h3>Ellenőrző lista</h3>
+              <div id="summaryChecklist" style="display: grid; gap: 10px; margin-top: 12px;"></div>
+            </div>
+
+            <div id="generationErrorBanner" role="alert" hidden style="margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2b8; font-weight: 600; display: none;"></div>
+
+            <div class="inline-box" style="margin-top: 18px;">
               <h3>Generálási folyamat</h3>
               <div class="mini-badges">
                 <span class="tag">Célok összeállítása</span>
@@ -872,45 +1316,32 @@
                 <span class="status-pill">Kész</span>
               </div>
 
-              <div class="summary-box">
-                <p><strong>Projekt:</strong> Őszi falevelek • <strong>Kor:</strong> Nagycsoport • <strong>Időtartam:</strong> Napi</p>
+              <div class="export-settings-panel">
+                <h3>Dokumentum beállítások</h3>
+                <div class="export-settings-grid">
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenységek</label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="differentiation" /> Differenciálás</label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="materials" /> Eszközök</label>
+                </div>
+                <div class="setting-row">
+                  <label for="pageMarginSelect">Oldalmargó</label>
+                  <select id="pageMarginSelect" data-export="margin">
+                    <option value="compact">Kompakt</option>
+                    <option value="comfortable" selected>Normál</option>
+                    <option value="spacious">Tágas</option>
+                  </select>
+                </div>
               </div>
 
-              <div class="result-card">
-                <div class="result-top">
-                  <strong>Cél- és feladatrendszer</strong>
-                  <button class="copy-btn" type="button">Másolás</button>
-                </div>
-                <p>Megfigyelés, beszédfejlesztés, finommotorika és kreativitás fejlesztése az őszi természet és a falevelek témájában.</p>
-              </div>
-
-              <div class="result-card">
-                <div class="result-top">
-                  <strong>Tevékenységek</strong>
-                  <button class="copy-btn" type="button">Másolás</button>
-                </div>
-                <p>Levelek gyűjtése, rajzolás, ritmusjáték, mesehallgatás és kézműves tevékenység a tananyaghoz igazítva.</p>
-              </div>
-
-              <div class="result-card">
-                <div class="result-top">
-                  <strong>Kiemelt differenciálás</strong>
-                  <button class="copy-btn" type="button">Másolás</button>
-                </div>
-                <p>A csoport energiaszintje alapján rövidebb, célzottabb blokkok és mozgásos levezető játékok.</p>
-              </div>
-
-              <div class="result-card">
-                <div class="result-top">
-                  <strong>Szülői tájékoztató</strong>
-                  <button class="copy-btn" type="button">Másolás</button>
-                </div>
-                <p>Őszi falevelek témájában sokféle mozgásos és kézműves tevékenység várja a gyerekeket, miközben a finommotorika és a természet megfigyelése is fejlődik.</p>
+              <div class="document-shell">
+                <div class="document-sheet" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
               <div class="download-row">
-                <button class="download-btn" type="button">PDF</button>
-                <button class="download-btn" type="button">DOCX</button>
+                <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
+                <button id="downloadDocxBtn" class="download-btn" type="button">DOCX letöltése</button>
               </div>
             </div>
           </div>
@@ -918,25 +1349,540 @@
       </main>
     </div>
 
+    <script src="config.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"></script>
     <script>
       const steps = Array.from(document.querySelectorAll('.step-panel'));
       const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
       const nextBtn = document.getElementById('nextBtn');
       const backBtn = document.getElementById('backBtn');
-      const summaryBox = document.querySelector('.summary-box p');
       const loadPreviousBtn = document.getElementById('loadPreviousBtn');
       const historyPanel = document.getElementById('historyPanel');
       const previewPanel = document.getElementById('previewPanel');
       const previewEmpty = document.getElementById('previewEmpty');
       const previewContent = document.getElementById('previewContent');
+      const resultDocument = document.getElementById('resultDocument');
       let currentStep = 0;
       let previewReady = false;
+      let lastResult = null;
+
+      const STORAGE_KEYS = {
+        profile: 'oviKretaProfile',
+        history: 'oviKretaPlansHistory',
+        draft: 'oviKretaDraft'
+      };
+
+      function resolveActiveDurationFromDom() {
+        const activeSegment = document.querySelector('.segment.active[data-group="duration"]');
+        const value = (activeSegment?.dataset?.value || activeSegment?.textContent || '').trim();
+        return value || 'Napi';
+      }
+
+      function getSelectedDuration() {
+        return resolveActiveDurationFromDom();
+      }
+
+      function getApiBaseUrl() {
+        const configured = String(window.APP_CONFIG?.apiBaseUrl || '').trim().replace(/\/+$/, '');
+        if (configured) return configured;
+        const host = window.location.hostname;
+        return host === 'localhost' || host === '127.0.0.1' || !host ? 'http://localhost:4000' : '';
+      }
+
+      function getWeeklyDailyBreakdown() {
+        const checkbox = document.getElementById('includeDailyBreakdown');
+        return Boolean(checkbox) && getSelectedDuration() === 'Heti' && checkbox.checked;
+      }
+
+      function getWeeklyProgressionType() {
+        return document.getElementById('weeklyProgressionType')?.value || 'progressive';
+      }
+
+      function getFridayClosingType() {
+        return document.getElementById('fridayClosingType')?.value || 'Kiállítás a csoportszobában';
+      }
+
+      function updateWeeklyDailyBreakdownVisibility() {
+        const panel = document.getElementById('weeklySettingsPanel');
+        if (!panel) return;
+        panel.hidden = getSelectedDuration() !== 'Heti';
+      }
+
+      function getTheme() {
+        return document.querySelector('input[data-field="theme"]')?.value || 'Téma';
+      }
+
+      function getDateValue() {
+        const isWeekly = getSelectedDuration() === 'Heti';
+        const weeklyInput = document.querySelector('input[data-field="week-value"]');
+        const dailyInput = document.querySelector('input[data-field="date-value"]');
+        if (isWeekly) return weeklyInput?.value || '';
+        return dailyInput?.value || '';
+      }
+
+      function getGroup() {
+        return document.querySelector('select[data-field="group"]')?.value || 'Nagycsoport';
+      }
+
+      function renderSummaryChecklist() {
+        const checklist = document.getElementById('summaryChecklist');
+        if (!checklist) return;
+
+        const payload = buildGenerationPayload();
+        const { selectedGoals, specialNeeds, customNotes } = payload;
+        const customFields = [
+          ['Saját megjegyzés', customNotes.primary || 'Nincs megadva'],
+          ['Csoport megjegyzés', customNotes.groupNote || 'Nincs megadva'],
+          ['Kötelező mese/vers/dal', customNotes.requiredText || 'Nincs megadva'],
+          ['Eszközök és ötletek', customNotes.ideaNote || 'Nincs megadva'],
+          ['Külön kérés', customNotes.customRequest || 'Nincs megadva'],
+        ];
+
+        const sections = [
+          ['Alapadatok', [
+            `Óvoda: ${payload.kindergartenName || 'Nincs megadva'}`,
+            `Óvodapedagógus: ${payload.teacherName || 'Nincs megadva'}`,
+            `Csoport: ${payload.groupName || 'Nincs megadva'}`,
+            `Korcsoport: ${payload.group}`,
+            `Időtartam: ${payload.duration}`,
+            `Napi lebontás: ${payload.includeDailyBreakdown ? 'igen' : 'nem'}`,
+            `Időpont: ${payload.dateValue || 'Nincs megadva'}`,
+            `Részletességi szint: ${payload.detailLevel} / 100`,
+            `Kimeneti forma: ${payload.outputMode}`,
+            `Irodalom megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
+          ]],
+          ['Téma és célok', [
+            `Téma: ${payload.theme || 'Nincs megadva'}`,
+            `Tevékenységi forma: ${payload.tevekenysegForma || 'Nincs megadva'}`,
+            `Előzmény: ${payload.elozmeny || 'Nincs megadva'}`,
+            `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
+            `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
+          ]],
+          ['Differenciálás', [
+            `Létszám: ${payload.childCount ?? 'Nincs megadva'}`,
+            `Energiaszint: ${payload.energyLevel} / 100`,
+            `Iskola-előkészítés: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
+            `Speciális igények: ${specialNeeds.join(', ') || 'Nincs megadva'}`,
+          ]],
+          ['Saját szövegek', customFields.map(([label, value]) => `${label}: ${value}`)],
+        ];
+
+        checklist.innerHTML = sections.map(([heading, items]) => `
+          <div style="padding: 10px 12px; border: 1px solid #dfe6e1; border-radius: 10px; background: #f7faf7;">
+            <strong style="display:block; margin-bottom: 6px; color: #1d4f36;">${escapeHtml(heading)}</strong>
+            <div style="display:grid; gap: 4px; font-size: 0.92rem; color: #2b2f2d; line-height:1.5;">
+              ${items.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('')}
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function setDurationSelection(nextValue) {
+        const value = String(nextValue || 'Napi').trim();
+        document.querySelectorAll('.segment[data-group="duration"]').forEach((segment) => {
+          segment.classList.toggle('active', segment.dataset.value === value);
+        });
+
+        const dateField = document.getElementById('dailyDateField');
+        const weekField = document.getElementById('weeklyDateField');
+        const showDaily = value === 'Napi';
+
+        if (dateField) {
+          dateField.type = 'date';
+          dateField.style.display = showDaily ? 'inline-block' : 'none';
+          if (showDaily && !dateField.value) {
+            dateField.value = new Date().toISOString().slice(0, 10);
+          }
+        }
+
+        if (weekField) {
+          weekField.type = 'week';
+          weekField.style.display = showDaily ? 'none' : 'inline-block';
+          if (!showDaily && !weekField.value && typeof document !== 'undefined') {
+            const currentDate = new Date();
+            const weekStart = new Date(currentDate);
+            const day = weekStart.getDay() || 7;
+            weekStart.setDate(weekStart.getDate() - day + 1);
+            const weekYear = Number(weekStart.toISOString().slice(0, 4));
+            const weekNumber = Math.ceil((((new Date(weekYear, 0, 1) - weekStart) / 86400000) + 1) / 7);
+            weekField.value = `${weekYear}-W${String(weekNumber).padStart(2, '0')}`;
+          }
+        }
+
+        saveProfileToStorage();
+        persistDraftState();
+        updateWeeklyDailyBreakdownVisibility();
+        updateSummary();
+      }
 
       function updateSummary() {
-        const duration = document.querySelector('.segment.active[data-group="duration"]')?.dataset.value || 'Napi';
-        const theme = document.querySelector('input[data-field="theme"]')?.value || 'Téma';
-        const group = document.querySelector('select[data-field="group"]')?.value || 'Nagycsoport';
-        summaryBox.innerHTML = `<strong>Projekt:</strong> ${theme} • <strong>Kor:</strong> ${group} • <strong>Időtartam:</strong> ${duration}`;
+        // A generated document keeps the settings it was actually generated from.
+        renderSummaryChecklist();
+      }
+
+      function getAutoSaveKey(element) {
+        if (element?.dataset?.field) return `field:${element.dataset.field}`;
+        if (element?.dataset?.exportSection) return `export:${element.dataset.exportSection}`;
+        if (element?.id) return `id:${element.id}`;
+        if (element?.dataset?.mode) return `mode:${element.dataset.mode}`;
+        if (element?.dataset?.value && element.matches('.segment')) return `segment:${element.dataset.value}`;
+        if (element?.dataset?.value && element.matches('.chip')) return `chip:${element.textContent.trim()}`;
+        const labelText = element?.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() || element?.closest('.check-item')?.textContent?.replace(/\s+/g, ' ').trim() || element?.name || '';
+        return labelText ? `label:${labelText}` : `index:${Array.from(document.querySelectorAll('input, textarea, select, .chip, .segment, .mode-pill')).indexOf(element)}`;
+      }
+
+      function collectDraftState() {
+        const selectedGoals = Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim());
+        const draft = {
+          version: 1,
+          currentStep,
+          duration: getSelectedDuration(),
+          dateValue: getDateValue(),
+          includeDailyBreakdown: getWeeklyDailyBreakdown(),
+          selectedGoals,
+          fields: {}
+        };
+
+        document.querySelectorAll('input, textarea, select').forEach((field) => {
+          const key = getAutoSaveKey(field);
+          if (field.type === 'checkbox') {
+            draft.fields[key] = field.checked;
+          } else if (field.type === 'range' || field.type === 'number' || field.type === 'date' || field.type === 'week' || field.tagName === 'TEXTAREA' || field.tagName === 'SELECT' || field.tagName === 'INPUT') {
+            draft.fields[key] = field.value;
+          }
+        });
+
+        document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
+          const key = getAutoSaveKey(button);
+          draft.fields[key] = button.classList.contains('active');
+        });
+
+        return draft;
+      }
+
+      function applyDraftState(draft) {
+        if (!draft || typeof draft !== 'object') return;
+
+        const map = new Map();
+        document.querySelectorAll('input, textarea, select, .chip, .segment, .mode-pill').forEach((element) => {
+          map.set(getAutoSaveKey(element), element);
+        });
+
+        Object.entries(draft.fields || {}).forEach(([key, value]) => {
+          const element = map.get(key);
+          if (!element) return;
+
+          if (element.matches('.chip, .segment, .mode-pill')) {
+            element.classList.toggle('active', Boolean(value));
+            return;
+          }
+
+          if (element.type === 'checkbox') {
+            element.checked = Boolean(value);
+          } else if (element.tagName === 'SELECT' || element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+            element.value = value ?? '';
+          }
+        });
+
+        if (typeof draft.currentStep === 'number') {
+          currentStep = Math.min(Math.max(draft.currentStep, 0), steps.length - 1);
+        }
+
+        const duration = draft.duration || 'Napi';
+        document.querySelectorAll('.segment[data-group="duration"]').forEach((segment) => {
+          segment.classList.toggle('active', segment.dataset.value === duration);
+        });
+
+        updateDateInputsForDuration();
+        updateWeeklyDailyBreakdownVisibility();
+
+        const dateTarget = document.querySelector(getSelectedDuration() === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
+        if (dateTarget && draft.dateValue) {
+          dateTarget.value = draft.dateValue;
+        }
+
+        updateSummary();
+        if (lastResult) renderResultDocument(lastResult);
+      }
+
+      function persistDraftState() {
+        try {
+          localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(collectDraftState()));
+        } catch (error) {
+          console.warn('Draft save failed:', error);
+        }
+      }
+
+      function loadDraftFromStorage() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.draft) || 'null');
+          if (saved) {
+            applyDraftState(saved);
+            renderStep();
+          }
+        } catch (error) {
+          console.warn('Draft load failed:', error);
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function formatTableCell(value) {
+        const parts = Array.isArray(value)
+          ? value.map((part) => String(part ?? '').trim()).filter(Boolean)
+          : String(value ?? '').split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+
+        if (!parts.length) return '';
+        return parts
+          .map((part) => `<p>${escapeHtml(part).replace(/\r?\n/g, '<br>')}</p>`)
+          .join('');
+      }
+
+      function getExportSettings() {
+        const settings = {};
+        document.querySelectorAll('[data-export-section]').forEach((checkbox) => {
+          settings[checkbox.dataset.exportSection] = checkbox.checked;
+        });
+        const margin = document.querySelector('[data-export="margin"]')?.value || 'comfortable';
+        return { settings, margin };
+      }
+
+      function applyExportSettingsToDocument() {
+        const { margin } = getExportSettings();
+        if (resultDocument) {
+          resultDocument.dataset.margin = margin;
+        }
+      }
+
+      function validateGeneratedPlan(result) {
+        if (!result || typeof result !== 'object' || Array.isArray(result)) {
+          throw new Error('A szerver nem dokumentumot tartalmazó JSON objektumot adott vissza.');
+        }
+        if (result.is_weekly === true && Array.isArray(result.napok)) {
+          if (!result.heti_keretterv || typeof result.heti_keretterv !== 'object' || !result.napok.length) {
+            throw new Error('A heti tervezetből hiányzik a keretterv vagy a napi bontás.');
+          }
+          return;
+        }
+        const textFields = ['tevekenyseg_forma', 'elozmeny', 'tema', 'cel',
+          'nevelesi_feladatok', 'didaktikai_feladatok', 'kepessegfejlesztes', 'felhasznalt_irodalom'];
+        for (const field of textFields) {
+          const allowEmpty = field === 'elozmeny' || field === 'felhasznalt_irodalom';
+          if (typeof result[field] !== 'string' || (!allowEmpty && !result[field].trim())) {
+            throw new Error(`Hiányzó vagy hibás dokumentummező: ${field}.`);
+          }
+        }
+        const isTextArray = (value) => Array.isArray(value) && value.length > 0 &&
+          value.every((part) => typeof part === 'string' && part.trim());
+        for (const field of ['modszerek', 'eszkozok']) {
+          if (!isTextArray(result[field])) throw new Error(`Hiányzó vagy hibás dokumentumlista: ${field}.`);
+        }
+        if (!Array.isArray(result.kidolgozas_tablazat) || !result.kidolgozas_tablazat.length) {
+          throw new Error('A válaszból hiányzik a kidolgozott táblázat.');
+        }
+        result.kidolgozas_tablazat.forEach((row, index) => {
+          if (!row || typeof row.ido !== 'string' || !row.ido.trim() ||
+              typeof row.modszerek_megjegyzesek !== 'string' || !row.modszerek_megjegyzesek.trim() ||
+              !(isTextArray(row.tevekenyseg_menete) ||
+                (typeof row.tevekenyseg_menete === 'string' && row.tevekenyseg_menete.trim()))) {
+            throw new Error(`Hiányos vagy hibás táblázatsor: ${index + 1}.`);
+          }
+        });
+      }
+
+      function renderResultDocument(data = lastResult) {
+        if (!data) {
+          resultDocument.replaceChildren();
+          return;
+        }
+        validateGeneratedPlan(data);
+        const result = data;
+        const request = result.request || buildGenerationPayload();
+        const { settings } = getExportSettings();
+        const showMethods = settings.differentiation !== false;
+        if (result.is_weekly === true && Array.isArray(result.napok)) {
+          renderWeeklyDocument(result, request, settings, showMethods);
+          return;
+        }
+        const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
+        const summary = result.summary || [result.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
+        const title = request.outputMode === 'Szülői tájékoztató'
+          ? 'Szülői tájékoztató'
+          : request.planMode === 'weekly' ? 'Heti tervezet' : 'Napi tervezet';
+        const metaRows = [
+          ['Óvoda', request.kindergartenName || '—'],
+          ['Óvodapedagógus', request.teacherName || '—'],
+          ['Csoport', request.groupName || request.group || '—'],
+          ['Forma', result.tevekenyseg_forma],
+          ['Előzmény', result.elozmeny],
+          ['Téma', result.tema],
+          ['Cél', result.cel]
+        ];
+        if (settings.materials !== false) metaRows.push(['Eszközök', result.eszkozok.join(', ')]);
+        const professionalFields = [
+          ['Nevelési feladatok', result.nevelesi_feladatok],
+          ['Didaktikai feladatok', result.didaktikai_feladatok],
+          ['Képességfejlesztés', result.kepessegfejlesztes],
+          ['Módszerek', result.modszerek.join(', ')]
+        ];
+
+        resultDocument.innerHTML = `
+          <div class="doc-header">
+            <h2>${escapeHtml(title)}</h2>
+            <span class="doc-meta">${escapeHtml(request.outputMode || 'Kréta')}</span>
+          </div>
+          ${settings.summary !== false ? `
+            <div class="doc-section">
+              <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
+            </div>` : ''}
+          <div class="doc-section">
+            <div class="official-meta">
+              ${metaRows.map(([label, value]) => `
+                <div class="meta-row">
+                  <span class="meta-label">${escapeHtml(label)}</span>
+                  <span class="meta-value">${escapeHtml(value)}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+          ${settings.goals !== false ? `
+            <div class="doc-section">
+              <h3>Cél- és feladatrendszer</h3>
+              ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
+            </div>` : ''}
+          ${settings.activities !== false ? `
+            <div class="doc-section doc-table-section">
+              <h3>A tevékenység/foglalkozás kidolgozása</h3>
+              <table class="official-table">
+                <colgroup>
+                  <col style="width: 10%;" />
+                  <col style="width: ${showMethods ? '58' : '90'}%;" />
+                  ${showMethods ? '<col style="width: 32%;" />' : ''}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Idő</th>
+                    <th>A fejlesztő tevékenység felépítése</th>
+                    ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${result.kidolgozas_tablazat.map((row) => `
+                    <tr>
+                      <td>${formatTableCell(row.ido)}</td>
+                      <td>${formatTableCell(row.tevekenyseg_menete)}</td>
+                      ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>` : ''}
+          ${showLiterature && result.felhasznalt_irodalom.trim() ? `
+            <div class="doc-section">
+              <h3>Felhasznált irodalom</h3>
+              ${formatTableCell(result.felhasznalt_irodalom)}
+            </div>` : ''}
+        `;
+        applyExportSettingsToDocument();
+      }
+
+      function renderWeeklyDocument(result, request, settings, showMethods) {
+        const frame = result.heti_keretterv || {};
+        const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
+        const summary = result.summary || [frame.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
+        const metaRows = [
+          ['Óvoda', request.kindergartenName || '—'],
+          ['Óvodapedagógus', request.teacherName || '—'],
+          ['Csoport', request.groupName || request.group || '—'],
+          ['Téma', frame.tema || '—'],
+          ['Heti fő cél', frame.heti_fo_cel || '—']
+        ];
+        if (settings.materials !== false) {
+          metaRows.push(['Eszközök', (Array.isArray(frame.eszkozok) ? frame.eszkozok : []).join(', ')]);
+        }
+        const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
+        const dayTable = (day) => `
+          <table class="official-table">
+            <colgroup>
+              <col style="width: 10%;" />
+              <col style="width: ${showMethods ? '58' : '90'}%;" />
+              ${showMethods ? '<col style="width: 32%;" />' : ''}
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Idő</th>
+                <th>A fejlesztő tevékenység felépítése</th>
+                ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${(Array.isArray(day.kidolgozas_tablazat) ? day.kidolgozas_tablazat : []).map((row) => `
+                <tr>
+                  <td>${formatTableCell(row.ido)}</td>
+                  <td>${formatTableCell(Array.isArray(row.tevekenyseg_menete) ? row.tevekenyseg_menete.join('\n\n') : row.tevekenyseg_menete).replace(/<\/p><p>/g, '</p><br><br><p>')}</td>
+                  ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+
+        resultDocument.innerHTML = `
+          <div class="doc-header">
+            <h2>Heti tervezet</h2>
+            <span class="doc-meta">${escapeHtml(request.outputMode || 'Kréta')}</span>
+          </div>
+          ${settings.summary !== false ? `
+            <div class="doc-section">
+              <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
+            </div>` : ''}
+          <div class="doc-section">
+            <div class="official-meta">
+              ${metaRows.map(([label, value]) => `
+                <div class="meta-row">
+                  <span class="meta-label">${escapeHtml(label)}</span>
+                  <span class="meta-value">${escapeHtml(value)}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+          ${settings.goals !== false ? `
+            <div class="doc-section">
+              <h3>Cél- és feladatrendszer</h3>
+              <p><strong>Nevelési feladatok:</strong> ${escapeHtml(frame.nevelesi_feladatok || '')}</p>
+              <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
+            </div>` : ''}
+          <div class="doc-section doc-table-section">
+            <h3>Területek heti eloszlása</h3>
+            <table class="official-table">
+              <colgroup><col style="width: 16%;" /><col style="width: 34%;" /><col style="width: 50%;" /></colgroup>
+              <thead><tr><th>Nap</th><th>Fő terület</th><th>Mikrocsoportos tevékenység</th></tr></thead>
+              <tbody>
+                ${grid.map((row) => `
+                  <tr>
+                    <td>${formatTableCell(row.nap)}</td>
+                    <td>${formatTableCell(row.fo_terulet)}</td>
+                    <td>${formatTableCell(row.mikrocsoportos_tevekenyseg)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          ${showLiterature && String(frame.felhasznalt_irodalom || '').trim() ? `
+            <div class="doc-section">
+              <h3>Felhasznált irodalom</h3>
+              ${formatTableCell(frame.felhasznalt_irodalom)}
+            </div>` : ''}
+          ${settings.activities !== false ? result.napok.map((day) => `
+            <div class="doc-section document-day-sheet">
+              <h3>${escapeHtml(day.nap_neve || '')} – ${escapeHtml(day.tevekenyseg_forma || '')}</h3>
+              <p><strong>Napi cél:</strong> ${escapeHtml(day.napi_cel || '')}</p>
+              ${dayTable(day)}
+            </div>`).join('') : ''}
+        `;
+        applyExportSettingsToDocument();
       }
 
       function renderPreview() {
@@ -944,6 +1890,34 @@
         previewPanel.classList.toggle('preview-hidden', !showPreview);
         previewEmpty.style.display = showPreview ? 'none' : 'grid';
         previewContent.style.display = showPreview ? 'block' : 'none';
+      }
+
+      function resetGeneratedResult() {
+        lastResult = null;
+        previewReady = false;
+        resultDocument.replaceChildren();
+        renderPreview();
+      }
+
+      function showGenerationError(message) {
+        const banner = document.getElementById('generationErrorBanner');
+        if (!banner) {
+          alert(message);
+          return;
+        }
+
+        banner.textContent = message;
+        banner.hidden = false;
+        banner.style.display = 'block';
+        banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      function hideGenerationErrorBanner() {
+        const banner = document.getElementById('generationErrorBanner');
+        if (!banner) return;
+        banner.hidden = true;
+        banner.style.display = 'none';
+        banner.textContent = '';
       }
 
       function renderStep() {
@@ -958,32 +1932,281 @@
         backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
         nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
         renderPreview();
+        persistDraftState();
       }
 
-      document.querySelectorAll('.segment').forEach((button) => {
-        button.addEventListener('click', () => {
-          const group = button.closest('[data-group]');
-          group.querySelectorAll('.segment').forEach((item) => item.classList.remove('active'));
-          button.classList.add('active');
-          updateSummary();
-        });
-      });
+      function updateDateInputsForDuration() {
+        const duration = getSelectedDuration();
+        const dailyInput = document.getElementById('dailyDateField');
+        const weeklyInput = document.getElementById('weeklyDateField');
+        const showDaily = duration === 'Napi';
 
-      document.querySelectorAll('input[data-field="theme"], select[data-field="group"]').forEach((field) => {
-        field.addEventListener('input', updateSummary);
-        field.addEventListener('change', updateSummary);
-      });
+        if (dailyInput) {
+          dailyInput.type = 'date';
+          dailyInput.style.display = showDaily ? 'inline-block' : 'none';
+        }
 
-      document.querySelectorAll('.chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-          chip.classList.toggle('active');
+        if (weeklyInput) {
+          weeklyInput.type = 'week';
+          weeklyInput.style.display = showDaily ? 'none' : 'inline-block';
+        }
+      }
+
+      function loadProfileFromStorage() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.profile) || '{}');
+          const fields = [
+            ['input[data-field="kindergarten-name"]', saved.kindergartenName || ''],
+            ['input[data-field="teacher-name"]', saved.teacherName || ''],
+            ['input[data-field="group-name"]', saved.groupName || ''],
+          ];
+          fields.forEach(([selector, value]) => {
+            const field = document.querySelector(selector);
+            if (field) field.value = value;
+          });
+        } catch (error) {
+          console.warn('Profile load failed:', error);
+        }
+      }
+
+      function saveProfileToStorage() {
+        const profile = {
+          kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
+          groupName: document.querySelector('input[data-field="group-name"]')?.value || ''
+        };
+        localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
+      }
+
+      function clearDraftState() {
+        const preservedProfile = {
+          kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
+          groupName: document.querySelector('input[data-field="group-name"]')?.value || '',
+        };
+        const profileFieldMap = {
+          'kindergarten-name': 'kindergartenName',
+          'teacher-name': 'teacherName',
+          'group-name': 'groupName'
+        };
+
+        document.querySelectorAll('input, textarea, select').forEach((field) => {
+          if (field.type === 'checkbox') {
+            field.checked = field.defaultChecked;
+            return;
+          }
+
+          if (field.matches('#weeklyProgressionType, #fridayClosingType')) {
+            field.selectedIndex = 0;
+            return;
+          }
+
+          if (field.matches('[data-field="group"]')) {
+            field.value = 'Nagycsoport';
+            return;
+          }
+
+          if (field.matches('[data-field="theme"]')) {
+            field.value = '';
+            return;
+          }
+
+          if (field.matches('[data-field="detail-level"]')) {
+            field.value = '68';
+            return;
+          }
+
+          if (field.matches('[data-field="energy-level"]')) {
+            field.value = '65';
+            return;
+          }
+
+          if (field.matches('[data-export="margin"]')) {
+            field.value = 'comfortable';
+            return;
+          }
+
+          if (field.matches('[data-field="date-value"], [data-field="week-value"]')) {
+            field.value = '';
+            return;
+          }
+
+          if (field.matches('[data-field="kindergarten-name"], [data-field="teacher-name"], [data-field="group-name"]')) {
+            const key = profileFieldMap[field.dataset.field];
+            field.value = preservedProfile[key] || '';
+            return;
+          }
+
+          if (field.tagName === 'TEXTAREA' || field.tagName === 'SELECT' || field.tagName === 'INPUT') {
+            field.value = '';
+          }
         });
-      });
+
+        document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
+          if (button.matches('.segment[data-group="duration"]')) {
+            button.classList.toggle('active', button.dataset.value === 'Napi');
+          } else if (button.matches('.chip')) {
+            button.classList.remove('active');
+          } else if (button.matches('.mode-pill')) {
+            button.classList.toggle('active', button.dataset.mode === 'Kréta');
+          }
+        });
+
+        localStorage.removeItem(STORAGE_KEYS.draft);
+        currentStep = 0;
+        resetGeneratedResult();
+        hideGenerationErrorBanner();
+        saveProfileToStorage();
+        renderStep();
+        updateSummary();
+      }
+
+      function loadHistoryFromStorage() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || '[]');
+          return Array.isArray(saved) ? saved : [];
+        } catch (error) {
+          console.warn('History load failed:', error);
+          return [];
+        }
+      }
+
+      function savePlanToHistory(payload) {
+        const plans = loadHistoryFromStorage();
+        const sanitized = { ...payload, savedAt: new Date().toISOString() };
+        const nextPlans = [sanitized, ...plans].slice(0, 10);
+        localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(nextPlans));
+      }
+
+      function renderHistoryPanel() {
+        const history = loadHistoryFromStorage();
+        const historyButtons = Array.from(document.querySelectorAll('.history-item'));
+        historyButtons.forEach((button) => button.remove());
+
+        if (history.length === 0) {
+          historyPanel.innerHTML = '<div class="history-item" style="pointer-events:none; opacity:0.7;">Még nincs mentett terv.</div>';
+          return;
+        }
+
+        history.forEach((plan) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'history-item';
+          button.dataset.theme = plan.theme || 'Téma';
+          button.dataset.text = plan.customNote || 'Korábbi terv';
+          button.textContent = `${plan.theme || 'Téma'} – mentett terv`;
+          button.addEventListener('click', () => {
+            const formFields = {
+              theme: document.querySelector('input[data-field="theme"]'),
+              kindergartenName: document.querySelector('input[data-field="kindergarten-name"]'),
+              teacherName: document.querySelector('input[data-field="teacher-name"]'),
+              groupName: document.querySelector('input[data-field="group-name"]'),
+              customNote: document.querySelector('textarea[data-field="custom-note"]'),
+              groupNote: document.querySelector('textarea[data-field="group-note"]'),
+              requiredText: document.querySelector('textarea[data-field="required-text"]'),
+              ideaNote: document.querySelector('textarea[data-field="idea-note"]'),
+              customRequest: document.querySelector('textarea[data-field="custom-request"]')
+            };
+
+            if (formFields.theme) formFields.theme.value = plan.theme || '';
+            if (formFields.kindergartenName) formFields.kindergartenName.value = plan.kindergartenName || '';
+            if (formFields.teacherName) formFields.teacherName.value = plan.teacherName || '';
+            if (formFields.groupName) formFields.groupName.value = plan.groupName || '';
+            if (formFields.customNote) formFields.customNote.value = plan.customNote || '';
+            if (formFields.groupNote) formFields.groupNote.value = plan.customNotes?.groupNote ?? plan.groupNote ?? '';
+            if (formFields.requiredText) formFields.requiredText.value = plan.customNotes?.requiredText ?? plan.requiredText ?? '';
+            if (formFields.ideaNote) formFields.ideaNote.value = plan.customNotes?.ideaNote ?? plan.ideaNote ?? '';
+            if (formFields.customRequest) formFields.customRequest.value = plan.customNotes?.customRequest ?? plan.customRequest ?? '';
+            const duration = plan.duration || 'Napi';
+            document.querySelectorAll('.segment').forEach((segment) => {
+              segment.classList.toggle('active', segment.dataset.value === duration);
+            });
+            updateDateInputsForDuration();
+            const dateInput = document.querySelector(duration === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
+            if (dateInput && plan.dateValue) dateInput.value = plan.dateValue;
+            saveProfileToStorage();
+            updateSummary();
+            historyPanel.classList.remove('open');
+          });
+
+          historyPanel.appendChild(button);
+        });
+      }
+
+      function bindAutoSaveListeners() {
+        const trackedFields = Array.from(document.querySelectorAll('input, textarea, select'));
+        trackedFields.forEach((field) => {
+          if (field.matches('input[type="hidden"]')) return;
+          field.addEventListener('input', () => {
+            updateSummary();
+            saveProfileToStorage();
+            persistDraftState();
+          });
+          field.addEventListener('change', () => {
+            updateSummary();
+            saveProfileToStorage();
+            persistDraftState();
+          });
+        });
+
+        ['includeDailyBreakdown', 'weeklyProgressionType', 'fridayClosingType'].forEach((id) => {
+          document.getElementById(id)?.addEventListener('change', () => {
+            updateSummary();
+            saveProfileToStorage();
+            persistDraftState();
+          });
+        });
+
+        document.querySelectorAll('.chip').forEach((button) => {
+          if (button.dataset.themeOption) return;
+          button.addEventListener('click', () => {
+            button.classList.toggle('active');
+            saveProfileToStorage();
+            persistDraftState();
+            updateSummary();
+          });
+        });
+
+        document.querySelectorAll('.segment[data-group="duration"]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            const selectedValue = (button.dataset.value || button.textContent || 'Napi').trim();
+            setDurationSelection(selectedValue);
+
+            const targetInput = selectedValue === 'Heti'
+              ? document.querySelector('input[data-field="week-value"]')
+              : document.querySelector('input[data-field="date-value"]');
+            if (targetInput) {
+              targetInput.type = selectedValue === 'Heti' ? 'week' : 'date';
+            }
+
+            updateWeeklyDailyBreakdownVisibility();
+            updateSummary();
+            localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(collectDraftState()));
+
+            if (lastResult) {
+              renderResultDocument(lastResult);
+            }
+          });
+        });
+      }
 
       document.querySelectorAll('.mode-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
           document.querySelectorAll('.mode-pill').forEach((item) => item.classList.remove('active'));
           pill.classList.add('active');
+          persistDraftState();
+          updateSummary();
+        });
+      });
+
+      document.querySelectorAll('[data-export-section], [data-export="margin"]').forEach((control) => {
+        control.addEventListener('change', () => {
+          if (lastResult) {
+            renderResultDocument(lastResult);
+          } else {
+            applyExportSettingsToDocument();
+          }
         });
       });
 
@@ -991,30 +2214,177 @@
         historyPanel.classList.toggle('open');
       });
 
-      document.querySelectorAll('.history-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          const themeField = document.querySelector('input[data-field="theme"]');
-          const customField = document.querySelector('textarea[data-field="custom-note"]');
-          const theme = item.dataset.theme;
-          const text = item.dataset.text;
-          if (themeField) themeField.value = theme;
-          if (customField) customField.value = text;
-          updateSummary();
-          historyPanel.classList.remove('open');
-        });
-      });
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportAsPdf() {
+        if (!window.html2pdf) {
+          alert('A PDF export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
+          return;
+        }
+
+        const exportElement = document.getElementById('resultDocument');
+        if (!exportElement) {
+          alert('Nincs megjeleníthető dokumentum a PDF exporthez.');
+          return;
+        }
+
+        applyExportSettingsToDocument();
+        exportElement.style.display = 'block';
+        exportElement.style.visibility = 'visible';
+        exportElement.style.opacity = '1';
+
+        const opt = {
+          margin: [15, 15, 15, 15],
+          filename: 'ovi-kreta-terv.pdf',
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            scrollX: 0,
+            scrollY: 0
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] }
+        };
+
+        window.html2pdf().set(opt).from(exportElement).save();
+      }
+
+      function exportAsDocx() {
+        if (!window.htmlDocx) {
+          alert('A DOCX export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
+          return;
+        }
+
+        const exportElement = document.getElementById('resultDocument');
+        if (!exportElement) {
+          alert('Nincs megjeleníthető dokumentum a DOCX exporthoz.');
+          return;
+        }
+
+        applyExportSettingsToDocument();
+        const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
+        const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${exportElement.outerHTML}</body></html>`;
+        const blob = window.htmlDocx.asBlob(html, { orientation: 'portrait' });
+        downloadBlob(blob, 'ovi-kreta-terv.docx');
+      }
+
+      function getDetailLevel() {
+        const value = Number(document.querySelector('[data-field="detail-level"]')?.value ?? 68);
+        return Number.isFinite(value) ? Math.min(Math.max(value, 0), 100) : 68;
+      }
+
+      function getCustomNotes() {
+        return {
+          primary: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
+          groupNote: document.querySelector('textarea[data-field="group-note"]')?.value || '',
+          requiredText: document.querySelector('textarea[data-field="required-text"]')?.value || '',
+          ideaNote: document.querySelector('textarea[data-field="idea-note"]')?.value || '',
+          customRequest: document.querySelector('textarea[data-field="custom-request"]')?.value || '',
+          specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]'))
+            .filter((checkbox) => checkbox.checked)
+            .map((checkbox) => checkbox.dataset.sniLabel.trim())
+        };
+      }
+
+      function buildGenerationPayload() {
+        const activeDurationButton = document.querySelector('.segment.active[data-group="duration"]');
+        const selectedDuration = (activeDurationButton?.dataset?.value || activeDurationButton?.textContent || '').trim() || getSelectedDuration() || 'Napi';
+
+        return {
+          duration: selectedDuration,
+          includeDailyBreakdown: getWeeklyDailyBreakdown(),
+          weeklyProgressionType: getWeeklyProgressionType(),
+          fridayClosingType: getFridayClosingType(),
+          planMode: selectedDuration === 'Heti' ? 'weekly' : 'daily',
+          theme: getTheme(),
+          group: getGroup(),
+          kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
+          groupName: document.querySelector('input[data-field="group-name"]')?.value || '',
+          dateValue: getDateValue(),
+          tevekenysegForma: document.querySelector('input[data-field="tevekenyseg-forma"]')?.value || '',
+          elozmeny: document.querySelector('textarea[data-field="elozmeny"]')?.value || '',
+          childCount: document.querySelector('[data-field="child-count"]')?.value
+            ? Number(document.querySelector('[data-field="child-count"]').value) : null,
+          energyLevel: Number(document.querySelector('[data-field="energy-level"]')?.value ?? 65),
+          hasPreschoolers: document.querySelector('[data-field="has-preschoolers"]')?.checked ?? false,
+          focusAreas: Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea),
+          customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
+          customNotes: getCustomNotes(),
+          detailLevel: getDetailLevel(),
+          outputMode: document.querySelector('.mode-pill.active')?.dataset.mode || 'Kréta',
+          selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
+          specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
+          showLiteratureAtBottom: document.querySelector('input[data-field="show-literature"]')?.checked || false,
+        };
+      }
+
+      async function generatePlan() {
+        hideGenerationErrorBanner();
+        resetGeneratedResult();
+        nextBtn.disabled = true;
+        nextBtn.textContent = 'Generálás...';
+
+        try {
+          const payload = buildGenerationPayload();
+
+          const response = await fetch(`${getApiBaseUrl()}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          const responseText = await response.text();
+          let data;
+          try {
+            data = JSON.parse(responseText);
+          } catch (_error) {
+            throw new Error(`A szerver nem valid JSON-választ adott (HTTP ${response.status}).`);
+          }
+
+          if (!response.ok || !data || data.success !== true) {
+            const message = [data?.error, data?.details].filter((part) => typeof part === 'string' && part.trim()).join(' ');
+            throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
+          }
+
+          const generatedResult = { ...data, request: payload };
+          renderResultDocument(generatedResult);
+          lastResult = generatedResult;
+          previewReady = true;
+          renderPreview();
+          try {
+            savePlanToHistory(payload);
+            renderHistoryPanel();
+          } catch (storageError) {
+            console.warn('A sikeres terv előzményként nem menthető:', storageError);
+          }
+        } catch (error) {
+          resetGeneratedResult();
+          const message = error?.message || 'A generálás hiba miatt nem tudott lefutni.';
+          showGenerationError(`Generálási hiba: ${message}`);
+        } finally {
+          nextBtn.disabled = false;
+          nextBtn.textContent = 'Tervezet elkészítése';
+        }
+      }
 
       nextBtn.addEventListener('click', () => {
         if (currentStep < steps.length - 1) {
           currentStep += 1;
           renderStep();
         } else {
-          previewReady = true;
-          renderPreview();
-          nextBtn.textContent = 'Tervezet elkészítése';
-          nextBtn.disabled = true;
-          nextBtn.style.opacity = '0.7';
-          nextBtn.style.cursor = 'default';
+          generatePlan();
         }
       });
 
@@ -1032,23 +2402,87 @@
         });
       });
 
-      document.querySelectorAll('.copy-btn').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const text = btn.closest('.result-card').querySelector('p').textContent;
-          try {
-            await navigator.clipboard.writeText(text);
-            const original = btn.textContent;
-            btn.textContent = 'Másolva';
-            setTimeout(() => { btn.textContent = original; }, 1200);
-          } catch (err) {
-            btn.textContent = 'Hiba';
-            setTimeout(() => { btn.textContent = 'Másolás'; }, 1200);
-          }
-        });
-      });
+      document.getElementById('downloadPdfBtn').addEventListener('click', exportAsPdf);
+      document.getElementById('downloadDocxBtn').addEventListener('click', exportAsDocx);
+      document.getElementById('clearDraftBtn').addEventListener('click', clearDraftState);
 
-      renderStep();
-      updateSummary();
+      const printBtn = document.createElement('button');
+      printBtn.id = 'printBtn';
+      printBtn.type = 'button';
+      printBtn.className = 'download-btn';
+      printBtn.textContent = 'Nyomtatás';
+      printBtn.addEventListener('click', () => window.print());
+      const downloadRow = document.querySelector('.download-row');
+      if (downloadRow) {
+        downloadRow.appendChild(printBtn);
+      }
+
+      function renderSeasonalThemeSuggestions() {
+        const container = document.getElementById('themeSuggestions');
+        if (!container) return;
+
+        const month = new Date().getMonth();
+        const seasonalMap = {
+          0: ['Téli kézműves nap', 'Téli állatok', 'Jégvarázs', 'Újévi terveztetés'],
+          1: ['Téli kézműves nap', 'Hideg és hó', 'Téli állatok', 'Színes hóesés'],
+          2: ['Tavaszi virágok', 'Kis madarak', 'Kert és növények', 'Fűzfa és szél'],
+          3: ['Húsvéti készülődés', 'Tavaszi fák', 'Madarak és fák', 'Kertészeti kaland'],
+          4: ['Május eleje', 'Madarak', 'Kerti munkák', 'Fák, virágok és méhek'],
+          5: ['Nyári napok', 'Balatoni élmények', 'Vizes játékok', 'Bogyók és gyümölcsök'],
+          6: ['Nyári kalandok', 'Nap és víz', 'Külföldi utazás', 'Nyaralási élmények'],
+          7: ['Őszi bogyók', 'Kerti termés', 'Művészi nyár', 'Álom és pihenés'],
+          8: ['Őszi színek', 'Madarak és fák', 'Téli előkészítés', 'Falevelek és gesztenye'],
+          9: ['Márton-nap', 'Őszi időjárás', 'Maci ébredése', 'Falevelek és gyűjtés'],
+          10: ['Márton-nap', 'Őszi időjárás', 'Maci ébredése', 'Falevelek és gyűjtés'],
+          11: ['Karácsonyi készülődés', 'Téli ünnepkör', 'Télapó és hó', 'Karácsony és fények']
+        };
+
+        const themes = seasonalMap[month] || seasonalMap[9];
+        const activeTheme = document.querySelector('input[data-field="theme"]')?.value?.trim();
+        container.innerHTML = themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${theme}">${theme}</button>`).join('');
+
+        container.querySelectorAll('[data-theme-option]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const themeInput = document.querySelector('input[data-field="theme"]');
+            if (!themeInput) return;
+
+            const currentlyActive = button.classList.contains('active');
+            container.querySelectorAll('[data-theme-option]').forEach((item) => item.classList.remove('active'));
+
+            if (currentlyActive) {
+              themeInput.value = '';
+            } else {
+              button.classList.add('active');
+              themeInput.value = button.dataset.themeOption;
+            }
+
+            themeInput.dispatchEvent(new Event('input', { bubbles: true }));
+            saveProfileToStorage();
+            persistDraftState();
+          });
+        });
+      }
+
+      function initializeApp() {
+        if (window.__oviKretaAppInitialized) return;
+        window.__oviKretaAppInitialized = true;
+
+        renderSeasonalThemeSuggestions();
+        loadProfileFromStorage();
+        loadDraftFromStorage();
+        bindAutoSaveListeners();
+        updateDateInputsForDuration();
+        updateWeeklyDailyBreakdownVisibility();
+        renderHistoryPanel();
+        renderStep();
+        updateSummary();
+        renderResultDocument();
+      }
+
+      document.addEventListener('DOMContentLoaded', initializeApp);
+      if (document.readyState !== 'loading') {
+        initializeApp();
+      }
     </script>
   </body>
 </html>

@@ -6,12 +6,23 @@ Ez a projekt egy egyszerű, GitHub Pages-en futtatható statikus weboldal, amely
 - 4 lépéses varázsló flow
 - egyszerű, pedagógusbarát dizájn
 - előnézet csak a végső generálás után
+- backend híd a Gemini API-hoz
 - GitHub Actions alapú automatizált ellenőrzés és deployment
 
 ## Lokális futtatás
 
+1. Hozz létre egy helyi `.env` fájlt, és add meg a valódi API kulcsot az alábbi konfiguráció szerint.
+2. Futtasd a backendet:
+
 ```bash
-python3 -m http.server 8000
+npm install
+npm start
+```
+
+3. Futtasd a frontend statikus kiszolgálását:
+
+```bash
+npm run serve
 ```
 
 A böngészőben ezt nyisd meg:
@@ -19,6 +30,29 @@ A böngészőben ezt nyisd meg:
 ```text
 http://localhost:8000
 ```
+
+A backend API itt érhető el:
+
+```text
+http://localhost:4000/health
+```
+
+## Gemini konfiguráció
+
+A `.env` fájlban legyen ez:
+
+```env
+PORT=4000
+GEMINI_API_KEY=your_api_key_here
+```
+
+A backend a kért `gemini-4-argon` modellre van rögzítve; a `GEMINI_MODEL` környezeti változó nem írja felül, és nincs más modellre történő automatikus váltás. A modell tényleges API-elérhetősége az adott hozzáféréstől függ. A szerver az API-, JSON- és tokenkeret-hibákat továbbítja a felületnek, nem helyettesíti a választ mintadokumentummal.
+
+## Ellenőrzések és generálási napló
+
+Az `npm test` a statikus oldal ellenőrzése mellett futtatja a szerver normalizálását, a valódi helyi HTTP-végpontot és a kliens DOM-megjelenítését vizsgáló regressziós teszteket is. A külső Gemini-választ a tesztek a hálózati határon helyettesítik, így nem használnak API-kulcsot és nem fogyasztanak kvótát. Éles generálási minőséget ezek a tesztek nem igazolnak.
+
+A generálási napló tartalmazza a modell nevét, a `finishReason` értékét, a bemeneti, kimeneti és gondolkodási tokenszámokat, valamint a visszakapott szöveg és a táblázat hosszát. A `MAX_TOKENS` eredmény hibát okoz, nem csonka előnézetet. A napló nem írja ki az API-kulcsot vagy a teljes, személyes adatokat tartalmazó promptot.
 
 ## GitHub repo létrehozása
 
