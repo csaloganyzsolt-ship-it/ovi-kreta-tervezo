@@ -369,3 +369,31 @@ test('weekly extras live in the advanced settings and follow the duration select
   assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, false);
   assert.ok(doc.querySelector('#advancedSettings #fridayClosingType'));
 });
+
+test('generated plan survives a reload and is removed only by the clean-slate action', async (t) => {
+  const saved = JSON.stringify({ ...makePlan(3), request: makePayload() });
+  const dom = new JSDOM(html, {
+    url: 'http://localhost:8000',
+    runScripts: 'dangerously',
+    beforeParse(window) {
+      window.HTMLElement.prototype.scrollIntoView = () => {};
+      window.localStorage.setItem('oviKretaGeneratedPlan', saved);
+    }
+  });
+  t.after(() => dom.window.close());
+  if (dom.window.document.readyState === 'loading') {
+    await new Promise((resolve) => dom.window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  }
+  const { window } = dom;
+  const doc = window.document;
+  assert.equal(doc.querySelectorAll('.official-table tbody tr').length, 3);
+  assert.notEqual(doc.querySelector('#previewContent').style.display, 'none');
+  assert.equal(doc.querySelector('#previewEmpty').style.display, 'none');
+  assert.ok(window.localStorage.getItem('oviKretaGeneratedPlan'));
+
+  window.clearDraftState();
+  assert.equal(window.localStorage.getItem('oviKretaGeneratedPlan'), null);
+  assert.equal(doc.querySelector('#resultDocument').textContent.trim(), '');
+  assert.equal(doc.querySelector('#previewContent').style.display, 'none');
+  assert.notEqual(doc.querySelector('#previewEmpty').style.display, 'none');
+});

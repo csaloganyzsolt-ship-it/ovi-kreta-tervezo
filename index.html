@@ -1614,7 +1614,8 @@
         profile: 'oviKretaProfile',
         history: 'oviKretaPlansHistory',
         draft: 'oviKretaDraft',
-        theme: 'oviKretaTheme'
+        theme: 'oviKretaTheme',
+        generatedPlan: 'oviKretaGeneratedPlan'
       };
 
       function resolveActiveDurationFromDom() {
@@ -2271,6 +2272,20 @@
         previewContent.style.display = showPreview ? 'block' : 'none';
       }
 
+      function loadGeneratedPlanFromStorage() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.generatedPlan) || 'null');
+          if (!saved || typeof saved !== 'object') return;
+          renderResultDocument(saved);
+          previewReady = true;
+          currentStep = Math.max(currentStep, 3);
+        } catch (error) {
+          console.warn('A mentett terv nem tölthető vissza:', error);
+          lastResult = null;
+          previewReady = false;
+        }
+      }
+
       function resetGeneratedResult() {
         lastResult = null;
         activeDocId = null;
@@ -2439,6 +2454,9 @@
         });
 
         localStorage.removeItem(STORAGE_KEYS.draft);
+        localStorage.removeItem(STORAGE_KEYS.generatedPlan);
+        lastResult = null;
+        previewReady = false;
         docSettings = {};
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
@@ -2859,6 +2877,11 @@
           renderResultDocument(generatedResult);
           lastResult = generatedResult;
           previewReady = true;
+          try {
+            localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
+          } catch (storageError) {
+            console.warn('A generált terv nem menthető a böngészőbe:', storageError);
+          }
           renderPreview();
           try {
             savePlanToHistory(payload);
@@ -2976,6 +2999,7 @@
         renderSeasonalThemeSuggestions();
         loadProfileFromStorage();
         loadDraftFromStorage();
+        loadGeneratedPlanFromStorage();
         bindAutoSaveListeners();
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
@@ -2983,6 +3007,7 @@
         renderStep();
         updateSummary();
         renderResultDocument();
+        renderPreview();
       }
 
       document.addEventListener('DOMContentLoaded', initializeApp);
