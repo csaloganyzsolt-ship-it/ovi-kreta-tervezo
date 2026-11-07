@@ -105,6 +105,7 @@ function getDetailProfile(detailLevel) {
 
 const WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
 const WEEKLY_MAX_OUTPUT_TOKENS = 16384;
+const WEEKLY_TIMEOUT_MS = 290000;
 
 function isWeeklyBreakdown(payload = {}) {
   return payload.duration === 'Heti' && payload.includeDailyBreakdown === true;
@@ -303,7 +304,7 @@ function normalizeResponse(rawText, payload = {}) {
   return result;
 }
 
-async function callGemini(prompt, { maxOutputTokens = 12288 } = {}) {
+async function callGemini(prompt, { maxOutputTokens = 12288, timeoutMs = 120000 } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw generationError('Hiányzik a GEMINI_API_KEY szerverbeállítás.', 503);
@@ -314,7 +315,7 @@ async function callGemini(prompt, { maxOutputTokens = 12288 } = {}) {
     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
         systemInstruction: {
           parts: [{ text: 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' }]
@@ -330,7 +331,7 @@ async function callGemini(prompt, { maxOutputTokens = 12288 } = {}) {
     });
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw generationError('A Gemini kérés 120 másodpercen belül nem fejeződött be.', 504);
+      throw generationError(`A Gemini kérés ${Math.round(timeoutMs / 1000)} másodpercen belül nem fejeződött be.`, 504);
     }
     throw generationError(`A Gemini API nem érhető el: ${error.message}`);
   }
@@ -380,7 +381,8 @@ app.post('/api/generate', async (req, res) => {
     }
     const prompt = buildPrompt(payload);
     const rawText = await callGemini(prompt, {
-      maxOutputTokens: isWeeklyBreakdown(payload) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined
+      maxOutputTokens: isWeeklyBreakdown(payload) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined,
+      timeoutMs: isWeeklyBreakdown(payload) ? WEEKLY_TIMEOUT_MS : undefined
     });
     const result = normalizeResponse(rawText, payload);
     console.info('Generated document:', result.is_weekly
