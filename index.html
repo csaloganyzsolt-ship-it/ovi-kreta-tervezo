@@ -784,6 +784,15 @@
       .document-sheet[data-margin="comfortable"] { padding: 12mm 14mm; }
       .document-sheet[data-margin="spacious"] { padding: 15mm 16mm; }
 
+      /* A hyphens: auto átfedő szöveget okoz a html2canvas képen, ezért exportnál kikapcsolva. */
+      .document-sheet.export-sheet,
+      .document-sheet.export-sheet * {
+        hyphens: manual;
+        -webkit-hyphens: manual;
+        overflow-wrap: normal;
+        text-rendering: optimizeSpeed;
+      }
+
       @page {
         size: A4;
         margin: 0;
@@ -1358,15 +1367,67 @@
         .content { order: 1; }
 
         .document-shell { padding: 8px; border-radius: 16px; }
-        .document-shell .document-sheet {
-          width: auto;
-          min-width: 620px;
-          padding: 10mm 8mm;
-          font-size: 13px;
-        }
-        .document-shell .document-sheet th,
-        .document-shell .document-sheet td { padding: 6px 7px; font-size: 12.5px; }
         .doc-tabs, #documentTabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+      }
+
+      /* ===== Valós A4-es lapszimuláció az előnézetben ===== */
+      @media screen {
+        .document-shell {
+          background: #dcd6cf;
+          padding: 24px;
+          max-height: 80vh;
+          overflow: auto;
+        }
+        html[data-theme="dark"] .document-shell { background: #1a1614; }
+
+        #resultDocument.document-sheet {
+          width: max-content;
+          max-width: none;
+          min-width: 100%;
+          min-height: 0;
+          padding: 0;
+          margin: 0 auto;
+          background: transparent;
+          box-shadow: none;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 28px;
+        }
+
+        .a4-page {
+          flex: none;
+          margin: 0 auto;
+          box-sizing: border-box;
+          width: 210mm;
+          min-height: 297mm;
+          padding: var(--page-margin, 12mm);
+          background: #fff;
+          color: #1d2329;
+          box-shadow: 0 8px 28px rgba(40, 30, 20, 0.22);
+          overflow-wrap: break-word;
+          word-break: normal;
+        }
+        .a4-page-body { display: flow-root; }
+
+        #resultDocument[data-orientation="landscape"] .a4-page { width: 297mm; min-height: 210mm; }
+        #resultDocument[data-margin="compact"] { --page-margin: 10mm; }
+        #resultDocument[data-margin="comfortable"] { --page-margin: 12mm; }
+        #resultDocument[data-margin="spacious"] { --page-margin: 15mm; }
+      }
+
+      .a4-page { break-after: page; page-break-after: always; }
+      .a4-page:last-child { break-after: auto; page-break-after: auto; }
+
+      @media print {
+        .a4-page {
+          width: 100% !important;
+          min-height: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          margin: 0 !important;
+        }
+        #resultDocument { display: block !important; }
       }
     </style>
   </head>
@@ -2440,6 +2501,88 @@
         renderDocumentTabs(list);
         syncDocControls();
         applyExportSettingsToDocument();
+        paginateDocument(resultDocument);
+      }
+
+      // A dokumentumot valódi A4 lapokra (.a4-page) tördeli; a hosszú táblázatokat sorok mentén osztja, fejléc-ismétléssel.
+      function paginateDocument(host) {
+        const orientation = host.dataset.orientation === 'landscape' ? 'landscape' : 'portrait';
+        const marginMm = MARGIN_MM[host.dataset.margin] || MARGIN_MM.comfortable;
+        const blocks = Array.from(host.children);
+
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;visibility:hidden;width:100mm;height:0;';
+        host.appendChild(probe);
+        const pxPerMm = probe.offsetWidth / 100;
+        probe.remove();
+
+        const makePage = () => {
+          const page = document.createElement('div');
+          page.className = 'a4-page';
+          const body = document.createElement('div');
+          body.className = 'a4-page-body';
+          page.appendChild(body);
+          host.appendChild(page);
+          return body;
+        };
+
+        host.replaceChildren();
+        host.dataset.paginated = pxPerMm ? '1' : '';
+        let body = makePage();
+        if (!pxPerMm) {
+          blocks.forEach((block) => body.appendChild(block));
+          return;
+        }
+
+        const capacity = (PAGE_MM[orientation][1] - marginMm * 2) * pxPerMm;
+        const overflows = () => body.offsetHeight > capacity + 1;
+        const newPage = () => { body = makePage(); };
+
+        blocks.forEach((block) => {
+          body.appendChild(block);
+          if (!overflows()) return;
+
+          const table = block.querySelector('.official-table');
+          const rows = table ? Array.from(table.tBodies[0]?.rows || []) : [];
+          if (!rows.length || rows.length < 2) {
+            if (body.children.length > 1) {
+              newPage();
+              body.appendChild(block);
+            }
+            return;
+          }
+
+          // Táblázatos blokk: sorok mentén szétosztás, a folytatás fejléces táblázatként új lapon indul.
+          const tbody = table.tBodies[0];
+          rows.forEach((row) => row.remove());
+          let current = block;
+          let currentBody = tbody;
+          rows.forEach((row) => {
+            currentBody.appendChild(row);
+            if (!overflows()) return;
+            if (currentBody.rows.length === 1) {
+              if (body.children.length > 1) {
+                newPage();
+                body.appendChild(current);
+              }
+              return;
+            }
+            currentBody.removeChild(row);
+            const continuation = current.cloneNode(true);
+            continuation.querySelectorAll('h3').forEach((node) => node.remove());
+            const continuationBody = continuation.querySelector('.official-table').tBodies[0];
+            continuationBody.replaceChildren();
+            newPage();
+            body.appendChild(continuation);
+            continuationBody.appendChild(row);
+            current = continuation;
+            currentBody = continuationBody;
+          });
+        });
+
+        host.querySelectorAll('.a4-page').forEach((page) => {
+          if (!page.textContent.trim() && host.querySelectorAll('.a4-page').length > 1) page.remove();
+        });
       }
 
       function renderPreview() {
@@ -2447,6 +2590,8 @@
         previewPanel.classList.toggle('preview-hidden', !showPreview);
         previewEmpty.style.display = showPreview ? 'none' : 'grid';
         previewContent.style.display = showPreview ? 'block' : 'none';
+        // Rejtett állapotban nem mérhető a lap magassága, ezért láthatóvá váláskor újratördelünk.
+        if (showPreview && lastResult && resultDocument.dataset.paginated !== '1') renderResultDocument(lastResult);
       }
 
       function loadGeneratedPlanFromStorage() {
@@ -2857,37 +3002,48 @@
         element.className = 'document-sheet export-sheet';
         element.dataset.margin = margin;
         element.dataset.orientation = orientation;
-        element.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${contentWidth}mm;min-height:0;max-width:none;padding:0;margin:0;box-shadow:none;background:#fff;`;
+        // Nincs position/z-index: az html2pdf egy overlay-be klónozza az elemet, ahol a fixed + negatív z-index üres képet adott.
+        element.style.cssText = `width:${contentWidth}mm;min-height:0;max-width:none;padding:0;margin:0;box-shadow:none;background:#fff;`;
         element.innerHTML = buildDocumentHtml(lastResult, lastResult.request || buildGenerationPayload(), docId);
-        document.body.appendChild(element);
-        return { element, orientation, marginMm };
+        return { element, orientation, marginMm, contentWidth };
       }
 
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
       async function renderPdfBlob(docId) {
-        const { element, orientation, marginMm } = buildExportElement(docId);
+        const { element, orientation, marginMm, contentWidth } = buildExportElement(docId);
+        // Látható, de a képernyőn kívüli, nem vágó (overflow: visible) tároló valós méretekkel.
+        const host = document.createElement('div');
+        host.style.cssText = `position:absolute;left:-10000px;top:0;width:${contentWidth}mm;overflow:visible;pointer-events:none;`;
+        host.appendChild(element);
+        document.body.appendChild(host);
         try {
+          if (document.fonts?.ready) await document.fonts.ready;
+          await nextFrame();
+          await nextFrame();
+          if (!element.offsetHeight || !element.offsetWidth) {
+            throw new Error('A dokumentum nem látható vagy nulla méretű, ezért a PDF nem készíthető el.');
+          }
           return await window.html2pdf().set({
             margin: [marginMm, marginMm, marginMm, marginMm],
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false },
             jsPDF: { unit: 'mm', format: 'a4', orientation },
             pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', 'h3', '.doc-meta-block'] }
           }).from(element).outputPdf('blob');
         } finally {
-          element.remove();
+          host.remove();
         }
       }
 
       function renderDocxBlob(docId) {
         const { element, orientation, marginMm } = buildExportElement(docId);
-        try {
+        {
           const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
           const exportOverrides = '.document-sheet{width:auto!important;min-height:0!important;padding:0!important;box-shadow:none!important;position:static!important;}';
           const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}\n${exportOverrides}</style></head><body>${element.outerHTML}</body></html>`;
           const twips = Math.round(marginMm * 56.7);
           return window.htmlDocx.asBlob(html, { orientation, margins: { top: twips, right: twips, bottom: twips, left: twips } });
-        } finally {
-          element.remove();
         }
       }
 

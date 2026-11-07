@@ -397,3 +397,13 @@ test('generated plan survives a reload and is removed only by the clean-slate ac
   assert.equal(doc.querySelector('#previewContent').style.display, 'none');
   assert.notEqual(doc.querySelector('#previewEmpty').style.display, 'none');
 });
+
+test('preview is built from A4 page containers and the export element is not fixed or hidden', async (t) => {
+  const window = await loadApp(t);
+  window.renderResultDocument({ ...makePlan(4), request: makePayload() });
+  const doc = window.document;
+  assert.ok(doc.querySelectorAll('#resultDocument .a4-page').length >= 1);
+  assert.equal(doc.querySelectorAll('#resultDocument .a4-page tbody tr').length, 4);
+  const { element } = window.buildExportElement('main');
+  assert.doesNotMatch(element.style.cssText, /position|z-index|display|visibility/);
+});
