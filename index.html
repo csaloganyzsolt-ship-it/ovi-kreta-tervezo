@@ -244,8 +244,15 @@
       .app {
         margin-top: 24px;
         display: grid;
-        grid-template-columns: 280px minmax(0, 1.3fr) 420px;
+        grid-template-columns: minmax(0, 1fr);
         gap: 22px;
+      }
+
+      .main-form-layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 22px;
+        align-items: start;
       }
 
       .preview {
@@ -1073,7 +1080,7 @@
       }
 
       @media (max-width: 1100px) {
-        .app {
+        .main-form-layout {
           grid-template-columns: 1fr;
         }
 
@@ -1374,6 +1381,7 @@
       </header>
 
       <main class="app">
+        <div class="main-form-layout">
         <aside class="panel wizard">
           <button class="wizard-progress" id="wizardProgressToggle" type="button" aria-expanded="false" aria-controls="wizardList">
             <span class="wizard-progress-text" id="wizardProgressText">1/4. lépés: Alapadatok</span>
@@ -1699,6 +1707,7 @@
             <button class="btn primary" id="nextBtn" type="button">Következő lépés</button>
           </div>
         </section>
+        </div>
 
         <aside class="panel preview preview-hidden" id="previewPanel">
           <div class="preview-box" id="previewBox">
@@ -3071,6 +3080,10 @@
             console.warn('A generált terv nem menthető a böngészőbe:', storageError);
           }
           renderPreview();
+          setTimeout(() => {
+            const previewEl = document.getElementById('previewPanel') || document.getElementById('previewBox');
+            if (previewEl) previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 150);
           try {
             savePlanToHistory(payload);
             renderHistoryPanel();
@@ -3088,10 +3101,15 @@
         }
       }
 
+      function scrollToFormTop() {
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_error) {}
+      }
+
       nextBtn.addEventListener('click', () => {
         if (currentStep < steps.length - 1) {
           currentStep += 1;
           renderStep();
+          scrollToFormTop();
         } else {
           generatePlan();
         }
@@ -3101,6 +3119,7 @@
         if (currentStep > 0) {
           currentStep -= 1;
           renderStep();
+          scrollToFormTop();
         }
       });
 
@@ -3108,6 +3127,7 @@
         item.addEventListener('click', () => {
           currentStep = Number(item.dataset.step);
           renderStep();
+          scrollToFormTop();
         });
       });
 
