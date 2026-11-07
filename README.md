@@ -46,7 +46,7 @@ PORT=4000
 GEMINI_API_KEY=your_api_key_here
 ```
 
-A backend a kért `gemini-4-argon` modellre van rögzítve; a `GEMINI_MODEL` környezeti változó nem írja felül, és nincs más modellre történő automatikus váltás. A modell tényleges API-elérhetősége az adott hozzáféréstől függ. A szerver az API-, JSON- és tokenkeret-hibákat továbbítja a felületnek, nem helyettesíti a választ mintadokumentummal.
+A backend két modell közül választ a kérés `requestedModel` mezője alapján (alapértelmezett: `gemini-3.1-pro-preview`, prémium: `gemini-4-argon`); a `GEMINI_MODEL` környezeti változó nem írja felül, és nincs automatikus modellváltás. A modell tényleges API-elérhetősége az adott hozzáféréstől függ. A szerver az API-, JSON- és tokenkeret-hibákat továbbítja a felületnek, nem helyettesíti a választ mintadokumentummal.
 
 ## Ellenőrzések és generálási napló
 

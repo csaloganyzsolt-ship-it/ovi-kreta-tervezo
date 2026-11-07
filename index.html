@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ovi-Kréta Tervező Asszisztens</title>
+    <script>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('oviKretaTheme') === 'dark' ? 'dark' : 'light';
+      } catch (_error) {}
+    </script>
     <style>
       :root {
         --bg: #f7f3ee;
@@ -13,6 +18,7 @@
         --soft-2: #eadfd4;
         --primary: #b88f74;
         --primary-dark: #8d6852;
+        --primary-text: #8d6852;
         --accent: #d9c4b1;
         --mint: #dfeee6;
         --blue: #dfeaf7;
@@ -21,7 +27,98 @@
         --border: #eaded0;
         --success: #7aa983;
         --shadow: 0 18px 40px rgba(98, 76, 60, 0.08);
+        color-scheme: light;
       }
+
+      html[data-theme="dark"] {
+        --bg: #171413;
+        --panel: #221e1c;
+        --card: #2a2522;
+        --soft: #343029;
+        --soft-2: #3d3630;
+        --primary: #a9805f;
+        --primary-dark: #8a5f45;
+        --primary-text: #e2c2a8;
+        --accent: #5a4a3f;
+        --mint: #22362b;
+        --blue: #223249;
+        --text: #efe8e2;
+        --muted: #b9ada5;
+        --border: #443b35;
+        --success: #6fa17a;
+        --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+        color-scheme: dark;
+      }
+
+      html[data-theme="dark"] body { background: linear-gradient(180deg, #151211 0%, #1c1816 100%); }
+      html[data-theme="dark"] .topbar,
+      html[data-theme="dark"] .panel { background: rgba(38, 33, 30, 0.82); }
+      html[data-theme="dark"] input,
+      html[data-theme="dark"] select,
+      html[data-theme="dark"] textarea { background: #1f1b19; color: var(--text); border-color: var(--border); }
+      html[data-theme="dark"] input::placeholder,
+      html[data-theme="dark"] textarea::placeholder { color: #8c807a; }
+      html[data-theme="dark"] .segment.active,
+      html[data-theme="dark"] .check-item,
+      html[data-theme="dark"] .tag,
+      html[data-theme="dark"] .summary-box,
+      html[data-theme="dark"] .setting-option,
+      html[data-theme="dark"] .setting-row select,
+      html[data-theme="dark"] .download-btn,
+      html[data-theme="dark"] .history-panel,
+      html[data-theme="dark"] .mode-pill { background: var(--card); color: var(--text); }
+      html[data-theme="dark"] .chip { background: var(--soft); color: var(--muted); }
+      html[data-theme="dark"] .chip.active { color: #fff; }
+      html[data-theme="dark"] .mode-pill.active { color: #fff; background: var(--primary); }
+      html[data-theme="dark"] .btn.secondary { background: var(--soft); color: var(--text); }
+      html[data-theme="dark"] .slider { background: #4a423c; }
+      html[data-theme="dark"] .inline-box,
+      html[data-theme="dark"] .add-card,
+      html[data-theme="dark"] .preview-box,
+      html[data-theme="dark"] .preview-empty,
+      html[data-theme="dark"] .export-settings-panel { background: var(--card); border-color: var(--border); }
+      html[data-theme="dark"] .document-shell { background: #1c1917; }
+      html[data-theme="dark"] .inline-toggle { background: var(--soft); color: var(--text); }
+      html[data-theme="dark"] #generationErrorBanner { background: #3a1f1d !important; color: #ffd1ca !important; border-color: #6d3a35 !important; }
+      /* The printable document always stays light, regardless of the theme. */
+      html[data-theme="dark"] .document-sheet {
+        --text: #2d2a2d; --muted: #6a5e5b; --border: #eaded0; --soft: #f2e9df; --card: #ffffff;
+        --primary-text: #8d6852; color: #1d2329; background: white;
+      }
+
+      .theme-toggle {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-weight: 700;
+        cursor: pointer;
+        order: 4;
+      }
+
+      .advanced-settings {
+        grid-column: 1 / -1;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--card);
+        overflow: hidden;
+      }
+      .advanced-settings > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 14px 18px;
+        font-weight: 800;
+        color: var(--primary-text);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .advanced-settings > summary::-webkit-details-marker { display: none; }
+      .advanced-settings > summary::after { content: '▾'; transition: transform 0.2s ease; }
+      .advanced-settings[open] > summary::after { transform: rotate(180deg); }
+      .advanced-body { display: grid; gap: 16px; padding: 4px 18px 18px; }
+      .field-hint { display: block; margin-top: 6px; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
 
       * { box-sizing: border-box; }
 
@@ -69,7 +166,7 @@
         display: grid;
         place-items: center;
         background: linear-gradient(135deg, var(--mint), var(--blue));
-        color: var(--primary-dark);
+        color: var(--primary-text);
         font-size: 22px;
       }
 
@@ -78,7 +175,7 @@
         border: 1px solid var(--border);
         border-radius: 999px;
         padding: 10px 16px;
-        color: var(--primary-dark);
+        color: var(--primary-text);
         font-weight: 600;
         cursor: pointer;
       }
@@ -146,7 +243,7 @@
         display: grid;
         place-items: center;
         background: var(--soft);
-        color: var(--primary-dark);
+        color: var(--primary-text);
         font-weight: 700;
         font-size: 14px;
       }
@@ -295,7 +392,7 @@
       .inline-toggle.active {
         background: linear-gradient(135deg, rgba(123,173,136,0.18), rgba(168,210,187,0.22));
         border-color: rgba(78,137,100,0.5);
-        color: var(--primary-dark);
+        color: var(--primary-text);
       }
 
       .check-grid {
@@ -784,7 +881,7 @@
         padding: 7px 10px;
         border-radius: 10px;
         font-size: 0.8rem;
-        color: var(--primary-dark);
+        color: var(--primary-text);
         cursor: pointer;
       }
 
@@ -826,7 +923,7 @@
       .chip.active {
         background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         color: #ffffff;
-        border-color: var(--primary-dark);
+        border-color: var(--primary-text);
         box-shadow: 0 10px 16px rgba(141, 104, 82, 0.18);
       }
 
@@ -1018,6 +1115,7 @@
           <div class="brand-mark">✦</div>
           <span>Ovi-Kréta Tervező Asszisztens</span>
         </div>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">🌙 Sötét mód</button>
       </header>
 
       <main class="app">
@@ -1048,22 +1146,7 @@
                     <input type="checkbox" id="includeDailyBreakdown" checked />
                     <span>Szeretnék mind az 5 napra (Hétfő–Péntek) önálló, részletesen kidolgozott napi tervezetet is a heti keret mellé</span>
                   </label>
-                  <div class="field">
-                    <label for="weeklyProgressionType">Heti építkezés</label>
-                    <select id="weeklyProgressionType">
-                      <option value="progressive">Szervesen egymásra épülő projekt (Hétfői gyűjtéstől a Pénteki zárásig)</option>
-                      <option value="area_focused">Klasszikus területváltó (Minden nap más nevelési terület áll fókuszban)</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="fridayClosingType">Pénteki lezárás formája</label>
-                    <select id="fridayClosingType">
-                      <option value="Kiállítás a csoportszobában">Kiállítás a csoportszobában</option>
-                      <option value="Dramatikus közös játék">Dramatikus közös játék</option>
-                      <option value="Ünnepi szokás/Kóstoló">Ünnepi szokás/Kóstoló</option>
-                      <option value="Projektzáró élményséta">Projektzáró élményséta</option>
-                    </select>
-                  </div>
+                  <small class="field-hint">A heti építkezés és a pénteki lezárás a 3. lépés „Speciális beállítások” részében módosítható.</small>
                 </div>
               </div>
 
@@ -1104,6 +1187,12 @@
               <div class="field full">
                 <label>Tevékenységi forma</label>
                 <input type="text" data-field="tevekenyseg-forma" placeholder="Pl.: Ének, zene" />
+              </div>
+
+              <div class="field full">
+                <label for="availableTools">Ovi/csoport eszközkészlete</label>
+                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok, tornaszerek"></textarea>
+                <small class="field-hint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
               </div>
 
               <div class="field full">
@@ -1246,13 +1335,6 @@
               </div>
 
               <div class="field full">
-                <label class="check-item" style="display:flex; align-items:center; gap:10px; font-weight:600; color: var(--text);">
-                  <input type="checkbox" data-field="show-literature" />
-                  Felhasznált irodalom megjelenítése a lap alján
-                </label>
-              </div>
-
-              <div class="field full">
                 <label>Generálás hossza és kidolgozottsága</label>
                 <div class="slider-wrap">
                   <input type="range" min="0" max="100" value="68" data-field="detail-level" />
@@ -1262,6 +1344,52 @@
                   </div>
                 </div>
               </div>
+
+              <div class="field full">
+                <div class="toggle-row">
+                  <span>Prémium minőség (Béta)</span>
+                  <label class="switch">
+                    <input type="checkbox" id="premiumQuality" data-field="premium-quality" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <small class="field-hint">Kikapcsolva a gyorsabb modell (gemini-3.1-pro-preview) dolgozik; bekapcsolva a zászlóshajó gemini-4-argon, ami lassabb lehet.</small>
+              </div>
+
+              <details class="advanced-settings" id="advancedSettings">
+                <summary>Speciális beállítások</summary>
+                <div class="advanced-body">
+                  <div class="field">
+                    <label for="blacklist">Tiltások / Amit NE használjon</label>
+                    <textarea id="blacklist" data-field="blacklist" placeholder="Pl.: Ne legyen gyurma, ne használja a Süss fel napot."></textarea>
+                    <small class="field-hint">Témák, dalok, eszközök vagy szavak, amelyeket az AI szigorúan kerüljön.</small>
+                  </div>
+
+                  <label class="check-item" style="display:flex; align-items:center; gap:10px; font-weight:600; color: var(--text);">
+                    <input type="checkbox" data-field="show-literature" />
+                    Felhasznált irodalom megjelenítése a lap alján
+                  </label>
+
+                  <div id="weeklyAdvancedBlock" class="weekly-advanced" hidden>
+                    <div class="field">
+                      <label for="weeklyProgressionType">Heti építkezés</label>
+                      <select id="weeklyProgressionType">
+                        <option value="progressive">Szervesen egymásra épülő projekt (Hétfői gyűjtéstől a Pénteki zárásig)</option>
+                        <option value="area_focused">Klasszikus területváltó (Minden nap más nevelési terület áll fókuszban)</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="fridayClosingType">Pénteki lezárás formája</label>
+                      <select id="fridayClosingType">
+                        <option value="Kiállítás a csoportszobában">Kiállítás a csoportszobában</option>
+                        <option value="Dramatikus közös játék">Dramatikus közös játék</option>
+                        <option value="Ünnepi szokás/Kóstoló">Ünnepi szokás/Kóstoló</option>
+                        <option value="Projektzáró élményséta">Projektzáró élményséta</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
 
@@ -1370,7 +1498,8 @@
       const STORAGE_KEYS = {
         profile: 'oviKretaProfile',
         history: 'oviKretaPlansHistory',
-        draft: 'oviKretaDraft'
+        draft: 'oviKretaDraft',
+        theme: 'oviKretaTheme'
       };
 
       function resolveActiveDurationFromDom() {
@@ -1406,7 +1535,47 @@
       function updateWeeklyDailyBreakdownVisibility() {
         const panel = document.getElementById('weeklySettingsPanel');
         if (!panel) return;
-        panel.hidden = getSelectedDuration() !== 'Heti';
+        const isWeekly = getSelectedDuration() === 'Heti';
+        panel.hidden = !isWeekly;
+        const advancedBlock = document.getElementById('weeklyAdvancedBlock');
+        if (advancedBlock) advancedBlock.hidden = !isWeekly;
+      }
+
+      function getAvailableTools() {
+        return document.querySelector('[data-field="available-tools"]')?.value.trim() || '';
+      }
+
+      function getBlacklist() {
+        return document.querySelector('[data-field="blacklist"]')?.value.trim() || '';
+      }
+
+      function getRequestedModel() {
+        return document.getElementById('premiumQuality')?.checked ? 'gemini-4-argon' : 'gemini-3.1-pro-preview';
+      }
+
+      // Rarely used settings stay collapsed unless they already hold a non-default value.
+      function syncAdvancedSettingsOpenState() {
+        const details = document.getElementById('advancedSettings');
+        if (!details) return;
+        const hasCustomValue = Boolean(getBlacklist()) ||
+          Boolean(document.querySelector('[data-field="show-literature"]')?.checked) ||
+          (getSelectedDuration() === 'Heti' && (
+            getWeeklyProgressionType() !== 'progressive' ||
+            getFridayClosingType() !== 'Kiállítás a csoportszobában'));
+        if (hasCustomValue) details.open = true;
+      }
+
+      function applyTheme(theme, persist = true) {
+        const isDark = theme === 'dark';
+        document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) {
+          toggle.textContent = isDark ? '☀️ Világos mód' : '🌙 Sötét mód';
+          toggle.setAttribute('aria-pressed', String(isDark));
+        }
+        if (persist) {
+          try { localStorage.setItem('oviKretaTheme', isDark ? 'dark' : 'light'); } catch (_error) {}
+        }
       }
 
       function getTheme() {
@@ -1596,6 +1765,7 @@
 
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
+        syncAdvancedSettingsOpenState();
 
         const dateTarget = document.querySelector(getSelectedDuration() === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
         if (dateTarget && draft.dateValue) {
@@ -2053,6 +2223,10 @@
         });
 
         localStorage.removeItem(STORAGE_KEYS.draft);
+        updateDateInputsForDuration();
+        updateWeeklyDailyBreakdownVisibility();
+        const advancedSettings = document.getElementById('advancedSettings');
+        if (advancedSettings) advancedSettings.open = false;
         currentStep = 0;
         resetGeneratedResult();
         hideGenerationErrorBanner();
@@ -2306,6 +2480,9 @@
           includeDailyBreakdown: getWeeklyDailyBreakdown(),
           weeklyProgressionType: getWeeklyProgressionType(),
           fridayClosingType: getFridayClosingType(),
+          availableTools: getAvailableTools(),
+          blacklist: getBlacklist(),
+          requestedModel: getRequestedModel(),
           planMode: selectedDuration === 'Heti' ? 'weekly' : 'daily',
           theme: getTheme(),
           group: getGroup(),
@@ -2409,6 +2586,14 @@
       document.getElementById('downloadPdfBtn').addEventListener('click', exportAsPdf);
       document.getElementById('downloadDocxBtn').addEventListener('click', exportAsDocx);
       document.getElementById('clearDraftBtn').addEventListener('click', clearDraftState);
+
+      const themeToggleBtn = document.getElementById('themeToggle');
+      let savedTheme = 'light';
+      try { savedTheme = localStorage.getItem(STORAGE_KEYS.theme) === 'dark' ? 'dark' : 'light'; } catch (_error) {}
+      applyTheme(savedTheme, false);
+      themeToggleBtn.addEventListener('click', () => {
+        applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+      });
 
       const printBtn = document.createElement('button');
       printBtn.id = 'printBtn';

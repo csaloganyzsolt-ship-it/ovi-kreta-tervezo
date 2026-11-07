@@ -276,3 +276,48 @@ test('weekly plan renders the frame table and five day sheets', async (t) => {
   assert.equal(doc.querySelectorAll('.document-day-sheet .official-table tbody tr').length, 5);
   assert.equal(doc.querySelectorAll('.official-table').length, 6);
 });
+
+test('new fields reach the payload, survive a draft round trip and are cleared by the clean slate button', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  const set = (selector, value) => { const el = doc.querySelector(selector); el.value = value; };
+  set('[data-field="available-tools"]', 'xilofon');
+  set('[data-field="blacklist"]', 'gyurma');
+  doc.querySelector('#premiumQuality').checked = true;
+  let payload = window.buildGenerationPayload();
+  assert.equal(payload.availableTools, 'xilofon');
+  assert.equal(payload.blacklist, 'gyurma');
+  assert.equal(payload.requestedModel, 'gemini-4-argon');
+  const draft = window.collectDraftState();
+  window.clearDraftState();
+  payload = window.buildGenerationPayload();
+  assert.equal(payload.availableTools, '');
+  assert.equal(payload.blacklist, '');
+  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
+  window.applyDraftState(draft);
+  payload = window.buildGenerationPayload();
+  assert.equal(payload.availableTools, 'xilofon');
+  assert.equal(payload.blacklist, 'gyurma');
+  assert.equal(payload.requestedModel, 'gemini-4-argon');
+  assert.equal(doc.querySelector('#advancedSettings').open, true);
+});
+
+test('theme toggle switches and persists the dark mode', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  assert.equal(doc.documentElement.dataset.theme, 'light');
+  doc.querySelector('#themeToggle').click();
+  assert.equal(doc.documentElement.dataset.theme, 'dark');
+  assert.equal(window.localStorage.getItem('oviKretaTheme'), 'dark');
+  doc.querySelector('#themeToggle').click();
+  assert.equal(window.localStorage.getItem('oviKretaTheme'), 'light');
+});
+
+test('weekly extras live in the advanced settings and follow the duration selection', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, true);
+  window.setDurationSelection('Heti');
+  assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, false);
+  assert.ok(doc.querySelector('#advancedSettings #fridayClosingType'));
+});

@@ -139,13 +139,15 @@ test('high detail starts at 80 and requests substantial paragraphs rather than a
   assert.match(prompt, /közkincs|népköltészeti/);
 });
 
-test('Gemini requests always target Argon, without schema coercion or a model fallback', async (t) => {
+test('Gemini requests default to the fast model and use Argon only when explicitly requested', async (t) => {
   const plan = makePlan();
   const calls = stubGemini(t, geminiResponse(JSON.stringify(plan)));
   const output = await callGemini(buildPrompt(makePayload()), makePayload());
   assert.deepEqual(normalizeResponse(output).kidolgozas_tablazat, plan.kidolgozas_tablazat);
   assert.equal(calls.length, 1);
-  assert.equal(new URL(calls[0].url).pathname, '/v1beta/models/gemini-4-argon:generateContent');
+  assert.equal(new URL(calls[0].url).pathname, '/v1beta/models/gemini-3.1-pro-preview:generateContent');
+  await callGemini(buildPrompt(makePayload()), { model: 'gemini-4-argon' });
+  assert.equal(new URL(calls[1].url).pathname, '/v1beta/models/gemini-4-argon:generateContent');
   const body = JSON.parse(calls[0].options.body);
   assert.equal(body.generationConfig.responseMimeType, 'application/json');
   assert.ok(body.generationConfig.maxOutputTokens >= 12288);
@@ -225,4 +227,26 @@ test('weekly breakdown uses the weekly master prompt and 16384 output tokens', (
   assert.match(prompt, /heti_keretterv/);
   assert.match(prompt, /area_focused/);
   assert.match(prompt, /Projektzáró élményséta/);
+});
+
+test('model requests are validated against the two allowed models', () => {
+  const { resolveModel } = require('../server');
+  assert.equal(resolveModel({}), 'gemini-3.1-pro-preview');
+  assert.equal(resolveModel({ requestedModel: 'gemini-4-argon' }), 'gemini-4-argon');
+  assert.throws(() => resolveModel({ requestedModel: 'evil-model' }), /Nem támogatott modell/);
+});
+
+test('available tools and the blacklist reach both prompts and the system instruction', async (t) => {
+  for (const extra of [{}, { duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true }]) {
+    const prompt = buildPrompt(makePayload({ ...extra, availableTools: 'xilofon, nagy labda', blacklist: 'gyurma, Süss fel nap' }));
+    assert.match(prompt, /xilofon, nagy labda/);
+    assert.match(prompt, /SZIGORÚ TILTÁS/);
+    assert.match(prompt, /gyurma, Süss fel nap/);
+  }
+  assert.match(buildPrompt(makePayload()), /óvodákban általánosan megtalálható/);
+  assert.doesNotMatch(buildPrompt(makePayload()), /SZIGORÚ TILTÁS/);
+  const calls = stubGemini(t, geminiResponse(JSON.stringify(makePlan())));
+  await callGemini('x', { blacklist: 'gyurma' });
+  const body = JSON.parse(calls[0].options.body);
+  assert.match(body.systemInstruction.parts[0].text, /SZIGORÚ TILTÁS.*gyurma/s);
 });
