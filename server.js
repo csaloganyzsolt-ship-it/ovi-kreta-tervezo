@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('node:path');
-const { router: paymentRouter, stripeWebhook, deliverPurchase } = require('./routes/payment');
+const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -111,11 +111,14 @@ function corsOrigin(origin, callback, env = process.env) {
   return callback(null, false);
 }
 
+// Renderen a kliens IP-je az X-Forwarded-For fejlécből jön (a tesztkézbesítés korlátozásához kell).
+app.set('trust proxy', 1);
 app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
+app.post('/api/test-deliver', express.json({ limit: '25mb' }), testDeliver);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', paymentRouter);
 

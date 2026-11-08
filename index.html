@@ -646,6 +646,11 @@
         padding: 18px;
       }
 
+      .test-deliver-row { margin: 10px 0; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 14px; background: var(--soft); }
+      .test-deliver-row[hidden] { display: none; }
+      .test-deliver-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+      .test-deliver-controls input { flex: 1 1 220px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; }
+      @media print { .test-deliver-row { display: none !important; } }
       .panel.preview[hidden] { display: none !important; }
       .preview-hidden {
         opacity: 0.8;
@@ -1916,6 +1921,13 @@
 
               <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
+              <div class="test-deliver-row" id="testDeliverRow" hidden>
+                <label for="testDeliverEmail"><strong>Teszt kézbesítés</strong> (fizetés nélkül)</label>
+                <div class="test-deliver-controls">
+                  <input type="email" id="testDeliverEmail" placeholder="sajat@email.hu" autocomplete="email" />
+                  <button id="testDeliverBtn" class="download-btn" type="button">✉️ Tervezet elküldése e-mailben</button>
+                </div>
+              </div>
               <div class="download-row">
                 <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>📄 Számla letöltése (PDF)</button>
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
@@ -3636,6 +3648,7 @@
           generatePlan();
         }
       });
+      document.getElementById('testDeliverBtn').addEventListener('click', sendTestDelivery);
       document.getElementById('confirmRegenYes').addEventListener('click', () => {
         closeModals();
         generatePlan();
@@ -3874,6 +3887,8 @@
         const invoiceBtn = document.getElementById('downloadInvoiceBtn');
         if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
         syncActivitiesControl();
+        const testRow = document.getElementById('testDeliverRow');
+        if (testRow) testRow.hidden = !(testDeliveryEnabled() && Boolean(lastResult));
         const onResultStep = currentStep >= 3 && Boolean(lastResult);
         const showCta = paywallEnabled() && Boolean(lastResult) && locked && onResultStep;
         // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
@@ -4016,17 +4031,49 @@
       }
 
       // Egyetlen közös levél a vevőnek: a tervezetfájlok (napi: PDF+DOCX, heti: ZIP) a szerveren tárolt számlával együtt.
+      async function buildDeliveryFiles() {
+        const files = [];
+        if (lastResult.is_weekly === true) {
+          files.push({ name: 'OviTervezo_heti_csomag.zip', base64: await blobToBase64(await buildZipBlob()) });
+        } else {
+          const doc = getDocumentList()[0];
+          files.push({ name: `${doc.fileBase}.pdf`, base64: await blobToBase64(await renderPdfBlob(doc.id)) });
+          files.push({ name: `${doc.fileBase}.docx`, base64: await blobToBase64(await renderDocxBlob(doc.id)) });
+        }
+        return files;
+      }
+
+      // Staging: ugyanaz a melléklet-előállítás, de fizetés és számla nélkül (csak ha a config testDelivery=true és nincs fizetési kapu).
+      function testDeliveryEnabled() { return window.APP_CONFIG?.testDelivery === true && !paywallEnabled(); }
+
+      async function sendTestDelivery() {
+        const email = document.getElementById('testDeliverEmail').value.trim();
+        const button = document.getElementById('testDeliverBtn');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { showPurchaseNotice('Adj meg egy érvényes e-mail címet.'); return; }
+        button.disabled = true;
+        try {
+          showPurchaseNotice('Fájlok előállítása és küldés...');
+          const files = await buildDeliveryFiles();
+          const response = await fetch(`${getApiBaseUrl()}/api/test-deliver`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, files, plan: planKind() }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+          showPurchaseNotice(`✅ A tesztlevelet elküldtük ide: ${email}`);
+        } catch (error) {
+          showPurchaseNotice('');
+          showGenerationError(`A tesztlevél kiküldése sikertelen: ${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
       async function deliverPurchaseEmail(sessionId) {
         try {
           showPurchaseNotice('A megvásárolt anyagokat e-mailben is elküldjük...');
-          const files = [];
-          if (lastResult.is_weekly === true) {
-            files.push({ name: 'OviTervezo_heti_csomag.zip', base64: await blobToBase64(await buildZipBlob()) });
-          } else {
-            const doc = getDocumentList()[0];
-            files.push({ name: `${doc.fileBase}.pdf`, base64: await blobToBase64(await renderPdfBlob(doc.id)) });
-            files.push({ name: `${doc.fileBase}.docx`, base64: await blobToBase64(await renderDocxBlob(doc.id)) });
-          }
+          const files = await buildDeliveryFiles();
           for (let attempt = 0; attempt < 6; attempt += 1) {
             const response = await fetch(`${getApiBaseUrl()}/api/deliver/${encodeURIComponent(sessionId)}`, {
               method: 'POST',

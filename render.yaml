@@ -45,3 +45,7 @@ services:
         value: "true"
       - key: SZAMLA_PREFIX
         sync: false
+      - key: TEST_DELIVERY_ENABLED
+        sync: false
+      - key: TEST_DELIVERY_RECIPIENTS
+        sync: false

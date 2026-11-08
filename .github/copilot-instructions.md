@@ -37,3 +37,6 @@ Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni
 - Fizetés előtt a dokumentum nem tartalmazza a tevékenységi/foglalkozásmenet szekciót (`getExportSettings` → `activities=false` zárolt állapotban); csak a feloldó kapu és az értesítés jelenik meg.
 - A „Prémium generálás” le van tiltva („Hamarosan elérhető”). Minden Gemini hívás kizárólag a `gemini-3.1-pro-preview` modellt használhatja (`resolveModel`, `callGemini`).
 - Lépések közötti navigáció és űrlapmódosítás soha nem zárja vissza a kifizetett tervet; a feloldás csak új generálással (megerősítő ablak után) szűnik meg. Az előnézeti konténer (`#previewPanel`) kész dokumentum nélkül és az 1–3. lépésben rejtett.
+
+## 6. Két környezet
+- Nethely = éles (`build-nethely.js`, paywall be); GitHub Pages = staging (`build-pages.js`, paywall ki, `testDelivery`, `/api/test-deliver` csak `TEST_DELIVERY_ENABLED=true` mellett). Mindkettő a `main` pushra deployol.

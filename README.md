@@ -95,3 +95,12 @@ Indítófájl: `app.js` (a port a `PORT` környezeti változóból jön). Körny
 
 ### Automatikus Nethely feltöltés (GitHub Actions)
 A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel az Actions fülön) lefuttatja a teszteket, a `node scripts/build-nethely.js` buildet, majd FTP-vel szinkronizálja a `dist-nethely/` tartalmát. Szükséges Repository Secret-ek: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; opcionális: `FTP_PORT` (21), `FTP_SERVER_DIR` (`./`). A kapcsolat FTPS (passzív mód, `security: loose`, 60 s időkorlát).
+
+
+## Két környezet (Staging / Production)
+
+- **Production (Nethely, ovitervezo.hu):** `node scripts/build-nethely.js` – `paywallEnabled: true`, éles Stripe + számlázás.
+- **Staging (GitHub Pages):** `node scripts/build-pages.js` – `paywallEnabled: false`, `testDelivery: true`; generálás után a „Tervezet elküldése e-mailben” gomb a `/api/test-deliver` végponton küld levelet fizetés nélkül.
+- A teszt végpont a Renderen csak `TEST_DELIVERY_ENABLED=true` mellett, a GitHub Pages/localhost eredetről, IP-nként 10/óra korláttal működik (opcionális `TEST_DELIVERY_RECIPIENTS`, `TEST_DELIVERY_ORIGINS`).
+- Mindkét deploy a `main` push után fut (`deploy.yml`, `deploy-nethely.yml`).
+- SMTP ellenőrzés: `node scripts/test-email.js sajat@email.hu` (a `.env` SMTP_* változóival).

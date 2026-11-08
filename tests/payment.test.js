@@ -495,3 +495,90 @@ test('Nethely .htaccess does not redirect when the proxy already forwards HTTPS'
   assert.match(htaccess, /RewriteCond %\{HTTP:X-Forwarded-Proto\} !https/);
   assert.match(htaccess, /RewriteRule \^\(\.\*\)\$ https:\/\/%\{HTTP_HOST\}%\{REQUEST_URI\} \[L,R=301\]/);
 });
+
+function fakeRes() {
+  const res = { statusCode: 200, body: null };
+  res.status = (code) => { res.statusCode = code; return res; };
+  res.json = (body) => { res.body = body; return res; };
+  return res;
+}
+
+test('test delivery endpoint is off by default, origin-bound, rate limited and sends without Stripe', async () => {
+  const payment = require('../routes/payment');
+  const mailService = require('../services/mailService');
+  const original = { send: mailService.sendTestDeliveryEmail, enabled: process.env.TEST_DELIVERY_ENABLED, host: process.env.SMTP_HOST };
+  const sent = [];
+  mailService.sendTestDeliveryEmail = async (args) => { sent.push(args); return {}; };
+  const pdf = { name: 'a.pdf', base64: Buffer.from('x').toString('base64') };
+  const req = (origin, body = { email: 'a@b.hu', files: [pdf], plan: 'daily' }) => ({ headers: { origin }, ip: `ip-${Math.random()}`, body });
+  try {
+    delete process.env.TEST_DELIVERY_ENABLED;
+    process.env.SMTP_HOST = 'smtp.example';
+    let res = fakeRes();
+    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io'), res);
+    assert.equal(res.statusCode, 403);
+
+    process.env.TEST_DELIVERY_ENABLED = 'true';
+    res = fakeRes();
+    await payment.testDeliver(req('https://ovitervezo.hu'), res);
+    assert.equal(res.statusCode, 403);
+
+    res = fakeRes();
+    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io'), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, 'a@b.hu');
+
+    res = fakeRes();
+    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io', { email: 'bad', files: [pdf] }), res);
+    assert.equal(res.statusCode, 400);
+
+    const same = req('https://csaloganyzsolt-ship-it.github.io');
+    let last;
+    for (let i = 0; i < 11; i += 1) { last = fakeRes(); await payment.testDeliver({ ...same }, last); }
+    assert.equal(last.statusCode, 429);
+  } finally {
+    mailService.sendTestDeliveryEmail = original.send;
+    if (original.enabled === undefined) delete process.env.TEST_DELIVERY_ENABLED; else process.env.TEST_DELIVERY_ENABLED = original.enabled;
+    if (original.host === undefined) delete process.env.SMTP_HOST; else process.env.SMTP_HOST = original.host;
+  }
+});
+
+test('staging build has no paywall and shows the test delivery row; production keeps the paywall', () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const cwd = path.join(__dirname, '..');
+  execFileSync('node', ['scripts/build-pages.js'], { cwd });
+  const staging = fs.readFileSync(path.join(cwd, 'dist-pages', 'config.js'), 'utf8');
+  assert.match(staging, /"paywallEnabled": false/);
+  assert.match(staging, /"testDelivery": true/);
+  assert.match(fs.readFileSync(path.join(cwd, 'dist-pages', 'robots.txt'), 'utf8'), /Disallow: \//);
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd });
+  assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /"paywallEnabled": true/);
+  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /testDelivery/);
+});
+
+test('test delivery row appears only in the staging config after generation', async (t) => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const load = async (config) => {
+    const dom = new JSDOM(html, { url: 'http://localhost:8000/', pretendToBeVisual: true, runScripts: 'dangerously',
+      beforeParse(window) { window.HTMLElement.prototype.scrollIntoView = () => {}; window.scrollTo = () => {}; window.APP_CONFIG = config; } });
+    t.after(() => dom.window.close());
+    dom.window.document.querySelector('.wizard-item[data-step="3"]').click();
+    return dom.window;
+  };
+  const staging = await load({ paywallEnabled: false, testDelivery: true, apiBaseUrl: 'same-origin' });
+  assert.equal(staging.document.getElementById('testDeliverRow').hidden, true);
+  staging.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'st1' });
+  staging.document.querySelector('.wizard-item[data-step="3"]').click();
+  assert.equal(staging.document.getElementById('testDeliverRow').hidden, false);
+  assert.equal(staging.isPlanLocked(), false);
+  const prod = await load({ paywallEnabled: true, apiBaseUrl: 'same-origin' });
+  prod.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'pr1' });
+  prod.document.querySelector('.wizard-item[data-step="3"]').click();
+  assert.equal(prod.document.getElementById('testDeliverRow').hidden, true);
+});

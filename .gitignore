@@ -6,3 +6,5 @@ npm-debug.log*
 data/
 krumpli.md
 dist-nethely/
+
+dist-pages/

@@ -67,6 +67,45 @@ async function deliverPurchase(req, res) {
   }
 }
 
+// Staging tesztkézbesítés Stripe nélkül. Csak kifejezett bekapcsolással (TEST_DELIVERY_ENABLED=true) és csak a teszt-eredetekről működik,
+// IP-nként korlátozva, hogy ne lehessen levélszemét-továbbításra használni.
+const TEST_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
+const TEST_LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const TEST_LIMIT = { windowMs: 60 * 60 * 1000, max: 10 };
+const testHits = new Map();
+
+function testDeliveryAllowed(req, env = process.env) {
+  if (String(env.TEST_DELIVERY_ENABLED || '').toLowerCase() !== 'true') return false;
+  const origin = String(req.headers.origin || '');
+  const extra = String(env.TEST_DELIVERY_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+  return TEST_ORIGINS.includes(origin) || extra.includes(origin) || TEST_LOCAL_ORIGIN.test(origin);
+}
+
+function testRateLimited(ip, now = Date.now()) {
+  const recent = (testHits.get(ip) || []).filter((t) => now - t < TEST_LIMIT.windowMs);
+  if (recent.length >= TEST_LIMIT.max) { testHits.set(ip, recent); return true; }
+  recent.push(now);
+  testHits.set(ip, recent);
+  return false;
+}
+
+async function testDeliver(req, res) {
+  try {
+    if (!testDeliveryAllowed(req)) return res.status(403).json({ success: false, error: 'A tesztkézbesítés ezen a környezeten nem engedélyezett.' });
+    if (testRateLimited(req.ip)) return res.status(429).json({ success: false, error: 'Túl sok tesztlevél, próbáld később.' });
+    if (!mailService.isConfigured()) return res.status(503).json({ success: false, error: 'Az SMTP nincs beállítva a szerveren (SMTP_HOST, SMTP_USER, SMTP_PASS).' });
+    const to = String(req.body?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return res.status(400).json({ success: false, error: 'Érvénytelen e-mail cím.' });
+    const allowed = String(process.env.TEST_DELIVERY_RECIPIENTS || '').split(',').map((a) => a.trim().toLowerCase()).filter(Boolean);
+    if (allowed.length && !allowed.includes(to.toLowerCase())) return res.status(403).json({ success: false, error: 'Ez a cím nem szerepel a tesztcímzettek között.' });
+    const attachments = mailService.sanitizeAttachments(req.body?.files);
+    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments });
+    return res.json({ success: true, sent: true });
+  } catch (error) {
+    return sendPaymentError(res, error, 'Test delivery');
+  }
+}
+
 // A nyers törzs (express.raw) kell az aláírás ellenőrzéséhez, ezért ezt a server.js az express.json() előtt köti be.
 async function stripeWebhook(req, res) {
   let event;
@@ -107,4 +146,4 @@ router.post('/create-checkout-session', createCheckout);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
 
-module.exports = { router, stripeWebhook, deliverPurchase };
+module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited };

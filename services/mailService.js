@@ -79,4 +79,20 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
   });
 }
 
-module.exports = { isConfigured, sanitizeAttachments, sendPurchaseEmail, wasSent, markSent };
+// Staging tesztkézbesítés: ugyanaz a melléklet-előállítás és levélsablon, de Stripe-fizetés és számla nélkül.
+async function sendTestDeliveryEmail({ to, plan, attachments }, deps = {}) {
+  const env = deps.env || process.env;
+  const support = supportEmail(env);
+  const planLabel = String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
+  const transport = createTransport(env, deps);
+  return transport.sendMail({
+    from: env.MAIL_FROM || `OviTervező <${support}>`,
+    to,
+    replyTo: support,
+    subject: 'OviTervező – TESZT: tervezet kézbesítés',
+    text: `Ez egy TESZT levél (fizetés és számla nélkül). Mellékletben a ${planLabel} fájljai.\n\nOviTervező – https://ovitervezo.hu`,
+    attachments
+  });
+}
+
+module.exports = { isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
