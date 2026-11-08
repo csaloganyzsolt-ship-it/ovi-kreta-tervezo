@@ -387,3 +387,9 @@ test('generation disables the button, shows progress text, scrolls to the loader
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, 'Tervezet elkészítése');
 });
+
+test('invoice prefix comes from SZAMLA_PREFIX and is omitted when empty', () => {
+  const base = { orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } };
+  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLA_PREFIX: 'OVITE' }), /<szamlaszamElotag>OVITE<\/szamlaszamElotag>/);
+  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /szamlaszamElotag/);
+});

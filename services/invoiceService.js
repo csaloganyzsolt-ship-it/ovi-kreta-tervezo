@@ -39,6 +39,10 @@ function today(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+function invoicePrefix(env = process.env) {
+  return String(env.SZAMLA_PREFIX || '').trim();
+}
+
 function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
@@ -62,7 +66,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
     <rendelesSzam>${escapeXml(orderId)}</rendelesSzam>
-    <dijbekero>false</dijbekero>
+${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</szamlaszamElotag>\n` : ''}    <dijbekero>false</dijbekero>
     <fizetve>true</fizetve>
   </fejlec>
   <elado>

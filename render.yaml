@@ -25,3 +25,5 @@ services:
         value: https://csaloganyzsolt-ship-it.github.io/ovi-kreta-tervezo
       - key: SZAMLAZZ_SANDBOX
         value: "true"
+      - key: SZAMLA_PREFIX
+        sync: false
