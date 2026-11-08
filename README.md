@@ -92,3 +92,6 @@ Indítófájl: `app.js` (a port a `PORT` környezeti változóból jön). Körny
 1. `node scripts/build-nethely.js` (teszt Stripe-hoz: `--test`; más backendhez: `API_BASE_URL=https://... node scripts/build-nethely.js`).
 2. A `dist-nethely/` mappa tartalmát (rejtett `.htaccess` is) FTP-vel töltsd a Nethely `/OviTervezo/` könyvtárba, változtatás nélkül.
 3. A Render környezeti változóit lásd a `.env.example` és a `render.yaml` fájlban. A Stripe webhook: `https://<app-név>.onrender.com/api/webhook/stripe`, esemény: `checkout.session.completed`.
+
+### Automatikus Nethely feltöltés (GitHub Actions)
+A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel az Actions fülön) lefuttatja a teszteket, a `node scripts/build-nethely.js` buildet, majd FTP-vel szinkronizálja a `dist-nethely/` tartalmát. Szükséges Repository Secret-ek: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; opcionális: `FTP_PORT` (21), `FTP_PROTOCOL` (`ftp`/`ftps`), `FTP_SERVER_DIR` (`./`).
