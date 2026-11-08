@@ -315,3 +315,64 @@ test('unrelated export settings do not revoke the unlock', async (t) => {
   margin.dispatchEvent(new window.Event('change', { bubbles: true }));
   assert.equal(window.isPlanLocked(), false);
 });
+
+test('locked preview hides the detailed activity text and the methods column', async (t) => {
+  const window = await loadLockedApp(t);
+  const plan = makePlan(8);
+  const secret = 'RÉSZLETES-FOGLALKOZÁSMENET-'.repeat(12);
+  plan.kidolgozas_tablazat[0].tevekenyseg_menete = [secret];
+  plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = 'TITKOS-MODSZER';
+  plan.kidolgozas_tablazat[3].tevekenyseg_menete = ['MASODIK-FAZIS-SZOVEG'];
+  window.renderResultDocument({ ...plan, request: makePayload(), generationId: 'g9' });
+  const text = window.document.getElementById('resultDocument').textContent;
+  assert.equal(window.document.querySelectorAll('.official-table tbody tr').length, 2);
+  assert.doesNotMatch(text, /TITKOS-MODSZER/);
+  assert.doesNotMatch(text, /MASODIK-FAZIS-SZOVEG/);
+  assert.ok(text.length < 8000);
+  assert.ok(!text.includes(secret));
+  assert.match(text, /Feloldás után/);
+
+  window.unlockGeneration('g9', 'cs_test_g9');
+  window.renderResultDocument(window.lastResult);
+  const full = window.document.getElementById('resultDocument').textContent;
+  assert.ok(full.includes(secret));
+  assert.match(full, /TITKOS-MODSZER/);
+});
+
+test('unlock buttons appear in all places while locked and give way to the Feloldva badge', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  const ids = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockBtn'];
+  assert.ok(ids.every((id) => !document.getElementById(id) || document.getElementById(id).hidden));
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'g10' });
+  for (const id of ids) {
+    const button = document.getElementById(id);
+    assert.ok(button && !button.hidden, id);
+    assert.match(button.textContent, /390 Ft/);
+  }
+  document.getElementById('unlockTopBtn').click();
+  assert.ok(document.getElementById('checkoutModal').classList.contains('open'));
+  window.unlockGeneration('g10', 'cs_test_g10');
+  window.renderResultDocument(window.lastResult);
+  for (const id of ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn']) assert.equal(document.getElementById(id).hidden, true);
+  assert.equal(document.getElementById('unlockBtn'), null);
+  assert.equal(document.getElementById('unlockedBadge').hidden, false);
+});
+
+test('generation disables the button, shows progress text, scrolls to the loader and restores afterwards', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  let scrolled = null;
+  document.getElementById('generationLoader').scrollIntoView = function scroll() { scrolled = this.id; };
+  let release;
+  window.fetch = () => new Promise((resolve) => { release = () => resolve({ ok: false, status: 500, text: async () => '{"success":false,"error":"x"}', json: async () => ({ success: false, error: 'x' }) }); });
+  const pending = window.generatePlan();
+  const button = document.getElementById('nextBtn');
+  assert.equal(button.disabled, true);
+  assert.match(button.textContent, /Tervezet generálása folyamatban/);
+  assert.equal(scrolled, 'generationLoader');
+  release();
+  await pending;
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, 'Tervezet elkészítése');
+});

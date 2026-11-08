@@ -1457,6 +1457,14 @@
       .modal-actions button { min-height: 48px; padding: 10px 18px; border-radius: 14px; border: 1px solid var(--border); background: var(--soft); color: var(--text); font-weight: 600; cursor: pointer; }
       .modal-actions button.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
       .modal-note { padding: 10px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 14px; }
+      .btn.is-busy, .btn.is-busy:disabled { opacity: .6; cursor: progress; filter: grayscale(.4); }
+      .unlock-cta { min-height: 48px; padding: 12px 22px; border: 0; border-radius: 14px; background: var(--primary-dark); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
+      .unlock-cta[hidden], .unlocked-badge[hidden] { display: none; }
+      .preview-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+      .unlocked-badge { padding: 10px 16px; border-radius: 14px; background: #dff0e3; color: #1f6b32; font-weight: 700; }
+      html[data-theme="dark"] .unlocked-badge { background: #22382a; color: #a8dcb5; }
+      .paywall-cell-lock { color: var(--muted); font-style: italic; }
+      @media print { .preview-actionbar, .unlock-cta { display: none !important; } }
       .lock-note { margin-left: 6px; color: var(--muted); font-size: 13px; }
       .modal-error { color: #c0392b; font-size: 14px; margin-top: 8px; }
       .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 22px 18px 30px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1.6; }
@@ -1804,6 +1812,7 @@
           <div class="footer-actions">
             <button class="btn secondary" id="backBtn" type="button">Vissza</button>
             <button class="btn primary" id="nextBtn" type="button">Következő lépés</button>
+            <button class="unlock-cta" id="unlockNavBtn" type="button" hidden></button>
           </div>
         </section>
         </div>
@@ -1852,10 +1861,16 @@
                 </div>
               </div>
 
+              <div class="preview-actionbar" id="previewActionbar">
+                <button class="unlock-cta" id="unlockTopBtn" type="button" hidden></button>
+                <span class="unlocked-badge" id="unlockedBadge" hidden>✅ Feloldva</span>
+              </div>
+
               <div class="document-shell">
                 <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
+              <div class="preview-actionbar"><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
               <div class="download-row">
                 <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>📄 Számla letöltése (PDF)</button>
@@ -3444,9 +3459,11 @@
         revokeUnlock(lastResult?.generationId);
         resetGeneratedResult();
         nextBtn.disabled = true;
-        nextBtn.textContent = 'Generálás...';
+        nextBtn.classList.add('is-busy');
+        nextBtn.textContent = '⏳ Tervezet generálása folyamatban...';
         const payload = buildGenerationPayload();
         const stopLoader = startGenerationLoader(payload);
+        document.getElementById('generationLoader')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         try {
 
@@ -3500,7 +3517,9 @@
         } finally {
           stopLoader();
           nextBtn.disabled = false;
+          nextBtn.classList.remove('is-busy');
           nextBtn.textContent = 'Tervezet elkészítése';
+          updateExportLock();
         }
       }
 
@@ -3728,6 +3747,18 @@
         if (table) {
           const rows = Array.from(table.tBodies[0].rows);
           rows.slice(2).forEach((row) => row.remove());
+          // Csak a bevezető első két sora látszik, és abban sincs teljes foglalkozásmenet: az első cella rövid kivonat, a többi zárolt.
+          rows.slice(0, 2).forEach((row) => {
+            Array.from(row.cells).forEach((cell, index) => {
+              if (index === 0) return;
+              if (index === 1) {
+                const text = cell.textContent.replace(/\s+/g, ' ').trim();
+                cell.textContent = text.length > 110 ? `${text.slice(0, 110).trim()}…` : text;
+              } else {
+                cell.innerHTML = '<span class="paywall-cell-lock">🔒 Feloldás után</span>';
+              }
+            });
+          });
           const block = table.closest('.a4-page-body > *');
           body = block.parentElement;
           while (block.nextElementSibling) block.nextElementSibling.remove();
@@ -3740,7 +3771,7 @@
         gate.innerHTML = `<div class="paywall-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
           <div class="paywall-lock" aria-hidden="true">🔒</div>
           <p>A tervezet további fázisai zárolva vannak.</p>
-          <button type="button" class="unlock-btn" id="unlockBtn">Teljes tervezet és Kréta letöltés feloldása – ${price} Ft</button>`;
+          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet és Kréta letöltés feloldása – ${price} Ft</button>`;
         body.appendChild(gate);
       }
 
@@ -3753,6 +3784,16 @@
         const invoiceBtn = document.getElementById('downloadInvoiceBtn');
         if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
         syncActivitiesControl();
+        const showCta = paywallEnabled() && Boolean(lastResult) && locked;
+        const label = `🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft`;
+        ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'].forEach((id) => {
+          const button = document.getElementById(id);
+          if (!button) return;
+          button.hidden = !showCta;
+          button.textContent = label;
+        });
+        const badge = document.getElementById('unlockedBadge');
+        if (badge) badge.hidden = !(paywallEnabled() && lastResult && !locked);
       }
 
       function guardLocked() {
@@ -3923,7 +3964,7 @@
           const legal = event.target.closest('[data-legal]');
           if (legal) { event.preventDefault(); openLegalModal(legal.dataset.legal); return; }
           if (event.target.closest('[data-close-modal]') || event.target.classList.contains('modal-backdrop')) closeModals();
-          if (event.target.closest('#unlockBtn')) openCheckoutModal();
+          if (event.target.closest('.unlock-cta')) openCheckoutModal();
         });
         document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
         document.getElementById('downloadInvoiceBtn').addEventListener('click', downloadInvoice);
