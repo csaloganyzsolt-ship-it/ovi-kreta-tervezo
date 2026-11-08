@@ -1834,7 +1834,7 @@
 
     <script src="config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
       const steps = Array.from(document.querySelectorAll('.step-panel'));
@@ -3063,16 +3063,135 @@
         }
       }
 
+      // Natív DOCX (valódi Word-táblázatok és bekezdések): minden szoftverben megjelenik, nem csak a Wordben.
+      function docxRunsFromNode(node, base = {}) {
+        const { TextRun } = window.docx;
+        const runs = [];
+        node.childNodes.forEach((child) => {
+          if (child.nodeType === 3) {
+            const text = child.textContent.replace(/\s+/g, ' ');
+            if (text.trim() || text === ' ') runs.push(new TextRun({ text, ...base }));
+          } else if (child.nodeName === 'BR') {
+            runs.push(new TextRun({ break: 1 }));
+          } else if (child.nodeType === 1) {
+            const bold = ['STRONG', 'B'].includes(child.nodeName) || base.bold;
+            runs.push(...docxRunsFromNode(child, { ...base, bold }));
+          }
+        });
+        return runs;
+      }
+
+      function docxTable(table, contentWidth) {
+        const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, ShadingType, TableLayoutType } = window.docx;
+        const cols = Array.from(table.querySelectorAll('col')).map((col) => parseFloat(col.style.width) || 0);
+        const count = cols.length || table.rows[0].cells.length;
+        const widths = (cols.length ? cols : Array(count).fill(100 / count)).map((pct) => Math.round(contentWidth * pct / 100));
+        const line = { style: BorderStyle.SINGLE, size: 6, color: '8E8174' };
+        const borders = { top: line, bottom: line, left: line, right: line };
+        const buildRow = (row, header) => new TableRow({
+          tableHeader: header,
+          cantSplit: true,
+          children: Array.from(row.cells).map((cell, index) => {
+            const paragraphs = Array.from(cell.querySelectorAll(':scope > p')).map((para) => new Paragraph({
+              spacing: { after: 100, line: 276 },
+              children: docxRunsFromNode(para, { size: 20, bold: header, font: 'Arial' })
+            }));
+            return new TableCell({
+              borders,
+              width: { size: widths[index], type: WidthType.DXA },
+              margins: { top: 80, bottom: 80, left: 110, right: 110 },
+              shading: header ? { type: ShadingType.CLEAR, fill: 'F2E9DF', color: 'auto' } : undefined,
+              children: paragraphs.length ? paragraphs : [new Paragraph({ children: docxRunsFromNode(cell, { size: 20, bold: header, font: 'Arial' }) })]
+            });
+          })
+        });
+        const rows = [];
+        Array.from(table.tHead?.rows || []).forEach((row) => rows.push(buildRow(row, true)));
+        Array.from(table.tBodies[0]?.rows || []).forEach((row) => rows.push(buildRow(row, false)));
+        return new Table({
+          width: { size: widths.reduce((a, b) => a + b, 0), type: WidthType.DXA },
+          columnWidths: widths,
+          layout: TableLayoutType.FIXED,
+          rows
+        });
+      }
+
+      function docxMetaTable(block, contentWidth) {
+        const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, ShadingType, TableLayoutType } = window.docx;
+        const line = { style: BorderStyle.SINGLE, size: 4, color: 'D9CFC4' };
+        const borders = { top: line, bottom: line, left: line, right: line };
+        const widths = [Math.round(contentWidth * 0.28), Math.round(contentWidth * 0.72)];
+        const rows = Array.from(block.querySelectorAll('.meta-row')).map((row) => new TableRow({
+          cantSplit: true,
+          children: [row.querySelector('.meta-label'), row.querySelector('.meta-value')].map((cell, index) => new TableCell({
+            borders,
+            width: { size: widths[index], type: WidthType.DXA },
+            margins: { top: 70, bottom: 70, left: 110, right: 110 },
+            shading: { type: ShadingType.CLEAR, fill: 'FAF6F1', color: 'auto' },
+            children: [new Paragraph({ children: [new TextRun({ text: cell?.textContent || '', bold: index === 0, size: 21, font: 'Arial' })] })]
+          }))
+        }));
+        return new Table({ width: { size: widths[0] + widths[1], type: WidthType.DXA }, columnWidths: widths, layout: TableLayoutType.FIXED, rows });
+      }
+
       async function renderDocxBlob(docId) {
-        const { pages, orientation, marginMm } = await buildPagesForDoc(docId);
-        const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent).join('\n');
-        const exportOverrides = '.document-sheet{width:auto!important;min-height:0!important;padding:0!important;box-shadow:none!important;position:static!important;}';
-        const body = pages
-          .map((html, index) => `<div${index ? ' style="page-break-before:always;"' : ''}>${html}</div>`)
-          .join('');
-        const html = `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><style>${styles}\n${exportOverrides}</style></head><body><div class="document-sheet export-sheet" style="width:auto;padding:0;margin:0;">${body}</div></body></html>`;
-        const twips = Math.round(marginMm * 56.7);
-        return window.htmlDocx.asBlob(html, { orientation, margins: { top: twips, right: twips, bottom: twips, left: twips } });
+        if (!window.docx) throw new Error('A DOCX könyvtár nem tölthető be.');
+        const { Document, Packer, Paragraph, TextRun, PageOrientation, BorderStyle, HeadingLevel } = window.docx;
+        const { orientation, margin } = getDocSettings(docId);
+        const marginMm = MARGIN_MM[margin] || MARGIN_MM.comfortable;
+        const marginTw = Math.round(marginMm * 56.7);
+        const [pageW] = PAGE_MM[orientation];
+        const contentWidth = Math.round(pageW * 56.7) - marginTw * 2;
+        const source = document.createElement('div');
+        source.innerHTML = buildDocumentHtml(lastResult, lastResult.request || buildGenerationPayload(), docId);
+
+        const children = [];
+        const spacer = () => new Paragraph({ spacing: { after: 120 }, children: [] });
+        const visit = (node) => {
+          if (node.nodeType !== 1) return;
+          if (node.matches('.doc-header')) {
+            children.push(new Paragraph({
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 60 },
+              children: [new TextRun({ text: node.querySelector('h2')?.textContent || '', bold: true, size: 34, font: 'Arial', color: '1D2329' })]
+            }));
+            children.push(new Paragraph({
+              spacing: { after: 240 },
+              border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'C9BDB0', space: 6 } },
+              children: [new TextRun({ text: (node.querySelector('.doc-meta')?.textContent || '').toUpperCase(), color: '6A5E5B', size: 18, bold: true, font: 'Arial' })]
+            }));
+          } else if (node.matches('.doc-meta-block')) {
+            children.push(docxMetaTable(node, contentWidth), spacer());
+          } else if (node.tagName === 'H3') {
+            children.push(new Paragraph({
+              heading: HeadingLevel.HEADING_2,
+              keepNext: true,
+              spacing: { before: 200, after: 120 },
+              children: [new TextRun({ text: node.textContent, bold: true, size: 26, font: 'Arial', color: '1D2329' })]
+            }));
+          } else if (node.tagName === 'TABLE') {
+            children.push(docxTable(node, contentWidth), spacer());
+          } else if (node.tagName === 'P') {
+            children.push(new Paragraph({ spacing: { after: 120, line: 288 }, children: docxRunsFromNode(node, { size: 22, font: 'Arial' }) }));
+          } else {
+            node.childNodes.forEach(visit);
+          }
+        };
+        source.childNodes.forEach(visit);
+
+        const doc = new Document({
+          creator: 'Ovi-Kréta Tervező',
+          sections: [{
+            properties: {
+              page: {
+                size: { width: 11906, height: 16838, orientation: orientation === 'landscape' ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT },
+                margin: { top: marginTw, right: marginTw, bottom: marginTw, left: marginTw }
+              }
+            },
+            children
+          }]
+        });
+        return Packer.toBlob(doc);
       }
 
       function getActiveDocument() {
@@ -3094,7 +3213,7 @@
       }
 
       async function exportAsDocx() {
-        if (!window.htmlDocx) {
+        if (!window.docx) {
           alert('A DOCX export könyvtár nem tölthető be. Ellenőrizd az internetkapcsolatot.');
           return;
         }
@@ -3107,7 +3226,7 @@
       }
 
       async function exportAllAsZip() {
-        if (!window.JSZip || !window.html2pdf || !window.htmlDocx) {
+        if (!window.JSZip || !window.html2pdf || !window.docx) {
           alert('Az exportkönyvtárak (JSZip, PDF, DOCX) nem tölthetők be. Ellenőrizd az internetkapcsolatot.');
           return;
         }

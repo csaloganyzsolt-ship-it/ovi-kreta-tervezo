@@ -407,3 +407,19 @@ test('preview is built from A4 page containers and the export element is not fix
   const element = window.makePageElement('<p>x</p>', 'portrait', 12);
   assert.doesNotMatch(element.style.cssText, /position|z-index|display|visibility/);
 });
+
+test('DOCX is a native Word document with real tables, not an embedded HTML chunk', async (t) => {
+  const window = await loadApp(t);
+  window.renderResultDocument({ ...makePlan(4), request: makePayload() });
+  const docxLib = require('docx');
+  window.docx = docxLib;
+  const blob = await window.renderDocxBlob('main');
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(buffer);
+  assert.equal(zip.file('word/afchunk.mht'), null);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.ok((xml.match(/<w:tr>/g) || []).length >= 5);
+  assert.match(xml, /<w:tblHeader\/>/);
+  assert.match(xml, /Napi tervezet/);
+});
