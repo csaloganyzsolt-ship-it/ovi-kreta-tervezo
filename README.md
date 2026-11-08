@@ -86,3 +86,9 @@ A frontend pusztán a felhasználói adatokat küldi el a backendnek, a backend 
 
 ## Üzemeltetés (Nethely)
 Indítófájl: `app.js` (a port a `PORT` környezeti változóból jön). Környezeti változók: `.env.example`. Stripe webhook: `BASE_URL/api/webhook/stripe` (esemény: `checkout.session.completed`).
+
+## Hibrid üzem: frontend a Nethelyen, backend a Renderen
+
+1. `node scripts/build-nethely.js` (teszt Stripe-hoz: `--test`; más backendhez: `API_BASE_URL=https://... node scripts/build-nethely.js`).
+2. A `dist-nethely/` mappa tartalmát (rejtett `.htaccess` is) FTP-vel töltsd a Nethely `/OviTervezo/` könyvtárba, változtatás nélkül.
+3. A Render környezeti változóit lásd a `.env.example` és a `render.yaml` fájlban. A Stripe webhook: `https://<app-név>.onrender.com/api/webhook/stripe`, esemény: `checkout.session.completed`.

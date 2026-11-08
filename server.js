@@ -96,7 +96,22 @@ function getPlanMode(payload = {}) {
   return duration === 'heti' || explicitMode === 'weekly' ? 'weekly' : 'daily';
 }
 
-app.use(cors({ origin: true, credentials: true }));
+// Hibrid üzem: a frontend a Nethelyen (ovitervezo.hu), a backend a Renderen fut, ezért a böngészős hívásokhoz kifejezett CORS-lista kell.
+const DEFAULT_CORS_ORIGINS = ['https://ovitervezo.hu', 'https://www.ovitervezo.hu', 'https://csaloganyzsolt-ship-it.github.io'];
+const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+function allowedOrigins(env = process.env) {
+  const extra = String(env.CORS_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+  return [...DEFAULT_CORS_ORIGINS, ...extra];
+}
+
+function corsOrigin(origin, callback, env = process.env) {
+  // Origin nélküli kérés (Stripe webhook, curl, azonos eredet) nem böngészős CORS-hívás.
+  if (!origin || LOCAL_ORIGIN.test(origin) || allowedOrigins(env).includes(origin)) return callback(null, true);
+  return callback(null, false);
+}
+
+app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
@@ -484,4 +499,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { start, app, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+module.exports = { start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };

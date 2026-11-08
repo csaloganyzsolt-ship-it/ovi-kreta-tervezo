@@ -462,3 +462,28 @@ test('footer has three organised columns and checkout modal has the new title', 
   assert.equal(document.querySelectorAll('#siteFooter .footer-col').length, 3);
   assert.equal(document.getElementById('checkoutTitle').textContent, 'Teljes tervezet és Kréta-letöltés feloldása');
 });
+
+test('CORS allows ovitervezo.hu, www and localhost but rejects other origins', () => {
+  const { corsOrigin } = require('../server');
+  const check = (origin, env = {}) => { let allowed; corsOrigin(origin, (_e, ok) => { allowed = ok; }, env); return allowed; };
+  assert.equal(check('https://ovitervezo.hu'), true);
+  assert.equal(check('https://www.ovitervezo.hu'), true);
+  assert.equal(check('http://localhost:4000'), true);
+  assert.equal(check(undefined), true);
+  assert.equal(check('https://evil.example'), false);
+  assert.equal(check('https://staging.example', { CORS_ORIGINS: 'https://staging.example/' }), true);
+});
+
+test('Nethely build contains only static files and points to the Render API', () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
+  const dir = path.join(__dirname, '..', 'dist-nethely');
+  const files = fs.readdirSync(dir).sort();
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'index.html', 'robots.txt', 'sitemap.xml']);
+  assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
+  const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
+  assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
+  assert.doesNotMatch(config, /sk_|whsec_|GEMINI/);
+});
