@@ -59,7 +59,7 @@ async function deliverPurchase(req, res) {
     if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
     if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
     const attachments = mailService.sanitizeAttachments(req.body?.files);
-    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, attachments, invoicePdf });
+    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, attachments, invoicePdf, title: req.body?.title });
     mailService.markSent(id);
     return res.json({ success: true, sent: true });
   } catch (error) {
@@ -102,7 +102,7 @@ async function testDeliver(req, res) {
     console.log('[test-deliver] Mellékletek ellenőrzése (DOCX/PDF/ZIP) kezdete');
     const attachments = mailService.sanitizeAttachments(req.body?.files);
     console.log(`[test-deliver] Mellékletek kész: ${attachments.map((a) => a.filename).join(', ')}`);
-    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments });
+    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments, title: req.body?.title });
     console.log('[test-deliver] Kész, válasz a kliensnek');
     return res.json({ success: true, sent: true });
   } catch (error) {

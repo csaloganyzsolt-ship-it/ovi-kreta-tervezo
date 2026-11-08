@@ -4031,6 +4031,10 @@
       }
 
       // Egyetlen közös levél a vevőnek: a tervezetfájlok (napi: PDF+DOCX, heti: ZIP) a szerveren tárolt számlával együtt.
+      function planTitle() {
+        return String(lastResult?.heti_keretterv?.tema || lastResult?.request?.theme || '').trim().slice(0, 200);
+      }
+
       async function buildDeliveryFiles() {
         const files = [];
         if (lastResult.is_weekly === true) {
@@ -4060,7 +4064,7 @@
           const response = await fetch(`${getApiBaseUrl()}/api/test-deliver`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, files, plan: planKind() }),
+            body: JSON.stringify({ email, files, plan: planKind(), title: planTitle() }),
             signal: controller.signal,
           });
           const data = await response.json().catch(() => ({}));
@@ -4084,7 +4088,7 @@
             const response = await fetch(`${getApiBaseUrl()}/api/deliver/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ files }),
+              body: JSON.stringify({ files, title: planTitle() }),
             });
             const data = await response.json().catch(() => ({}));
             if (response.status === 409) { await new Promise((resolve) => setTimeout(resolve, 3000)); continue; }

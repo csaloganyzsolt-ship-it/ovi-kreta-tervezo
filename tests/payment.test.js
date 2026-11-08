@@ -587,6 +587,14 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
   const { buildEmailContent } = require('../services/mailService');
   const daily = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, {});
   assert.match(daily.html, /Kedves Kolléganő!/);
+  assert.doesNotMatch(daily.html, /🌱|📚|✨|💚|🌿/);
+  assert.match(daily.html, /Új tervezet készítése/);
+  assert.match(daily.html, /szabadon szerkeszthető/);
+  assert.match(daily.html, /válaszoljon közvetlenül erre a levélre/);
+  assert.doesNotMatch(daily.html, /Tervezet témája/);
+  const titled = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: false, test: false, title: 'Az <őszi> erdő' }, {});
+  assert.match(titled.html, /Tervezet témája:<\/strong> Az &lt;őszi&gt; erdő/);
+  assert.match(titled.text, /Tervezet témája: Az <őszi> erdő/);
   assert.match(daily.html, /\.docx/);
   assert.match(daily.html, /PDF/);
   assert.match(daily.html, /27891788-2-08/);
