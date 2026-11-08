@@ -39,6 +39,9 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT || 21 }}
-          protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+          # A Nethely FTPS-t és passzív módot követel; az akció (basic-ftp) mindig passzív módban kapcsolódik, ehhez nincs külön kapcsoló.
+          protocol: ftps
+          security: loose
+          timeout: 60000
           local-dir: ./dist-nethely/
           server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
