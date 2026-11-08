@@ -3,6 +3,7 @@
 const express = require('express');
 const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
+const mailService = require('../services/mailService');
 
 function sendPaymentError(res, error, context) {
   const status = error.status || 500;
@@ -22,9 +23,47 @@ async function createCheckout(req, res) {
 async function verifyCheckout(req, res) {
   try {
     const result = await stripeService.retrieveCheckoutSession(req.params.id);
-    return res.json({ success: true, ...result });
+    return res.json({
+      success: true,
+      ...result,
+      invoiceReady: Boolean(invoiceService.getInvoicePdf(req.params.id)),
+      emailEnabled: mailService.isConfigured() && !result.mock
+    });
   } catch (error) {
     return sendPaymentError(res, error, 'Checkout verification');
+  }
+}
+
+async function downloadInvoice(req, res) {
+  try {
+    const session = await stripeService.retrieveCheckoutSession(req.params.id);
+    if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
+    const pdf = invoiceService.getInvoicePdf(req.params.id);
+    if (!pdf) return res.status(404).json({ success: false, error: 'A számla még készül vagy nem érhető el.' });
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="OviTervezo_szamla.pdf"' });
+    return res.send(pdf);
+  } catch (error) {
+    return sendPaymentError(res, error, 'Invoice download');
+  }
+}
+
+// Egyetlen közös e-mail: a böngésző által előállított tervezetfájlok + a szerveren tárolt számla PDF. Csak egyszer, csak a vásárló e-mail címére.
+async function deliverPurchase(req, res) {
+  try {
+    const id = req.params.id;
+    const session = await stripeService.retrieveCheckoutSession(id);
+    if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
+    if (session.mock || !mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
+    if (mailService.wasSent(id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
+    const invoicePdf = invoiceService.getInvoicePdf(id);
+    if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
+    if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
+    const attachments = mailService.sanitizeAttachments(req.body?.files);
+    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, attachments, invoicePdf });
+    mailService.markSent(id);
+    return res.json({ success: true, sent: true });
+  } catch (error) {
+    return sendPaymentError(res, error, 'Purchase delivery');
   }
 }
 
@@ -66,5 +105,6 @@ async function stripeWebhook(req, res) {
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
 router.get('/checkout-session/:id', verifyCheckout);
+router.get('/invoice/:id', downloadInvoice);
 
-module.exports = { router, stripeWebhook };
+module.exports = { router, stripeWebhook, deliverPurchase };

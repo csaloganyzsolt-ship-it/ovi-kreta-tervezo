@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('node:path');
-const { router: paymentRouter, stripeWebhook } = require('./routes/payment');
+const { router: paymentRouter, stripeWebhook, deliverPurchase } = require('./routes/payment');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -99,6 +99,8 @@ function getPlanMode(payload = {}) {
 app.use(cors({ origin: true, credentials: true }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
+// A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
+app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', paymentRouter);
 

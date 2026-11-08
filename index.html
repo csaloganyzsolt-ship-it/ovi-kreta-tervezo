@@ -1457,6 +1457,7 @@
       .modal-actions button { min-height: 48px; padding: 10px 18px; border-radius: 14px; border: 1px solid var(--border); background: var(--soft); color: var(--text); font-weight: 600; cursor: pointer; }
       .modal-actions button.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
       .modal-note { padding: 10px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 14px; }
+      .lock-note { margin-left: 6px; color: var(--muted); font-size: 13px; }
       .modal-error { color: #c0392b; font-size: 14px; margin-top: 8px; }
       .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 22px 18px 30px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1.6; }
       .site-footer .footer-grid { display: flex; flex-wrap: wrap; gap: 18px 36px; justify-content: space-between; }
@@ -1830,7 +1831,7 @@
                 <div class="export-settings-grid">
                   <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenységek</label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenység kidolgozása <span id="activitiesLockNote" class="lock-note" hidden>🔒 (Fizetés után elérhető prémium funkció)</span></label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="differentiation" /> Differenciálás</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="materials" /> Eszközök</label>
                 </div>
@@ -1855,7 +1856,9 @@
                 <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
+              <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
               <div class="download-row">
+                <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>📄 Számla letöltése (PDF)</button>
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
                 <button id="downloadDocxBtn" class="download-btn" type="button">DOCX letöltése</button>
                 <button id="downloadZipBtn" class="download-btn download-zip" type="button" hidden>Összes letöltése ZIP-ben</button>
@@ -2239,6 +2242,7 @@
       }
 
       function persistDraftState() {
+        revokeIfPlanChanged();
         try {
           localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(collectDraftState()));
         } catch (error) {
@@ -2283,6 +2287,8 @@
         document.querySelectorAll('[data-export-section]').forEach((checkbox) => {
           settings[checkbox.dataset.exportSection] = checkbox.checked;
         });
+        // Zárolt állapotban a teaser a foglalkozás-táblázat első sorait mutatja, ezért a kapcsoló értéke ilyenkor nem érvényesül.
+        if (isPlanLocked()) settings.activities = true;
         const margin = document.querySelector('[data-export="margin"]')?.value || 'comfortable';
         return { settings, margin };
       }
@@ -2574,10 +2580,12 @@
       function renderResultDocument(data = lastResult) {
         if (!data) {
           resultDocument.replaceChildren();
+          updateExportLock();
           return;
         }
         validateGeneratedPlan(data);
         lastResult = data;
+        syncActivitiesControl();
         const request = data.request || buildGenerationPayload();
         const list = getDocumentList(data);
         if (!list.some((doc) => doc.id === activeDocId)) activeDocId = list[0].id;
@@ -3311,6 +3319,18 @@
         downloadBlob(await renderDocxBlob(doc.id), `${doc.fileBase}.docx`);
       }
 
+      async function buildZipBlob(onProgress = () => {}) {
+        const zip = new window.JSZip();
+        const list = getDocumentList();
+        for (let index = 0; index < list.length; index += 1) {
+          const doc = list[index];
+          onProgress(index + 1, list.length);
+          zip.file(`${doc.fileBase}.pdf`, await renderPdfBlob(doc.id));
+          zip.file(`${doc.fileBase}.docx`, await renderDocxBlob(doc.id));
+        }
+        return zip.generateAsync({ type: 'blob' });
+      }
+
       async function exportAllAsZip() {
         if (!window.JSZip || !window.html2pdf || !window.docx) {
           alert('Az exportkönyvtárak (JSZip, PDF, DOCX) nem tölthetők be. Ellenőrizd az internetkapcsolatot.');
@@ -3321,15 +3341,8 @@
         const originalLabel = button.textContent;
         button.disabled = true;
         try {
-          const zip = new window.JSZip();
-          const list = getDocumentList();
-          for (let index = 0; index < list.length; index += 1) {
-            const doc = list[index];
-            button.textContent = `ZIP készítése... ${index + 1}/${list.length}`;
-            zip.file(`${doc.fileBase}.pdf`, await renderPdfBlob(doc.id));
-            zip.file(`${doc.fileBase}.docx`, await renderDocxBlob(doc.id));
-          }
-          downloadBlob(await zip.generateAsync({ type: 'blob' }), 'ovi-kreta-heti-terv.zip');
+          const blob = await buildZipBlob((done, total) => { button.textContent = `ZIP készítése... ${done}/${total}`; });
+          downloadBlob(blob, 'ovi-kreta-heti-terv.zip');
         } catch (error) {
           showGenerationError(`A ZIP letöltés sikertelen: ${error?.message || error}`);
         } finally {
@@ -3428,6 +3441,7 @@
 
       async function generatePlan() {
         hideGenerationErrorBanner();
+        revokeUnlock(lastResult?.generationId);
         resetGeneratedResult();
         nextBtn.disabled = true;
         nextBtn.textContent = 'Generálás...';
@@ -3644,6 +3658,51 @@
 <p>Fizetéssel vagy számlával kapcsolatos kérdés esetén: info@csb-vill.com.</p>`]
       };
 
+      function getPaidSessions() {
+        try { return JSON.parse(localStorage.getItem('oviKretaPaidSessions') || '{}') || {}; } catch (_e) { return {}; }
+      }
+      function currentPaidSessionId() {
+        return getPaidSessions()[lastResult?.generationId] || null;
+      }
+      // Egyszeri fizetés: a feloldás csak az adott generált tervhez (generationId) tartozik, és bármely módosításnál megszűnik.
+      function revokeUnlock(generationId) {
+        if (!generationId) return;
+        localStorage.setItem('oviKretaUnlocked', JSON.stringify(getUnlockedIds().filter((id) => id !== generationId)));
+        const sessions = getPaidSessions();
+        delete sessions[generationId];
+        localStorage.setItem('oviKretaPaidSessions', JSON.stringify(sessions));
+      }
+      function revokeIfPlanChanged() {
+        if (!paywallEnabled() || !lastResult || isPlanLocked()) return;
+        if (JSON.stringify(buildGenerationPayload()) === JSON.stringify(lastResult.request)) return;
+        revokeUnlock(lastResult.generationId);
+        renderResultDocument(lastResult);
+        renderPreview();
+      }
+
+      function syncActivitiesControl() {
+        const box = document.querySelector('[data-export-section="activities"]');
+        const note = document.getElementById('activitiesLockNote');
+        if (!box) return;
+        const locked = paywallEnabled() && !(lastResult && !isPlanLocked());
+        if (locked) {
+          box.checked = false;
+          box.disabled = true;
+          box.dataset.paywallLocked = '1';
+        } else {
+          if (box.dataset.paywallLocked === '1') { box.checked = true; delete box.dataset.paywallLocked; }
+          box.disabled = false;
+        }
+        if (note) note.hidden = !locked;
+      }
+
+      function showPurchaseNotice(message) {
+        const el = document.getElementById('purchaseNotice');
+        if (!el) return;
+        el.textContent = message || '';
+        el.hidden = !message;
+      }
+
       function getUnlockedIds() {
         try { return JSON.parse(localStorage.getItem('oviKretaUnlocked') || '[]'); } catch (_e) { return []; }
       }
@@ -3691,6 +3750,9 @@
           const button = document.getElementById(id);
           if (button) button.disabled = locked;
         });
+        const invoiceBtn = document.getElementById('downloadInvoiceBtn');
+        if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
+        syncActivitiesControl();
       }
 
       function guardLocked() {
@@ -3749,10 +3811,15 @@
         }
       }
 
-      function unlockGeneration(generationId) {
+      function unlockGeneration(generationId, sessionId) {
         const ids = getUnlockedIds();
         if (!ids.includes(generationId)) ids.push(generationId);
         localStorage.setItem('oviKretaUnlocked', JSON.stringify(ids));
+        if (sessionId) {
+          const sessions = getPaidSessions();
+          sessions[generationId] = sessionId;
+          localStorage.setItem('oviKretaPaidSessions', JSON.stringify(sessions));
+        }
       }
 
       async function handleCheckoutReturn() {
@@ -3767,11 +3834,78 @@
           const data = await response.json();
           if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
           const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId;
-          if (pending) unlockGeneration(pending);
+          if (pending) unlockGeneration(pending, sessionId);
           localStorage.removeItem('oviKretaPendingCheckout');
           if (lastResult) { renderResultDocument(lastResult); renderPreview(); }
+          if (data.emailEnabled && lastResult) deliverPurchaseEmail(sessionId);
         } catch (error) {
           showGenerationError(`A fizetés ellenőrzése sikertelen: ${error.message}`);
+        }
+      }
+
+      function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function downloadInvoice() {
+        const sessionId = currentPaidSessionId();
+        if (!sessionId) return;
+        const button = document.getElementById('downloadInvoiceBtn');
+        button.disabled = true;
+        try {
+          // A számla a Stripe webhook után készül, ezért néhányszor újrapróbáljuk.
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            const response = await fetch(`${getApiBaseUrl()}/api/invoice/${encodeURIComponent(sessionId)}`);
+            if (response.ok) { downloadBlob(await response.blob(), 'OviTervezo_szamla.pdf'); return; }
+            if (response.status !== 404) {
+              const data = await response.json().catch(() => ({}));
+              throw new Error(data.error || `HTTP ${response.status}`);
+            }
+            showPurchaseNotice('A számla még készül, kérlek várj egy pillanatot...');
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+          throw new Error('A számla még nem érhető el. Próbáld újra egy perc múlva.');
+        } catch (error) {
+          showGenerationError(`A számla letöltése sikertelen: ${error.message}`);
+        } finally {
+          button.disabled = false;
+          showPurchaseNotice('');
+        }
+      }
+
+      // Egyetlen közös levél a vevőnek: a tervezetfájlok (napi: PDF+DOCX, heti: ZIP) a szerveren tárolt számlával együtt.
+      async function deliverPurchaseEmail(sessionId) {
+        try {
+          showPurchaseNotice('A megvásárolt anyagokat e-mailben is elküldjük...');
+          const files = [];
+          if (lastResult.is_weekly === true) {
+            files.push({ name: 'OviTervezo_heti_csomag.zip', base64: await blobToBase64(await buildZipBlob()) });
+          } else {
+            const doc = getDocumentList()[0];
+            files.push({ name: `${doc.fileBase}.pdf`, base64: await blobToBase64(await renderPdfBlob(doc.id)) });
+            files.push({ name: `${doc.fileBase}.docx`, base64: await blobToBase64(await renderDocxBlob(doc.id)) });
+          }
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            const response = await fetch(`${getApiBaseUrl()}/api/deliver/${encodeURIComponent(sessionId)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.status === 409) { await new Promise((resolve) => setTimeout(resolve, 3000)); continue; }
+            if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+            showPurchaseNotice(data.sent ? '✅ A tervezetet és az e-számlát elküldtük a megadott e-mail címre.' : '');
+            return;
+          }
+          throw new Error('A számla még nem készült el.');
+        } catch (error) {
+          showPurchaseNotice('');
+          showGenerationError(`Az e-mail kiküldése sikertelen (a letöltés ettől még működik): ${error.message}`);
         }
       }
 
@@ -3792,6 +3926,7 @@
           if (event.target.closest('#unlockBtn')) openCheckoutModal();
         });
         document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
+        document.getElementById('downloadInvoiceBtn').addEventListener('click', downloadInvoice);
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModals(); });
       }
 
@@ -3810,6 +3945,7 @@
         renderStep();
         updateSummary();
         renderResultDocument();
+        updateExportLock();
         renderPreview();
         initFooterAndModals();
         handleCheckoutReturn();

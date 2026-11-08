@@ -50,7 +50,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
   <beallitasok>
     <szamlaagentkulcs>${escapeXml(env.SZAMLAZZ_KEY)}</szamlaagentkulcs>
     <eszamla>true</eszamla>
-    <szamlaLetoltes>false</szamlaLetoltes>
+    <szamlaLetoltes>true</szamlaLetoltes>
     <valaszVerzio>1</valaszVerzio>
   </beallitasok>
   <fejlec>
@@ -76,7 +76,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <telepules>${escapeXml(customer.city)}</telepules>
     <cim>${escapeXml(customer.address)}</cim>
     <email>${escapeXml(customer.email)}</email>
-    <sendEmail>true</sendEmail>
+    <sendEmail>false</sendEmail>
   </vevo>
   <tetelek>
     <tetel>
@@ -95,6 +95,31 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
 
 function storePath(env = process.env) {
   return env.INVOICE_STORE_PATH || path.join(__dirname, '..', 'data', 'invoiced-sessions.json');
+}
+
+function storageDir(env = process.env) {
+  return path.dirname(storePath(env));
+}
+
+function invoicePdfPath(orderId, env = process.env) {
+  const id = String(orderId || '');
+  if (!/^[A-Za-z0-9_]{6,200}$/.test(id)) throw new Error('Érvénytelen fizetési azonosító.');
+  return path.join(storageDir(env), 'invoices', `${id}.pdf`);
+}
+
+// A Számlázz.hu a kért PDF-et a válasz törzsében adja vissza; fizetési sessionhöz társítva fájlban tartjuk.
+function getInvoicePdf(orderId, env = process.env) {
+  try {
+    return fs.readFileSync(invoicePdfPath(orderId, env));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveInvoicePdf(orderId, pdf, env) {
+  const file = invoicePdfPath(orderId, env);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, pdf);
 }
 
 function readStore(env) {
@@ -137,7 +162,13 @@ async function issueInvoice(order, deps = {}) {
   const invoiceNumber = response.headers.get('szlahu_szamlaszam') || 'ismeretlen';
   issued[order.orderId] = invoiceNumber;
   writeStore(env, issued);
+  const pdf = Buffer.from(await response.arrayBuffer());
+  if (pdf.subarray(0, 4).toString() === '%PDF') {
+    saveInvoicePdf(order.orderId, pdf, env);
+  } else {
+    console.warn(`A Számlázz.hu válasza nem PDF (${order.orderId}), a számla letöltése nem érhető el.`);
+  }
   return { mock: false, sandbox: isSandbox(env), invoiceNumber };
 }
 
-module.exports = { supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };

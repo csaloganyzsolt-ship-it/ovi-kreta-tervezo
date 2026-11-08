@@ -15,6 +15,12 @@ services:
         sync: false
       - key: SZAMLAZZ_KEY
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
       - key: FRONTEND_URL
         value: https://csaloganyzsolt-ship-it.github.io/ovi-kreta-tervezo
       - key: SZAMLAZZ_SANDBOX

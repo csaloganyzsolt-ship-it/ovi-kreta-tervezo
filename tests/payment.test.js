@@ -52,8 +52,8 @@ test('invoice is issued once per Stripe session', async () => {
   const store = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inv-')), 's.json');
   const env = { SZAMLAZZ_KEY: 'key', INVOICE_STORE_PATH: store };
   let calls = 0;
-  const fetch = async () => { calls += 1; return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-2025-1']]) }; };
-  const order = { orderId: 'cs_1', plan: 'daily', customer: { email: 'a@b.hu' } };
+  const fetch = async () => { calls += 1; return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-2025-1']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 test') }; };
+  const order = { orderId: 'cs_test_1', plan: 'daily', customer: { email: 'a@b.hu' } };
   assert.equal((await invoiceService.issueInvoice(order, { env, fetch })).invoiceNumber, 'E-2025-1');
   assert.equal((await invoiceService.issueInvoice(order, { env, fetch })).duplicate, true);
   assert.equal(calls, 1);
@@ -166,7 +166,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   assert.doesNotMatch(daily, /pedagógiai/);
   assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@csb-vill\.com \| Köszönjük a vásárlást!<\/megjegyzes>/);
   assert.match(daily, /<eszamla>true<\/eszamla>/);
-  assert.match(daily, /<sendEmail>true<\/sendEmail>/);
+  assert.match(daily, /<sendEmail>false<\/sendEmail>/);
   assert.match(daily, /<dijbekero>false<\/dijbekero>/);
 });
 
@@ -184,7 +184,7 @@ test('signed checkout.session.completed webhook issues the invoice with the new 
   global.fetch = async (url, options) => {
     if (String(url).includes('szamlazz.hu')) {
       sentXml = await options.body.get('action-xmlagentxmlfile').text();
-      return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-1']]) };
+      return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-1']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 test') };
     }
     return realFetch(url, options);
   };
@@ -233,4 +233,85 @@ test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async
   assert.equal(params.cancel_url, 'https://pages.example/ovi/?checkout=cancelled');
   const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { FRONTEND_URL: 'http://localhost:4000' } });
   assert.match(mock.url, /^http:\/\/localhost:4000\/\?checkout_session=cs_mock_/);
+});
+
+test('invoice request disables Számlázz.hu mailing and asks for the PDF; the PDF is kept per session', async () => {
+  const xml = invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'cs_test_9', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
+  assert.match(xml, /<szamlaLetoltes>true<\/szamlaLetoltes>/);
+  assert.match(xml, /<sendEmail>false<\/sendEmail>/);
+  const env = { SZAMLAZZ_KEY: 'k', INVOICE_STORE_PATH: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-')), 's.json') };
+  const fetch = async () => ({ ok: true, headers: new Map([['szlahu_szamlaszam', 'E-7']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 invoice') });
+  await invoiceService.issueInvoice({ orderId: 'cs_test_9', plan: 'daily', customer: { email: 'a@b.hu' } }, { env, fetch });
+  assert.match(invoiceService.getInvoicePdf('cs_test_9', env).toString(), /^%PDF/);
+  assert.equal(invoiceService.getInvoicePdf('cs_test_other', env), null);
+});
+
+test('one combined purchase email carries the plan files and the invoice PDF', async () => {
+  const mailService = require('../services/mailService');
+  let message;
+  const transport = { sendMail: async (m) => { message = m; return { messageId: 'x' }; } };
+  const attachments = mailService.sanitizeAttachments([
+    { name: 'Napi.pdf', base64: Buffer.from('%PDF').toString('base64') },
+    { name: '../evil/Napi.docx', base64: Buffer.from('PK').toString('base64') }
+  ]);
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments, invoicePdf: Buffer.from('%PDF-inv') }, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
+  assert.equal(message.to, 'vevo@example.com');
+  assert.equal(message.replyTo, 's@x.hu');
+  assert.deepEqual(message.attachments.map((a) => a.filename), ['Napi.pdf', 'Napi.docx', 'szamla.pdf']);
+  assert.throws(() => mailService.sanitizeAttachments([{ name: 'x.exe', base64: 'AAAA' }]), /melléklettípus/);
+  assert.equal(mailService.isConfigured({}), false);
+  assert.equal(mailService.isConfigured({ SMTP_HOST: 'smtp.x' }), true);
+});
+
+test('activities toggle is locked before payment and opens only for the paid plan', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  const box = document.querySelector('[data-export-section="activities"]');
+  assert.equal(box.disabled, true);
+  assert.equal(box.checked, false);
+  assert.equal(document.getElementById('activitiesLockNote').hidden, false);
+
+  window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g1' });
+  assert.equal(box.disabled, true);
+  assert.equal(document.getElementById('downloadInvoiceBtn').hidden, true);
+
+  window.unlockGeneration('g1', 'cs_test_paid1');
+  window.renderResultDocument(window.lastResult);
+  assert.equal(box.disabled, false);
+  assert.equal(box.checked, true);
+  assert.equal(document.getElementById('activitiesLockNote').hidden, true);
+  assert.equal(document.getElementById('downloadInvoiceBtn').hidden, false);
+});
+
+test('changing any form field revokes the single-use unlock and locks the plan again', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  const request = window.buildGenerationPayload();
+  window.renderResultDocument({ ...makePlan(8), request, generationId: 'g2' });
+  window.unlockGeneration('g2', 'cs_test_paid2');
+  window.renderResultDocument(window.lastResult);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+
+  const topic = document.querySelector('[data-field="theme"], [data-field="topic"], textarea[data-field], input[data-field="group-name"]');
+  topic.value = `${topic.value}módosítva`;
+  topic.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+  assert.equal(window.isPlanLocked(), true);
+  assert.equal(window.getUnlockedIds().length, 0);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 2);
+  assert.equal(document.querySelector('[data-export-section="activities"]').disabled, true);
+  assert.equal(document.querySelector('[data-export-section="activities"]').checked, false);
+  assert.equal(document.getElementById('downloadInvoiceBtn').hidden, true);
+  assert.equal(document.getElementById('downloadPdfBtn').disabled, true);
+});
+
+test('unrelated export settings do not revoke the unlock', async (t) => {
+  const window = await loadLockedApp(t);
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'g3' });
+  window.unlockGeneration('g3', 'cs_test_paid3');
+  window.renderResultDocument(window.lastResult);
+  const margin = window.document.querySelector('[data-export="margin"]');
+  margin.value = 'compact';
+  margin.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(window.isPlanLocked(), false);
 });
