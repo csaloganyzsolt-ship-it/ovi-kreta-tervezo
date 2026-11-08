@@ -67,6 +67,8 @@ test('invoice errors from Számlázz.hu are surfaced', async () => {
 
 test('webhook rejects calls without valid configuration or signature', async () => {
   const { app } = require('../server');
+  const saved = {};
+  for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'NODE_ENV']) { saved[key] = process.env[key]; delete process.env[key]; }
   const server = app.listen(0);
   try {
     const port = server.address().port;
@@ -83,6 +85,7 @@ test('webhook rejects calls without valid configuration or signature', async () 
     assert.equal(env.status, 404);
   } finally {
     server.close();
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
 
@@ -151,4 +154,10 @@ test('footer and legal modals use the real company data without placeholders', a
   assert.doesNotMatch(window.document.body.innerHTML, /kitöltendő/);
   window.document.querySelector('[data-legal="privacy"]').click();
   assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
+});
+
+test('daily invoice line uses the agreed product name and has the seller element', () => {
+  const xml = invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'x', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
+  assert.match(xml, /<megnevezes>OviTervező - Napi pedagógiai tervezet<\/megnevezes>/);
+  assert.match(xml, /<elado><\/elado>\s*<vevo>/);
 });

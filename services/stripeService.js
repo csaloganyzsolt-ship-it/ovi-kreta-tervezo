@@ -2,7 +2,7 @@
 
 // Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
 const PRODUCTS = Object.freeze({
-  daily: Object.freeze({ key: 'daily', name: 'OviTervező – 1 db napi tervezet', amountHuf: 390 }),
+  daily: Object.freeze({ key: 'daily', name: 'OviTervező - Napi pedagógiai tervezet', amountHuf: 390 }),
   weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – 1 db heti csomag (keretterv + 5 napi tervezet)', amountHuf: 890 })
 });
 

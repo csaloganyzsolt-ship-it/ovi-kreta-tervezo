@@ -56,6 +56,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <dijbekero>${sandbox}</dijbekero>
     <fizetve>${!sandbox}</fizetve>
   </fejlec>
+  <elado></elado>
   <vevo>
     <nev>${escapeXml(customer.name || customer.email)}</nev>
     <irsz>${escapeXml(customer.zip)}</irsz>
@@ -118,7 +119,7 @@ async function issueInvoice(order, deps = {}) {
   const errorMessage = response.headers.get('szlahu_error');
   if (!response.ok || errorMessage) {
     const code = response.headers.get('szlahu_error_code');
-    throw new Error(`Számlázz.hu hiba${code ? ` (${code})` : ''}: ${decodeURIComponent(errorMessage || `HTTP ${response.status}`)}`);
+    throw new Error(`Számlázz.hu hiba${code ? ` (${code})` : ''}: ${decodeURIComponent((errorMessage || `HTTP ${response.status}`).replace(/\+/g, ' '))}`);
   }
   const invoiceNumber = response.headers.get('szlahu_szamlaszam') || 'ismeretlen';
   issued[order.orderId] = invoiceNumber;
