@@ -424,3 +424,19 @@ test('DOCX is a native Word document with real tables, not an embedded HTML chun
   assert.match(xml, /<w:tblHeader\/>/);
   assert.match(xml, /Napi tervezet/);
 });
+
+test('SEO metadata, indexable sections and legal footer data are present', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  assert.match(doc.title, /Kréta-kompatibilis Óvodai Tervezet/);
+  assert.ok(doc.querySelector('meta[name="description"]'));
+  assert.ok(doc.querySelector('meta[property="og:title"]'));
+  const ld = [...doc.querySelectorAll('script[type="application/ld+json"]')].map((s) => JSON.parse(s.textContent)['@type']);
+  assert.deepEqual(ld.sort(), ['FAQPage', 'SoftwareApplication']);
+  assert.ok(doc.querySelectorAll('#seoContent h2').length >= 4);
+  assert.ok(doc.querySelectorAll('#seoContent details').length >= 3);
+  const footer = doc.getElementById('siteFooter').textContent;
+  assert.match(footer, /Nethely Kft\./);
+  assert.match(footer, /Békéltető Testület/);
+  assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
+});

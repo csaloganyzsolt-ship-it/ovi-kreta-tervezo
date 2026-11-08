@@ -111,6 +111,10 @@ for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
 
+for (const file of ['robots.txt', 'sitemap.xml']) {
+  app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
+}
+
 // Élesben a konfiguráció a környezeti változókból jön (nincs titkos adat benne), így a Nethely-telepítéshez nem kell a config.js-t szerkeszteni.
 app.get('/config.js', (_req, res) => {
   const env = process.env;
