@@ -3,7 +3,8 @@
 // Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
 const PRODUCTS = Object.freeze({
   daily: Object.freeze({ key: 'daily', name: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
-  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – Heti tervező szoftverelérés', invoiceName: 'OviTervező – Heti tervező szoftverelérés', amountHuf: 890 })
+  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – Online szoftverhasználati díj – heti alapcsomag', invoiceName: 'OviTervező – Online szoftverhasználati díj – heti alapcsomag', amountHuf: 390 }),
+  weekly_detailed: Object.freeze({ key: 'weekly_detailed', name: 'OviTervező – Online szoftverhasználati díj – heti részletes csomag', invoiceName: 'OviTervező – Online szoftverhasználati díj – heti részletes csomag', amountHuf: 890 })
 });
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -44,7 +45,7 @@ function getBaseUrl(env = process.env) {
 
 function parsePlan(value) {
   const product = PRODUCTS[String(value || '').trim()];
-  if (!product) throw new PaymentError('Ismeretlen csomag. Elfogadott értékek: daily, weekly.');
+  if (!product) throw new PaymentError('Ismeretlen csomag. Elfogadott értékek: daily, weekly, weekly_detailed.');
   return product;
 }
 

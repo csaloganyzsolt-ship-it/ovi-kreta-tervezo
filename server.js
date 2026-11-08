@@ -6,18 +6,18 @@ const { router: paymentRouter, stripeWebhook, deliverPurchase } = require('./rou
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
-// Environment variables cannot select a model; only these two explicit models may be requested.
+// Költségvédelem: minden generálás kizárólag a FAST_MODEL-t használja. Környezeti változó vagy kérés nem választhat másikat.
+// A PREMIUM_MODEL csak a későbbi bevezetéshez maradt meg; a callGemini tesztekben közvetlenül hívható, de az /api/generate nem engedi.
 const FAST_MODEL = 'gemini-3.1-pro-preview';
 const PREMIUM_MODEL = 'gemini-4-argon';
-const ALLOWED_MODELS = [FAST_MODEL, PREMIUM_MODEL];
 
 function resolveModel(payload = {}) {
   const requested = payload.requestedModel;
   if (requested === undefined || requested === null || requested === '') return FAST_MODEL;
-  if (!ALLOWED_MODELS.includes(requested)) {
-    throw generationError(`Nem támogatott modell: ${String(requested).slice(0, 60)}. Választható: ${ALLOWED_MODELS.join(', ')}.`, 400);
+  if (requested !== FAST_MODEL) {
+    throw generationError(`Nem támogatott modell: ${String(requested).slice(0, 60)}. A prémium generálás hamarosan elérhető; jelenleg csak a ${FAST_MODEL} használható.`, 400);
   }
-  return requested;
+  return FAST_MODEL;
 }
 
 function normalizeFreeText(value, maxLength = 2000) {
@@ -135,7 +135,6 @@ app.get('/health', (_req, res) => {
     ok: true,
     port: PORT,
     model: FAST_MODEL,
-    premiumModel: PREMIUM_MODEL,
     message: 'Backend is running.'
   });
 });
@@ -367,7 +366,7 @@ function normalizeResponse(rawText, payload = {}) {
 }
 
 async function callGemini(prompt, { model = FAST_MODEL, maxOutputTokens = 12288, timeoutMs = 120000, blacklist = '' } = {}) {
-  if (!ALLOWED_MODELS.includes(model)) {
+  if (model !== FAST_MODEL) {
     throw generationError(`Nem támogatott modell: ${model}.`, 400);
   }
   const apiKey = process.env.GEMINI_API_KEY;

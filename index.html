@@ -1463,6 +1463,7 @@
       .preview-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
       .unlocked-badge { padding: 10px 16px; border-radius: 14px; background: #dff0e3; color: #1f6b32; font-weight: 700; }
       html[data-theme="dark"] .unlocked-badge { background: #22382a; color: #a8dcb5; }
+      .preview-actionbar .lock-note { flex-basis: 100%; margin: 0; }
       .paywall-cell-lock { color: var(--muted); font-style: italic; }
       @media print { .preview-actionbar, .unlock-cta { display: none !important; } }
       .lock-note { margin-left: 6px; color: var(--muted); font-size: 13px; }
@@ -1721,13 +1722,13 @@
 
               <div class="field full">
                 <div class="toggle-row">
-                  <span>Prémium minőség (Béta)</span>
-                  <label class="switch">
-                    <input type="checkbox" id="premiumQuality" data-field="premium-quality" />
+                  <span>Prémium generálás <em class="lock-note">(Hamarosan elérhető)</em></span>
+                  <label class="switch" title="Hamarosan elérhető" style="opacity:.5;cursor:not-allowed">
+                    <input type="checkbox" id="premiumQuality" data-field="premium-quality" disabled />
                     <span class="slider"></span>
                   </label>
                 </div>
-                <small class="field-hint">Kikapcsolva a gyorsabb modell (gemini-3.1-pro-preview) dolgozik; bekapcsolva a zászlóshajó gemini-4-argon, ami lassabb lehet.</small>
+                <small class="field-hint">Jelenleg minden tervezet a gemini-3.1-pro-preview modellel készül. A prémium generálás hamarosan elérhető.</small>
               </div>
 
               <details class="advanced-settings" id="advancedSettings">
@@ -1870,7 +1871,7 @@
                 <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
-              <div class="preview-actionbar"><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
+              <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
               <div class="download-row">
                 <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>📄 Számla letöltése (PDF)</button>
@@ -2006,7 +2007,8 @@
       }
 
       function getRequestedModel() {
-        return document.getElementById('premiumQuality')?.checked ? 'gemini-4-argon' : 'gemini-3.1-pro-preview';
+        // A prémium generálás le van tiltva: mindig a rögzített modell megy a szervernek.
+        return 'gemini-3.1-pro-preview';
       }
 
       // Rarely used settings stay collapsed unless they already hold a non-default value.
@@ -2104,7 +2106,7 @@
           ]],
           ['Generálási beállítások', [
             `Részletességi szint: ${payload.detailLevel} / 100`,
-            `Modell: ${payload.requestedModel === 'gemini-4-argon' ? 'Prémium – Gemini 4 Argon' : 'Gyors – Gemini 3.1 Pro'}`,
+            'Modell: Gemini 3.1 Pro (a prémium generálás hamarosan elérhető)',
             `Kimeneti forma: ${payload.outputMode}`
           ]]
         ];
@@ -2303,7 +2305,8 @@
           settings[checkbox.dataset.exportSection] = checkbox.checked;
         });
         // Zárolt állapotban a teaser a foglalkozás-táblázat első sorait mutatja, ezért a kapcsoló értéke ilyenkor nem érvényesül.
-        if (isPlanLocked()) settings.activities = true;
+        // Fizetés előtt a tevékenység-szekció egyáltalán nem rajzolódik ki, mintha az exportbeállításban ki lenne kapcsolva.
+        if (isPlanLocked()) settings.activities = false;
         const margin = document.querySelector('[data-export="margin"]')?.value || 'comfortable';
         return { settings, margin };
       }
@@ -3640,7 +3643,8 @@
 
       // ===== Fizetési kapu (teaser) =====
       // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
-      const PAYWALL_PRICES = { daily: 390, weekly: 890 };
+      const PAYWALL_PRICES = { daily: 390, weekly: 390, weekly_detailed: 890 };
+      const PLAN_LABELS = { daily: 'Napi tervezet', weekly: 'Heti alapcsomag', weekly_detailed: 'Heti részletes csomag (keretterv + 5 napi tervezet)' };
       const LEGAL_TEXTS = {
         terms: ['Általános Szerződési Feltételek (ÁSZF)', `
 <h3>1. Szolgáltató</h3>
@@ -3731,47 +3735,27 @@
         return !getUnlockedIds().includes(result.generationId);
       }
       function planKind(result = lastResult) {
-        return result?.is_weekly === true ? 'weekly' : 'daily';
+        if (result?.is_weekly === true) return 'weekly_detailed';
+        return result?.request?.duration === 'Heti' ? 'weekly' : 'daily';
       }
       function newGenerationId() {
         return `gen_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
       }
 
-      // A kapu a kész lapokat csonkolja: a leghosszabb táblázatból csak az első 2 sort hagyja meg, a többit rejtő helyőrzőre cseréli.
+      const LOCK_MESSAGE = 'A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el.';
+
+      // Zárolt állapotban a tevékenység-szekciót a renderelő már eleve kihagyja; a kapu csak a feloldó felületet teszi a dokumentum végére.
       function applyPaywall(host) {
         if (!isPlanLocked()) return;
-        const tables = Array.from(host.querySelectorAll('.official-table'));
-        const table = tables.find((t) => (t.tBodies[0]?.rows.length || 0) > 2) || tables[tables.length - 1];
-        const price = PAYWALL_PRICES[planKind()];
-        let body = host.querySelector('.a4-page-body');
-        if (table) {
-          const rows = Array.from(table.tBodies[0].rows);
-          rows.slice(2).forEach((row) => row.remove());
-          // Csak a bevezető első két sora látszik, és abban sincs teljes foglalkozásmenet: az első cella rövid kivonat, a többi zárolt.
-          rows.slice(0, 2).forEach((row) => {
-            Array.from(row.cells).forEach((cell, index) => {
-              if (index === 0) return;
-              if (index === 1) {
-                const text = cell.textContent.replace(/\s+/g, ' ').trim();
-                cell.textContent = text.length > 110 ? `${text.slice(0, 110).trim()}…` : text;
-              } else {
-                cell.innerHTML = '<span class="paywall-cell-lock">🔒 Feloldás után</span>';
-              }
-            });
-          });
-          const block = table.closest('.a4-page-body > *');
-          body = block.parentElement;
-          while (block.nextElementSibling) block.nextElementSibling.remove();
-          const page = body.closest('.a4-page');
-          while (page.nextElementSibling) page.nextElementSibling.remove();
-        }
+        const bodies = host.querySelectorAll('.a4-page-body');
+        const body = bodies[bodies.length - 1];
+        if (!body) return;
         const gate = document.createElement('div');
         gate.className = 'paywall-gate';
         gate.id = 'paywallGate';
-        gate.innerHTML = `<div class="paywall-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
-          <div class="paywall-lock" aria-hidden="true">🔒</div>
-          <p>A tervezet további fázisai zárolva vannak.</p>
-          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet és Kréta letöltés feloldása – ${price} Ft</button>`;
+        gate.innerHTML = `<div class="paywall-lock" aria-hidden="true">🔒</div>
+          <p>${LOCK_MESSAGE}</p>
+          <button type="button" class="unlock-cta" id="unlockBtn">🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft</button>`;
         body.appendChild(gate);
       }
 
@@ -3792,6 +3776,8 @@
           button.hidden = !showCta;
           button.textContent = label;
         });
+        const bottomNote = document.getElementById('unlockBottomNote');
+        if (bottomNote) bottomNote.hidden = !showCta;
         const badge = document.getElementById('unlockedBadge');
         if (badge) badge.hidden = !(paywallEnabled() && lastResult && !locked);
       }
@@ -3816,7 +3802,7 @@
       function openCheckoutModal() {
         const kind = planKind();
         document.getElementById('checkoutSummary').textContent =
-          `${kind === 'weekly' ? 'Heti csomag (keretterv + 5 napi tervezet)' : 'Napi tervezet'} – ${PAYWALL_PRICES[kind]} Ft`;
+          `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
         document.getElementById('checkoutError').textContent = '';
         document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
         openModal('checkoutModal');

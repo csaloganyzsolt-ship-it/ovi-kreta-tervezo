@@ -29,13 +29,13 @@ test('live checkout sends HUF minor units and metadata to Stripe', async () => {
   let params;
   const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_live_1', url: 'https://stripe/x' }; } } } };
   const result = await stripeService.createCheckoutSession(
-    { plan: 'weekly', email: 'a@b.hu', generationId: 'g1' },
+    { plan: 'weekly_detailed', email: 'a@b.hu', generationId: 'g1' },
     { env: { ...devEnv, STRIPE_SECRET_KEY: 'sk_test' }, client }
   );
   assert.equal(result.url, 'https://stripe/x');
   assert.equal(params.line_items[0].price_data.unit_amount, 89000);
   assert.equal(params.line_items[0].price_data.currency, 'huf');
-  assert.equal(params.metadata.plan, 'weekly');
+  assert.equal(params.metadata.plan, 'weekly_detailed');
 });
 
 test('invoice XML escapes input and splits VAT', () => {
@@ -108,7 +108,7 @@ test('paywall shows a teaser with the unlock button and blocks exports until unl
   const window = await loadLockedApp(t);
   window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g1' });
   const document = window.document;
-  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 2);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 0);
   assert.match(document.getElementById('unlockBtn').textContent, /390 Ft/);
   assert.equal(document.getElementById('downloadPdfBtn').disabled, true);
 
@@ -162,7 +162,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   const daily = invoiceService.buildInvoiceXml({ ...base, plan: 'daily' }, env);
   const weekly = invoiceService.buildInvoiceXml({ ...base, plan: 'weekly' }, env);
   assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
-  assert.match(weekly, /<megnevezes>OviTervező – Heti tervező szoftverelérés<\/megnevezes>/);
+  assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti alapcsomag<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
   assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@csb-vill\.com \| Köszönjük a vásárlást!<\/megjegyzes>/);
   assert.match(daily, /<eszamla>true<\/eszamla>/);
@@ -220,7 +220,11 @@ test('Stripe checkout names match the invoice software line items', async () => 
   await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
   assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj (1 alkalom)');
   await stripeService.createCheckoutSession({ plan: 'weekly', email: 'a@b.hu' }, { env, client });
-  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Heti tervező szoftverelérés');
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti alapcsomag');
+  assert.equal(params.line_items[0].price_data.unit_amount, 39000);
+  await stripeService.createCheckoutSession({ plan: 'weekly_detailed', email: 'a@b.hu' }, { env, client });
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti részletes csomag');
+  assert.equal(params.line_items[0].price_data.unit_amount, 89000);
   assert.doesNotMatch(JSON.stringify(params), /pedagógiai/);
 });
 
@@ -298,7 +302,7 @@ test('changing any form field revokes the single-use unlock and locks the plan a
 
   assert.equal(window.isPlanLocked(), true);
   assert.equal(window.getUnlockedIds().length, 0);
-  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 2);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 0);
   assert.equal(document.querySelector('[data-export-section="activities"]').disabled, true);
   assert.equal(document.querySelector('[data-export-section="activities"]').checked, false);
   assert.equal(document.getElementById('downloadInvoiceBtn').hidden, true);
@@ -316,27 +320,34 @@ test('unrelated export settings do not revoke the unlock', async (t) => {
   assert.equal(window.isPlanLocked(), false);
 });
 
-test('locked preview hides the detailed activity text and the methods column', async (t) => {
+test('locked preview renders no activity section at all and shows the unlock notice', async (t) => {
   const window = await loadLockedApp(t);
   const plan = makePlan(8);
-  const secret = 'RÉSZLETES-FOGLALKOZÁSMENET-'.repeat(12);
+  const secret = 'RÉSZLETES-FOGLALKOZÁSMENET';
   plan.kidolgozas_tablazat[0].tevekenyseg_menete = [secret];
   plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = 'TITKOS-MODSZER';
-  plan.kidolgozas_tablazat[3].tevekenyseg_menete = ['MASODIK-FAZIS-SZOVEG'];
   window.renderResultDocument({ ...plan, request: makePayload(), generationId: 'g9' });
-  const text = window.document.getElementById('resultDocument').textContent;
-  assert.equal(window.document.querySelectorAll('.official-table tbody tr').length, 2);
-  assert.doesNotMatch(text, /TITKOS-MODSZER/);
-  assert.doesNotMatch(text, /MASODIK-FAZIS-SZOVEG/);
-  assert.ok(text.length < 8000);
-  assert.ok(!text.includes(secret));
-  assert.match(text, /Feloldás után/);
+  const host = window.document.getElementById('resultDocument');
+  assert.equal(host.querySelectorAll('.official-table tbody tr').length, 0);
+  assert.ok(!host.textContent.includes(secret));
+  assert.doesNotMatch(host.textContent, /TITKOS-MODSZER/);
+  assert.match(host.textContent, /A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el\./);
 
   window.unlockGeneration('g9', 'cs_test_g9');
   window.renderResultDocument(window.lastResult);
   const full = window.document.getElementById('resultDocument').textContent;
   assert.ok(full.includes(secret));
   assert.match(full, /TITKOS-MODSZER/);
+});
+
+test('plan kinds map to the three price tiers', async (t) => {
+  const window = await loadLockedApp(t);
+  assert.equal(window.planKind({ request: { duration: 'Napi' } }), 'daily');
+  assert.equal(window.planKind({ request: { duration: 'Heti', includeDailyBreakdown: false } }), 'weekly');
+  assert.equal(window.planKind({ is_weekly: true, request: { duration: 'Heti', includeDailyBreakdown: true } }), 'weekly_detailed');
+  const price = (result) => { window.renderResultDocument({ ...makePlan(8), ...result, generationId: 'gp' + Math.random() }); return window.document.getElementById('unlockBtn').textContent; };
+  assert.match(price({ request: { ...makePayload(), duration: 'Napi' } }), /390 Ft/);
+  assert.match(price({ request: { ...makePayload(), duration: 'Heti' } }), /390 Ft/);
 });
 
 test('unlock buttons appear in all places while locked and give way to the Feloldva badge', async (t) => {

@@ -317,12 +317,14 @@ test('the summary checklist lists every setting, including the new ones', async 
     'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Energiaszint:', 'Iskola-előkészítő', 'Speciális nevelési igények',
     'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök: xilofon', 'Kötelező mese/vers/dal:', 'Saját ötletek', 'Kiválasztott célkifejezések:',
     'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
-    'Részletességi szint:', 'Modell: Gyors – Gemini 3.1 Pro', 'Kimeneti forma:']) {
+    'Részletességi szint:', 'Modell: Gemini 3.1 Pro', 'Kimeneti forma:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
-  doc.querySelector('#premiumQuality').checked = true;
-  window.updateSummary();
-  assert.match(doc.querySelector('#summaryChecklist').textContent, /Prémium – Gemini 4 Argon/);
+  const premium = doc.querySelector('#premiumQuality');
+  assert.equal(premium.disabled, true);
+  assert.equal(premium.checked, false);
+  premium.checked = true;
+  assert.equal(window.getRequestedModel(), 'gemini-3.1-pro-preview');
 });
 
 test('new fields reach the payload, survive a draft round trip and are cleared by the clean slate button', async (t) => {
@@ -331,11 +333,10 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   const set = (selector, value) => { const el = doc.querySelector(selector); el.value = value; };
   set('[data-field="available-tools"]', 'xilofon');
   set('[data-field="blacklist"]', 'gyurma');
-  doc.querySelector('#premiumQuality').checked = true;
   let payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, 'xilofon');
   assert.equal(payload.blacklist, 'gyurma');
-  assert.equal(payload.requestedModel, 'gemini-4-argon');
+  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
   const draft = window.collectDraftState();
   window.clearDraftState();
   payload = window.buildGenerationPayload();
@@ -346,7 +347,7 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, 'xilofon');
   assert.equal(payload.blacklist, 'gyurma');
-  assert.equal(payload.requestedModel, 'gemini-4-argon');
+  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
   assert.equal(doc.querySelector('#advancedSettings').open, true);
 });
 

@@ -67,7 +67,7 @@ function createTransport(env, deps) {
 async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const planLabel = plan === 'weekly' ? 'heti csomag' : 'napi tervezet';
+  const planLabel = String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,

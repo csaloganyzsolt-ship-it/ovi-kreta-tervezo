@@ -146,8 +146,8 @@ test('Gemini requests default to the fast model and use Argon only when explicit
   assert.deepEqual(normalizeResponse(output).kidolgozas_tablazat, plan.kidolgozas_tablazat);
   assert.equal(calls.length, 1);
   assert.equal(new URL(calls[0].url).pathname, '/v1beta/models/gemini-3.1-pro-preview:generateContent');
-  await callGemini(buildPrompt(makePayload()), { model: 'gemini-4-argon' });
-  assert.equal(new URL(calls[1].url).pathname, '/v1beta/models/gemini-4-argon:generateContent');
+  await assert.rejects(callGemini(buildPrompt(makePayload()), { model: 'gemini-4-argon' }), /Nem támogatott modell/);
+  assert.equal(calls.length, 1);
   const body = JSON.parse(calls[0].options.body);
   assert.equal(body.generationConfig.responseMimeType, 'application/json');
   assert.ok(body.generationConfig.maxOutputTokens >= 12288);
@@ -232,7 +232,7 @@ test('weekly breakdown uses the weekly master prompt and 16384 output tokens', (
 test('model requests are validated against the two allowed models', () => {
   const { resolveModel } = require('../server');
   assert.equal(resolveModel({}), 'gemini-3.1-pro-preview');
-  assert.equal(resolveModel({ requestedModel: 'gemini-4-argon' }), 'gemini-4-argon');
+  assert.throws(() => resolveModel({ requestedModel: 'gemini-4-argon' }), /Nem támogatott modell/);
   assert.throws(() => resolveModel({ requestedModel: 'evil-model' }), /Nem támogatott modell/);
 });
 
