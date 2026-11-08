@@ -287,26 +287,45 @@ test('activities toggle is locked before payment and opens only for the paid pla
   assert.equal(document.getElementById('downloadInvoiceBtn').hidden, false);
 });
 
-test('changing any form field revokes the single-use unlock and locks the plan again', async (t) => {
+test('editing a field keeps the paid plan unlocked and only brings back the generate button', async (t) => {
   const window = await loadLockedApp(t);
   const document = window.document;
-  const request = window.buildGenerationPayload();
-  window.renderResultDocument({ ...makePlan(8), request, generationId: 'g2' });
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'g2' });
   window.unlockGeneration('g2', 'cs_test_paid2');
   window.renderResultDocument(window.lastResult);
-  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.equal(document.getElementById('nextBtn').hidden, true);
 
-  const topic = document.querySelector('[data-field="theme"], [data-field="topic"], textarea[data-field], input[data-field="group-name"]');
+  const topic = document.querySelector('input[data-field="group-name"]');
   topic.value = `${topic.value}módosítva`;
   topic.dispatchEvent(new window.Event('input', { bubbles: true }));
 
-  assert.equal(window.isPlanLocked(), true);
-  assert.equal(window.getUnlockedIds().length, 0);
-  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 0);
-  assert.equal(document.querySelector('[data-export-section="activities"]').disabled, true);
-  assert.equal(document.querySelector('[data-export-section="activities"]').checked, false);
-  assert.equal(document.getElementById('downloadInvoiceBtn').hidden, true);
-  assert.equal(document.getElementById('downloadPdfBtn').disabled, true);
+  assert.equal(window.isPlanLocked(), false);
+  assert.equal(document.getElementById('nextBtn').hidden, false);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.equal(document.getElementById('downloadPdfBtn').disabled, false);
+});
+
+test('navigating between steps never relocks a paid plan', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'gn1' });
+  window.unlockGeneration('gn1', 'cs_test_gn1');
+  window.renderResultDocument(window.lastResult);
+  for (const step of ['0', '1', '2', '3']) document.querySelector(`.wizard-item[data-step="${step}"]`).click();
+  assert.equal(window.isPlanLocked(), false);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.equal(document.getElementById('downloadPdfBtn').disabled, false);
+  assert.equal(document.getElementById('nextBtn').hidden, true);
+});
+
+test('preview container stays hidden until a plan exists and on steps 1-3', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  const panel = document.getElementById('previewPanel');
+  assert.equal(panel.hidden, true);
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'gv1' });
+  document.querySelector('.wizard-item[data-step="1"]').click();
+  assert.equal(panel.hidden, true);
 });
 
 test('unrelated export settings do not revoke the unlock', async (t) => {
@@ -422,6 +441,7 @@ test('generate button hides after payment, returns on edit, and regeneration nee
   field.value = `${field.value}x`;
   field.dispatchEvent(new window.Event('input', { bubbles: true }));
   assert.equal(next.hidden, false);
+  assert.equal(window.isPlanLocked(), false);
 
   next.click();
   assert.ok(document.getElementById('confirmRegenModal').classList.contains('open'));

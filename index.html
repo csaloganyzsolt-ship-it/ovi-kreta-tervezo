@@ -646,6 +646,7 @@
         padding: 18px;
       }
 
+      .panel.preview[hidden] { display: none !important; }
       .preview-hidden {
         opacity: 0.8;
         filter: grayscale(0.05);
@@ -2791,6 +2792,8 @@
       function renderPreview() {
         const showPreview = currentStep >= 3 && previewReady;
         previewPanel.classList.toggle('preview-hidden', !showPreview);
+        // Kész dokumentum nélkül (vagy az 1–3. lépésben) a teljes előnézeti konténer rejtve marad.
+        previewPanel.hidden = !showPreview;
         previewEmpty.style.display = showPreview ? 'none' : 'grid';
         previewContent.style.display = showPreview ? 'block' : 'none';
         // Rejtett állapotban nem mérhető a lap magassága, ezért láthatóvá váláskor újratördelünk.
@@ -3552,7 +3555,6 @@
       async function generatePlan() {
         hideGenerationErrorBanner();
         revokeUnlock(lastResult?.generationId);
-        localStorage.removeItem(OVERWRITE_KEY);
         resetGeneratedResult();
         nextBtn.disabled = true;
         nextBtn.classList.add('is-busy');
@@ -3794,17 +3796,17 @@
         delete sessions[generationId];
         localStorage.setItem('oviKretaPaidSessions', JSON.stringify(sessions));
       }
-      const OVERWRITE_KEY = 'oviKretaOverwriteWarn';
       function needsOverwriteConfirm() {
-        return paywallEnabled() && Boolean(lastResult) && localStorage.getItem(OVERWRITE_KEY) === '1';
+        return paywallEnabled() && Boolean(lastResult) && !isPlanLocked();
       }
       function revokeIfPlanChanged() {
-        if (!paywallEnabled() || !lastResult || isPlanLocked()) return;
-        if (JSON.stringify(buildGenerationPayload()) === JSON.stringify(lastResult.request)) return;
-        revokeUnlock(lastResult.generationId);
-        localStorage.setItem(OVERWRITE_KEY, '1');
-        renderResultDocument(lastResult);
-        renderPreview();
+        // A kifizetett terv űrlapmódosításkor sem záródik vissza; csak az új generálás gomb jelenik meg újra.
+        if (!paywallEnabled() || !lastResult) return;
+        updateExportLock();
+      }
+
+      function isFormDirty() {
+        return Boolean(lastResult?.request) && JSON.stringify(buildGenerationPayload()) !== JSON.stringify(lastResult.request);
       }
 
       function syncActivitiesControl() {
@@ -3876,7 +3878,7 @@
         const showCta = paywallEnabled() && Boolean(lastResult) && locked && onResultStep;
         // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
         const justPaid = paywallEnabled() && Boolean(lastResult) && !locked && onResultStep;
-        nextBtn.hidden = justPaid && !nextBtn.classList.contains('is-busy');
+        nextBtn.hidden = justPaid && !isFormDirty() && !nextBtn.classList.contains('is-busy');
         const label = `🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft`;
         ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'].forEach((id) => {
           const button = document.getElementById(id);
