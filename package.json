@@ -14,7 +14,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "html2pdf.js": "^0.10.1"
+    "html2pdf.js": "^0.10.1",
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "docx": "^8.5.0",

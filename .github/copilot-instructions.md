@@ -19,3 +19,11 @@ Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni
 - **Tervezetek kidolgozottsága:** Az óvodai napi és heti tervezetek generálásakor szigorúan tilos az elcsépelt, ismétlődő sablonok használata (pl. ne ismételje a "szemléltetés, frontális munka" kifejezést). Mindig életszerű, differenciált, módszertanilag gazdag leírásokat kell kikényszeríteni az AI promptban.
 - **Formázás:** A tömbként érkező bekezdéseket a felületen mindig `<br><br>` tagekkel, olvashatóan kell renderelni.
 - **Összegző lista teljessége:** A 4. lépés összefoglaló listájának kivétel nélkül minden létező és jövőbeli beállítási mezőt meg kell jeleníteni a felhasználó számára.
+
+## 4. Nethely üzemeltetés és szervizréteg (OviTervező – ovitervezo.hu)
+- **Belépési pont:** `app.js` (Nethely/cPanel „Application startup file”). A `server.js` exportálja a `start()` függvényt, a port a `process.env.PORT` változóból jön. Egy domain és port szolgál ki mindent.
+- **Statikus kiszolgálás:** csak kifejezetten felsorolt útvonalak (`/`, `/index.html`, `/config.js`); SOHA ne `express.static('.')`, mert a `server.js` és a `.env` letölthetővé válna. A `/config.js` a környezeti változókból épül (`PAYWALL_ENABLED`, `COMPANY_*`, `SUPPORT_EMAIL`), titkos kulcs nem kerülhet bele.
+- **Környezeti változók:** lásd `.env.example` (`GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `SZAMLAZZ_KEY`, `SZAMLAZZ_AFA`, `BASE_URL`). Titok soha nem kerül a frontendbe vagy gitbe.
+- **Szervizréteg:** `services/stripeService.js` (Checkout Session, árak: napi 390 Ft, heti 890 Ft, szerver az igazságforrás), `services/invoiceService.js` (Számlázz.hu Agent XML, idempotens számlázás), `routes/payment.js` (`POST /api/create-checkout-session`, `GET /api/checkout-session/:id`, `POST /api/webhook/stripe` – utóbbi `express.raw`-val, az `express.json` ELŐTT).
+- **Mock mód:** kulcsok nélkül csak fejlesztői módban, egyértelmű `mock: true` jelzéssel; `NODE_ENV=production` mellett 503 a hiányzó kulcsra.
+- **Fizetési kapu:** `PAYWALL_ENABLED=true` esetén a frontend teaser + feloldás. Ez felületi kapu; a szerveroldali visszatartás külön fejlesztés. A jogi szövegeket jogásznak kell jóváhagyni.

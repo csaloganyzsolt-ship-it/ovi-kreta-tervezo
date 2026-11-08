@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ovi-Kréta Tervező Asszisztens</title>
+    <title>OviTervező – ovitervezo.hu</title>
     <script>
       try {
         document.documentElement.dataset.theme = localStorage.getItem('oviKretaTheme') === 'dark' ? 'dark' : 'light';
@@ -1432,6 +1432,36 @@
         }
         #resultDocument { display: block !important; }
       }
+
+      /* ===== Fizetési kapu, modálisok, lábléc ===== */
+      .paywall-gate { position: relative; margin-top: 14px; padding: 22px 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--soft); text-align: center; break-inside: avoid; }
+      .paywall-skeleton { display: grid; gap: 10px; margin-bottom: 16px; filter: blur(3px); opacity: .7; pointer-events: none; user-select: none; }
+      .paywall-skeleton span { display: block; height: 14px; border-radius: 8px; background: var(--accent); }
+      .paywall-skeleton span:nth-child(2) { width: 82%; }
+      .paywall-skeleton span:nth-child(3) { width: 64%; }
+      .paywall-lock { font-size: 34px; line-height: 1; }
+      .paywall-gate p { margin: 8px 0 14px; color: var(--muted); }
+      .paywall-gate .unlock-btn { min-height: 48px; padding: 12px 22px; border: 0; border-radius: 14px; background: var(--primary-dark); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
+      .download-btn[disabled] { opacity: .45; cursor: not-allowed; }
+      .modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(30, 24, 20, .55); }
+      .modal-backdrop.open { display: flex; }
+      .modal-box { width: min(560px, 100%); max-height: 88vh; overflow: auto; padding: 22px; border-radius: 20px; background: var(--card); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); }
+      .modal-box h2 { margin: 0 0 10px; font-size: 20px; }
+      .modal-box label.consent { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; font-size: 15px; }
+      .modal-box input[type="email"] { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; }
+      .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      .modal-actions button { min-height: 48px; padding: 10px 18px; border-radius: 14px; border: 1px solid var(--border); background: var(--soft); color: var(--text); font-weight: 600; cursor: pointer; }
+      .modal-actions button.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+      .modal-note { padding: 10px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 14px; }
+      .modal-error { color: #c0392b; font-size: 14px; margin-top: 8px; }
+      .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 22px 18px 30px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1.6; }
+      .site-footer .footer-grid { display: flex; flex-wrap: wrap; gap: 18px 36px; justify-content: space-between; }
+      .site-footer a { color: var(--primary-text); text-decoration: underline; cursor: pointer; }
+      .site-footer .footer-links { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+      .trust-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+      .trust-badge { padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-weight: 600; font-size: 13px; }
+      .placeholder-missing { color: #c0392b; font-style: italic; }
+      @media print { .paywall-gate, .site-footer, .modal-backdrop { display: none !important; } }
     </style>
   </head>
   <body>
@@ -1439,7 +1469,7 @@
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">✦</div>
-          <span>Ovi-Kréta Tervező Asszisztens</span>
+          <span>OviTervező <small style="font-weight:500;opacity:.7">ovitervezo.hu</small></span>
         </div>
         <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">🌙 Sötét mód</button>
       </header>
@@ -1830,6 +1860,49 @@
           </div>
         </aside>
       </main>
+
+      <footer class="site-footer" id="siteFooter">
+        <div class="footer-grid">
+          <div>
+            <strong>OviTervező</strong> – ovitervezo.hu<br />
+            Üzemelteti és a számlát kiállítja: <span id="footerCompanyName">CSB-Villamosság Kft.</span><br />
+            Adószám: <span id="footerTaxId"></span><br />
+            Székhely: <span id="footerAddress"></span><br />
+            Ügyfélszolgálat: <span id="footerEmail"></span>
+          </div>
+          <div class="footer-links">
+            <a data-legal="terms">Általános Szerződési Feltételek (ÁSZF)</a>
+            <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
+            <a data-legal="billing">Fizetési és Számlázási Tájékoztató</a>
+          </div>
+          <div class="trust-badges">
+            <span class="trust-badge">🔒 Stripe – biztonságos bankkártyás fizetés</span>
+            <span class="trust-badge">🧾 Számlázz.hu – automatikus e-számla</span>
+          </div>
+        </div>
+      </footer>
+      <div class="modal-backdrop" id="legalModal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
+        <div class="modal-box">
+          <h2 id="legalModalTitle"></h2>
+          <div id="legalModalBody"></div>
+          <div class="modal-actions"><button type="button" data-close-modal>Bezárás</button></div>
+        </div>
+      </div>
+      <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+        <form class="modal-box" id="checkoutForm" novalidate>
+          <h2 id="checkoutTitle">Gyors fizetés</h2>
+          <p id="checkoutSummary" class="modal-note"></p>
+          <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
+          <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
+          <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatkezelési Tájékoztatót</a>.</span></label>
+          <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Kérem a digitális tartalom azonnali teljesítését, és tudomásul veszem, hogy ezzel elveszítem az elállási jogomat.</span></label>
+          <div id="checkoutError" class="modal-error" role="alert"></div>
+          <div class="modal-actions">
+            <button type="submit" class="primary" id="checkoutSubmit">Tovább a fizetéshez</button>
+            <button type="button" data-close-modal>Mégse</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script src="config.js"></script>
@@ -1871,6 +1944,7 @@
 
       function getApiBaseUrl() {
         const configured = String(window.APP_CONFIG?.apiBaseUrl || '').trim().replace(/\/+$/, '');
+        if (configured === 'same-origin') return window.location.origin;
         if (configured) return configured;
         const host = window.location.hostname;
         return host === 'localhost' || host === '127.0.0.1' || !host ? 'http://localhost:4000' : '';
@@ -2505,6 +2579,8 @@
         syncDocControls();
         applyExportSettingsToDocument();
         paginateDocument(resultDocument);
+        applyPaywall(resultDocument);
+        updateExportLock();
       }
 
       // A dokumentumot valódi A4 lapokra (.a4-page) tördeli; a hosszú táblázatokat sorok mentén osztja, fejléc-ismétléssel.
@@ -2601,6 +2677,7 @@
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.generatedPlan) || 'null');
           if (!saved || typeof saved !== 'object') return;
+          if (!saved.generationId) saved.generationId = newGenerationId();
           renderResultDocument(saved);
           previewReady = true;
           currentStep = Math.max(currentStep, 3);
@@ -3180,7 +3257,7 @@
         source.childNodes.forEach(visit);
 
         const doc = new Document({
-          creator: 'Ovi-Kréta Tervező',
+          creator: 'OviTervező',
           sections: [{
             properties: {
               page: {
@@ -3208,6 +3285,7 @@
           alert('Nincs megjeleníthető dokumentum a PDF exporthez.');
           return;
         }
+        if (guardLocked()) return;
         const doc = getActiveDocument();
         downloadBlob(await renderPdfBlob(doc.id), `${doc.fileBase}.pdf`);
       }
@@ -3221,6 +3299,7 @@
           alert('Nincs megjeleníthető dokumentum a DOCX exporthoz.');
           return;
         }
+        if (guardLocked()) return;
         const doc = getActiveDocument();
         downloadBlob(await renderDocxBlob(doc.id), `${doc.fileBase}.docx`);
       }
@@ -3230,7 +3309,7 @@
           alert('Az exportkönyvtárak (JSZip, PDF, DOCX) nem tölthetők be. Ellenőrizd az internetkapcsolatot.');
           return;
         }
-        if (!lastResult) return;
+        if (!lastResult || guardLocked()) return;
         const button = document.getElementById('downloadZipBtn');
         const originalLabel = button.textContent;
         button.disabled = true;
@@ -3373,7 +3452,7 @@
             throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
           }
 
-          const generatedResult = { ...data, request: payload };
+          const generatedResult = { ...data, request: payload, generationId: newGenerationId() };
           renderResultDocument(generatedResult);
           lastResult = generatedResult;
           previewReady = true;
@@ -3518,6 +3597,169 @@
         });
       }
 
+
+      // ===== Fizetési kapu (teaser) =====
+      // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
+      const PAYWALL_PRICES = { daily: 390, weekly: 890 };
+      const LEGAL_TEXTS = {
+        terms: ['Általános Szerződési Feltételek (ÁSZF)', ['Szolgáltató adatai és elérhetősége', 'A szolgáltatás tárgya és a megrendelés menete', 'Árak, fizetési mód (Stripe bankkártya)', 'Digitális tartalom teljesítése, elállási jog', 'Szavatosság, felelősség, panaszkezelés', 'Záró rendelkezések']],
+        privacy: ['Adatkezelési Tájékoztató (GDPR)', ['Adatkezelő megnevezése és elérhetősége', 'Kezelt adatok köre (számlázási név, cím, e-mail)', 'Az adatkezelés célja és jogalapja', 'Adatfeldolgozók (Stripe, Számlázz.hu, tárhelyszolgáltató)', 'Megőrzési idő (számviteli kötelezettség)', 'Az érintett jogai és jogorvoslat']],
+        billing: ['Fizetési és Számlázási Tájékoztató', ['Fizetés bankkártyával a Stripe biztonságos felületén', 'A kártyaadatokat az üzemeltető nem látja és nem tárolja', 'Sikeres fizetés után e-számla érkezik a megadott e-mail címre (Számlázz.hu)', 'Árak forintban, az ÁFA a számlán szerepel', 'Reklamáció: az ügyfélszolgálati e-mail címen']]
+      };
+
+      function getUnlockedIds() {
+        try { return JSON.parse(localStorage.getItem('oviKretaUnlocked') || '[]'); } catch (_e) { return []; }
+      }
+      function paywallEnabled() { return window.APP_CONFIG?.paywallEnabled === true; }
+      function isPlanLocked(result = lastResult) {
+        if (!paywallEnabled() || !result) return false;
+        return !getUnlockedIds().includes(result.generationId);
+      }
+      function planKind(result = lastResult) {
+        return result?.is_weekly === true ? 'weekly' : 'daily';
+      }
+      function newGenerationId() {
+        return `gen_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      // A kapu a kész lapokat csonkolja: a leghosszabb táblázatból csak az első 2 sort hagyja meg, a többit rejtő helyőrzőre cseréli.
+      function applyPaywall(host) {
+        if (!isPlanLocked()) return;
+        const tables = Array.from(host.querySelectorAll('.official-table'));
+        const table = tables.find((t) => (t.tBodies[0]?.rows.length || 0) > 2) || tables[tables.length - 1];
+        const price = PAYWALL_PRICES[planKind()];
+        let body = host.querySelector('.a4-page-body');
+        if (table) {
+          const rows = Array.from(table.tBodies[0].rows);
+          rows.slice(2).forEach((row) => row.remove());
+          const block = table.closest('.a4-page-body > *');
+          body = block.parentElement;
+          while (block.nextElementSibling) block.nextElementSibling.remove();
+          const page = body.closest('.a4-page');
+          while (page.nextElementSibling) page.nextElementSibling.remove();
+        }
+        const gate = document.createElement('div');
+        gate.className = 'paywall-gate';
+        gate.id = 'paywallGate';
+        gate.innerHTML = `<div class="paywall-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="paywall-lock" aria-hidden="true">🔒</div>
+          <p>A tervezet további fázisai zárolva vannak.</p>
+          <button type="button" class="unlock-btn" id="unlockBtn">Teljes tervezet és Kréta letöltés feloldása – ${price} Ft</button>`;
+        body.appendChild(gate);
+      }
+
+      function updateExportLock() {
+        const locked = isPlanLocked();
+        ['downloadPdfBtn', 'downloadDocxBtn', 'downloadZipBtn', 'printBtn'].forEach((id) => {
+          const button = document.getElementById(id);
+          if (button) button.disabled = locked;
+        });
+      }
+
+      function guardLocked() {
+        if (!isPlanLocked()) return false;
+        openCheckoutModal();
+        return true;
+      }
+
+      function openModal(id) { document.getElementById(id).classList.add('open'); }
+      function closeModals() { document.querySelectorAll('.modal-backdrop.open').forEach((m) => m.classList.remove('open')); }
+
+      function openLegalModal(key) {
+        const [title, items] = LEGAL_TEXTS[key];
+        document.getElementById('legalModalTitle').textContent = title;
+        document.getElementById('legalModalBody').innerHTML =
+          '<p class="modal-note">Az alábbi szöveg szerkezeti váz; a végleges, jogilag kötelező szöveget jogásznak kell jóváhagynia és ide beillesztenie.</p><ol>'
+          + items.map((item) => `<li>${escapeHtml(item)}</li>`).join('') + '</ol>';
+        openModal('legalModal');
+      }
+
+      function openCheckoutModal() {
+        const kind = planKind();
+        document.getElementById('checkoutSummary').textContent =
+          `${kind === 'weekly' ? 'Heti csomag (keretterv + 5 napi tervezet)' : 'Napi tervezet'} – ${PAYWALL_PRICES[kind]} Ft`;
+        document.getElementById('checkoutError').textContent = '';
+        openModal('checkoutModal');
+        document.getElementById('checkoutEmail').focus();
+      }
+
+      async function submitCheckout(event) {
+        event.preventDefault();
+        const errorEl = document.getElementById('checkoutError');
+        const email = document.getElementById('checkoutEmail').value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return; }
+        if (!document.getElementById('consentTerms').checked || !document.getElementById('consentDigital').checked) {
+          errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
+          return;
+        }
+        const submit = document.getElementById('checkoutSubmit');
+        submit.disabled = true;
+        try {
+          const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan: planKind(), email, generationId: lastResult.generationId }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+          localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
+          if (data.mock) errorEl.textContent = data.message;
+          window.location.assign(data.url);
+        } catch (error) {
+          errorEl.textContent = `A fizetés nem indítható: ${error.message}`;
+        } finally {
+          submit.disabled = false;
+        }
+      }
+
+      function unlockGeneration(generationId) {
+        const ids = getUnlockedIds();
+        if (!ids.includes(generationId)) ids.push(generationId);
+        localStorage.setItem('oviKretaUnlocked', JSON.stringify(ids));
+      }
+
+      async function handleCheckoutReturn() {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('checkout_session');
+        const cancelled = params.get('checkout') === 'cancelled';
+        if (!sessionId && !cancelled) return;
+        window.history.replaceState({}, '', window.location.pathname);
+        if (cancelled) { showGenerationError('A fizetés megszakadt, a tervezet zárolva maradt.'); return; }
+        try {
+          const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
+          const data = await response.json();
+          if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
+          const pending = localStorage.getItem('oviKretaPendingCheckout');
+          if (pending) unlockGeneration(pending);
+          localStorage.removeItem('oviKretaPendingCheckout');
+          if (lastResult) { renderResultDocument(lastResult); renderPreview(); }
+        } catch (error) {
+          showGenerationError(`A fizetés ellenőrzése sikertelen: ${error.message}`);
+        }
+      }
+
+      function initFooterAndModals() {
+        const company = window.APP_CONFIG?.company || {};
+        const fill = (id, value) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          if (value) el.textContent = value;
+          else { el.textContent = '[kitöltendő]'; el.classList.add('placeholder-missing'); }
+        };
+        fill('footerCompanyName', company.name || 'CSB-Villamosság Kft.');
+        fill('footerTaxId', company.taxId);
+        fill('footerAddress', company.address);
+        fill('footerEmail', company.email);
+        document.addEventListener('click', (event) => {
+          const legal = event.target.closest('[data-legal]');
+          if (legal) { event.preventDefault(); openLegalModal(legal.dataset.legal); return; }
+          if (event.target.closest('[data-close-modal]') || event.target.classList.contains('modal-backdrop')) closeModals();
+          if (event.target.closest('#unlockBtn')) openCheckoutModal();
+        });
+        document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModals(); });
+      }
+
       function initializeApp() {
         if (window.__oviKretaAppInitialized) return;
         window.__oviKretaAppInitialized = true;
@@ -3534,6 +3776,8 @@
         updateSummary();
         renderResultDocument();
         renderPreview();
+        initFooterAndModals();
+        handleCheckoutReturn();
       }
 
       document.addEventListener('DOMContentLoaded', initializeApp);

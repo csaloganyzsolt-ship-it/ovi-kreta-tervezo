@@ -20,7 +20,7 @@ const html = fs.existsSync(path.join(process.cwd(), 'index.html'))
   : '';
 
 const requiredMarkers = [
-  'Ovi-Kréta Tervező Asszisztens',
+  'OviTervező',
   'Tervezet elkészítése',
   'Generálásra vár',
 ];

@@ -1,4 +1,4 @@
-# Ovi-Kréta Tervező Asszisztens
+# OviTervező (ovitervezo.hu)
 
 Ez a projekt egy egyszerű, GitHub Pages-en futtatható statikus weboldal, amely az óvodai tervkészítő felületet mutatja be.
 
@@ -83,3 +83,6 @@ A GitHub Pages csak statikus frontendet tud kiszolgálni. Ha később valódi Ge
 - Azure Functions
 
 A frontend pusztán a felhasználói adatokat küldi el a backendnek, a backend pedig a Gemini API-hoz fordul.
+
+## Üzemeltetés (Nethely)
+Indítófájl: `app.js` (a port a `PORT` környezeti változóból jön). Környezeti változók: `.env.example`. Stripe webhook: `BASE_URL/api/webhook/stripe` (esemény: `checkout.session.completed`).

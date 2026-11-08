@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('node:path');
+const { router: paymentRouter, stripeWebhook } = require('./routes/payment');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -95,7 +97,34 @@ function getPlanMode(payload = {}) {
 }
 
 app.use(cors({ origin: true, credentials: true }));
+// A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
+app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', paymentRouter);
+
+// A frontend ugyanazon a domainen és porton fut. Csak a kifejezetten felsorolt fájlok érhetők el,
+// hogy a server.js, a .env és a forráskód soha ne legyen letölthető.
+const STATIC_ROOT = __dirname;
+for (const route of ['/', '/index.html']) {
+  app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
+}
+
+// Élesben a konfiguráció a környezeti változókból jön (nincs titkos adat benne), így a Nethely-telepítéshez nem kell a config.js-t szerkeszteni.
+app.get('/config.js', (_req, res) => {
+  const env = process.env;
+  const config = {
+    apiBaseUrl: 'same-origin',
+    paywallEnabled: env.PAYWALL_ENABLED === 'true',
+    stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
+    company: {
+      name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
+      taxId: env.COMPANY_TAX_ID || '',
+      address: env.COMPANY_ADDRESS || '',
+      email: env.SUPPORT_EMAIL || ''
+    }
+  };
+  res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};`);
+});
 
 app.get('/health', (_req, res) => {
   res.json({
@@ -440,10 +469,12 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Backend is running on http://localhost:${PORT}`);
+function start(port = PORT) {
+  return app.listen(port, () => {
+    console.log(`OviTervező is running on port ${port}`);
   });
 }
 
-module.exports = { app, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+if (require.main === module) start();
+
+module.exports = { start, app, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
