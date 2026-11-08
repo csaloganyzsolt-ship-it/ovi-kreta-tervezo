@@ -2,8 +2,8 @@
 
 // Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
 const PRODUCTS = Object.freeze({
-  daily: Object.freeze({ key: 'daily', name: 'OviTervező - Napi pedagógiai tervezet', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
-  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – 1 db heti csomag (keretterv + 5 napi tervezet)', invoiceName: 'OviTervező – Heti tervező szoftverelérés', amountHuf: 890 })
+  daily: Object.freeze({ key: 'daily', name: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
+  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – Heti tervező szoftverelérés', invoiceName: 'OviTervező – Heti tervező szoftverelérés', amountHuf: 890 })
 });
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -102,7 +102,7 @@ async function createCheckoutSession({ plan, email, generationId } = {}, deps = 
       price_data: {
         currency: 'huf',
         unit_amount: toStripeAmount(product.amountHuf),
-        product_data: { name: product.name }
+        product_data: { name: product.invoiceName, description: product.invoiceName }
       }
     }],
     metadata: { plan: product.key, generationId: String(generationId || '').slice(0, 100) },

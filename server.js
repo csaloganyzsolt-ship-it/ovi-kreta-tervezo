@@ -121,7 +121,7 @@ app.get('/config.js', (_req, res) => {
       taxId: env.COMPANY_TAX_ID || '27891788-2-08',
       regNo: env.COMPANY_REG_NO || '08 09 031727',
       address: env.COMPANY_ADDRESS || '9153 Öttevény, Arany János utca 10.',
-      email: env.SUPPORT_EMAIL || 'info@csb-vill.com',
+      email: String(env.SUPPORT_EMAIL || '').trim() || 'info@csb-vill.com',
       stripeTestMode: String(env.STRIPE_SECRET_KEY || '').startsWith('sk_test_')
     }
   };

@@ -3705,8 +3705,8 @@
       function openLegalModal(key) {
         const [title, items] = LEGAL_TEXTS[key];
         document.getElementById('legalModalTitle').textContent = title;
-        document.getElementById('legalModalBody').innerHTML =
-          items;
+        const contact = window.APP_CONFIG?.company?.email || 'info@csb-vill.com';
+        document.getElementById('legalModalBody').innerHTML = items.split('info@csb-vill.com').join(escapeHtml(contact));
         openModal('legalModal');
       }
 

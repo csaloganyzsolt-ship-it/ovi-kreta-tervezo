@@ -4,7 +4,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PRODUCTS } = require('./stripeService');
 
-const INVOICE_NOTE = 'Szolgáltató weboldal: https://ovitervezo.hu | Ügyfélszolgálat: info@ovitervezo.hu | Köszönjük a vásárlást!';
+const DEFAULT_SUPPORT_EMAIL = 'info@csb-vill.com';
+
+function supportEmail(env = process.env) {
+  return String(env.SUPPORT_EMAIL || '').trim() || DEFAULT_SUPPORT_EMAIL;
+}
+
+function invoiceNote(env) {
+  return `Szolgáltató weboldal: https://ovitervezo.hu | Ügyfélszolgálat: ${supportEmail(env)} | Köszönjük a vásárlást!`;
+}
+
 const SZAMLAZZ_URL = 'https://www.szamlazz.hu/szamla/';
 
 function escapeXml(value) {
@@ -21,7 +30,7 @@ function splitGross(grossHuf, vatRate) {
   return { net, vat: grossHuf - net };
 }
 
-// Csak kifejezetten kért SZAMLAZZ_SANDBOX=true esetén készül díjbekérő; alapból e-számla kerül kiállításra.
+// A SZAMLAZZ_SANDBOX csak jelzés (teszt üzem): a bizonylat ilyenkor is rendes e-számla, nem díjbekérő.
 function isSandbox(env = process.env) {
   return String(env.SZAMLAZZ_SANDBOX || '').toLowerCase() === 'true';
 }
@@ -36,7 +45,6 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
   const vatKey = String(env.SZAMLAZZ_AFA || '27').trim();
   const { net, vat } = splitGross(product.amountHuf, vatKey);
   const day = today(date);
-  const sandbox = isSandbox(env);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
@@ -52,13 +60,13 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <fizmod>Bankkártya</fizmod>
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
-    <megjegyzes>${escapeXml(INVOICE_NOTE)}</megjegyzes>
+    <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
     <rendelesSzam>${escapeXml(orderId)}</rendelesSzam>
-    <dijbekero>${sandbox}</dijbekero>
-    <fizetve>${!sandbox}</fizetve>
+    <dijbekero>false</dijbekero>
+    <fizetve>true</fizetve>
   </fejlec>
   <elado>
-    <emailReplyto>info@ovitervezo.hu</emailReplyto>
+    <emailReplyto>${escapeXml(supportEmail(env))}</emailReplyto>
     <emailTargy>OviTervező – e-számla</emailTargy>
     <emailSzoveg>A szolgáltatás az ovitervezo.hu oldalon keresztül valósult meg. Köszönjük a vásárlást!</emailSzoveg>
   </elado>
@@ -132,4 +140,4 @@ async function issueInvoice(order, deps = {}) {
   return { mock: false, sandbox: isSandbox(env), invoiceNumber };
 }
 
-module.exports = { isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };

@@ -136,11 +136,11 @@ test('sk_test key runs live checkout in test mode with return URLs', async () =>
   assert.equal(params.success_url, 'https://ovitervezo.hu/?checkout_session={CHECKOUT_SESSION_ID}');
 });
 
-test('Számlázz.hu sandbox creates a proforma instead of a final invoice', () => {
+test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a proforma', () => {
   const order = { plan: 'daily', orderId: 'cs_1', customer: { email: 'a@b.hu' } };
   const sandbox = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_SANDBOX: 'true' });
-  assert.match(sandbox, /<dijbekero>true<\/dijbekero>/);
-  assert.match(sandbox, /<fizetve>false<\/fizetve>/);
+  assert.match(sandbox, /<dijbekero>false<\/dijbekero>/);
+  assert.match(sandbox, /<eszamla>true<\/eszamla>/);
   const live = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k' });
   assert.match(live, /<dijbekero>false<\/dijbekero>/);
 });
@@ -164,7 +164,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
   assert.match(weekly, /<megnevezes>OviTervező – Heti tervező szoftverelérés<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
-  assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@ovitervezo\.hu \| Köszönjük a vásárlást!<\/megjegyzes>/);
+  assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@csb-vill\.com \| Köszönjük a vásárlást!<\/megjegyzes>/);
   assert.match(daily, /<eszamla>true<\/eszamla>/);
   assert.match(daily, /<sendEmail>true<\/sendEmail>/);
   assert.match(daily, /<dijbekero>false<\/dijbekero>/);
@@ -203,4 +203,23 @@ test('signed checkout.session.completed webhook issues the invoice with the new 
     server.close();
     for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
+});
+
+test('SUPPORT_EMAIL drives the invoice note and reply address, with a working fallback', () => {
+  const order = { plan: 'daily', orderId: 'x', customer: { email: 'a@b.hu' } };
+  const custom = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SUPPORT_EMAIL: 'segitseg@ovitervezo.hu' });
+  assert.match(custom, /Ügyfélszolgálat: segitseg@ovitervezo\.hu/);
+  assert.match(custom, /<emailReplyto>segitseg@ovitervezo\.hu<\/emailReplyto>/);
+  assert.equal(invoiceService.supportEmail({}), 'info@csb-vill.com');
+});
+
+test('Stripe checkout names match the invoice software line items', async () => {
+  let params;
+  const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_test_n', url: 'u' }; } } } };
+  const env = { ...devEnv, STRIPE_SECRET_KEY: 'sk_test_x' };
+  await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj (1 alkalom)');
+  await stripeService.createCheckoutSession({ plan: 'weekly', email: 'a@b.hu' }, { env, client });
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Heti tervező szoftverelérés');
+  assert.doesNotMatch(JSON.stringify(params), /pedagógiai/);
 });
