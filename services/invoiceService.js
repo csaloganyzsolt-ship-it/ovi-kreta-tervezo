@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PRODUCTS } = require('./stripeService');
 
+const INVOICE_NOTE = 'Szolgáltató weboldal: https://ovitervezo.hu | Ügyfélszolgálat: info@ovitervezo.hu | Köszönjük a vásárlást!';
 const SZAMLAZZ_URL = 'https://www.szamlazz.hu/szamla/';
 
 function escapeXml(value) {
@@ -20,7 +21,7 @@ function splitGross(grossHuf, vatRate) {
   return { net, vat: grossHuf - net };
 }
 
-// Teszt üzemmódban nem éles bizonylat, hanem díjbekérő készül.
+// Csak kifejezetten kért SZAMLAZZ_SANDBOX=true esetén készül díjbekérő; alapból e-számla kerül kiállításra.
 function isSandbox(env = process.env) {
   return String(env.SZAMLAZZ_SANDBOX || '').toLowerCase() === 'true';
 }
@@ -51,12 +52,16 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <fizmod>Bankkártya</fizmod>
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
-    <megjegyzes>Stripe online bankkártyás fizetés</megjegyzes>
+    <megjegyzes>${escapeXml(INVOICE_NOTE)}</megjegyzes>
     <rendelesSzam>${escapeXml(orderId)}</rendelesSzam>
     <dijbekero>${sandbox}</dijbekero>
     <fizetve>${!sandbox}</fizetve>
   </fejlec>
-  <elado></elado>
+  <elado>
+    <emailReplyto>info@ovitervezo.hu</emailReplyto>
+    <emailTargy>OviTervező – e-számla</emailTargy>
+    <emailSzoveg>A szolgáltatás az ovitervezo.hu oldalon keresztül valósult meg. Köszönjük a vásárlást!</emailSzoveg>
+  </elado>
   <vevo>
     <nev>${escapeXml(customer.name || customer.email)}</nev>
     <irsz>${escapeXml(customer.zip)}</irsz>
@@ -67,7 +72,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
   </vevo>
   <tetelek>
     <tetel>
-      <megnevezes>${escapeXml(product.name)}</megnevezes>
+      <megnevezes>${escapeXml(product.invoiceName)}</megnevezes>
       <mennyiseg>1</mennyiseg>
       <mennyisegiEgyseg>db</mennyisegiEgyseg>
       <nettoEgysegar>${net}</nettoEgysegar>

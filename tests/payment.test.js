@@ -156,8 +156,51 @@ test('footer and legal modals use the real company data without placeholders', a
   assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
 });
 
-test('daily invoice line uses the agreed product name and has the seller element', () => {
-  const xml = invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'x', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
-  assert.match(xml, /<megnevezes>OviTervező - Napi pedagógiai tervezet<\/megnevezes>/);
-  assert.match(xml, /<elado><\/elado>\s*<vevo>/);
+test('invoice carries software line items, ovitervezo.hu note and sends an e-invoice', () => {
+  const base = { orderId: 'x', customer: { email: 'a@b.hu' } };
+  const env = { SZAMLAZZ_KEY: 'k' };
+  const daily = invoiceService.buildInvoiceXml({ ...base, plan: 'daily' }, env);
+  const weekly = invoiceService.buildInvoiceXml({ ...base, plan: 'weekly' }, env);
+  assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
+  assert.match(weekly, /<megnevezes>OviTervező – Heti tervező szoftverelérés<\/megnevezes>/);
+  assert.doesNotMatch(daily, /pedagógiai/);
+  assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@ovitervezo\.hu \| Köszönjük a vásárlást!<\/megjegyzes>/);
+  assert.match(daily, /<eszamla>true<\/eszamla>/);
+  assert.match(daily, /<sendEmail>true<\/sendEmail>/);
+  assert.match(daily, /<dijbekero>false<\/dijbekero>/);
+});
+
+test('signed checkout.session.completed webhook issues the invoice with the new line item', async () => {
+  const Stripe = require('stripe');
+  const store = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wh-')), 's.json');
+  const saved = {};
+  const set = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test', SZAMLAZZ_KEY: 'k', INVOICE_STORE_PATH: store, SZAMLAZZ_SANDBOX: 'false' };
+  for (const [k, v] of Object.entries(set)) { saved[k] = process.env[k]; process.env[k] = v; }
+  const realFetch = global.fetch;
+  let sentXml = '';
+  const { app } = require('../server');
+  const server = app.listen(0);
+  const port = server.address().port;
+  global.fetch = async (url, options) => {
+    if (String(url).includes('szamlazz.hu')) {
+      sentXml = await options.body.get('action-xmlagentxmlfile').text();
+      return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-1']]) };
+    }
+    return realFetch(url, options);
+  };
+  try {
+    const payload = JSON.stringify({
+      id: 'evt_1', object: 'event', type: 'checkout.session.completed',
+      data: { object: { id: 'cs_test_wh', payment_status: 'paid', metadata: { plan: 'daily' }, customer_details: { name: 'Teszt', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } }
+    });
+    const header = Stripe.webhooks.generateTestHeaderString({ payload, secret: 'whsec_test' });
+    const response = await realFetch(`http://127.0.0.1:${port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': header }, body: payload });
+    assert.equal(response.status, 200);
+    assert.match(sentXml, /Online szoftverhasználati díj/);
+    assert.match(sentXml, /<email>vevo@example\.com<\/email>/);
+  } finally {
+    global.fetch = realFetch;
+    server.close();
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });

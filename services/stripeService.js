@@ -2,8 +2,8 @@
 
 // Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
 const PRODUCTS = Object.freeze({
-  daily: Object.freeze({ key: 'daily', name: 'OviTervező - Napi pedagógiai tervezet', amountHuf: 390 }),
-  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – 1 db heti csomag (keretterv + 5 napi tervezet)', amountHuf: 890 })
+  daily: Object.freeze({ key: 'daily', name: 'OviTervező - Napi pedagógiai tervezet', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
+  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – 1 db heti csomag (keretterv + 5 napi tervezet)', invoiceName: 'OviTervező – Heti tervező szoftverelérés', amountHuf: 890 })
 });
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
