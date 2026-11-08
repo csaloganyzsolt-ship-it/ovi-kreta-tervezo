@@ -487,3 +487,11 @@ test('Nethely build contains only static files and points to the Render API', ()
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
   assert.doesNotMatch(config, /sk_|whsec_|GEMINI/);
 });
+
+test('Nethely .htaccess does not redirect when the proxy already forwards HTTPS', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const htaccess = fs.readFileSync(path.join(__dirname, '..', 'dist-nethely', '.htaccess'), 'utf8');
+  assert.match(htaccess, /RewriteCond %\{HTTP:X-Forwarded-Proto\} !https/);
+  assert.match(htaccess, /RewriteRule \^\(\.\*\)\$ https:\/\/%\{HTTP_HOST\}%\{REQUEST_URI\} \[L,R=301\]/);
+});

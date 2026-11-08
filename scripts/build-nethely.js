@@ -35,8 +35,11 @@ fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.string
 
 fs.writeFileSync(path.join(out, '.htaccess'), `# Nethely / Apache
 RewriteEngine On
+# A Nethely Nginx proxy mögött fut az Apache, ezért a proxy fejlécét is figyelembe kell venni (különben átirányítási ciklus lesz).
 RewriteCond %{HTTPS} off
-RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteCond %{HTTP:CF-Visitor} !{"scheme":"https"}
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 DirectoryIndex index.html
 Options -Indexes
