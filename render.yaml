@@ -9,3 +9,13 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: SZAMLAZZ_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://csaloganyzsolt-ship-it.github.io/ovi-kreta-tervezo
+      - key: SZAMLAZZ_SANDBOX
+        value: "true"

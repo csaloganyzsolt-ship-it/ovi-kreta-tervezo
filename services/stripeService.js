@@ -36,8 +36,10 @@ function assertPaymentsAvailable(env = process.env) {
   }
 }
 
+// A fizetés utáni visszatérési cím: FRONTEND_URL (pl. GitHub Pages teszt vagy localhost), ennek hiányában BASE_URL.
 function getBaseUrl(env = process.env) {
-  return String(env.BASE_URL || 'http://localhost:4000').trim().replace(/\/+$/, '');
+  const configured = String(env.FRONTEND_URL || '').trim() || String(env.BASE_URL || '').trim();
+  return (configured || 'http://localhost:4000').replace(/\/+$/, '');
 }
 
 function parsePlan(value) {

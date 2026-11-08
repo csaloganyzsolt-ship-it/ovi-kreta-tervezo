@@ -223,3 +223,14 @@ test('Stripe checkout names match the invoice software line items', async () => 
   assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Heti tervező szoftverelérés');
   assert.doesNotMatch(JSON.stringify(params), /pedagógiai/);
 });
+
+test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async () => {
+  let params;
+  const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_test_u', url: 'u' }; } } } };
+  const env = { STRIPE_SECRET_KEY: 'sk_test_x', BASE_URL: 'https://ovitervezo.hu', FRONTEND_URL: 'https://pages.example/ovi/' };
+  await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
+  assert.equal(params.success_url, 'https://pages.example/ovi/?checkout_session={CHECKOUT_SESSION_ID}');
+  assert.equal(params.cancel_url, 'https://pages.example/ovi/?checkout=cancelled');
+  const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { FRONTEND_URL: 'http://localhost:4000' } });
+  assert.match(mock.url, /^http:\/\/localhost:4000\/\?checkout_session=cs_mock_/);
+});
