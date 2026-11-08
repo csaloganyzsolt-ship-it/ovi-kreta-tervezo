@@ -393,3 +393,52 @@ test('invoice prefix comes from SZAMLA_PREFIX and is omitted when empty', () => 
   assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLA_PREFIX: 'OVITE' }), /<szamlaszamElotag>OVITE<\/szamlaszamElotag>/);
   assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /szamlaszamElotag/);
 });
+
+test('unlock buttons are hidden on steps 1-3 and shown only on step 4 after generation', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'gs1' });
+  const ids = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'];
+  assert.ok(ids.every((id) => !document.getElementById(id).hidden));
+  document.querySelector('.wizard-item[data-step="1"]').click();
+  assert.ok(ids.every((id) => document.getElementById(id).hidden));
+  document.querySelector('.wizard-item[data-step="3"]').click();
+  assert.ok(ids.every((id) => !document.getElementById(id).hidden));
+});
+
+test('generate button hides after payment, returns on edit, and regeneration needs confirmation', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  const next = document.getElementById('nextBtn');
+  let generated = 0;
+  window.fetch = async () => { generated += 1; return { ok: false, status: 500, text: async () => '{}', json: async () => ({}) }; };
+  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'gc1' });
+  assert.equal(next.hidden, false);
+  window.unlockGeneration('gc1', 'cs_test_gc1');
+  window.renderResultDocument(window.lastResult);
+  assert.equal(next.hidden, true);
+
+  const field = document.querySelector('input[data-field="group-name"]');
+  field.value = `${field.value}x`;
+  field.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(next.hidden, false);
+
+  next.click();
+  assert.ok(document.getElementById('confirmRegenModal').classList.contains('open'));
+  assert.match(document.getElementById('confirmRegenModal').textContent, /felülírásra kerül/);
+  assert.equal(generated, 0);
+  document.getElementById('confirmRegenNo').click();
+  assert.ok(!document.getElementById('confirmRegenModal').classList.contains('open'));
+  assert.equal(generated, 0);
+  next.click();
+  document.getElementById('confirmRegenYes').click();
+  assert.equal(generated, 1);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+});
+
+test('footer has three organised columns and checkout modal has the new title', async (t) => {
+  const window = await loadLockedApp(t);
+  const document = window.document;
+  assert.equal(document.querySelectorAll('#siteFooter .footer-col').length, 3);
+  assert.equal(document.getElementById('checkoutTitle').textContent, 'Teljes tervezet és Kréta-letöltés feloldása');
+});

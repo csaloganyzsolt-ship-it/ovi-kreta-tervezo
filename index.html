@@ -1492,13 +1492,31 @@
       .seo-content .seo-cards li { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--soft); }
       .seo-content details { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; }
       .seo-content summary { cursor: pointer; font-weight: 600; color: var(--text); }
-      .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 22px 18px 30px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1.6; }
-      .site-footer .footer-grid { display: flex; flex-wrap: wrap; gap: 18px 36px; justify-content: space-between; }
+      .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 26px 18px 34px; border-top: 1px solid var(--border); color: var(--muted); font-size: .875rem; line-height: 1.65; }
+      .site-footer .footer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; align-items: start; }
+      .site-footer .footer-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+      .site-footer .footer-col h3 { margin: 0 0 6px; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+      .site-footer strong { color: var(--text); }
       .site-footer a { color: var(--primary-text); text-decoration: underline; cursor: pointer; }
-      .site-footer .footer-links { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+      .site-footer .footer-links { display: flex; flex-direction: column; gap: 6px; }
+      .site-footer .trust-badges { margin-top: 10px; }
+      @media (max-width: 900px) { .site-footer .footer-grid { grid-template-columns: 1fr; gap: 14px; } .site-footer .footer-col { padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--soft); } }
       .trust-badges { display: flex; flex-wrap: wrap; gap: 8px; }
       .trust-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--soft); color: var(--muted); font-weight: 600; font-size: 12.5px; }
       .placeholder-missing { color: #c0392b; font-style: italic; }
+      .footer-actions .btn[hidden], #nextBtn[hidden] { display: none !important; }
+      .modal-box.checkout-box { padding: 26px 24px; }
+      .modal-box.checkout-box h2 { font-size: 1.25rem; }
+      .modal-box.checkout-box .modal-note { margin: 10px 0; line-height: 1.55; }
+      .modal-box.checkout-box label.consent { align-items: flex-start; line-height: 1.5; font-size: .9rem; }
+      .modal-box.checkout-box label.consent input { flex: 0 0 auto; width: 20px; height: 20px; margin: 2px 0 0; }
+      .modal-box.checkout-box .modal-actions { flex-direction: column-reverse; }
+      .modal-box.checkout-box .modal-actions button { width: 100%; }
+      .modal-test-strip { padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--border); font-size: .85rem; color: var(--muted); }
+      @media screen and (max-width: 768px) {
+        .panel.preview, #previewContent, .preview-content { min-width: 0; max-width: 100%; }
+        .document-shell { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      }
       @media print { .paywall-gate, .site-footer, .modal-backdrop { display: none !important; } }
     </style>
   </head>
@@ -1933,24 +1951,34 @@
 
       <footer class="site-footer" id="siteFooter">
         <div class="footer-grid">
-          <div>
-            <strong>OviTervező</strong> – ovitervezo.hu<br />
-            Üzemelteti és a számlát kiállítja: <span id="footerCompanyName">CSB-Villamosság Kft.</span><br />
-            Adószám: <span id="footerTaxId"></span> · Cégjegyzékszám: <span id="footerRegNo"></span><br />
-            Székhely: <span id="footerAddress"></span><br />
-            Ügyfélszolgálat: <a id="footerEmail" href="mailto:info@csb-vill.com">info@csb-vill.com</a><br />
-            Cégbíróság: Győri Törvényszék Cégbírósága<br />
-            Tárhelyszolgáltató: Nethely Kft., 1115 Budapest, Halmi utca 29., <a href="mailto:info@nethely.hu">info@nethely.hu</a><br />
-            Fogyasztói jogvita esetén: Győr-Moson-Sopron Vármegyei Békéltető Testület (9021 Győr, Szent István út 10/a) · <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">Online vitarendezési platform</a>
+          <div class="footer-col">
+            <h3>Cégadatok</h3>
+            <span><strong>OviTervező</strong> – ovitervezo.hu</span>
+            <span>Üzemelteti és a számlát kiállítja: <span id="footerCompanyName">CSB-Villamosság Kft.</span></span>
+            <span>Adószám: <span id="footerTaxId"></span></span>
+            <span>Cégjegyzékszám: <span id="footerRegNo"></span></span>
+            <span>Székhely: <span id="footerAddress"></span></span>
+            <span>Cégbíróság: Győri Törvényszék Cégbírósága</span>
           </div>
-          <div class="footer-links">
-            <a data-legal="terms">Általános Szerződési Feltételek (ÁSZF)</a>
-            <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
-            <a data-legal="billing">Fizetési és Számlázási Tájékoztató</a>
+          <div class="footer-col">
+            <h3>Jogi tájékoztatók</h3>
+            <div class="footer-links">
+              <a data-legal="terms">Általános Szerződési Feltételek (ÁSZF)</a>
+              <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
+              <a data-legal="billing">Fizetési és Számlázási Tájékoztató</a>
+            </div>
+            <span>Fogyasztói jogvita esetén: Győr-Moson-Sopron Vármegyei Békéltető Testület (9021 Győr, Szent István út 10/a)</span>
+            <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">Online vitarendezési platform</a>
           </div>
-          <div class="trust-badges">
-            <span class="trust-badge">🔒 Stripe – biztonságos bankkártyás fizetés</span>
-            <span class="trust-badge">🧾 Számlázz.hu – automatikus e-számla</span>
+          <div class="footer-col">
+            <h3>Tárhely és kapcsolat</h3>
+            <span>Ügyfélszolgálat: <a id="footerEmail" href="mailto:info@csb-vill.com">info@csb-vill.com</a></span>
+            <span>Tárhelyszolgáltató: Nethely Kft., 1115 Budapest, Halmi utca 29.</span>
+            <a href="mailto:info@nethely.hu">info@nethely.hu</a>
+            <div class="trust-badges">
+              <span class="trust-badge">🔒 Stripe – biztonságos bankkártyás fizetés</span>
+              <span class="trust-badge">🧾 Számlázz.hu – automatikus e-számla</span>
+            </div>
           </div>
         </div>
       </footer>
@@ -1962,12 +1990,24 @@
           <div class="modal-actions"><button type="button" data-close-modal>Bezárás</button></div>
         </div>
       </div>
-      <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
-        <form class="modal-box" id="checkoutForm" novalidate>
+      <div class="modal-backdrop" id="confirmRegenModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmRegenTitle">
+        <div class="modal-box checkout-box">
           <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
-          <h2 id="checkoutTitle">Gyors fizetés</h2>
-          <p id="checkoutTestNote" class="modal-note" hidden>Teszt üzemmód: használható tesztkártya a 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
+          <h2 id="confirmRegenTitle">Figyelem!</h2>
+          <p>Figyelem! Új tervezet generálásával az aktuális tervezet felülírásra kerül. Kérjük, győződjön meg róla, hogy a megvásárolt tervezetet és a számlát már letöltötte (PDF / Word formátumban)! Biztosan folytatja az új tervezet elkészítését?</p>
+          <div class="modal-actions">
+            <button type="button" class="primary" id="confirmRegenYes">Igen, új tervezetet készítek</button>
+            <button type="button" data-close-modal id="confirmRegenNo">Mégse</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+        <form class="modal-box checkout-box" id="checkoutForm" novalidate>
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
+          <h2 id="checkoutTitle">Teljes tervezet és Kréta-letöltés feloldása</h2>
+          <p id="checkoutTestNote" class="modal-test-strip" hidden>Teszt üzemmód – tesztkártya: 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
           <p id="checkoutSummary" class="modal-note"></p>
+          <p class="modal-note" id="checkoutDeliveryNote">A sikeres fizetés után a tervezet azonnal letölthető (PDF, Word), az e-számlát pedig a megadott e-mail címre küldjük, és a felületen is letölthető.</p>
           <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
@@ -2834,6 +2874,7 @@
         backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
         nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
         renderPreview();
+        updateExportLock();
         persistDraftState();
       }
 
@@ -3511,6 +3552,7 @@
       async function generatePlan() {
         hideGenerationErrorBanner();
         revokeUnlock(lastResult?.generationId);
+        localStorage.removeItem(OVERWRITE_KEY);
         resetGeneratedResult();
         nextBtn.disabled = true;
         nextBtn.classList.add('is-busy');
@@ -3586,9 +3628,15 @@
           currentStep += 1;
           renderStep();
           scrollToFormTop();
+        } else if (needsOverwriteConfirm()) {
+          openModal('confirmRegenModal');
         } else {
           generatePlan();
         }
+      });
+      document.getElementById('confirmRegenYes').addEventListener('click', () => {
+        closeModals();
+        generatePlan();
       });
 
       backBtn.addEventListener('click', () => {
@@ -3746,10 +3794,15 @@
         delete sessions[generationId];
         localStorage.setItem('oviKretaPaidSessions', JSON.stringify(sessions));
       }
+      const OVERWRITE_KEY = 'oviKretaOverwriteWarn';
+      function needsOverwriteConfirm() {
+        return paywallEnabled() && Boolean(lastResult) && localStorage.getItem(OVERWRITE_KEY) === '1';
+      }
       function revokeIfPlanChanged() {
         if (!paywallEnabled() || !lastResult || isPlanLocked()) return;
         if (JSON.stringify(buildGenerationPayload()) === JSON.stringify(lastResult.request)) return;
         revokeUnlock(lastResult.generationId);
+        localStorage.setItem(OVERWRITE_KEY, '1');
         renderResultDocument(lastResult);
         renderPreview();
       }
@@ -3819,7 +3872,11 @@
         const invoiceBtn = document.getElementById('downloadInvoiceBtn');
         if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
         syncActivitiesControl();
-        const showCta = paywallEnabled() && Boolean(lastResult) && locked;
+        const onResultStep = currentStep >= 3 && Boolean(lastResult);
+        const showCta = paywallEnabled() && Boolean(lastResult) && locked && onResultStep;
+        // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
+        const justPaid = paywallEnabled() && Boolean(lastResult) && !locked && onResultStep;
+        nextBtn.hidden = justPaid && !nextBtn.classList.contains('is-busy');
         const label = `🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft`;
         ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'].forEach((id) => {
           const button = document.getElementById(id);
@@ -3830,7 +3887,7 @@
         const bottomNote = document.getElementById('unlockBottomNote');
         if (bottomNote) bottomNote.hidden = !showCta;
         const badge = document.getElementById('unlockedBadge');
-        if (badge) badge.hidden = !(paywallEnabled() && lastResult && !locked);
+        if (badge) badge.hidden = !justPaid;
       }
 
       function guardLocked() {
