@@ -43,7 +43,7 @@ services:
         sync: false
       - key: SZAMLAZZ_SANDBOX
         value: "true"
-      - key: SZAMLA_PREFIX
+      - key: SZAMLAZZ_PREFIX
         sync: false
       - key: TEST_DELIVERY_ENABLED
         sync: false

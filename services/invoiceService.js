@@ -39,11 +39,20 @@ function today(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+// Alapérték OVITE; a régi SZAMLA_PREFIX név is működik. Explicit üres SZAMLAZZ_PREFIX kikapcsolja az előtagot.
 function invoicePrefix(env = process.env) {
-  return String(env.SZAMLA_PREFIX || '').trim();
+  const raw = env.SZAMLAZZ_PREFIX ?? env.SZAMLA_PREFIX;
+  return raw === undefined ? 'OVITE' : String(raw).trim();
 }
 
-function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = new Date()) {
+// Vevőbarát rendelésszám: OVI-ÉÉHHNN-<a Stripe azonosító utolsó 6 karaktere>. A teljes azonosító a Stripe-ban és a naplóban marad.
+function orderNumber(orderId, created = new Date()) {
+  const when = typeof created === 'number' ? new Date(created * 1000) : created;
+  const ymd = when.toISOString().slice(2, 10).replace(/-/g, '');
+  return `OVI-${ymd}-${String(orderId || '').slice(-6).toUpperCase()}`;
+}
+
+function buildInvoiceXml({ customer, plan, orderId, created }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
   const vatKey = String(env.SZAMLAZZ_AFA || '27').trim();
@@ -65,7 +74,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
-    <rendelesSzam>${escapeXml(orderId)}</rendelesSzam>
+    <rendelesSzam>${escapeXml(orderNumber(orderId, created ?? date))}</rendelesSzam>
 ${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</szamlaszamElotag>\n` : ''}    <dijbekero>false</dijbekero>
     <fizetve>true</fizetve>
   </fejlec>
@@ -155,6 +164,7 @@ async function issueInvoice(order, deps = {}) {
     return { mock: true };
   }
 
+  console.log(`[invoice] Számla kiállítása: ${order.orderId} → ${orderNumber(order.orderId, order.created ?? new Date())}`);
   const form = new FormData();
   form.append('action-xmlagentxmlfile', new Blob([buildInvoiceXml(order, env)], { type: 'text/xml' }), 'invoice.xml');
   const response = await fetchImpl(SZAMLAZZ_URL, { method: 'POST', body: form });
@@ -175,4 +185,4 @@ async function issueInvoice(order, deps = {}) {
   return { mock: false, sandbox: isSandbox(env), invoiceNumber };
 }
 
-module.exports = { storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { orderNumber, invoicePrefix, storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };

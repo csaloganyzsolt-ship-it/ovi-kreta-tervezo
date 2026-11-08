@@ -407,10 +407,25 @@ test('generation disables the button, shows progress text, scrolls to the loader
   assert.equal(button.textContent, 'Tervezet elkészítése');
 });
 
-test('invoice prefix comes from SZAMLA_PREFIX and is omitted when empty', () => {
+test('invoice prefix defaults to OVITE, comes from SZAMLAZZ_PREFIX and can be disabled with an empty value', () => {
   const base = { orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } };
-  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLA_PREFIX: 'OVITE' }), /<szamlaszamElotag>OVITE<\/szamlaszamElotag>/);
-  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /szamlaszamElotag/);
+  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /<szamlaszamElotag>OVITE<\/szamlaszamElotag>/);
+  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'ABC' }), /<szamlaszamElotag>ABC<\/szamlaszamElotag>/);
+  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLA_PREFIX: 'OLD' }), /<szamlaszamElotag>OLD<\/szamlaszamElotag>/);
+  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: '' }), /szamlaszamElotag/);
+});
+
+test('invoice shows a short friendly order number instead of the Stripe session id', () => {
+  const sessionId = 'cs_live_a1oHW2xOQfzz8abc7TTU12';
+  const created = Date.UTC(2026, 10, 8, 12) / 1000;
+  assert.equal(invoiceService.orderNumber(sessionId, created), 'OVI-261108-7TTU12');
+  const xml = invoiceService.buildInvoiceXml({ orderId: sessionId, created, plan: 'daily', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
+  assert.match(xml, /<rendelesSzam>OVI-261108-7TTU12<\/rendelesSzam>/);
+  assert.doesNotMatch(xml, /cs_live_/);
+  const { buildEmailContent } = require('../services/mailService');
+  const mail = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false, orderNumber: 'OVI-261108-7TTU12' }, {});
+  assert.match(mail.html, /OVI-261108-7TTU12/);
+  assert.match(mail.text, /Rendelésszám: OVI-261108-7TTU12/);
 });
 
 test('unlock buttons are hidden on steps 1-3 and shown only on step 4 after generation', async (t) => {

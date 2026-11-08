@@ -130,6 +130,7 @@ async function retrieveCheckoutSession(sessionId, deps = {}) {
     mock: false,
     paid: session.payment_status === 'paid',
     plan: session.metadata?.plan || null,
+    created: session.created || null,
     email: session.customer_details?.email || session.customer_email || null
   };
 }

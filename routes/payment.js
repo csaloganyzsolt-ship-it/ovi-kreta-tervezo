@@ -59,7 +59,7 @@ async function deliverPurchase(req, res) {
     if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
     if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
     const attachments = mailService.sanitizeAttachments(req.body?.files);
-    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, attachments, invoicePdf, title: req.body?.title });
+    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: invoiceService.orderNumber(id, session.created || new Date()), attachments, invoicePdf, title: req.body?.title });
     mailService.markSent(id);
     return res.json({ success: true, sent: true });
   } catch (error) {
@@ -129,6 +129,7 @@ async function stripeWebhook(req, res) {
     const address = details.address || {};
     const result = await invoiceService.issueInvoice({
       orderId: session.id,
+      created: session.created,
       plan: session.metadata?.plan,
       customer: {
         name: details.name,
