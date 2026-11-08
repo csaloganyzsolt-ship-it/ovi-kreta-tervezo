@@ -20,6 +20,11 @@ function splitGross(grossHuf, vatRate) {
   return { net, vat: grossHuf - net };
 }
 
+// Teszt üzemmódban nem éles bizonylat, hanem díjbekérő készül.
+function isSandbox(env = process.env) {
+  return String(env.SZAMLAZZ_SANDBOX || '').toLowerCase() === 'true';
+}
+
 function today(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
@@ -30,6 +35,7 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
   const vatKey = String(env.SZAMLAZZ_AFA || '27').trim();
   const { net, vat } = splitGross(product.amountHuf, vatKey);
   const day = today(date);
+  const sandbox = isSandbox(env);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
@@ -47,7 +53,8 @@ function buildInvoiceXml({ customer, plan, orderId }, env = process.env, date = 
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>Stripe online bankkártyás fizetés</megjegyzes>
     <rendelesSzam>${escapeXml(orderId)}</rendelesSzam>
-    <fizetve>true</fizetve>
+    <dijbekero>${sandbox}</dijbekero>
+    <fizetve>${!sandbox}</fizetve>
   </fejlec>
   <vevo>
     <nev>${escapeXml(customer.name || customer.email)}</nev>
@@ -116,7 +123,7 @@ async function issueInvoice(order, deps = {}) {
   const invoiceNumber = response.headers.get('szlahu_szamlaszam') || 'ismeretlen';
   issued[order.orderId] = invoiceNumber;
   writeStore(env, issued);
-  return { mock: false, invoiceNumber };
+  return { mock: false, sandbox: isSandbox(env), invoiceNumber };
 }
 
-module.exports = { buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };

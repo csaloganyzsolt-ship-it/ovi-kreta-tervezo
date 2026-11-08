@@ -123,3 +123,32 @@ test('footer shows the operator and legal links open modals', async (t) => {
   document.querySelector('[data-legal="terms"]').click();
   assert.ok(document.getElementById('legalModal').classList.contains('open'));
 });
+
+test('sk_test key runs live checkout in test mode with return URLs', async () => {
+  let params;
+  const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_test_1', url: 'https://stripe/t' }; } } } };
+  const result = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { ...devEnv, STRIPE_SECRET_KEY: 'sk_test_x' }, client });
+  assert.equal(result.testMode, true);
+  assert.equal(result.mock, false);
+  assert.equal(params.success_url, 'https://ovitervezo.hu/?checkout_session={CHECKOUT_SESSION_ID}');
+});
+
+test('Számlázz.hu sandbox creates a proforma instead of a final invoice', () => {
+  const order = { plan: 'daily', orderId: 'cs_1', customer: { email: 'a@b.hu' } };
+  const sandbox = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_SANDBOX: 'true' });
+  assert.match(sandbox, /<dijbekero>true<\/dijbekero>/);
+  assert.match(sandbox, /<fizetve>false<\/fizetve>/);
+  const live = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k' });
+  assert.match(live, /<dijbekero>false<\/dijbekero>/);
+});
+
+test('footer and legal modals use the real company data without placeholders', async (t) => {
+  const window = await loadLockedApp(t);
+  const footer = window.document.getElementById('siteFooter').textContent;
+  assert.match(footer, /27891788-2-08/);
+  assert.match(footer, /08 09 031727/);
+  assert.match(footer, /Öttevény/);
+  assert.doesNotMatch(window.document.body.innerHTML, /kitöltendő/);
+  window.document.querySelector('[data-legal="privacy"]').click();
+  assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
+});

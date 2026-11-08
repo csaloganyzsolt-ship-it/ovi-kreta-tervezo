@@ -1446,7 +1446,11 @@
       .modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(30, 24, 20, .55); }
       .modal-backdrop.open { display: flex; }
       .modal-box { width: min(560px, 100%); max-height: 88vh; overflow: auto; padding: 22px; border-radius: 20px; background: var(--card); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); }
-      .modal-box h2 { margin: 0 0 10px; font-size: 20px; }
+      .modal-box { position: relative; }
+      .modal-box h2 { margin: 0 36px 10px 0; font-size: 20px; }
+      .modal-box h3 { margin: 14px 0 4px; font-size: 16px; }
+      .modal-box p { margin: 4px 0; line-height: 1.6; }
+      .modal-x { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--soft); color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
       .modal-box label.consent { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; font-size: 15px; }
       .modal-box input[type="email"] { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; }
       .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
@@ -1459,7 +1463,7 @@
       .site-footer a { color: var(--primary-text); text-decoration: underline; cursor: pointer; }
       .site-footer .footer-links { display: flex; flex-wrap: wrap; gap: 8px 18px; }
       .trust-badges { display: flex; flex-wrap: wrap; gap: 8px; }
-      .trust-badge { padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-weight: 600; font-size: 13px; }
+      .trust-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--soft); color: var(--muted); font-weight: 600; font-size: 12.5px; }
       .placeholder-missing { color: #c0392b; font-style: italic; }
       @media print { .paywall-gate, .site-footer, .modal-backdrop { display: none !important; } }
     </style>
@@ -1866,9 +1870,9 @@
           <div>
             <strong>OviTervező</strong> – ovitervezo.hu<br />
             Üzemelteti és a számlát kiállítja: <span id="footerCompanyName">CSB-Villamosság Kft.</span><br />
-            Adószám: <span id="footerTaxId"></span><br />
+            Adószám: <span id="footerTaxId"></span> · Cégjegyzékszám: <span id="footerRegNo"></span><br />
             Székhely: <span id="footerAddress"></span><br />
-            Ügyfélszolgálat: <span id="footerEmail"></span>
+            Ügyfélszolgálat: <a id="footerEmail" href="mailto:info@csb-vill.com">info@csb-vill.com</a>
           </div>
           <div class="footer-links">
             <a data-legal="terms">Általános Szerződési Feltételek (ÁSZF)</a>
@@ -1883,6 +1887,7 @@
       </footer>
       <div class="modal-backdrop" id="legalModal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
         <div class="modal-box">
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
           <h2 id="legalModalTitle"></h2>
           <div id="legalModalBody"></div>
           <div class="modal-actions"><button type="button" data-close-modal>Bezárás</button></div>
@@ -1890,7 +1895,9 @@
       </div>
       <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
         <form class="modal-box" id="checkoutForm" novalidate>
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
           <h2 id="checkoutTitle">Gyors fizetés</h2>
+          <p id="checkoutTestNote" class="modal-note" hidden>Teszt üzemmód: használható tesztkártya a 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
           <p id="checkoutSummary" class="modal-note"></p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
@@ -3602,9 +3609,39 @@
       // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
       const PAYWALL_PRICES = { daily: 390, weekly: 890 };
       const LEGAL_TEXTS = {
-        terms: ['Általános Szerződési Feltételek (ÁSZF)', ['Szolgáltató adatai és elérhetősége', 'A szolgáltatás tárgya és a megrendelés menete', 'Árak, fizetési mód (Stripe bankkártya)', 'Digitális tartalom teljesítése, elállási jog', 'Szavatosság, felelősség, panaszkezelés', 'Záró rendelkezések']],
-        privacy: ['Adatkezelési Tájékoztató (GDPR)', ['Adatkezelő megnevezése és elérhetősége', 'Kezelt adatok köre (számlázási név, cím, e-mail)', 'Az adatkezelés célja és jogalapja', 'Adatfeldolgozók (Stripe, Számlázz.hu, tárhelyszolgáltató)', 'Megőrzési idő (számviteli kötelezettség)', 'Az érintett jogai és jogorvoslat']],
-        billing: ['Fizetési és Számlázási Tájékoztató', ['Fizetés bankkártyával a Stripe biztonságos felületén', 'A kártyaadatokat az üzemeltető nem látja és nem tárolja', 'Sikeres fizetés után e-számla érkezik a megadott e-mail címre (Számlázz.hu)', 'Árak forintban, az ÁFA a számlán szerepel', 'Reklamáció: az ügyfélszolgálati e-mail címen']]
+        terms: ['Általános Szerződési Feltételek (ÁSZF)', `
+<h3>1. Szolgáltató</h3>
+<p>CSB-Villamosság Kft. · Székhely: 9153 Öttevény, Arany János utca 10. · Adószám: 27891788-2-08 · Cégjegyzékszám: 08 09 031727 · E-mail: info@csb-vill.com</p>
+<h3>2. A szolgáltatás</h3>
+<p>Az OviTervező (ovitervezo.hu) digitális pedagógiai segédlet: óvodai napi és heti tervezetek összeállítására szolgáló tervezőszoftver. A generált tervezet segédanyag; a tartalom végleges ellenőrzése és felhasználása a pedagógus felelőssége.</p>
+<h3>3. Árak és fizetés</h3>
+<p>1 db napi tervezet: 390 Ft, 1 db heti csomag (keretterv + 5 napi tervezet): 890 Ft. Az árak forintban, az ÁFA-t tartalmazva értendők. A fizetés bankkártyával, a Stripe biztonságos felületén történik regisztráció nélkül.</p>
+<h3>4. Teljesítés, elállási jog</h3>
+<p>A megvásárolt tervezet azonnal, elektronikusan letölthetővé válik. Nem fizikai adathordozón nyújtott digitális adattartalom esetén a fogyasztó a teljesítés megkezdésével, kifejezett előzetes hozzájárulása és tudomásulvétele alapján elveszíti elállási jogát (45/2014. (II. 26.) Korm. rendelet 29. § (1) m) pont). A fizetés előtt ezt külön jelölőnégyzettel kell elfogadni.</p>
+<h3>5. Szellemi tulajdon</h3>
+<p>A szoftver és annak felülete a Szolgáltató szellemi tulajdona. A megvásárolt tervezetet a vásárló saját pedagógiai munkájához szabadon felhasználhatja, de a szoftvert nem másolhatja és nem értékesítheti tovább.</p>
+<h3>6. Szavatosság, panaszkezelés</h3>
+<p>Hibás teljesítés (pl. sikertelen letöltés) esetén írj az info@csb-vill.com címre; a panaszt legfeljebb 30 napon belül kivizsgáljuk. A Szolgáltató a generált tartalom pedagógiai pontosságáért nem vállal felelősséget.</p>`],
+        privacy: ['Adatkezelési Tájékoztató (GDPR)', `
+<h3>1. Adatkezelő</h3>
+<p>CSB-Villamosság Kft., 9153 Öttevény, Arany János utca 10., adószám: 27891788-2-08, cégjegyzékszám: 08 09 031727, e-mail: info@csb-vill.com.</p>
+<h3>2. Kezelt adatok és cél</h3>
+<p>Fizetéskor a számlázási név, a számlázási cím és az e-mail cím. Cél: a vásárlás teljesítése és a számla kiállítása. Jogalap: szerződés teljesítése (GDPR 6. cikk (1) b) pont) és jogi kötelezettség (számviteli törvény, 6. cikk (1) c) pont). Az adatokat a számviteli előírások szerint 8 évig őrizzük.</p>
+<h3>3. Bankkártyaadatok</h3>
+<p>A fizetési adatokat kizárólag a Stripe kezeli. A bankkártyaszámok nem futnak át az OviTervező szerverén, és nem tároljuk őket.</p>
+<h3>4. Adatfeldolgozók</h3>
+<p>Stripe (fizetés), Számlázz.hu – KBOSS.hu Kft. (e-számlázás), tárhelyszolgáltató (Nethely). A kitöltött tervezési adatok a generáláshoz a Google Gemini szolgáltatásnak kerülnek továbbításra; ezek a böngésződben is mentődnek (localStorage), nálunk nem kerülnek profilba.</p>
+<h3>5. Jogaid</h3>
+<p>Kérhetsz hozzáférést, helyesbítést, törlést (a jogszabályi megőrzési kötelezettség kivételével), korlátozást, tiltakozhatsz, és panasszal fordulhatsz a NAIH-hoz (naih.hu). Kapcsolat: info@csb-vill.com.</p>`],
+        billing: ['Fizetési és Számlázási Tájékoztató', `
+<h3>Bankkártyás fizetés</h3>
+<p>A fizetés a Stripe biztonságos, titkosított felületén történik. A kártyaadataidat az OviTervező nem látja és nem tárolja.</p>
+<h3>Árak</h3>
+<p>Napi tervezet: 390 Ft · Heti csomag (keretterv + 5 napi tervezet): 890 Ft. Az ár tartalmazza az ÁFA-t, további díj nincs.</p>
+<h3>Számlázás</h3>
+<p>Sikeres fizetés után a CSB-Villamosság Kft. a Számlázz.hu rendszeren keresztül automatikusan e-számlát állít ki, és elküldi a megadott e-mail címre. Kérjük, helyes e-mail címet adj meg.</p>
+<h3>Kapcsolat</h3>
+<p>Fizetéssel vagy számlával kapcsolatos kérdés esetén: info@csb-vill.com.</p>`]
       };
 
       function getUnlockedIds() {
@@ -3669,8 +3706,7 @@
         const [title, items] = LEGAL_TEXTS[key];
         document.getElementById('legalModalTitle').textContent = title;
         document.getElementById('legalModalBody').innerHTML =
-          '<p class="modal-note">Az alábbi szöveg szerkezeti váz; a végleges, jogilag kötelező szöveget jogásznak kell jóváhagynia és ide beillesztenie.</p><ol>'
-          + items.map((item) => `<li>${escapeHtml(item)}</li>`).join('') + '</ol>';
+          items;
         openModal('legalModal');
       }
 
@@ -3679,6 +3715,7 @@
         document.getElementById('checkoutSummary').textContent =
           `${kind === 'weekly' ? 'Heti csomag (keretterv + 5 napi tervezet)' : 'Napi tervezet'} – ${PAYWALL_PRICES[kind]} Ft`;
         document.getElementById('checkoutError').textContent = '';
+        document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
         openModal('checkoutModal');
         document.getElementById('checkoutEmail').focus();
       }
@@ -3729,7 +3766,7 @@
           const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
           const data = await response.json();
           if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
-          const pending = localStorage.getItem('oviKretaPendingCheckout');
+          const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId;
           if (pending) unlockGeneration(pending);
           localStorage.removeItem('oviKretaPendingCheckout');
           if (lastResult) { renderResultDocument(lastResult); renderPreview(); }
@@ -3740,16 +3777,14 @@
 
       function initFooterAndModals() {
         const company = window.APP_CONFIG?.company || {};
-        const fill = (id, value) => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          if (value) el.textContent = value;
-          else { el.textContent = '[kitöltendő]'; el.classList.add('placeholder-missing'); }
-        };
+        const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
         fill('footerCompanyName', company.name || 'CSB-Villamosság Kft.');
-        fill('footerTaxId', company.taxId);
-        fill('footerAddress', company.address);
-        fill('footerEmail', company.email);
+        fill('footerTaxId', company.taxId || '27891788-2-08');
+        fill('footerRegNo', company.regNo || '08 09 031727');
+        fill('footerAddress', company.address || '9153 Öttevény, Arany János utca 10.');
+        const email = company.email || 'info@csb-vill.com';
+        const mail = document.getElementById('footerEmail');
+        if (mail) { mail.textContent = email; mail.href = `mailto:${email}`; }
         document.addEventListener('click', (event) => {
           const legal = event.target.closest('[data-legal]');
           if (legal) { event.preventDefault(); openLegalModal(legal.dataset.legal); return; }

@@ -20,6 +20,11 @@ function isLive(env = process.env) {
   return Boolean(String(env.STRIPE_SECRET_KEY || '').trim());
 }
 
+// sk_test_ kulccsal a Stripe tesztmódban fut: nincs valódi terhelés.
+function isTestMode(env = process.env) {
+  return String(env.STRIPE_SECRET_KEY || '').trim().startsWith('sk_test_');
+}
+
 function isProduction(env = process.env) {
   return env.NODE_ENV === 'production';
 }
@@ -104,7 +109,7 @@ async function createCheckoutSession({ plan, email, generationId } = {}, deps = 
     success_url: `${baseUrl}/?checkout_session={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/?checkout=cancelled`
   });
-  return { mock: false, id: session.id, plan: product.key, amountHuf: product.amountHuf, url: session.url };
+  return { mock: false, testMode: isTestMode(env), id: session.id, plan: product.key, amountHuf: product.amountHuf, url: session.url };
 }
 
 async function retrieveCheckoutSession(sessionId, deps = {}) {
@@ -140,6 +145,6 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
 }
 
 module.exports = {
-  PRODUCTS, PaymentError, MOCK_PREFIX, isLive, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
+  PRODUCTS, PaymentError, MOCK_PREFIX, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
   createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent
 };
