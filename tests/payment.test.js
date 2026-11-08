@@ -582,3 +582,17 @@ test('test delivery row appears only in the staging config after generation', as
   prod.document.querySelector('.wizard-item[data-step="3"]').click();
   assert.equal(prod.document.getElementById('testDeliverRow').hidden, true);
 });
+
+test('mail template is warm, lists attachments and carries the legal footer', () => {
+  const { buildEmailContent } = require('../services/mailService');
+  const daily = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, {});
+  assert.match(daily.html, /Kedves Kolléganő!/);
+  assert.match(daily.html, /\.docx/);
+  assert.match(daily.html, /PDF/);
+  assert.match(daily.html, /27891788-2-08/);
+  assert.match(daily.html, /automatikus rendszerüzenet/);
+  assert.match(daily.text, /Adatkezelési tájékoztató és ÁSZF/);
+  const test = buildEmailContent({ planLabel: 'heti csomag', withInvoice: false, test: true }, {});
+  assert.match(test.html, /teszt/);
+  assert.doesNotMatch(test.html, /E-számla/);
+});

@@ -91,6 +91,7 @@ function testRateLimited(ip, now = Date.now()) {
 
 async function testDeliver(req, res) {
   try {
+    console.log(`[test-deliver] Kérés beérkezett (origin: ${req.headers?.origin || '-'}, ip: ${req.ip})`);
     if (!testDeliveryAllowed(req)) return res.status(403).json({ success: false, error: 'A tesztkézbesítés ezen a környezeten nem engedélyezett.' });
     if (testRateLimited(req.ip)) return res.status(429).json({ success: false, error: 'Túl sok tesztlevél, próbáld később.' });
     if (!mailService.isConfigured()) return res.status(503).json({ success: false, error: 'Az SMTP nincs beállítva a szerveren (SMTP_HOST, SMTP_USER, SMTP_PASS).' });
@@ -98,10 +99,14 @@ async function testDeliver(req, res) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return res.status(400).json({ success: false, error: 'Érvénytelen e-mail cím.' });
     const allowed = String(process.env.TEST_DELIVERY_RECIPIENTS || '').split(',').map((a) => a.trim().toLowerCase()).filter(Boolean);
     if (allowed.length && !allowed.includes(to.toLowerCase())) return res.status(403).json({ success: false, error: 'Ez a cím nem szerepel a tesztcímzettek között.' });
+    console.log('[test-deliver] Mellékletek ellenőrzése (DOCX/PDF/ZIP) kezdete');
     const attachments = mailService.sanitizeAttachments(req.body?.files);
+    console.log(`[test-deliver] Mellékletek kész: ${attachments.map((a) => a.filename).join(', ')}`);
     await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments });
+    console.log('[test-deliver] Kész, válasz a kliensnek');
     return res.json({ success: true, sent: true });
   } catch (error) {
+    console.error('[test-deliver] HIBA:', error.code || '', error.message);
     return sendPaymentError(res, error, 'Test delivery');
   }
 }

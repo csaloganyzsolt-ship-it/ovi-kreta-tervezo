@@ -4051,21 +4051,27 @@
         const button = document.getElementById('testDeliverBtn');
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { showPurchaseNotice('Adj meg egy érvényes e-mail címet.'); return; }
         button.disabled = true;
+        const controller = new AbortController();
+        let timer;
         try {
           showPurchaseNotice('Fájlok előállítása és küldés...');
           const files = await buildDeliveryFiles();
+          timer = setTimeout(() => controller.abort(), 20000);
           const response = await fetch(`${getApiBaseUrl()}/api/test-deliver`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, files, plan: planKind() }),
+            signal: controller.signal,
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
           showPurchaseNotice(`✅ A tesztlevelet elküldtük ide: ${email}`);
         } catch (error) {
           showPurchaseNotice('');
-          showGenerationError(`A tesztlevél kiküldése sikertelen: ${error.message}`);
+          const reason = error.name === 'AbortError' ? 'a szerver 20 másodpercen belül nem válaszolt' : error.message;
+          showGenerationError(`A tesztlevél kiküldése sikertelen: ${reason}`);
         } finally {
+          clearTimeout(timer);
           button.disabled = false;
         }
       }

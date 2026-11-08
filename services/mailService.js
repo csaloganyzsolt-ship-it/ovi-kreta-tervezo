@@ -59,40 +59,117 @@ function createTransport(env, deps) {
     host: env.SMTP_HOST,
     port,
     secure: String(env.SMTP_SECURE || (port === 465)).toLowerCase() === 'true',
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
   });
+}
+
+function companyLines(env) {
+  return {
+    name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
+    address: env.COMPANY_ADDRESS || '9153 Öttevény, Arany János utca 10.',
+    taxId: env.COMPANY_TAX_ID || '27891788-2-08',
+    regNo: env.COMPANY_REG_NO || '08 09 031727'
+  };
+}
+
+// Közös levélsablon: meleg hangvétel, az OviTervező arculatához igazodó kártya, jogi lábléc.
+function buildEmailContent({ planLabel, withInvoice, test }, env) {
+  const c = companyLines(env);
+  const support = supportEmail(env);
+  const site = 'https://ovitervezo.hu';
+  const attachmentText = planLabel === 'heti csomag'
+    ? 'a heti csomag ZIP archívuma (benne Word és PDF formátumú tervezetekkel)'
+    : 'a tervezet Word (.docx) és PDF formátumban is';
+  const invoiceText = withInvoice ? ' Az e-számlát is mellékeltük PDF-ben.' : '';
+  const testText = test ? 'Ez egy TESZT levél: fizetés és számla nélkül érkezett.\n\n' : '';
+  const legalText = `${c.name} | Székhely: ${c.address} | Adószám: ${c.taxId} | Cégjegyzékszám: ${c.regNo}`;
+
+  const text = `Kedves Kolléganő!\n\n${testText}Köszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\nMellékletben küldjük ${attachmentText}.${invoiceText}\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\nÜgyfélszolgálat: ${support}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
+
+  const testBanner = test
+    ? '<div style="background:#fff4e0;border:1px solid #f3d29b;color:#8a5a00;border-radius:12px;padding:10px 14px;margin:0 0 16px;font-size:14px;">🧪 Ez egy <strong>teszt</strong> levél: fizetés és számla nélkül érkezett.</div>'
+    : '';
+  const invoiceItem = withInvoice
+    ? '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">🧾 <strong>E-számla</strong> (PDF)</td></tr>'
+    : '';
+  const fileItems = planLabel === 'heti csomag'
+    ? '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">🗂️ <strong>Heti csomag</strong> (ZIP – Word és PDF fájlokkal)</td></tr>'
+    : '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr><tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📕 <strong>Tervezet PDF</strong> formátumban</td></tr>';
+
+  const html = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OviTervező</title></head>
+<body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #d9ebe0;">
+<tr><td style="background:#d8f0e3;padding:26px 28px;text-align:center;">
+<div style="font-size:34px;line-height:1;">🌱📚✨</div>
+<div style="font-size:24px;font-weight:700;color:#e0885a;margin-top:8px;">Ovi<span style="font-weight:400;color:#1f5f52;">Tervező</span></div>
+</td></tr>
+<tr><td style="padding:28px;">
+${testBanner}
+<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
+<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – és köszönjük az elhivatott munkát, amellyel nap mint nap a gyerekek mellett áll. 💚</p>
+<p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#2d3b36;">Reméljük, hogy a kész tervezet sok időt spórol Önnek, így több jut a legfontosabbra: a közös játékra és felfedezésre.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;">
+<div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek</div>
+<table role="presentation" cellpadding="0" cellspacing="0">${fileItems}${invoiceItem}</table>
+</td></tr></table>
+<p style="margin:20px 0;text-align:center;"><a href="${site}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">🌿 Új tervezet készítése</a></p>
+<p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
+<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Melegséggel,<br><strong>Az OviTervező csapata</strong></p>
+<p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Írjon nekünk: <a href="mailto:${support}" style="color:#1f5f52;">${support}</a></p>
+</td></tr>
+<tr><td style="background:#f6f7f7;padding:18px 28px;border-top:1px solid #e6eae8;font-size:12px;line-height:1.6;color:#7a8480;">
+<strong>Kibocsátó:</strong> ${c.name}, székhely: ${c.address}, adószám: ${c.taxId}, cégjegyzékszám: ${c.regNo}.<br>
+<a href="${site}" style="color:#7a8480;">Adatkezelési tájékoztató</a> · <a href="${site}" style="color:#7a8480;">ÁSZF</a> – ${site}<br>
+Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
+</td></tr>
+</table></td></tr></table></body></html>`;
+  return { text, html };
+}
+
+function planLabelOf(plan) {
+  return String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
 }
 
 // Egyetlen levél: a megvásárolt tervezet fájljai és az e-számla PDF együtt.
 async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const planLabel = String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: true, test: false }, env);
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to,
     replyTo: support,
     subject: 'OviTervező – a megvásárolt tervezet és az e-számla',
-    text: `Kedves Vásárlónk!\n\nKöszönjük a vásárlást! Mellékletben küldjük a megvásárolt ${planLabel} fájljait és az e-számlát.\n\nSzolgáltató weboldal: https://ovitervezo.hu\nÜgyfélszolgálat: ${support}\n\nÜdvözlettel,\nOviTervező`,
+    text,
+    html,
     attachments: [...attachments, { filename: invoiceName || 'szamla.pdf', content: invoicePdf, contentType: 'application/pdf' }]
   });
 }
 
-// Staging tesztkézbesítés: ugyanaz a melléklet-előállítás és levélsablon, de Stripe-fizetés és számla nélkül.
+// Staging tesztkézbesítés: ugyanaz a levélsablon, de Stripe-fizetés és számla nélkül.
 async function sendTestDeliveryEmail({ to, plan, attachments }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const planLabel = String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: false, test: true }, env);
   const transport = createTransport(env, deps);
-  return transport.sendMail({
+  console.log(`[test-deliver] SMTP kapcsolódás és küldés: ${env.SMTP_HOST}:${env.SMTP_PORT || 587}`);
+  const info = await transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to,
     replyTo: support,
     subject: 'OviTervező – TESZT: tervezet kézbesítés',
-    text: `Ez egy TESZT levél (fizetés és számla nélkül). Mellékletben a ${planLabel} fájljai.\n\nOviTervező – https://ovitervezo.hu`,
+    text,
+    html,
     attachments
   });
+  console.log('[test-deliver] E-mail elküldve:', info?.response || 'ok');
+  return info;
 }
 
-module.exports = { isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
+module.exports = { buildEmailContent, isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
