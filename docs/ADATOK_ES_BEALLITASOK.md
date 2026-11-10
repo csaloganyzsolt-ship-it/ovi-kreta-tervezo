@@ -81,7 +81,7 @@ Az ellenőrző kártya (`renderSummaryChecklist()`) a fizetés és generálás e
 
 Ár: napi tervezet bruttó 390 Ft, heti tervezet (keretterv + a kiválasztott napok) bruttó 890 Ft, a napok számától függetlenül. Az igazságforrás a szerver (`services/stripeService.js`).
 
-A generált dokumentumban és az előnézetben a „Kréta” szó nem szerepelhet; a szerver a modell válaszából is eltávolítja.
+A generált dokumentum és az előnézet általános szakmai tervezet; állami vagy külső rendszerek (pl. naplórendszerek) nevére nem hivatkozik.
 
 ## Jövőbeli bővítési lehetőségek
 

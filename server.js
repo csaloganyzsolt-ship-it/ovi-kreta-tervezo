@@ -206,7 +206,7 @@ function buildWeeklyPrompt(settings, detail, extraRules = '') {
     ? 'area_focused – klasszikus területváltó: minden nap más nevelési terület áll a fókuszban, de a heti téma és a gyerekek tapasztalatai összekötik a napokat.'
     : 'progressive – szervesen egymásra épülő projekt: hétfői gyűjtéstől a pénteki zárásig minden nap az előző nap élményeire és produktumaira épül.';
 
-  return `Tapasztalt magyar mester-óvodapedagógus vagy, aki projektmódszerrel dolgozik az Óvodai Nevelés Országos Alapprogramja (ONOAP) szerint. Heti tematikus keretet és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló, részletesen kidolgozott napi tervezetet készítesz; a nem kiválasztott napokra NEM készítesz tervezetet.
+  return `Tapasztalt magyar mester-óvodapedagógus vagy, aki projektmódszerrel dolgozik a magyar óvodapedagógiai irányelveknek megfelelően. Heti tematikus keretet és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló, részletesen kidolgozott napi tervezetet készítesz; a nem kiválasztott napokra NEM készítesz tervezetet.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -254,7 +254,7 @@ A teruletek_heti_eloszlasa is pontosan a kiválasztott napokat tartalmazza (${da
 }
 
 const MIXED_GROUP_RULE = 'KÖTELEZŐ DIFFERENCIÁLÁS: Mivel ez egy vegyes csoport, a tevékenységek kidolgozásánál kötelezően jelenjen meg a 3 szintű differenciálás korcsoportok szerint: külön feladatszint a kicsiknek (egyszerűsített), a középsősöknek, és a nagyoknak/iskola-előkészítősöknek (összetett, szabálykövető).';
-const NO_PLATFORM_NAME_RULE = 'A dokumentum szövegében a Kréta szó (és bármely számlázási vagy naplórendszer neve) sehol nem szerepelhet; a kimenet egyszerűen hivatalos pedagógiai tervezet.';
+const NO_PLATFORM_NAME_RULE = 'A dokumentum szövegében ne hivatkozz állami vagy külső naplórendszerekre; a kimenet egyszerűen szakmai pedagógiai tervezet.';
 
 function buildPrompt(payload = {}) {
   const customNotes = payload.customNotes || {};
@@ -291,14 +291,14 @@ function buildPrompt(payload = {}) {
       customRequest: customNotes.customRequest || ''
     },
     detailLevel: detail.level,
-    outputMode: /kréta/i.test(String(payload.outputMode || '')) || !payload.outputMode ? 'Szakmai tervezet' : payload.outputMode,
+    outputMode: 'Szakmai tervezet',
     showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom ?? payload.includeLiterature ?? false)
   };
 
   const extraRules = [settings.group === 'Vegyes csoport' ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');
   if (isWeeklyBreakdown(payload)) return buildWeeklyPrompt(settings, detail, extraRules);
 
-  return `Elhivatott, kreatív magyar mester-óvodapedagógus vagy, aki az Óvodai nevelés országos alapprogramja (OAP) és a hivatalos pedagógiai tervezetekkel szemben támasztott követelmények szerint készít élményszerű, gazdag napi foglalkozástervet.
+  return `Elhivatott, kreatív magyar mester-óvodapedagógus vagy, aki a magyar óvodapedagógiai irányelveknek és a hivatalos pedagógiai tervezetekkel szemben támasztott követelményeknek megfelelően készít élményszerű, gazdag napi foglalkozástervet.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -391,15 +391,8 @@ function normalizeWeeklyResponse(parsed, payload) {
   };
 }
 
-function stripPlatformName(value) {
-  if (typeof value === 'string') return value.replace(/Kréta[- ]*(?:kompatibilis|formátum\w*|rendszer\w*|napló\w*)?/gi, 'szakmai tervezet').replace(/[ \t]{2,}/g, ' ');
-  if (Array.isArray(value)) return value.map(stripPlatformName);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripPlatformName(item)]));
-  return value;
-}
-
 function normalizeResponse(rawText, payload = {}) {
-  const parsed = stripPlatformName(safeParseJson(rawText));
+  const parsed = safeParseJson(rawText);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw generationError('A Gemini API válasza nem valid JSON objektum. Nem készült dokumentum.');
   }

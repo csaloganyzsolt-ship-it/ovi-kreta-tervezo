@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tervező – OviTervező óvodai tervezet készítő</title>
-    <meta name="description" content="Óvodai tervezés percek alatt: tematikus terv, heti tervezet és foglalkozásterv minta az ONAP-hoz igazodva. szerkeszthető, letölthető Word és PDF tervezetek óvodapedagógusoknak." />
+    <meta name="description" content="Szakszerű óvodai tervezet, heti tervek és tematikus foglalkozásterv minták pár perc alatt. Szerkeszthető Word és nyomtatható PDF formátumban." />
     <!--GOOGLE_SITE_VERIFICATION-->
-    <meta name="keywords" content="óvodai tervezés, tematikus terv, foglalkozásterv minta, heti tervezet, ONAP, óvodai tervezet sablon" />
+    <meta name="keywords" content="óvodai tervezés, tematikus terv, foglalkozásterv minta, heti tervezet, óvodai tervezet sablon" />
     <link rel="canonical" href="https://ovitervezo.hu/tervezo.html" />
     <meta property="og:title" content="OviTervező – Óvodai Tervezet Készítő Szoftver" />
     <meta property="og:description" content="Spórolj heti több óra adminisztrációt. Szerkeszthető óvodai tervezetek 1 kattintással." />
@@ -1078,10 +1078,10 @@
           </div>`;
       }
 
-      // A dokumentumban nem szerepelhet a "Kréta" szó; a korábban mentett tervek régi értékét is átírjuk.
+      // A korábban mentett tervek régi kimeneti formáját is átírjuk.
       function displayOutputMode(mode) {
         const value = String(mode || '').trim();
-        return !value || /kréta/i.test(value) ? 'Szakmai tervezet' : value;
+        return value === 'Szakmai tervezet' ? value : 'Szakmai tervezet';
       }
 
       function buildDocumentHtml(result, request, docId) {

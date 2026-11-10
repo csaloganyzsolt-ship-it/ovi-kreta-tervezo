@@ -1,4 +1,4 @@
-Ovi-Kréta Tervező Asszisztens – Rendszerterv és UX/UI Koncepció
+OviTervező asszisztens – Rendszerterv és UX/UI Koncepció
 
 1. Alapelvek a Célcsoport Számára (50-60 éves óvodapedagógusok)
 
@@ -8,7 +8,7 @@ Szakmai nyelvezet: A "Prompt" vagy "AI generálás" szavak helyett "Tervezet ös
 
 Fokozatosság (Varázsló / Wizard forma): Ne egyetlen hatalmas, végtelenül görgethető űrlap legyen. 3-4 rövid lépésre kell bontani a folyamatot, felül egy folyamatjelzővel (pl. 1. Alapok -> 2. Csoport -> 3. Tevékenységek -> 4. Kész tervezet).
 
-Ovi-Kréta kompatibilitás: A végeredmény egy az egyben másolható legyen a Kréta rubrikáiba.
+Másolhatóság: A végeredmény egy az egyben másolható legyen az elektronikus napló rovataiba.
 
 2. A Weboldal Felépítése (Lépésről lépésre)
 
@@ -74,11 +74,11 @@ Ha ezeket üresen hagyja, az AI magától talál ki az életkornak és a témán
 
 4. Lépés: Várakozás és Generálás
 
-Míg az AI dolgozik, egy barátságos animáció jelenik meg: "A tervezet összeállítása folyamatban... Keresem a legjobb játékokat... Formázom az Ovi-Kréta rubrikáihoz..."
+Míg az AI dolgozik, egy barátságos animáció jelenik meg: "A tervezet összeállítása folyamatban... Keresem a legjobb játékokat... Formázom a szakmai rovatokhoz..."
 
 3. A Végeredmény Megjelenítése (Kimenet)
 
-A generált terv nem egy egybefüggő, hosszú szövegként jelenik meg, hanem az Ovi-Kréta logikáját követő, jól elkülönülő dobozokban. Minden doboz mellett egy "Másolás" ikon található, így a pedagógus csak rákattint, és beilleszti a Krétába.
+A generált terv nem egy egybefüggő, hosszú szövegként jelenik meg, hanem a szakmai rovatok logikáját követő, jól elkülönülő dobozokban. Minden doboz mellett egy "Másolás" ikon található, így a pedagógus csak rákattint, és beilleszti a Krétába.
 
 A generált nézet blokkjai:
 

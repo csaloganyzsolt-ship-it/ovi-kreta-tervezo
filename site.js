@@ -11,7 +11,7 @@ const LEGAL_TEXTS = {
 <li>Tárhelyszolgáltató: Nethely Kft. (1115 Budapest, Halmi utca 29., e-mail: info@nethely.hu)</li>
 </ul>
 <h3>2. A szolgáltatás jellege</h3>
-<p>Az OviTervező (ovitervezo.hu) webes, mesterséges intelligenciával támogatott digitális pedagógiai tervezőszoftver, amely óvodapedagógusok számára nyújt segítséget napi és heti foglalkozástervezetek, tematikus vázlatok összeállításához. A szoftver által előállított dokumentumok (.docx és .pdf formátumban) pedagógiai segédanyagnak, ötlettárnak, szakmai kiindulópontnak minősülnek, és nem váltják ki a pedagógus szakmai felelősségét. A tartalom helyi sajátosságokhoz, csoportigényekhez és az Óvodai Nevelés Országos Alapprogramjához (ONAP) történő végső igazítása, szakmai felülvizsgálata és a Kréta OVI rendszerbe történő beillesztése kizárólag a Felhasználó (pedagógus) felelőssége.</p>
+<p>Az OviTervező (ovitervezo.hu) webes, mesterséges intelligenciával támogatott digitális pedagógiai tervezőszoftver, amely óvodapedagógusok számára nyújt segítséget napi és heti foglalkozástervezetek, tematikus vázlatok összeállításához. A szoftver által előállított dokumentumok (.docx és .pdf formátumban) pedagógiai segédanyagnak, ötlettárnak, szakmai kiindulópontnak minősülnek, és nem váltják ki a pedagógus szakmai felelősségét. A tartalom helyi sajátosságokhoz, csoportigényekhez és a hatályos óvodapedagógiai előírásokhoz történő végső igazítása, szakmai felülvizsgálata és az elektronikus naplóba történő beillesztése kizárólag a Felhasználó (pedagógus) felelőssége.</p>
 <p>Az űrlap témamezőibe személyes adat (pl. gyermek neve, sajátos nevelési igényének személyhez köthető részletei) nem adható meg, kizárólag általános pedagógiai célok és témák.</p>
 <h3>3. Megrendelés, árak és fizetés</h3>
 <ul>

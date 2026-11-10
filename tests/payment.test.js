@@ -672,18 +672,18 @@ test('purchase e-mail is copied (BCC) to the admin address with all attachments 
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {
   const landing = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const planner = fs.readFileSync(path.join(__dirname, '..', 'tervezo.html'), 'utf8');
-  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Kréta OVI kompatibilis', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
+  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Átlátható, szakmai felépítés', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
   assert.equal((landing.match(/href="tervezo\.html"/g) || []).length >= 2, true);
   for (const absent of ['id="wizardList"', 'id="generateBtn"', 'id="previewPanel"', 'id="checkoutModal"', 'html2pdf']) assert.ok(!landing.includes(absent), `landing: ${absent}`);
   for (const text of ['id="wizardList"', 'id="previewPanel"', 'id="checkoutModal"', 'id="siteFooter"', 'href="index.html"']) assert.ok(planner.includes(text), `planner: ${text}`);
   for (const absent of ['id="landing"', 'id="seoContent"', 'landing-hero', 'Egyszeri díj, havidíj nélkül', 'application/ld+json']) assert.ok(!planner.includes(absent), `planner: ${absent}`);
   assert.match(landing, /<a class="brand" href="index\.html"/);
   assert.match(planner, /<a class="brand" href="index\.html"/);
-  assert.match(landing, /<meta name="description" content="[^"]*ONAP/);
+  assert.doesNotMatch(landing + planner, /ONAP|Kréta OVI|Kréta-kompatibilis/);
   assert.match(landing, /policies\.google\.com\/privacy/);
   assert.match(landing, /policies\.google\.com\/terms/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
-  for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'ONAP tervezet', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
+  for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
 });
@@ -746,7 +746,7 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   assert.equal(app.offers.lowPrice, '390');
   assert.equal(app.offers.highPrice, '890');
   assert.match(html, /<title>Óvodai tervezet készítés gyorsan és egyszerűen \| OviTervező<\/title>/);
-  assert.match(html, /name="description" content="Óvodai tervezet készítés az ONAP alapján\. Készíts pedagógiailag átgondolt heti tervezetet és foglalkozásterv mintát percek alatt/);
+  assert.match(html, /name="description" content="Szakszerű óvodai tervezet, heti tervek és tematikus foglalkozásterv minták pár perc alatt/);
 });
 
 test('both pages use the OT logo and favicon, and both builds ship the icon files', () => {

@@ -1,4 +1,4 @@
-# Gemini API és teljes tesztelési terv az Ovi-Kréta Tervező Asszisztenshez
+# Gemini API és teljes tesztelési terv az OviTervező asszisztenshez
 
 ## 1. Milyen adatokra van szükség?
 
@@ -29,7 +29,7 @@ A weboldalból be kell gyűjteni ezeket az információkat:
 
 ### 1.3. Kimenet specifikációja
 A Gemini API-nak tudatni kell, hogy mit várunk vissza:
-- Kréta-rubrikák szerinti szövegformátum
+- Szakmai rovatok szerinti szövegformátum
 - rövid, jól tagolt bekezdések
 - szakmai, óvodapedagógiai nyelvezet
 - OH-kompatibilis célkifejezések
@@ -50,7 +50,7 @@ A Gemini API-nak tudatni kell, hogy mit várunk vissza:
 ### 2.1. Prompt struktúra
 Javasolt rendszer-prompt:
 
-"Te egy szakértő magyar óvodapedagógus vagy. Készíts egy {időtartam} tervezetet a {korcsoport} számára {téma} témában. A csoport hangulata {energiaszint}, a csoportban {gyerekek_szama} gyermek van. Figyelembe vett speciális igények: {sni_igények}. Az óvodai nevelés célja a következő területek fejlesztése: {nevelési_területek}. Kérjük, hogy a terv tartalmazza a cél- és feladatrendszert, a tevékenységeket, a differenciálást, az eszközszükségletet, valamint a szülői tájékoztatót. A kimenet szerkezete legyen Kréta-kompatibilis, jól olvasható, rövid bekezdésekkel, szakmai nyelvvel."
+"Te egy szakértő magyar óvodapedagógus vagy. Készíts egy {időtartam} tervezetet a {korcsoport} számára {téma} témában. A csoport hangulata {energiaszint}, a csoportban {gyerekek_szama} gyermek van. Figyelembe vett speciális igények: {sni_igények}. Az óvodai nevelés célja a következő területek fejlesztése: {nevelési_területek}. Kérjük, hogy a terv tartalmazza a cél- és feladatrendszert, a tevékenységeket, a differenciálást, az eszközszükségletet, valamint a szülői tájékoztatót. A kimenet szerkezete legyen átlátható, jól olvasható, rövid bekezdésekkel, szakmai nyelvvel."
 
 ### 2.2. Kimenet formátuma
 A model válaszában a következőt érdemes elvárni:

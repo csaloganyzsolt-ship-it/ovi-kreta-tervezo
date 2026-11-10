@@ -1,4 +1,4 @@
-# Ovi-Kréta Tervező – Állandó Fejlesztési Irányelvek
+# OviTervező – Állandó Fejlesztési Irányelvek
 
 ## 1. Projekt Kontextus és Architektúra
 - **Kétoldalas felépítés:**
@@ -23,7 +23,7 @@
   * A verziózott (`?v=`) statikus fájlok hatékonyan gyorsítótárazhatók (`immutable`).
 
 ## 4. Keresőoptimalizálás (SEO) és Strukturált Adatok
-- **Meta címkék:** Az `index.html` célzott kulcsszavai: *óvodai tervezet*, *óvodai tervezet készítés*, *heti tervezet*, *foglalkozásterv minta*, *ONAP*.
+- **Meta címkék:** Az `index.html` célzott kulcsszavai: *óvodai tervezet*, *óvodai tervezet készítés*, *heti tervezet*, *foglalkozásterv minta*.
 - **Schema.org JSON-LD:** A `<head>` kötelezően tartalmazza az érvényes `SoftwareApplication` és a látható tartalommal szó szerint megegyező `FAQPage` blokkokat.
 - **Indexelési fájlok:** A `sitemap.xml` és a `robots.txt` a kiadási csomag részét képezi, a Nethely gyökérkönyvtárába kerül.
 
@@ -37,7 +37,7 @@ Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni
 ## 6. Minőségi és Biztonsági Szabályok
 - **Nincs csendes Fallback/Mock:** SOHA ne rejts el hibákat beégetett kamu táblázatsorokkal. Ha a backend vagy az API hibát dob, az jelenjen meg tisztán a felületen és a terminálban!
 - **Titkok védelme:** Titkos kulcs (`GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `SZAMLAZZ_KEY`, stb.) soha nem kerülhet be a frontend kódba vagy a git commitokba. A `build-nethely.js` toleránsan tisztítsa a `GOOGLE_SITE_VERIFICATION` tokent.
-- **Tervezetek szakmai nyelve:** Szigorúan tilos az elcsépelt, ismétlődő sablonok használata. Mindig életszerű, differenciált, ONAP-kompatibilis tartalmat kell generálni.
+- **Tervezetek szakmai nyelve:** Szigorúan tilos az elcsépelt, ismétlődő sablonok használata. Mindig életszerű, differenciált, a magyar óvodapedagógiai irányelveknek megfelelő tartalmat kell generálni.
 - **Adatvédelem (GDPR):** Gyermekek személyes adatait az űrlapon tilos bekérni vagy tárolni. A számlázási adatokat a számviteli törvény szerint 8 évig kell megőrizni.
 
 ## 7. Fizetés, Számlázás és Szervizréteg

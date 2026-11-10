@@ -125,7 +125,7 @@ test('the concise pedagogical prompt includes all real settings and every custom
     assert.match(prompt, new RegExp(`"${key}"\\s*:\\s*${value}`));
   }
   assert.match(prompt, /mester-óvodapedagógus/);
-  assert.match(prompt, /OAP/);
+  assert.match(prompt, /óvodapedagógiai irányelv/);
   for (const phase of ['Szervezési feladatok', 'Érzelmi ráhangolódás', 'Fő tevékenység',
     'Gyakorlás, differenciált', 'Összegzés, levezetés']) {
     assert.ok(prompt.includes(phase), `Missing phase: ${phase}`);
@@ -223,7 +223,7 @@ test('quota errors preserve their HTTP status and are not retried on a different
 test('weekly breakdown uses the weekly master prompt and 16384 output tokens', () => {
   const prompt = buildPrompt(makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true,
     weeklyProgressionType: 'area_focused', fridayClosingType: 'Projektzáró élményséta' }));
-  assert.match(prompt, /ONOAP/);
+  assert.match(prompt, /óvodapedagógiai irányelv/);
   assert.match(prompt, /heti_keretterv/);
   assert.match(prompt, /area_focused/);
   assert.match(prompt, /Projektzáró élményséta/);
@@ -289,10 +289,8 @@ test('mixed group prompts carry the mandatory 3-level differentiation rule', () 
   assert.doesNotMatch(buildPrompt(makePayload({ group: 'Nagycsoport' })), /3 szintű differenciálás/);
 });
 
-test('generated output never contains the word Kréta', () => {
-  const plan = makePlan();
-  plan.tema = 'Kréta-kompatibilis falevelek';
-  plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = 'A Kréta rendszerbe másolható.';
-  const result = normalizeResponse(plan, makePayload());
-  assert.doesNotMatch(JSON.stringify(result), /kréta/i);
+test('prompts never mention protected state systems', () => {
+  for (const payload of [makePayload(), makePayload({ duration: 'Heti', includeDailyBreakdown: true, group: 'Vegyes csoport' })]) {
+    assert.doesNotMatch(buildPrompt(payload), /onap|onoap|\bOAP\b|kréta/i);
+  }
 });
