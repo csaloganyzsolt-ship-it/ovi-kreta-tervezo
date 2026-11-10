@@ -629,6 +629,12 @@ test('sheets webhook payload has all purchase fields and failures never throw', 
     datum: '2026-11-10 09:05', rendelesszam: 'OVI-261110-7TTU12', szamlaszam: 'OVITE-2026-1', vevo_neve: 'Teszt Elek', vevo_email: 'a@b.hu',
     szamlazasi_cim: '9153, Öttevény, Arany J. u. 10.', csomag: 'Heti csomag', tervezet_temaja: 'Őszi erdő', fizetett_osszeg_huf: 890, stripe_session_id: session.id
   });
+  assert.equal(payload.invoice_pdf_base64, undefined);
+  const withPdf = sheets.buildPayload({ session, invoiceNumber: 'OVITE-2026-1', customer, invoicePdf: Buffer.from('%PDF-test') }, new Date(), {});
+  assert.equal(withPdf.invoice_pdf_base64, Buffer.from('%PDF-test').toString('base64'));
+  assert.equal(withPdf.invoice_pdf_filename, 'OVI-261110-7TTU12 - Teszt Elek - OVITE-2026-1.pdf');
+  assert.equal(withPdf.drive_folder_id, '1rubYmBzc-gDt2GkMcMqM7syDAfe4-PT7');
+  assert.equal(sheets.buildPayload({ session, customer: { name: 'A/B:C' }, invoicePdf: Buffer.from('x') }, new Date(), { GOOGLE_DRIVE_FOLDER_ID: 'zzz' }).drive_folder_id, 'zzz');
   assert.deepEqual(await sheets.recordPurchase({ session, customer }, { env: {} }), { sent: false, reason: 'not_configured' });
   const env = { GOOGLE_SHEETS_WEBHOOK_URL: 'https://script.google.com/macros/s/x/exec' };
   const calls = [];

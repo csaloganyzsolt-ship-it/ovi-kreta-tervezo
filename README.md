@@ -112,9 +112,21 @@ A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel a
    function doPost(e) {
      const d = JSON.parse(e.postData.contents);
      SpreadsheetApp.getActiveSheet().appendRow([d.datum, d.rendelesszam, d.szamlaszam, d.vevo_neve, d.vevo_email, d.szamlazasi_cim, d.csomag, d.tervezet_temaja, d.fizetett_osszeg_huf, d.stripe_session_id]);
-     return ContentService.createTextOutput('ok');
+
+     // A számla PDF mentése a Drive mappába (a sor beszúrása ettől függetlenül sikeres marad).
+     let driveUrl = '';
+     if (d.invoice_pdf_base64 && d.drive_folder_id) {
+       try {
+         const blob = Utilities.newBlob(Utilities.base64Decode(d.invoice_pdf_base64), 'application/pdf', d.invoice_pdf_filename || (d.rendelesszam + '.pdf'));
+         driveUrl = DriveApp.getFolderById(d.drive_folder_id).createFile(blob).getUrl();
+       } catch (err) {
+         console.error('Drive mentés sikertelen: ' + err);
+       }
+     }
+     return ContentService.createTextOutput(JSON.stringify({ ok: true, driveUrl: driveUrl })).setMimeType(ContentService.MimeType.JSON);
    }
    ```
+   Első mentésnél a script engedélyt kér a Táblázathoz és a Drive-hoz. A mappa azonosítóját a szerver a `GOOGLE_DRIVE_FOLDER_ID` változóból küldi (alapértelmezés: az OviTervező számlamappa).
 2. Üzembe helyezés → Webalkalmazás (Futtatás: én; Hozzáférés: bárki) → a kapott URL a Renderen a `GOOGLE_SHEETS_WEBHOOK_URL`.
 3. `ADMIN_NOTIFICATION_EMAIL`: erre a címre BCC-ben megy a vásárlói levél (tervezet + számla).
 4. Search Console: a `GOOGLE_SITE_VERIFICATION` a Nethely deploy build környezetében kerül az oldalba (GitHub Secret: `GOOGLE_SITE_VERIFICATION`, a deploy-nethely workflow átadja a buildnek).

@@ -142,7 +142,7 @@ async function stripeWebhook(req, res) {
     });
     if (!result.duplicate && !result.mock) {
       // Nem várjuk meg: a Google Táblázat hibája nem érintheti a Stripe válaszát és a vevőt.
-      sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, customer: { name: details.name, email: details.email || session.customer_email, zip: address.postal_code, city: address.city, address: [address.line1, address.line2].filter(Boolean).join(' ') } }).catch(() => {});
+      sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, invoicePdf: invoiceService.getInvoicePdf(session.id), customer: { name: details.name, email: details.email || session.customer_email, zip: address.postal_code, city: address.city, address: [address.line1, address.line2].filter(Boolean).join(' ') } }).catch(() => {});
     }
     return res.json({ received: true, invoice: result });
   } catch (error) {
