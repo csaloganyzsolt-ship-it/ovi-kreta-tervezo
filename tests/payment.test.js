@@ -154,6 +154,16 @@ test('footer and legal modals use the real company data without placeholders', a
   assert.doesNotMatch(window.document.body.innerHTML, /kitöltendő/);
   window.document.querySelector('[data-legal="privacy"]').click();
   assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
+  const expected = {
+    terms: [/Nethely Kft\./, /Győri Törvényszék Cégbírósága/, /kellékszavatossági/, /nem váltják ki a pedagógus szakmai felelősségét/, /nincs|nem terheli meg/i, /bekelteto\.testulet@gymsmkik\.hu/],
+    privacy: [/Render Services/, /Google Ireland/, /GYERMEKEK SZEMÉLYES ADATAIT/, /Stripe Payments Europe/, /NAIH/, /8 évig/],
+    billing: [/nincs havidíj/, /KBOSS\.hu Kft\./, /PCI-DSS/]
+  };
+  for (const [key, patterns] of Object.entries(expected)) {
+    window.document.querySelector(`[data-legal="${key}"]`).click();
+    const body = window.document.getElementById('legalModalBody').textContent;
+    for (const p of patterns) assert.match(body, p, `${key}: ${p}`);
+  }
 });
 
 test('invoice carries software line items, ovitervezo.hu note and sends an e-invoice', () => {
