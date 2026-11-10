@@ -6,10 +6,12 @@
 //   --test        a tesztkártya-tippet is megjeleníti (Stripe teszt mód)
 const fs = require('node:fs');
 const path = require('node:path');
+const { addVersion, buildVersion } = require('./cache-bust');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-nethely');
 const apiBaseUrl = String(process.env.API_BASE_URL || 'https://ovi-kreta-tervezo-api.onrender.com').trim().replace(/\/+$/, '');
+const version = buildVersion();
 const testMode = process.argv.includes('--test');
 
 if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) {
@@ -42,7 +44,7 @@ for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'favic
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 for (const page of ['index.html', 'tervezo.html']) {
-  fs.writeFileSync(path.join(out, page), applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')));
+  fs.writeFileSync(path.join(out, page), addVersion(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')), version));
 }
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
@@ -55,27 +57,6 @@ const config = {
 };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
-fs.writeFileSync(path.join(out, '.htaccess'), `# Nethely / Apache
-RewriteEngine On
-# A Nethely Nginx proxy mögött fut az Apache, ezért a proxy fejlécét is figyelembe kell venni (különben átirányítási ciklus lesz).
-RewriteCond %{HTTPS} off
-RewriteCond %{HTTP:X-Forwarded-Proto} !https
-RewriteCond %{HTTP:CF-Visitor} !{"scheme":"https"}
-RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+fs.copyFileSync(path.join(root, '.htaccess'), path.join(out, '.htaccess'));
 
-DirectoryIndex index.html
-Options -Indexes
-
-<IfModule mod_headers.c>
-  Header set X-Content-Type-Options "nosniff"
-  Header set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-<IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresByType image/png "access plus 7 days"
-  ExpiresByType text/html "access plus 0 seconds"
-  ExpiresByType application/javascript "access plus 0 seconds"
-</IfModule>
-`);
-
-console.log(`Kész: ${out}\nAPI: ${apiBaseUrl}\nStripe teszt tipp: ${testMode}`);
+console.log(`Kész: ${out}\nVerzió: ?v=${version}\nAPI: ${apiBaseUrl}\nStripe teszt tipp: ${testMode}`);

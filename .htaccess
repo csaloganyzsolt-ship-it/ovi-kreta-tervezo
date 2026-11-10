@@ -1,0 +1,35 @@
+# Nethely / Apache (a build ezt másolja a kiadási mappába)
+RewriteEngine On
+# A Nethely Nginx proxy mögött fut az Apache, ezért a proxy fejlécét is figyelembe kell venni (különben átirányítási ciklus lesz).
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteCond %{HTTP:CF-Visitor} !{"scheme":"https"}
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# A build ?v=<időbélyeg> paramétert tesz a CSS/JS/kép hivatkozásokra, ezek URL-je minden kiadásnál változik, ezért hosszan gyorsítótárazhatók.
+RewriteCond %{QUERY_STRING} (^|&)v=[0-9]+
+RewriteRule \.(css|js|svg|ico|png|jpe?g|webp|gif|woff2?)$ - [E=VERSIONED:1]
+
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # A belépési oldal és a HTML mindig a legfrissebb legyen.
+  <FilesMatch "\.html?$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+
+  # Verzió nélkül hivatkozott statikus fájlok (pl. /favicon.ico): rövid ideig, újraellenőrzéssel.
+  <FilesMatch "\.(css|js|svg|ico|png|jpe?g|webp|gif|woff2?)$">
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+  </FilesMatch>
+
+  # Verziózott (?v=) fájlok: hatékony, hosszú gyorsítótár.
+  Header set Cache-Control "public, max-age=31536000, immutable" env=VERSIONED
+  Header set Cache-Control "public, max-age=31536000, immutable" env=REDIRECT_VERSIONED
+</IfModule>

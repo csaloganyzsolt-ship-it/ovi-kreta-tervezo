@@ -714,9 +714,12 @@ test('both builds ship both pages with every local reference resolvable and the 
       assert.ok(refs.length > 0);
       for (const ref of refs) {
         assert.ok(!ref.startsWith('/'), `${dir}/${page}: abszolút útvonal ${ref}`);
-        assert.ok(fs.existsSync(path.join(cwd, dir, ref)), `${dir}/${page}: hiányzó fájl ${ref}`);
+        assert.ok(fs.existsSync(path.join(cwd, dir, ref.split('?')[0])), `${dir}/${page}: hiányzó fájl ${ref}`);
       }
       assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
+      for (const f of ['styles.css', 'site.js', 'config.js', 'favicon.svg', 'favicon.ico']) assert.match(html, new RegExp(`(?:href|src)="${f.replace('.', '\\.')}\\?v=\\d{12}"`), `${dir}/${page}: ${f} verzió nélkül`);
+      assert.doesNotMatch(html, /(?:cdn|stripe)[^"]*\?v=/);
+      assert.doesNotMatch(html, /href="(?:index|tervezo)\.html\?v=/);
     }
   }
   for (const page of ['index.html', 'tervezo.html']) {
@@ -785,4 +788,11 @@ test('GOOGLE_SITE_VERIFICATION is cleaned to the bare token without warnings', (
     assert.ok(!/FIGYELEM/.test(run.stderr + run.stdout), `figyelmeztetés: ${raw}`);
     assert.ok(fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8').includes(`<meta name="google-site-verification" content="${token}" />`), raw);
   }
+});
+
+test('Nethely .htaccess keeps HTML uncached and versioned assets immutable', () => {
+  const ht = fs.readFileSync(path.join(__dirname, '..', 'dist-nethely', '.htaccess'), 'utf8');
+  assert.match(ht, /FilesMatch "\\\.html\?\$"[\s\S]*no-cache, no-store, must-revalidate/);
+  assert.match(ht, /max-age=31536000, immutable" env=VERSIONED/);
+  assert.match(ht, /X-Forwarded-Proto/);
 });
