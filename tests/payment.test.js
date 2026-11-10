@@ -261,7 +261,7 @@ test('one combined purchase email carries the plan files and the invoice PDF', a
   await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments, invoicePdf: Buffer.from('%PDF-inv') }, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
   assert.equal(message.to, 'vevo@example.com');
   assert.equal(message.replyTo, 's@x.hu');
-  assert.deepEqual(message.attachments.map((a) => a.filename), ['Napi.pdf', 'Napi.docx', 'szamla.pdf']);
+  assert.deepEqual(message.attachments.map((a) => a.filename), ['Napi.pdf', 'Napi.docx', 'szamla.pdf', 'ovitervezo-logo.png']);
   assert.throws(() => mailService.sanitizeAttachments([{ name: 'x.exe', base64: 'AAAA' }]), /melléklettípus/);
   assert.equal(mailService.isConfigured({}), false);
   assert.equal(mailService.isConfigured({ SMTP_HOST: 'smtp.x' }), true);
@@ -655,7 +655,7 @@ test('purchase e-mail is copied (BCC) to the admin address with all attachments 
   await mailService.sendPurchaseEmail(args, { transport, env: { ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' } });
   await mailService.sendPurchaseEmail(args, { transport, env: {} });
   assert.equal(sent[0].bcc, 'admin@ovitervezo.hu');
-  assert.equal(sent[0].attachments.length, 2);
+  assert.equal(sent[0].attachments.length, 3);
   assert.equal(sent[1].bcc, undefined);
 });
 
@@ -747,4 +747,32 @@ test('both pages use the OT logo and favicon, and both builds ship the icon file
   }
   for (const f of ['favicon.svg', 'logo.svg']) assert.match(fs.readFileSync(path.join(root, f), 'utf8'), /^<svg /);
   assert.equal(fs.readFileSync(path.join(root, 'favicon.ico')).readUInt16LE(2), 1);
+});
+
+test('purchase and test e-mails embed the OT logo as a CID image in the mint brand header', async () => {
+  const mailService = require('../services/mailService');
+  const sent = [];
+  const transport = { sendMail: async (m) => { sent.push(m); return { response: 'ok' }; } };
+  const base = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }] };
+  await mailService.sendPurchaseEmail({ ...base, invoicePdf: Buffer.from('%PDF') }, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
+  await mailService.sendTestDeliveryEmail(base, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
+  for (const m of sent) {
+    const logo = m.attachments.find((a) => a.cid === 'ovitervezo-logo');
+    assert.ok(logo && logo.contentType === 'image/png' && logo.content.subarray(1, 4).toString() === 'PNG');
+    assert.match(m.html, /<img src="cid:ovitervezo-logo"/);
+    assert.match(m.html, /background:#3fae84/);
+    assert.ok(!m.html.includes('#e0885a'));
+  }
+});
+
+test('GOOGLE_SITE_VERIFICATION is cleaned to the bare token without warnings', () => {
+  const { spawnSync } = require('node:child_process');
+  const cwd = path.join(__dirname, '..');
+  const token = 'abcDEF1234567890abcDEF1234567890abcDEF12345';
+  for (const raw of [token, `google-site-verification=${token}`, `"${token}"`, `'${token}'`, `  ${token}\n`, `<meta name="google-site-verification" content="${token}" />`]) {
+    const run = spawnSync('node', ['scripts/build-nethely.js'], { cwd, env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com', GOOGLE_SITE_VERIFICATION: raw }, encoding: 'utf8' });
+    assert.equal(run.status, 0, raw);
+    assert.ok(!/FIGYELEM/.test(run.stderr + run.stdout), `figyelmeztetés: ${raw}`);
+    assert.ok(fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8').includes(`<meta name="google-site-verification" content="${token}" />`), raw);
+  }
 });

@@ -5,6 +5,14 @@ const path = require('node:path');
 const { supportEmail, storageDir } = require('./invoiceService');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
+const LOGO_CID = 'ovitervezo-logo';
+let logoBuffer;
+// A logó CID-vel csatolt PNG: Gmailben, Outlookban és Apple Mailben is megbízhatóan megjelenik (az inline SVG nem).
+function logoAttachment() {
+  if (!logoBuffer) logoBuffer = fs.readFileSync(path.join(__dirname, 'assets', 'mail-logo.png'));
+  return { filename: 'ovitervezo-logo.png', content: logoBuffer, contentType: 'image/png', cid: LOGO_CID, contentDisposition: 'inline' };
+}
+
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.zip']);
 
 function isConfigured(env = process.env) {
@@ -109,15 +117,19 @@ function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber },
 <body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #d9ebe0;">
-<tr><td style="background:#d8f0e3;padding:26px 28px;text-align:center;">
-<div style="font-size:26px;font-weight:700;color:#e0885a;">Ovi<span style="font-weight:400;color:#1f5f52;">Tervező</span></div>
+<tr><td style="height:5px;line-height:5px;font-size:0;background:#3fae84;">&nbsp;</td></tr>
+<tr><td style="background:#d8f0e3;padding:22px 28px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>
+<td style="padding-right:12px;vertical-align:middle;"><img src="cid:${LOGO_CID}" width="52" height="52" alt="OT" style="display:block;border:0;border-radius:12px;"></td>
+<td style="vertical-align:middle;font-size:26px;line-height:1;color:#1f3d34;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">Ovi<strong style="font-weight:800;color:#2f946f;">Tervező</strong></td>
+</tr></table>
 </td></tr>
 <tr><td style="padding:28px;">
 ${testBanner}
 <h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
 <p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – és köszönjük az elhivatott munkát, amellyel nap mint nap a gyerekek mellett áll.</p>
 <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#2d3b36;">Reméljük, hogy a kész tervezet sok időt spórol Önnek, így több jut a legfontosabbra: a közös játékra és felfedezésre.</p>
-${cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#fff8f1;border-left:4px solid #e0885a;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : ''}
+${cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : ''}
 ${orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>${escapeHtml(orderNumber)}</strong></p>` : ''}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;">
 <div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek</div>
@@ -156,7 +168,7 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
     subject: 'OviTervező – a megvásárolt tervezet és az e-számla',
     text,
     html,
-    attachments: [...attachments, { filename: invoiceName || 'szamla.pdf', content: invoicePdf, contentType: 'application/pdf' }]
+    attachments: [...attachments, { filename: invoiceName || 'szamla.pdf', content: invoicePdf, contentType: 'application/pdf' }, logoAttachment()]
   });
 }
 
@@ -174,7 +186,7 @@ async function sendTestDeliveryEmail({ to, plan, attachments, title }, deps = {}
     subject: 'OviTervező – TESZT: tervezet kézbesítés',
     text,
     html,
-    attachments
+    attachments: [...attachments, logoAttachment()]
   });
   console.log('[test-deliver] E-mail elküldve:', info?.response || 'ok');
   return info;

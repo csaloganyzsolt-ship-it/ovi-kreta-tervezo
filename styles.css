@@ -1,51 +1,51 @@
   :root {
-    --bg: #f7f3ee;
-    --panel: #fffdfb;
+    --bg: #eef6f1;
+    --panel: #fbfefc;
     --card: #ffffff;
-    --soft: #f2e9df;
-    --soft-2: #eadfd4;
-    --primary: #b88f74;
-    --primary-dark: #8d6852;
-    --primary-text: #8d6852;
-    --accent: #d9c4b1;
-    --mint: #dfeee6;
+    --soft: #e3f2ea;
+    --soft-2: #d5eadf;
+    --primary: #3fae84;
+    --primary-dark: #2f946f;
+    --primary-text: #1f5f52;
+    --accent: #bfe3d0;
+    --mint: #d8f0e3;
     --blue: #dfeaf7;
-    --text: #2d2a2d;
-    --muted: #6a5e5b;
-    --border: #eaded0;
-    --success: #7aa983;
-    --shadow: 0 18px 40px rgba(98, 76, 60, 0.08);
+    --text: #1f2d28;
+    --muted: #566660;
+    --border: #cfe8da;
+    --success: #3fae84;
+    --shadow: 0 18px 40px rgba(31, 95, 82, 0.08);
     color-scheme: light;
   }
 
   html[data-theme="dark"] {
-    --bg: #171413;
-    --panel: #221e1c;
-    --card: #2a2522;
-    --soft: #343029;
-    --soft-2: #3d3630;
-    --primary: #a9805f;
-    --primary-dark: #8a5f45;
-    --primary-text: #e2c2a8;
-    --accent: #5a4a3f;
-    --mint: #22362b;
+    --bg: #121a17;
+    --panel: #1a2420;
+    --card: #202c27;
+    --soft: #2a3a33;
+    --soft-2: #324539;
+    --primary: #3fae84;
+    --primary-dark: #2f946f;
+    --primary-text: #9fd8c0;
+    --accent: #38564a;
+    --mint: #24382f;
     --blue: #223249;
-    --text: #efe8e2;
-    --muted: #b9ada5;
-    --border: #443b35;
-    --success: #6fa17a;
+    --text: #e6f2ec;
+    --muted: #a9bdb4;
+    --border: #38564a;
+    --success: #5ec79e;
     --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
     color-scheme: dark;
   }
 
-  html[data-theme="dark"] body { background: linear-gradient(180deg, #151211 0%, #1c1816 100%); }
+  html[data-theme="dark"] body { background: linear-gradient(180deg, #101714 0%, #17211d 100%); }
   html[data-theme="dark"] .topbar,
-  html[data-theme="dark"] .panel { background: rgba(38, 33, 30, 0.82); }
+  html[data-theme="dark"] .panel { background: rgba(26, 36, 32, 0.86); }
   html[data-theme="dark"] input,
   html[data-theme="dark"] select,
-  html[data-theme="dark"] textarea { background: #1f1b19; color: var(--text); border-color: var(--border); }
+  html[data-theme="dark"] textarea { background: #16201c; color: var(--text); border-color: var(--border); }
   html[data-theme="dark"] input::placeholder,
-  html[data-theme="dark"] textarea::placeholder { color: #8c807a; }
+  html[data-theme="dark"] textarea::placeholder { color: #8aa196; }
   html[data-theme="dark"] .segment.active,
   html[data-theme="dark"] .check-item,
   html[data-theme="dark"] .tag,
@@ -59,17 +59,17 @@
   html[data-theme="dark"] .chip.active { color: #fff; }
   html[data-theme="dark"] .mode-pill.active { color: #fff; background: var(--primary); }
   html[data-theme="dark"] .btn.secondary { background: var(--soft); color: var(--text); }
-  html[data-theme="dark"] .slider { background: #4a423c; }
+  html[data-theme="dark"] .slider { background: #3d544a; }
   html[data-theme="dark"] .inline-box,
   html[data-theme="dark"] .add-card,
   html[data-theme="dark"] .preview-box,
   html[data-theme="dark"] .preview-empty,
   html[data-theme="dark"] .export-settings-panel { background: var(--card); border-color: var(--border); }
-  html[data-theme="dark"] .document-shell { background: #1c1917; }
+  html[data-theme="dark"] .document-shell { background: #141c19; }
   html[data-theme="dark"] .inline-toggle { background: var(--soft); color: var(--text); }
   html[data-theme="dark"] #generationErrorBanner { background: #3a1f1d !important; color: #ffd1ca !important; border-color: #6d3a35 !important; }
-  /* The printable document always stays light, regardless of the theme. */
-  html[data-theme="dark"] .document-sheet {
+  /* The printable document keeps its own warm palette in both themes. */
+  .document-sheet, html[data-theme="dark"] .document-sheet {
     --text: #2d2a2d; --muted: #6a5e5b; --border: #eaded0; --soft: #f2e9df; --card: #ffffff;
     --primary-text: #8d6852; color: #1d2329; background: white;
   }
@@ -174,7 +174,7 @@
   html, body {
     margin: 0;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(180deg, #f6f1eb 0%, #faf7f4 100%);
+    background: linear-gradient(180deg, #eaf5ef 0%, #f6fbf8 100%);
     color: var(--text);
   }
 
@@ -191,7 +191,7 @@
   .topbar {
     background: rgba(255,255,255,0.7);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(234, 222, 208, 0.9);
+    border: 1px solid rgba(207, 232, 218, 0.95);
     border-radius: 24px;
     display: flex;
     align-items: center;
@@ -281,8 +281,8 @@
   }
 
   .wizard-item.active {
-    background: linear-gradient(135deg, rgba(184,143,116,0.12), rgba(217,196,177,0.18));
-    border-color: rgba(184,143,116,0.18);
+    background: linear-gradient(135deg, rgba(63,174,132,0.12), rgba(191,227,208,0.25));
+    border-color: rgba(63,174,132,0.22);
     color: var(--text);
   }
 
@@ -396,7 +396,7 @@
   .segment.active {
     background: white;
     color: var(--text);
-    box-shadow: 0 6px 16px rgba(98,76,60,0.08);
+    box-shadow: 0 6px 16px rgba(31,95,82,0.08);
   }
 
   .weekly-settings-panel {
@@ -514,7 +514,7 @@
     position: absolute;
     cursor: pointer;
     inset: 0;
-    background: #d9d3ce;
+    background: #cfe0d6;
     border-radius: 999px;
     transition: 0.2s ease;
   }
@@ -589,14 +589,14 @@
   }
 
   .btn.secondary {
-    background: #f5efe9;
+    background: #e7f4ec;
     color: var(--text);
   }
 
   .btn.primary {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
-    box-shadow: 0 12px 18px rgba(141,104,82,0.2);
+    box-shadow: 0 12px 18px rgba(47,148,111,0.22);
   }
 
   .preview {
@@ -678,7 +678,7 @@
   }
 
   .document-shell {
-    background: #f6f4f1;
+    background: #eef3f0;
     border: 1px solid var(--border);
     border-radius: 18px;
     padding: 0;
@@ -1004,8 +1004,8 @@
 
   .chip {
     border: 1px solid var(--border);
-    background: #f7f4f2;
-    color: #6f6662;
+    background: var(--soft);
+    color: var(--muted);
     border-radius: 999px;
     padding: 8px 12px;
     font-size: 0.82rem;
@@ -1018,7 +1018,7 @@
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #ffffff;
     border-color: var(--primary-text);
-    box-shadow: 0 10px 16px rgba(141, 104, 82, 0.18);
+    box-shadow: 0 10px 16px rgba(47, 148, 111, 0.2);
   }
 
   .add-card {
@@ -1208,14 +1208,14 @@
   /* ===== Letisztult, érintésbarát megjelenés (csak képernyőn) ===== */
   @media screen {
     html[data-theme="dark"] {
-      --bg: #1e1a18;
-      --panel: #272220;
-      --card: #2e2926;
-      --soft: #38312d;
-      --soft-2: #433b36;
-      --text: #f1ebe5;
-      --muted: #c4b8af;
-      --border: #4a413b;
+      --bg: #121a17;
+      --panel: #1a2420;
+      --card: #202c27;
+      --soft: #2a3a33;
+      --soft-2: #324539;
+      --text: #e6f2ec;
+      --muted: #a9bdb4;
+      --border: #38564a;
     }
 
     body { font-size: 16px; line-height: 1.6; }
@@ -1235,7 +1235,7 @@
       border: 1px solid var(--border);
       border-radius: 22px;
       padding: 20px;
-      box-shadow: 0 6px 18px rgba(98, 76, 60, 0.05);
+      box-shadow: 0 6px 18px rgba(31, 95, 82, 0.06);
     }
     .content .inline-box:nth-of-type(3n+1) { background: color-mix(in srgb, var(--mint) 45%, var(--card)); }
     .content .inline-box:nth-of-type(3n+2) { background: color-mix(in srgb, var(--blue) 45%, var(--card)); }
@@ -1257,7 +1257,7 @@
       border-color: var(--primary);
       box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent);
     }
-    input::placeholder, textarea::placeholder { color: #9a8f88; opacity: 1; }
+    input::placeholder, textarea::placeholder { color: #82968c; opacity: 1; }
     html[data-theme="dark"] input,
     html[data-theme="dark"] select,
     html[data-theme="dark"] textarea { background: var(--card); color: var(--text); }
@@ -1364,7 +1364,7 @@
   /* ===== Valós A4-es lapszimuláció az előnézetben ===== */
   @media screen {
     .document-shell {
-      background: #dcd6cf;
+      background: #d3e0d9;
       padding: 24px;
       max-height: 80vh;
       overflow: auto;
@@ -1459,7 +1459,7 @@
   .landing-card .step-num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: #d8f0e3; color: #1f5f52; font-weight: 700; margin-bottom: 8px; }
   .landing-card h3 { margin: 0 0 6px; font-size: 18px; color: #1f5f52; }
   .landing-card p { margin: 0; color: var(--muted, #5b6b64); line-height: 1.5; }
-  .landing-card .price { font-size: 28px; font-weight: 700; color: #e0885a; margin: 4px 0; }
+  .landing-card .price { font-size: 28px; font-weight: 700; color: #2f946f; margin: 4px 0; }
   .landing h2 { margin: 0; text-align: center; font-size: 22px; color: #1f5f52; }
   .landing-note { text-align: center; font-size: 13px; color: var(--muted, #5b6b64); margin: 0; }
   :root[data-theme="dark"] .landing-hero { background: linear-gradient(135deg, #24382f, #1f2b26); border-color: #38564a; color: #e6f2ec; }

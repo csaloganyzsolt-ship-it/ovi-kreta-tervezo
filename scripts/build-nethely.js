@@ -19,13 +19,19 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) {
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 
-function applySiteVerification(html) {
-  let code = String(process.env.GOOGLE_SITE_VERIFICATION || '').trim();
-  // A teljes bemásolt meta címkéből is kinyerjük a content értéket.
-  const fromMeta = code.match(/content=["']([\w-]+)["']/);
+// Megbocsátó beolvasás: a teljes meta címkét, a "google-site-verification=" előtagot, idézőjeleket és szóközöket is lecsupaszítja a tiszta tokenre.
+function cleanVerificationToken(raw) {
+  let code = String(raw || '').trim();
+  const fromMeta = code.match(/content\s*=\s*["']?([\w-]+)/i);
   if (fromMeta) code = fromMeta[1];
+  code = code.replace(/^["'\s]*google-site-verification\s*[=:]\s*/i, '').replace(/[\s"'<>/]+/g, '');
+  return code;
+}
+
+function applySiteVerification(html) {
+  let code = cleanVerificationToken(process.env.GOOGLE_SITE_VERIFICATION);
   if (code && !/^[\w-]{10,200}$/.test(code)) {
-    console.warn('FIGYELEM: a GOOGLE_SITE_VERIFICATION secret formátuma érvénytelen, a meta címke kimarad. Csak a content="..." értéket add meg.');
+    console.warn('FIGYELEM: a GOOGLE_SITE_VERIFICATION secret nem tartalmaz érvényes tokent, a meta címke kimarad.');
     code = '';
   }
   return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
