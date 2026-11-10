@@ -717,3 +717,21 @@ test('both builds ship both pages with every local reference resolvable and the 
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env: clean });
   assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'tervezo.html'), 'utf8'), /google-site-verification/);
 });
+
+test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO brief', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const blocks = [...html.matchAll(/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+  const faq = blocks.find((b) => b['@type'] === 'FAQPage');
+  const app = blocks.find((b) => b['@type'] === 'SoftwareApplication');
+  assert.equal(faq.mainEntity.length, 4);
+  for (const q of faq.mainEntity) {
+    assert.ok(html.includes(`<summary>${q.name}</summary>`), q.name);
+    assert.ok(html.includes(q.acceptedAnswer.text), q.name);
+  }
+  assert.equal(app.name, 'OviTervező');
+  assert.equal(app.applicationCategory, 'EducationalApplication');
+  assert.equal(app.offers.lowPrice, '390');
+  assert.equal(app.offers.highPrice, '890');
+  assert.match(html, /<title>OviTervező – Óvodai tematikus terv, heti és napi foglalkozásterv készítő<\/title>/);
+  assert.match(html, /name="description" content="Készíts pedagógiailag átgondolt, ONAP-kompatibilis óvodai tematikus és heti tervezetet percek alatt\./);
+});
