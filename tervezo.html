@@ -53,6 +53,11 @@
             <h2>1. Miről szól a hét/nap?</h2>
             <p class="subhead">Téma és időkeret: add meg, mikorra és miről készüljön a tervezet.</p>
 
+            <div class="restore-banner" id="restoreBanner" hidden>
+              <span>Van egy befejezetlen, letöltésre váró tervezeted. Szeretnéd visszatölteni?</span>
+              <button class="btn" id="restoreLastBtn" type="button">Visszatöltés</button>
+            </div>
+
             <div class="field-grid">
               <div class="field full">
                 <label>Korábbi terv betöltése</label>
@@ -88,7 +93,17 @@
                 </div>
               </div>
 
-              <div class="field full">
+                            <div class="field">
+                <label>Korcsoport</label>
+                <select data-field="group">
+                  <option value="Kiscsoport">Kiscsoport</option>
+                  <option value="Középső csoport">Középső csoport</option>
+                  <option value="Nagycsoport" selected>Nagycsoport</option>
+                  <option value="Vegyes csoport">Vegyes csoport</option>
+                </select>
+              </div>
+
+<div class="field full">
                 <label>Téma / projekt címe</label>
                 <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
                 <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
@@ -141,19 +156,9 @@
 
           <div class="step-panel" data-step="2">
             <h2>2. Kiknek tervezünk?</h2>
-            <p class="subhead">A csoport profilja: csak a gyerekekről szóló adatok, hogy az AI személyre szabottabban dolgozzon.</p>
+            <p class="subhead">A csoport profilja: létszám, hangulat és speciális igények, hogy az AI személyre szabottabban dolgozzon.</p>
 
             <div class="field-grid">
-              <div class="field">
-                <label>Korcsoport</label>
-                <select data-field="group">
-                  <option value="Kiscsoport">Kiscsoport</option>
-                  <option value="Középső csoport">Középső csoport</option>
-                  <option value="Nagycsoport" selected>Nagycsoport</option>
-                  <option value="Vegyes csoport">Vegyes csoport</option>
-                </select>
-              </div>
-
               <div class="field">
                 <label>Hány gyerek van a csoportban?</label>
                 <input type="number" min="1" step="1" data-field="child-count" placeholder="Pl.: 20" />
@@ -544,6 +549,36 @@
         try { localStorage.setItem(STORAGE_KEYS.dailyCount, JSON.stringify({ date: todayKey(), count })); } catch (_error) { /* nincs tár */ }
       }
 
+      function readStoredGeneration() {
+        try {
+          const cached = JSON.parse(localStorage.getItem(STORAGE_KEYS.lastGeneration) || 'null');
+          return cached && cached.result && cached.result.request ? cached : null;
+        } catch (_error) { return null; }
+      }
+
+      function refreshRestoreBanner() {
+        const banner = document.getElementById('restoreBanner');
+        if (!banner) return;
+        const cached = readStoredGeneration();
+        const waiting = Boolean(cached) && !getUnlockedIds().includes(cached.result.generationId);
+        banner.hidden = !(waiting && !(previewReady && currentStep >= 3));
+      }
+
+      function restoreLastGeneration() {
+        const cached = readStoredGeneration();
+        if (!cached) return;
+        if (cached.draft) applyDraftState(cached.draft);
+        updateDateInputsForDuration();
+        renderResultDocument(cached.result);
+        lastResult = cached.result;
+        previewReady = true;
+        currentStep = steps.length - 1;
+        updateSummary();
+        renderStep();
+        refreshRestoreBanner();
+        document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
       function readCachedGeneration(payload) {
         try {
           const cached = JSON.parse(localStorage.getItem(STORAGE_KEYS.lastGeneration) || 'null');
@@ -704,6 +739,7 @@
           ['Téma és időkeret', [
             `Időtartam: ${describeDuration(payload)}`,
             `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
+            `Korcsoport: ${payload.group}`,
             `Téma: ${payload.theme || none}`,
             `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
             `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
@@ -713,7 +749,6 @@
             `Saját megjegyzés: ${customNotes.primary || none}`
           ]],
           ['A csoport profilja', [
-            `Korcsoport: ${payload.group}`,
             `Gyereklétszám: ${payload.childCount ?? none}`,
             `Csoport hangulata, mozgékonysága: ${payload.energyLevel}`,
             `Iskola-előkészítő gyermekek: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
@@ -2127,6 +2162,7 @@
           previewReady = true;
           renderPreview();
           updateExportLock();
+          refreshRestoreBanner();
           document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           return;
         }
@@ -2183,7 +2219,7 @@
           }
           writeDailyCount(readDailyCount().count + 1);
           try {
-            localStorage.setItem(STORAGE_KEYS.lastGeneration, JSON.stringify({ payload: JSON.stringify(payload), result: generatedResult }));
+            localStorage.setItem(STORAGE_KEYS.lastGeneration, JSON.stringify({ payload: JSON.stringify(payload), draft: collectDraftState(), result: generatedResult }));
           } catch (storageError) {
             console.warn('A gyorsítótár nem menthető:', storageError);
           }
@@ -2204,6 +2240,7 @@
           showGenerationError(message === LIMIT_MESSAGE ? message : `Generálási hiba: ${message}`);
         } finally {
           stopLoader();
+          refreshRestoreBanner();
           nextBtn.disabled = false;
           nextBtn.classList.remove('is-busy');
           nextBtn.textContent = 'Tervezet elkészítése';
@@ -2654,6 +2691,8 @@
         renderResultDocument();
         updateExportLock();
         renderPreview();
+        document.getElementById('restoreLastBtn')?.addEventListener('click', restoreLastGeneration);
+        refreshRestoreBanner();
         initFooterAndModals();
         handleCheckoutReturn();
       }

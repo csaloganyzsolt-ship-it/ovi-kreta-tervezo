@@ -13,6 +13,7 @@ A `tervezo.html` három kitöltendő lépésből és egy összegző (4.) lépés
 | Időtartam | `.segment[data-group="duration"]` | rádió jellegű gomb: Napi / Heti | kötelező | Napi |
 | Napválasztó (csak Heti) | `.day-chip[data-day]` | 5 kapcsológomb (Hétfő–Péntek) | legalább 1 nap | mind az 5 aktív |
 | Dátum / hét | dátummező | dátum | kötelező | aktuális nap / hét |
+| Korcsoport | `group` | select (Vegyes csoport is) | kötelező | Nagycsoport |
 | Téma | `theme` | szöveg | kötelező | üres |
 | Tevékenység formája | `tevekenyseg-forma` | select | kötelező | Kezdeményezett tevékenység (kötetlen) |
 | Nevelési területek | `data-focus-area` | jelölőnégyzetek | min. 1 ajánlott | – |
@@ -26,7 +27,6 @@ Heti időtartamnál a kijelölt napok a `selectedDays` tömbben mennek a szerver
 
 | Mező | Azonosító | Típus | Kötelező | Alapérték |
 |---|---|---|---|---|
-| Korcsoport | `group` | select (Vegyes csoport is) | kötelező | – |
 | Gyereklétszám | `child-count` | szám | opcionális | – |
 | Hangulat, mozgékonyság | `.segment[data-group="energy"]` | 3 opciós választó | opcionális | Átlagos |
 | Iskola-előkészítő gyermekek | `has-preschoolers` | checkbox | opcionális | bekapcsolva |
@@ -35,7 +35,7 @@ Heti időtartamnál a kijelölt napok a `selectedDays` tömbben mennek a szerver
 
 Energia opciók (a payload `energyLevel` mezője a feliratot küldi): *Nyugodt, kiegyensúlyozott*, *Átlagos*, *Nagyon mozgékony, eleven*.
 
-**Vegyes csoport:** ha a korcsoport „Vegyes csoport”, a prompt kötelező 3 szintű differenciálást ír elő (kicsik – egyszerűsített, középsősök, nagyok/iskola-előkészítősök – összetett, szabálykövető).
+**Vegyes csoport:** (a korcsoport az 1. lépésben állítható) ha a korcsoport „Vegyes csoport”, a prompt kötelező 3 szintű differenciálást ír elő (kicsik – egyszerűsített, középsősök, nagyok/iskola-előkészítősök – összetett, szabálykövető).
 
 Gyermekek személyes adatait az űrlap nem kéri be.
 
@@ -71,8 +71,8 @@ Az ellenőrző kártya (`renderSummaryChecklist()`) a fizetés és generálás e
 
 | Blokk | Tartalom |
 |---|---|
-| Téma és időkeret | Időtartam (heti tervnél a napok felsorolva, pl. „Heti tervezet (Hétfő, Kedd)”), dátum/hét, téma, tevékenységi forma, nevelési területek, óvoda, pedagógus, csoportnév, saját megjegyzés |
-| A csoport profilja | Korcsoport, létszám, hangulat/mozgékonyság, iskola-előkészítők, SNI, csoportmegjegyzés |
+| Téma és időkeret | Időtartam (heti tervnél a napok felsorolva, pl. „Heti tervezet (Hétfő, Kedd)”), dátum/hét, korcsoport, téma, tevékenységi forma, nevelési területek, óvoda, pedagógus, csoportnév, saját megjegyzés |
+| A csoport profilja | Létszám, hangulat/mozgékonyság, iskola-előkészítők, SNI, csoportmegjegyzés |
 | Pedagógiai kívánságok | Eszközök és saját ötletek, kötelező mese/vers/dal, célkifejezések, külön kérés, kidolgozottság |
 | Speciális beállítások | Tiltólista, előzmény, irodalomjegyzék, heti építkezés, pénteki zárás |
 | Generálási beállítások | Modell, kimeneti forma („Szakmai tervezet”) |
@@ -97,3 +97,9 @@ Ezek ötletek, jelenleg nincsenek megvalósítva.
 | Szülői tájékoztató testreszabása | Hangnem és hosszúság | `outputMode` |
 | Sablonok mentése | Névvel mentett beállításcsomagok | helyi tárolás |
 | Ünnepek és hagyományok naptára | Időpont alapján javasolt témák | 1. lépés |
+
+## Gyorsítótár, napi limit és visszatöltés
+
+- `oviKreta_lastGeneration`: az utolsó sikeres generálás payloadja, űrlapállapota és eredménye. Azonos bemenetnél nincs szerverhívás, és ez a napi limit betelte után is működik.
+- `oviKreta_dailyCount`: `{ date, count }`, naponta legfeljebb 3 új (szerverhívással járó) generálás; sikeres fizetés után 0-ra áll. A szerver IP-nként 24 óránként 3 sikeres generálást enged (429).
+- Oldalfrissítés után, ha van ki nem fizetett kész terv, az 1. lépés tetején a „Visszatöltés” gomb visszaállítja az űrlapot és a 4. lépés előnézetét.

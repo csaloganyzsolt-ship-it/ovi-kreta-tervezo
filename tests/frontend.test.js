@@ -493,3 +493,42 @@ test('a 429 from the server shows the limit message', async (t) => {
   await window.generatePlan();
   assert.match(window.document.querySelector('#generationErrorBanner').textContent, /napi ingyenes tervezési limitet/);
 });
+
+test('cache hit is served even when the daily limit is already used up', async (t) => {
+  const window = await loadApp(t);
+  let calls = 0;
+  window.fetch = async () => { calls += 1; return Response.json({ success: true, ...makePlan() }); };
+  await window.generatePlan();
+  window.localStorage.setItem('oviKreta_dailyCount', JSON.stringify({ date: (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; })(), count: 3 }));
+  await window.generatePlan();
+  assert.equal(calls, 1);
+  assert.equal(window.document.querySelector('#generationErrorBanner').hidden, true);
+  assert.equal(window.document.querySelector('#previewContent').style.display, 'block');
+});
+
+test('after a reload the unpaid cached plan can be restored with its form and the 4th step', async (t) => {
+  const first = await loadApp(t);
+  first.fetch = async () => Response.json({ success: true, ...makePlan() });
+  first.document.querySelector('[data-field="theme"]').value = 'Visszatöltés próba';
+  first.document.querySelector('[data-field="group"]').value = 'Kiscsoport';
+  await first.generatePlan();
+  const saved = first.localStorage.getItem('oviKreta_lastGeneration');
+  assert.ok(saved);
+  const second = await loadApp(t);
+  second.localStorage.setItem('oviKreta_lastGeneration', saved);
+  second.refreshRestoreBanner();
+  const banner = second.document.querySelector('#restoreBanner');
+  assert.equal(banner.hidden, false);
+  assert.match(banner.textContent, /befejezetlen, letöltésre váró tervezeted/);
+  second.document.querySelector('[data-field="theme"]').value = '';
+  second.document.querySelector('#restoreLastBtn').click();
+  assert.equal(second.document.querySelector('[data-field="theme"]').value, 'Visszatöltés próba');
+  assert.equal(second.document.querySelector('[data-field="group"]').value, 'Kiscsoport');
+  assert.equal(second.document.querySelector('.step-panel.active').dataset.step, '4');
+  assert.equal(second.document.querySelector('#previewContent').style.display, 'block');
+});
+
+test('the age group field lives in step 1', async (t) => {
+  const window = await loadApp(t);
+  assert.equal(window.document.querySelector('[data-field="group"]').closest('.step-panel').dataset.step, '1');
+});

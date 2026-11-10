@@ -1538,3 +1538,6 @@
     .document-shell { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
   @media print { .paywall-gate, .site-footer, .modal-backdrop { display: none !important; } }
+
+.restore-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--primary); border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.restore-banner[hidden] { display: none; }
