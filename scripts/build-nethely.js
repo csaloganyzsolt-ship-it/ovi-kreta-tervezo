@@ -20,8 +20,14 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 
 function applySiteVerification(html) {
-  const code = String(process.env.GOOGLE_SITE_VERIFICATION || '').trim();
-  if (code && !/^[\w-]{10,200}$/.test(code)) throw new Error('Érvénytelen GOOGLE_SITE_VERIFICATION érték.');
+  let code = String(process.env.GOOGLE_SITE_VERIFICATION || '').trim();
+  // A teljes bemásolt meta címkéből is kinyerjük a content értéket.
+  const fromMeta = code.match(/content=["']([\w-]+)["']/);
+  if (fromMeta) code = fromMeta[1];
+  if (code && !/^[\w-]{10,200}$/.test(code)) {
+    console.warn('FIGYELEM: a GOOGLE_SITE_VERIFICATION secret formátuma érvénytelen, a meta címke kimarad. Csak a content="..." értéket add meg.');
+    code = '';
+  }
   return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
 }
 
