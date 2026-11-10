@@ -673,7 +673,7 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   assert.match(landing, /policies\.google\.com\/privacy/);
   assert.match(landing, /policies\.google\.com\/terms/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
-  for (const kw of ['óvodai tervezés', 'tematikus terv', 'foglalkozásterv minta', 'heti tervezet', 'ONAP']) assert.ok(landing.includes(kw), kw);
+  for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'ONAP tervezet', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
 });
@@ -732,6 +732,6 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   assert.equal(app.applicationCategory, 'EducationalApplication');
   assert.equal(app.offers.lowPrice, '390');
   assert.equal(app.offers.highPrice, '890');
-  assert.match(html, /<title>OviTervező – Óvodai tematikus terv, heti és napi foglalkozásterv készítő<\/title>/);
-  assert.match(html, /name="description" content="Készíts pedagógiailag átgondolt, ONAP-kompatibilis óvodai tematikus és heti tervezetet percek alatt\./);
+  assert.match(html, /<title>Óvodai tervezet készítés gyorsan és egyszerűen \| OviTervező<\/title>/);
+  assert.match(html, /name="description" content="Óvodai tervezet készítés az ONAP alapján\. Készíts pedagógiailag átgondolt heti tervezetet és foglalkozásterv mintát percek alatt/);
 });
