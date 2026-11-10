@@ -1462,12 +1462,12 @@
   .landing-steps, .landing-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .landing-prices { grid-template-columns: repeat(2, 1fr); }
   .landing-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 20px; padding: 20px; text-align: center; }
-  .landing-card .icon { font-size: 30px; display: block; margin-bottom: 8px; }
+  .landing-card .step-num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: #d8f0e3; color: #1f5f52; font-weight: 700; margin-bottom: 8px; }
   .landing-card h3 { margin: 0 0 6px; font-size: 18px; color: #1f5f52; }
   .landing-card p { margin: 0; color: var(--muted, #5b6b64); line-height: 1.5; }
   .landing-card .price { font-size: 28px; font-weight: 700; color: #e0885a; margin: 4px 0; }
   .landing h2 { margin: 0; text-align: center; font-size: 22px; color: #1f5f52; }
-  .landing-note { text-align: center; font-size: 14px; color: var(--muted, #5b6b64); margin: 0; }
+  .landing-note { text-align: center; font-size: 13px; color: var(--muted, #5b6b64); margin: 0; }
   :root[data-theme="dark"] .landing-hero { background: linear-gradient(135deg, #24382f, #1f2b26); border-color: #38564a; color: #e6f2ec; }
   :root[data-theme="dark"] .landing-hero h1, :root[data-theme="dark"] .landing h2, :root[data-theme="dark"] .landing-card h3 { color: #9fd8c0; }
   :root[data-theme="dark"] .landing-card { border-color: #38564a; }

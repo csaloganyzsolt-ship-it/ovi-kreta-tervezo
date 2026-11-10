@@ -40,7 +40,7 @@ function applyTheme(theme, persist = true) {
   document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   const toggle = document.getElementById('themeToggle');
   if (toggle) {
-    toggle.textContent = isDark ? '☀️ Világos mód' : '🌙 Sötét mód';
+    toggle.textContent = isDark ? 'Világos mód' : 'Sötét mód';
     toggle.setAttribute('aria-pressed', String(isDark));
   }
   if (persist) {
