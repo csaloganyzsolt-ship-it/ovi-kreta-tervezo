@@ -2539,10 +2539,12 @@
 
       async function handleCheckoutReturn() {
         const params = new URLSearchParams(window.location.search);
-        const sessionId = params.get('checkout_session');
-        const cancelled = params.get('checkout') === 'cancelled';
+        const sessionId = params.get('session_id') || params.get('checkout_session');
+        const cancelled = params.get('payment') === 'cancel' || params.get('checkout') === 'cancelled';
         if (!sessionId && !cancelled) return;
+        // A paraméterek törlése után a sima frissítés nem indítja újra a kézbesítést.
         window.history.replaceState({}, '', window.location.pathname);
+        if (sessionId && !lastResult) restoreLastGeneration();
         if (cancelled) { showGenerationError('A fizetés megszakadt, a tervezet zárolva maradt.'); return; }
         try {
           const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
@@ -2551,8 +2553,14 @@
           const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId;
           if (pending) unlockGeneration(pending, sessionId);
           localStorage.removeItem('oviKretaPendingCheckout');
-          if (lastResult) { renderResultDocument(lastResult); renderPreview(); }
-          if (data.emailEnabled && lastResult) deliverPurchaseEmail(sessionId);
+          if (lastResult) {
+            currentStep = steps.length - 1;
+            renderStep();
+            renderResultDocument(lastResult);
+            renderPreview();
+            updateExportLock();
+          }
+          if (data.emailEnabled && lastResult) await deliverPurchaseEmail(sessionId);
         } catch (error) {
           showGenerationError(`A fizetés ellenőrzése sikertelen: ${error.message}`);
         }

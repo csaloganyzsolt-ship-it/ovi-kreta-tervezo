@@ -532,3 +532,21 @@ test('the age group field lives in step 1', async (t) => {
   const window = await loadApp(t);
   assert.equal(window.document.querySelector('[data-field="group"]').closest('.step-panel').dataset.step, '1');
 });
+
+test('the payment=success return unlocks the restored plan, jumps to step 4 and cleans the URL', async (t) => {
+  const first = await loadApp(t);
+  first.fetch = async () => Response.json({ success: true, ...makePlan() });
+  await first.generatePlan();
+  const saved = first.localStorage.getItem('oviKreta_lastGeneration');
+  const window = await loadApp(t);
+  window.localStorage.setItem('oviKreta_lastGeneration', saved);
+  const urls = [];
+  window.fetch = async (url) => { urls.push(String(url)); return Response.json({ success: true, paid: true, emailEnabled: false }); };
+  window.history.pushState({}, '', '/tervezo.html?payment=success&session_id=cs_test_abc123');
+  await window.handleCheckoutReturn();
+  assert.equal(window.location.search, '');
+  assert.ok(urls[0].includes('/api/checkout-session/cs_test_abc123'));
+  assert.equal(window.document.querySelector('.step-panel.active').dataset.step, '4');
+  assert.equal(window.document.querySelector('#previewContent').style.display, 'block');
+  assert.ok(JSON.parse(window.localStorage.getItem('oviKretaUnlocked')).length >= 1);
+});

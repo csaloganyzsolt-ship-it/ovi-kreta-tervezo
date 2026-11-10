@@ -144,6 +144,16 @@ async function stripeWebhook(req, res) {
       // Nem várjuk meg: a Google Táblázat hibája nem érintheti a Stripe válaszát és a vevőt.
       sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, invoicePdf: invoiceService.getInvoicePdf(session.id), customer: { name: details.name, email: details.email || session.customer_email, zip: address.postal_code, city: address.city, address: [address.line1, address.line2].filter(Boolean).join(' ') } }).catch(() => {});
     }
+    if (!result.duplicate && !result.mock) {
+      mailService.sendAdminNotification({
+        customer: { name: details.name, email: details.email || session.customer_email },
+        plan: session.metadata?.plan,
+        title: session.metadata?.title,
+        orderNumber: invoiceService.orderNumber(session.id, session.created ? new Date(session.created * 1000) : new Date()),
+        invoiceNumber: result.invoiceNumber,
+        invoicePdf: invoiceService.getInvoicePdf(session.id)
+      }).catch((error) => console.error('[mail] Rendszergazdai értesítő sikertelen:', error.message));
+    }
     return res.json({ received: true, invoice: result });
   } catch (error) {
     // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.

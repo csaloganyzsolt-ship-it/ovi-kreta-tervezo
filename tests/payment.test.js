@@ -13,7 +13,7 @@ const devEnv = { BASE_URL: 'https://ovitervezo.hu' };
 test('stripe mock mode answers clearly without keys and is refused in production', async () => {
   const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: devEnv });
   assert.equal(mock.mock, true);
-  assert.match(mock.url, /^https:\/\/ovitervezo\.hu\/\?checkout_session=cs_mock_/);
+  assert.match(mock.url, /^https:\/\/ovitervezo\.hu\/tervezo\.html\?payment=success&session_id=cs_mock_/);
   await assert.rejects(
     stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { NODE_ENV: 'production' } }),
     (error) => error.status === 503
@@ -133,7 +133,8 @@ test('sk_test key runs live checkout in test mode with return URLs', async () =>
   const result = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { ...devEnv, STRIPE_SECRET_KEY: 'sk_test_x' }, client });
   assert.equal(result.testMode, true);
   assert.equal(result.mock, false);
-  assert.equal(params.success_url, 'https://ovitervezo.hu/?checkout_session={CHECKOUT_SESSION_ID}');
+  assert.equal(params.success_url, 'https://ovitervezo.hu/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}');
+  assert.equal(params.cancel_url, 'https://ovitervezo.hu/tervezo.html?payment=cancel');
 });
 
 test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a proforma', () => {
@@ -243,10 +244,10 @@ test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async
   const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_test_u', url: 'u' }; } } } };
   const env = { STRIPE_SECRET_KEY: 'sk_test_x', BASE_URL: 'https://ovitervezo.hu', FRONTEND_URL: 'https://pages.example/ovi/' };
   await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
-  assert.equal(params.success_url, 'https://pages.example/ovi/?checkout_session={CHECKOUT_SESSION_ID}');
-  assert.equal(params.cancel_url, 'https://pages.example/ovi/?checkout=cancelled');
+  assert.equal(params.success_url, 'https://pages.example/ovi/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}');
+  assert.equal(params.cancel_url, 'https://pages.example/ovi/tervezo.html?payment=cancel');
   const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { FRONTEND_URL: 'http://localhost:4000' } });
-  assert.match(mock.url, /^http:\/\/localhost:4000\/\?checkout_session=cs_mock_/);
+  assert.match(mock.url, /^http:\/\/localhost:4000\/tervezo\.html\?payment=success&session_id=cs_mock_/);
 });
 
 test('invoice request disables Számlázz.hu mailing and asks for the PDF; the PDF is kept per session', async () => {
@@ -666,7 +667,7 @@ test('purchase e-mail is copied (BCC) to the admin address with all attachments 
   await mailService.sendPurchaseEmail(args, { transport, env: {} });
   assert.equal(sent[0].bcc, 'admin@ovitervezo.hu');
   assert.equal(sent[0].attachments.length, 3);
-  assert.equal(sent[1].bcc, undefined);
+  assert.equal(sent[1].bcc, 'info@ovitervezo.hu');
 });
 
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {
@@ -795,4 +796,14 @@ test('Nethely .htaccess keeps HTML uncached and versioned assets immutable', () 
   assert.match(ht, /FilesMatch "\\\.html\?\$"[\s\S]*no-cache, no-store, must-revalidate/);
   assert.match(ht, /max-age=31536000, immutable" env=VERSIONED/);
   assert.match(ht, /X-Forwarded-Proto/);
+});
+
+test('the webhook-side admin notification carries the invoice PDF', async () => {
+  const mailService = require('../services/mailService');
+  const sent = [];
+  const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
+  const result = await mailService.sendAdminNotification({ customer: { name: 'Teszt', email: 'v@b.hu' }, plan: 'daily', orderNumber: 'OVITE-1', invoiceNumber: 'E-1', invoicePdf: Buffer.from('%PDF') }, { transport, env: { SMTP_HOST: 'smtp.test' } });
+  assert.equal(result.sent, true);
+  assert.equal(sent[0].to, 'info@ovitervezo.hu');
+  assert.equal(sent[0].attachments.length, 1);
 });

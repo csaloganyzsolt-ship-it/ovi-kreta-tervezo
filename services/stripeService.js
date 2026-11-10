@@ -40,7 +40,8 @@ function assertPaymentsAvailable(env = process.env) {
 // A fizetés utáni visszatérési cím: FRONTEND_URL (pl. GitHub Pages teszt vagy localhost), ennek hiányában BASE_URL.
 function getBaseUrl(env = process.env) {
   const configured = String(env.FRONTEND_URL || '').trim() || String(env.BASE_URL || '').trim();
-  return (configured || 'http://localhost:4000').replace(/\/+$/, '');
+  const fallback = env.NODE_ENV === 'production' ? 'https://ovitervezo.hu' : 'http://localhost:4000';
+  return (configured || fallback).replace(/\/+$/, '');
 }
 
 function parsePlan(value) {
@@ -90,7 +91,7 @@ async function createCheckoutSession({ plan, email, generationId, title } = {}, 
       id,
       plan: product.key,
       amountHuf: product.amountHuf,
-      url: `${baseUrl}/?checkout_session=${id}`,
+      url: `${baseUrl}/tervezo.html?payment=success&session_id=${id}`,
       message: 'Fejlesztői (mock) mód: nincs STRIPE_SECRET_KEY, valódi fizetés nem történt.'
     };
   }
@@ -109,8 +110,8 @@ async function createCheckoutSession({ plan, email, generationId, title } = {}, 
       }
     }],
     metadata: { plan: product.key, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
-    success_url: `${baseUrl}/?checkout_session={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/?checkout=cancelled`
+    success_url: `${baseUrl}/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/tervezo.html?payment=cancel`
   });
   return { mock: false, testMode: isTestMode(env), id: session.id, plan: product.key, amountHuf: product.amountHuf, url: session.url };
 }

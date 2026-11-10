@@ -154,6 +154,28 @@ function planLabelOf(plan) {
   return String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
 }
 
+// A rendszergazdai másolat kötelező: alapértelmezetten info@ovitervezo.hu, az ADMIN_NOTIFICATION_EMAIL felülírhatja.
+function adminEmail(env = process.env) {
+  return String(env.ADMIN_NOTIFICATION_EMAIL || '').trim() || 'info@ovitervezo.hu';
+}
+
+// Külön értesítő a webhookból: a számla a rendszergazdához akkor is eljut, ha a vevő böngészője nem indítja a kézbesítést.
+async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumber, invoicePdf, title }, deps = {}) {
+  const env = deps.env || process.env;
+  if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  const support = supportEmail(env);
+  const lines = [`Új sikeres fizetés.`, `Rendelésszám: ${orderNumber || '-'}`, `Számlaszám: ${invoiceNumber || '-'}`, `Csomag: ${planLabelOf(plan)}`, `Vevő: ${customer?.name || '-'} <${customer?.email || '-'}>`, `Téma: ${title || '-'}`];
+  const transport = createTransport(env, deps);
+  await transport.sendMail({
+    from: env.MAIL_FROM || `OviTervező <${support}>`,
+    to: adminEmail(env),
+    subject: `OviTervező – új fizetés: ${orderNumber || ''}`.trim(),
+    text: lines.join('\n'),
+    attachments: Buffer.isBuffer(invoicePdf) && invoicePdf.length ? [{ filename: `${orderNumber || 'szamla'}.pdf`, content: invoicePdf, contentType: 'application/pdf' }] : []
+  });
+  return { sent: true };
+}
+
 // Egyetlen levél: a megvásárolt tervezet fájljai és az e-számla PDF együtt.
 async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber }, deps = {}) {
   const env = deps.env || process.env;
@@ -163,7 +185,7 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to,
-    ...(String(env.ADMIN_NOTIFICATION_EMAIL || '').trim() ? { bcc: String(env.ADMIN_NOTIFICATION_EMAIL).trim() } : {}),
+    bcc: adminEmail(env),
     replyTo: support,
     subject: 'OviTervező – a megvásárolt tervezet és az e-számla',
     text,
@@ -192,4 +214,4 @@ async function sendTestDeliveryEmail({ to, plan, attachments, title }, deps = {}
   return info;
 }
 
-module.exports = { buildEmailContent, isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
+module.exports = { adminEmail, sendAdminNotification, buildEmailContent, isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
