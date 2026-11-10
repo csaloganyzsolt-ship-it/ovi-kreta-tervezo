@@ -61,10 +61,15 @@
                   <button class="segment" type="button" data-group="duration" data-value="Heti">Heti</button>
                 </div>
                 <div id="weeklySettingsPanel" class="weekly-settings-panel" hidden>
-                  <label class="weekly-check">
-                    <input type="checkbox" id="includeDailyBreakdown" checked />
-                    <span>Szeretnék mind az 5 napra (Hétfő–Péntek) önálló, részletesen kidolgozott napi tervezetet is a heti keret mellé</span>
-                  </label>
+                  <span class="weekly-days-label" id="weeklyDaysLabel">Melyik napokra készüljön részletes tervezet?</span>
+                  <div class="day-picker" id="weeklyDayPicker" role="group" aria-labelledby="weeklyDaysLabel">
+                    <button class="day-chip active" type="button" data-day="Hétfő" aria-pressed="true">Hétfő</button>
+                    <button class="day-chip active" type="button" data-day="Kedd" aria-pressed="true">Kedd</button>
+                    <button class="day-chip active" type="button" data-day="Szerda" aria-pressed="true">Szerda</button>
+                    <button class="day-chip active" type="button" data-day="Csütörtök" aria-pressed="true">Csütörtök</button>
+                    <button class="day-chip active" type="button" data-day="Péntek" aria-pressed="true">Péntek</button>
+                  </div>
+                  <small class="field-hint" id="weeklyDaysHint" role="status">A heti keretterv mellé a kijelölt napokra készül részletes napi tervezet (egységesen a heti csomag ára). Legalább egy napot ki kell választani.</small>
                   <small class="field-hint">A heti építkezés és a pénteki lezárás a 3. lépés „Speciális beállítások” részében módosítható.</small>
                 </div>
               </div>
@@ -555,9 +560,47 @@
         return host === 'localhost' || host === '127.0.0.1' || !host ? 'http://localhost:4000' : '';
       }
 
+      const ALL_WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
+
+      // Heti időtartamnál mindig készül napi bontás; a kijelölt napok hétfő–péntek sorrendben jönnek vissza.
       function getWeeklyDailyBreakdown() {
-        const checkbox = document.getElementById('includeDailyBreakdown');
-        return Boolean(checkbox) && getSelectedDuration() === 'Heti' && checkbox.checked;
+        return getSelectedDuration() === 'Heti';
+      }
+
+      function getSelectedDays() {
+        const active = Array.from(document.querySelectorAll('#weeklyDayPicker .day-chip.active')).map((chip) => chip.dataset.day);
+        const days = ALL_WEEKDAYS.filter((day) => active.includes(day));
+        return days.length ? days : [...ALL_WEEKDAYS];
+      }
+
+      function setSelectedDays(days) {
+        const wanted = Array.isArray(days) ? ALL_WEEKDAYS.filter((day) => days.includes(day)) : [];
+        const next = wanted.length ? wanted : ALL_WEEKDAYS;
+        document.querySelectorAll('#weeklyDayPicker .day-chip').forEach((chip) => {
+          const on = next.includes(chip.dataset.day);
+          chip.classList.toggle('active', on);
+          chip.setAttribute('aria-pressed', String(on));
+        });
+      }
+
+      function toggleWeekday(chip) {
+        const hint = document.getElementById('weeklyDaysHint');
+        const isActive = chip.classList.contains('active');
+        if (isActive && getSelectedDays().length <= 1) {
+          if (hint) {
+            hint.textContent = 'Legalább egy napot ki kell választani!';
+            hint.classList.add('field-warning');
+          }
+          return false;
+        }
+        chip.classList.toggle('active', !isActive);
+        chip.setAttribute('aria-pressed', String(!isActive));
+        if (hint) hint.classList.remove('field-warning');
+        return true;
+      }
+
+      function describeDuration(payload) {
+        return payload.duration === 'Heti' ? `Heti tervezet (${(payload.selectedDays || []).join(', ')})` : payload.duration;
       }
 
       function getWeeklyProgressionType() {
@@ -639,13 +682,12 @@
             `Óvodapedagógus: ${payload.teacherName || none}`,
             `Csoport neve: ${payload.groupName || none}`,
             `Korcsoport: ${payload.group}`,
-            `Időtartam: ${payload.duration}`,
+            `Időtartam: ${describeDuration(payload)}`,
             `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
             `Téma: ${payload.theme || none}`,
             `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
             `Előzmény: ${payload.elozmeny || none}`,
             `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
-            `Napi lebontás (heti terv mellé): ${weeklyOnly(payload.includeDailyBreakdown ? 'igen' : 'nem')}`,
             `Saját megjegyzés: ${customNotes.primary || none}`
           ]],
           ['Csoport profilja', [
@@ -748,7 +790,7 @@
           currentStep,
           duration: getSelectedDuration(),
           dateValue: getDateValue(),
-          includeDailyBreakdown: getWeeklyDailyBreakdown(),
+          selectedDays: getSelectedDays(),
           selectedGoals,
           docSettings,
           fields: {}
@@ -804,6 +846,7 @@
           segment.classList.toggle('active', segment.dataset.value === duration);
         });
 
+        setSelectedDays(draft.selectedDays);
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
         syncAdvancedSettingsOpenState();
@@ -1467,6 +1510,7 @@
           }
         });
 
+        setSelectedDays(ALL_WEEKDAYS);
         document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
           if (button.matches('.segment[data-group="duration"]')) {
             button.classList.toggle('active', button.dataset.value === 'Napi');
@@ -1582,7 +1626,16 @@
           });
         });
 
-        ['includeDailyBreakdown', 'weeklyProgressionType', 'fridayClosingType'].forEach((id) => {
+        document.querySelectorAll('#weeklyDayPicker .day-chip').forEach((chip) => {
+          chip.addEventListener('click', () => {
+            if (!toggleWeekday(chip)) return;
+            updateSummary();
+            saveProfileToStorage();
+            persistDraftState();
+          });
+        });
+
+        ['weeklyProgressionType', 'fridayClosingType'].forEach((id) => {
           document.getElementById(id)?.addEventListener('change', () => {
             updateSummary();
             saveProfileToStorage();
@@ -1963,6 +2016,7 @@
         return {
           duration: selectedDuration,
           includeDailyBreakdown: getWeeklyDailyBreakdown(),
+          selectedDays: getSelectedDays(),
           weeklyProgressionType: getWeeklyProgressionType(),
           fridayClosingType: getFridayClosingType(),
           availableTools: getAvailableTools(),

@@ -176,6 +176,8 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(weekly.dateValue, '2026-W45');
   assert.equal(weekly.planMode, 'weekly');
   assert.equal(weekly.includeDailyBreakdown, true);
+  assert.deepEqual([...weekly.selectedDays], ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']);
+  assert.equal(document.querySelector('#includeDailyBreakdown'), null);
   assert.equal(document.querySelector('#weeklySettingsPanel').hidden, false);
   assert.equal(weekly.weeklyProgressionType, 'progressive');
   assert.equal(weekly.fridayClosingType, 'Kiállítás a csoportszobában');
@@ -433,4 +435,25 @@ test('planner page keeps the legal footer and checkout withdrawal note', async (
   assert.match(footer, /Nethely Kft\./);
   assert.match(footer, /Békéltető Testület/);
   assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
+});
+
+test('weekly day picker toggles days, keeps at least one and feeds payload and summary', async (t) => {
+  const window = await loadApp(t);
+  const { document } = window;
+  const chip = (day) => document.querySelector(`#weeklyDayPicker [data-day="${day}"]`);
+  window.setDurationSelection('Heti');
+  assert.equal(document.querySelectorAll('#weeklyDayPicker .day-chip.active').length, 5);
+  chip('Szerda').click();
+  chip('Péntek').click();
+  assert.equal(chip('Szerda').classList.contains('active'), false);
+  assert.deepEqual([...window.buildGenerationPayload().selectedDays], ['Hétfő', 'Kedd', 'Csütörtök']);
+  assert.match(document.body.textContent, /Heti tervezet \(Hétfő, Kedd, Csütörtök\)/);
+  chip('Hétfő').click();
+  chip('Kedd').click();
+  chip('Csütörtök').click();
+  assert.equal(chip('Csütörtök').classList.contains('active'), true);
+  assert.deepEqual([...window.buildGenerationPayload().selectedDays], ['Csütörtök']);
+  assert.match(document.querySelector('#weeklyDaysHint').textContent, /Legalább egy napot ki kell választani!/);
+  window.setDurationSelection('Napi');
+  assert.equal(document.querySelector('#weeklySettingsPanel').hidden, true);
 });

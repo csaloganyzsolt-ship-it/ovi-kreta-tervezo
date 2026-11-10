@@ -410,8 +410,30 @@
     animation: weeklyPanelIn 0.25s ease-out;
   }
   .weekly-settings-panel[hidden] { display: none; }
-  .weekly-check { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; cursor: pointer; }
-  .weekly-check input { margin-top: 3px; }
+  .weekly-days-label { font-weight: 600; }
+  .day-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+  .day-chip {
+    border: 1px solid var(--border);
+    background: var(--soft);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 9px 16px;
+    min-height: 40px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .day-chip:hover { border-color: var(--primary); }
+  .day-chip.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #ffffff;
+    border-color: var(--primary-text);
+    box-shadow: 0 8px 14px rgba(47, 148, 111, 0.2);
+  }
+  .day-chip:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+  .field-hint.field-warning { color: #b3261e; font-weight: 700; }
   @keyframes weeklyPanelIn {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }

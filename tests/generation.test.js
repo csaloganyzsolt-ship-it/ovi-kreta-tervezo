@@ -250,3 +250,33 @@ test('available tools and the blacklist reach both prompts and the system instru
   const body = JSON.parse(calls[0].options.body);
   assert.match(body.systemInstruction.parts[0].text, /SZIGORÚ TILTÁS.*gyurma/s);
 });
+
+test('weekly generation covers only the selected days in prompt and response validation', () => {
+  const { getSelectedDays } = require('../server');
+  assert.deepEqual(getSelectedDays({}), ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']);
+  assert.deepEqual(getSelectedDays({ selectedDays: ['Péntek', 'Hétfő', 'Hétfő', 'Vasárnap'] }), ['Hétfő', 'Péntek']);
+  assert.deepEqual(getSelectedDays({ selectedDays: [] }).length, 5);
+
+  const payload = makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true, selectedDays: ['Hétfő', 'Kedd', 'Csütörtök'] });
+  const prompt = buildPrompt(payload);
+  assert.match(prompt, /pontosan 3 elem, ebben a sorrendben: Hétfő, Kedd, Csütörtök/);
+  assert.match(prompt, /nem kiválasztott napokra NEM készítesz/);
+  assert.doesNotMatch(prompt, /pontosan 5 elem/);
+
+  const row = { ido: '10 perc', tevekenyseg_menete: ['Bekezdés'], modszerek_megjegyzesek: 'Megjegyzés' };
+  const make = (days) => JSON.stringify({
+    is_weekly: true,
+    summary: 's',
+    heti_keretterv: {
+      tema: 'Erdő', heti_fo_cel: 'c', nevelesi_feladatok: 'n', didaktikai_feladatok: 'd',
+      teruletek_heti_eloszlasa: days.map((nap) => ({ nap, fo_terulet: 'f', mikrocsoportos_tevekenyseg: 'm' })),
+      eszkozok: ['papír'], felhasznalt_irodalom: ''
+    },
+    napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'játék', napi_cel: 'cél', kidolgozas_tablazat: [row] }))
+  });
+  const ok = normalizeResponse(make(['Hétfő', 'Kedd', 'Csütörtök']), payload);
+  assert.equal(ok.napok.length, 3);
+  assert.deepEqual(ok.napok.map((d) => d.nap_neve), ['Hétfő', 'Kedd', 'Csütörtök']);
+  assert.throws(() => normalizeResponse(make(['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']), payload), /kiválasztott 3 napot/);
+  assert.throws(() => normalizeResponse(make(['Hétfő']), payload), /kiválasztott 3 napot/);
+});

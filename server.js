@@ -187,16 +187,26 @@ const WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
 const WEEKLY_MAX_OUTPUT_TOKENS = 16384;
 const WEEKLY_TIMEOUT_MS = 290000;
 
+// A kiválasztott napok (hétfői–pénteki sorrendben, duplikáció nélkül); hiányzó vagy érvénytelen érték esetén mind az 5 nap.
+function getSelectedDays(payload = {}) {
+  const requested = Array.isArray(payload.selectedDays) ? payload.selectedDays : [];
+  const days = WEEKDAYS.filter((day) => requested.includes(day));
+  return days.length ? days : [...WEEKDAYS];
+}
+
 function isWeeklyBreakdown(payload = {}) {
   return payload.duration === 'Heti' && payload.includeDailyBreakdown === true;
 }
 
 function buildWeeklyPrompt(settings, detail) {
+  const days = settings.selectedDays;
+  const dayCount = days.length;
+  const closing = days.includes('Péntek') ? ` pénteken pedig a megadott záróesemény (${settings.fridayClosingType}) zajlik` : '';
   const progression = settings.weeklyProgressionType === 'area_focused'
     ? 'area_focused – klasszikus területváltó: minden nap más nevelési terület áll a fókuszban, de a heti téma és a gyerekek tapasztalatai összekötik a napokat.'
     : 'progressive – szervesen egymásra épülő projekt: hétfői gyűjtéstől a pénteki zárásig minden nap az előző nap élményeire és produktumaira épül.';
 
-  return `Tapasztalt magyar mester-óvodapedagógus vagy, aki projektmódszerrel dolgozik az Óvodai Nevelés Országos Alapprogramja (ONOAP) szerint. Heti tematikus keretet és Hétfőtől Péntekig 5 önálló, részletesen kidolgozott napi tervezetet készítesz.
+  return `Tapasztalt magyar mester-óvodapedagógus vagy, aki projektmódszerrel dolgozik az Óvodai Nevelés Országos Alapprogramja (ONOAP) szerint. Heti tematikus keretet és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló, részletesen kidolgozott napi tervezetet készítesz; a nem kiválasztott napokra NEM készítesz tervezetet.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -207,13 +217,13 @@ ${settings.availableTools ? `Rendelkezésre álló eszközök (availableTools): 
 ${buildBlacklistRule(settings.blacklist)}
 Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
 
-Szigorú pedagógiai szabály: az 5 nap NEM lehet egymás mechanikus másolata! A napoknak szerves láncolatot kell alkotniuk: a hétfői tapasztalatszerzésre (gyűjtés, felfedezés) épül a keddi és szerdai alkotó és zenei (ének-zene, mese-vers, vizuális) tevékenység, csütörtökön mozgásos elmélyítés következik, pénteken pedig a megadott záróesemény (${settings.fridayClosingType}) zajlik. Minden nap hivatkozzon az előző nap élményeire, és más tevékenységformát, más tevékenységeket tartalmazzon. A megadott korcsoportot, létszámot, energiaszintet, fókuszterületeket, célokat, speciális igényeket és minden egyéni kérést építs be.
+Szigorú pedagógiai szabály: a ${dayCount} nap NEM lehet egymás mechanikus másolata! A kiválasztott napoknak (${days.join(', ')}) szerves láncolatot kell alkotniuk: a hét eleji tapasztalatszerzésre (gyűjtés, felfedezés) épül az alkotó és zenei (ének-zene, mese-vers, vizuális) tevékenység, ezt követi a mozgásos elmélyítés,${closing || ' a hét végén pedig összegzés'}. Ha egy nap nincs kiválasztva, a láncolat a kiválasztott napok között folytonos legyen. Minden nap hivatkozzon az előző nap élményeire, és más tevékenységformát, más tevékenységeket tartalmazzon. A megadott korcsoportot, létszámot, energiaszintet, fókuszterületeket, célokat, speciális igényeket és minden egyéni kérést építs be.
 
 Minden nap kidolgozas_tablazat táblázata az öt fázist kövesse, a fázist nevezd meg a bekezdés elején: 1. Szervezési feladatok és környezet előkészítése; 2. Érzelmi ráhangolódás és motiváció; 3. Fő tevékenység / Új ismeret feldolgozása; 4. Gyakorlás, differenciált elmélyülés; 5. Összegzés, levezetés, elcsendesedés. Az ido mezőbe reális időkeret kerüljön.
-Kidolgozottság (${detail.level}/100): ${detail.instruction} A napok közt ossz el arányosan; mind az 5 nap legyen gazdagon kidolgozva.
+Kidolgozottság (${detail.level}/100): ${detail.instruction} A napok közt ossz el arányosan; minden kiválasztott nap legyen gazdagon kidolgozva.
 A tevekenyseg_menete minden eleme önálló bekezdés. Teljes mondókát vagy dalszöveget csak közkincs, népköltészeti, saját alkotás vagy a felhasználó által megadott szöveg esetén idézz. A modszerek_megjegyzesek legyen konkrét, a speciális igényekhez differenciált. A hiányzó előzményről ne állíts megtörtént eseményt. Az irodalomnál csak valóban azonosítható forrást nevezz meg; kikapcsolva a felhasznalt_irodalom üres szöveg.
 
-Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerkezetben (a napok tömbje pontosan 5 elem: ${WEEKDAYS.join(', ')}):
+Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerkezetben (a napok tömbje pontosan ${dayCount} elem, ebben a sorrendben: ${days.join(', ')}):
 {
   "is_weekly": true,
   "summary": "string",
@@ -239,7 +249,7 @@ Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerk
     }
   ]
 }
-A teruletek_heti_eloszlasa is mind az 5 napot tartalmazza (${WEEKDAYS.join(', ')}). Minden mezőt adj vissza.`;
+A teruletek_heti_eloszlasa is pontosan a kiválasztott napokat tartalmazza (${days.join(', ')}). Minden mezőt adj vissza.`;
 }
 
 function buildPrompt(payload = {}) {
@@ -255,6 +265,7 @@ function buildPrompt(payload = {}) {
     duration: payload.duration || 'Napi',
     planMode: getPlanMode(payload),
     includeDailyBreakdown: Boolean(payload.includeDailyBreakdown),
+    selectedDays: getSelectedDays(payload),
     weeklyProgressionType: payload.weeklyProgressionType === 'area_focused' ? 'area_focused' : 'progressive',
     fridayClosingType: payload.fridayClosingType || 'Kiállítás a csoportszobában',
     tevekenysegForma: payload.tevekenysegForma || '',
@@ -323,12 +334,13 @@ function normalizeWeeklyResponse(parsed, payload) {
   if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
     throw generationError('Hiányzó vagy hibás heti_keretterv a Gemini válaszában.');
   }
+  const days = getSelectedDays(payload);
   const grid = frame.teruletek_heti_eloszlasa;
-  if (!Array.isArray(grid) || grid.length !== WEEKDAYS.length) {
-    throw generationError('A heti_keretterv.teruletek_heti_eloszlasa nem tartalmazza mind az 5 napot.');
+  if (!Array.isArray(grid) || grid.length !== days.length) {
+    throw generationError(`A heti_keretterv.teruletek_heti_eloszlasa nem pontosan a kiválasztott ${days.length} napot tartalmazza (${days.join(', ')}).`);
   }
-  if (!Array.isArray(parsed.napok) || parsed.napok.length !== WEEKDAYS.length) {
-    throw generationError('A Gemini válasza nem tartalmaz pontosan 5 napi tervezetet.');
+  if (!Array.isArray(parsed.napok) || parsed.napok.length !== days.length) {
+    throw generationError(`A Gemini válasza nem tartalmaz pontosan ${days.length} napi tervezetet (${days.join(', ')}).`);
   }
 
   const heti_keretterv = {
@@ -507,4 +519,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+module.exports = { getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
