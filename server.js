@@ -5,7 +5,9 @@ const path = require('node:path');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 
 const app = express();
-const PORT = Number(process.env.PORT || 4000);
+const PORT = Number(process.env.PORT || 10000);
+// Render (és a konténeres környezetek) csak a 0.0.0.0-ra kötött portot érzékelik, ezért a hosztot fixen megadjuk.
+const HOST = '0.0.0.0';
 // Költségvédelem: minden generálás kizárólag a FAST_MODEL-t használja. Környezeti változó vagy kérés nem választhat másikat.
 // A PREMIUM_MODEL csak a későbbi bevezetéshez maradt meg; a callGemini tesztekben közvetlenül hívható, de az /api/generate nem engedi.
 const FAST_MODEL = 'gemini-3.1-pro-preview';
@@ -498,8 +500,8 @@ app.post('/api/generate', async (req, res) => {
 });
 
 function start(port = PORT) {
-  return app.listen(port, () => {
-    console.log(`OviTervező is running on port ${port}`);
+  return app.listen(port, HOST, () => {
+    console.log(`OviTervező is running on ${HOST}:${port}`);
   });
 }
 
