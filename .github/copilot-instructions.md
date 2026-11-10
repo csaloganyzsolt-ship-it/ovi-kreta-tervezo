@@ -40,3 +40,6 @@ Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni
 
 ## 6. Két környezet
 - Nethely = éles (`build-nethely.js`, paywall be); GitHub Pages = staging (`build-pages.js`, paywall ki, `testDelivery`, `/api/test-deliver` csak `TEST_DELIVERY_ENABLED=true` mellett). Mindkettő a `main` pushra deployol.
+
+## 7. Két oldal
+- `index.html` = csak fogadóoldal (hero, 3 lépés, árak, SEO, lábléc); `tervezo.html` = csak a tervező alkalmazás. Közös: `styles.css`, `site.js` (téma, jogi modalok, lábléc cégadatok), `config.js`. Minden hivatkozás relatív (GitHub Pages alútvonal és Nethely gyökér is működjön). A build mindkét oldalt és a közös fájlokat másolja; a jsdom-tesztek a `readPage()` helperrel ágyazzák be a `site.js`-t.

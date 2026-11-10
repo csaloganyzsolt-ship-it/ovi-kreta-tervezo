@@ -12,7 +12,10 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) throw new Error(`Érvénytelen API_
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 // A staging oldal nem indexelhető, ezért nem kap Search Console igazolást.
-fs.writeFileSync(path.join(out, 'index.html'), fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', ''));
+for (const page of ['index.html', 'tervezo.html']) {
+  fs.writeFileSync(path.join(out, page), fs.readFileSync(path.join(root, page), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', ''));
+}
+for (const file of ['styles.css', 'site.js']) fs.copyFileSync(path.join(root, file), path.join(out, file));
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }

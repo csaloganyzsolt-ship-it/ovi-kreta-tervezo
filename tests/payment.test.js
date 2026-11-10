@@ -6,7 +6,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
-const { makePayload, makePlan } = require('./fixtures');
+const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const devEnv = { BASE_URL: 'https://ovitervezo.hu' };
 
@@ -90,7 +90,7 @@ test('webhook rejects calls without valid configuration or signature', async () 
 });
 
 async function loadLockedApp(t) {
-  const dom = new JSDOM(fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8'), {
+  const dom = new JSDOM(readPage('tervezo.html'), {
     url: 'http://localhost:8000',
     runScripts: 'dangerously',
     beforeParse(window) {
@@ -496,7 +496,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'index.html', 'robots.txt', 'sitemap.xml']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'index.html', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -578,7 +578,7 @@ test('test delivery row appears only in the staging config after generation', as
   const { JSDOM } = require('jsdom');
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const html = readPage('tervezo.html');
   const load = async (config) => {
     const dom = new JSDOM(html, { url: 'http://localhost:8000/', pretendToBeVisual: true, runScripts: 'dangerously',
       beforeParse(window) { window.HTMLElement.prototype.scrollIntoView = () => {}; window.scrollTo = () => {}; window.APP_CONFIG = config; } });
@@ -659,22 +659,61 @@ test('purchase e-mail is copied (BCC) to the admin address with all attachments 
   assert.equal(sent[1].bcc, undefined);
 });
 
-test('landing page precedes the planner and the SEO/Google bits are in place', () => {
+test('index.html is a pure landing page and tervezo.html is the planner only', () => {
+  const landing = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const planner = fs.readFileSync(path.join(__dirname, '..', 'tervezo.html'), 'utf8');
+  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Adja meg', '2. Elkészül', '3. Töltse le', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
+  assert.equal((landing.match(/href="tervezo\.html"/g) || []).length >= 2, true);
+  for (const absent of ['id="wizardList"', 'id="generateBtn"', 'id="previewPanel"', 'id="checkoutModal"', 'html2pdf']) assert.ok(!landing.includes(absent), `landing: ${absent}`);
+  for (const text of ['id="wizardList"', 'id="previewPanel"', 'id="checkoutModal"', 'id="siteFooter"', 'href="index.html"']) assert.ok(planner.includes(text), `planner: ${text}`);
+  for (const absent of ['id="landing"', 'id="seoContent"', 'landing-hero', 'Egyszeri díj, havidíj nélkül', 'application/ld+json']) assert.ok(!planner.includes(absent), `planner: ${absent}`);
+  assert.match(landing, /<a class="brand" href="index\.html"/);
+  assert.match(planner, /<a class="brand" href="index\.html"/);
+  assert.match(landing, /<meta name="description" content="[^"]*ONAP/);
+  assert.match(landing, /policies\.google\.com\/privacy/);
+  assert.match(landing, /policies\.google\.com\/terms/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
+  for (const kw of ['óvodai tervezés', 'tematikus terv', 'foglalkozásterv minta', 'heti tervezet', 'ONAP']) assert.ok(landing.includes(kw), kw);
+  const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
+  assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
+});
+
+test('landing page footer and legal modal work and the footer is filled from the config', async (t) => {
+  const dom = new JSDOM(readPage('index.html'), { url: 'http://localhost:8000/', runScripts: 'dangerously',
+    beforeParse(window) { window.APP_CONFIG = { company: { taxId: '11111111-1-11' } }; } });
+  t.after(() => dom.window.close());
+  const { document } = dom.window;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.match(document.getElementById('siteFooter').textContent, /11111111-1-11/);
+  document.querySelector('[data-legal="terms"]').click();
+  assert.ok(document.getElementById('legalModal').classList.contains('open'));
+  document.getElementById('themeToggle').click();
+  assert.equal(document.documentElement.dataset.theme, 'dark');
+});
+
+test('both builds ship both pages with every local reference resolvable and the Search Console tag on both', () => {
   const { execFileSync } = require('node:child_process');
   const cwd = path.join(__dirname, '..');
-  const html = fs.readFileSync(path.join(cwd, 'index.html'), 'utf8');
-  assert.ok(html.indexOf('id="landing"') > 0 && html.indexOf('id="landing"') < html.indexOf('id="tervezo"'));
-  for (const text of ['Tervező indítása', '390 Ft', '890 Ft', '1. Adja meg', '2. Elkészül', '3. Töltse le']) assert.ok(html.includes(text), text);
-  assert.match(html, /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
-  assert.match(html, /policies\.google\.com\/privacy/);
-  assert.match(html, /policies\.google\.com\/terms/);
-  assert.match(html, /<meta name="description" content="[^"]*ONAP/);
-  for (const kw of ['óvodai tervezés', 'tematikus terv', 'foglalkozásterv minta', 'heti tervezet', 'ONAP']) assert.ok(html.includes(kw), kw);
   const env = { ...process.env, API_BASE_URL: 'https://api.example.onrender.com', GOOGLE_SITE_VERIFICATION: 'abcDEF1234567890xyz' };
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env });
-  const built = fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8');
-  assert.match(built, /<meta name="google-site-verification" content="abcDEF1234567890xyz" \/>/);
+  execFileSync('node', ['scripts/build-pages.js'], { cwd, env });
+  for (const dir of ['dist-nethely', 'dist-pages']) {
+    for (const page of ['index.html', 'tervezo.html']) {
+      const html = fs.readFileSync(path.join(cwd, dir, page), 'utf8');
+      const refs = [...html.matchAll(/(?:href|src)="([^"#]+)"/g)].map((m) => m[1]).filter((r) => !/^(https?:|mailto:|data:)/.test(r));
+      assert.ok(refs.length > 0);
+      for (const ref of refs) {
+        assert.ok(!ref.startsWith('/'), `${dir}/${page}: abszolút útvonal ${ref}`);
+        assert.ok(fs.existsSync(path.join(cwd, dir, ref)), `${dir}/${page}: hiányzó fájl ${ref}`);
+      }
+      assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
+    }
+  }
+  for (const page of ['index.html', 'tervezo.html']) {
+    assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', page), 'utf8'), /<meta name="google-site-verification" content="abcDEF1234567890xyz" \/>/);
+    assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-pages', page), 'utf8'), /google-site-verification/);
+  }
   const { GOOGLE_SITE_VERIFICATION, ...clean } = env;
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env: clean });
-  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8'), /google-site-verification/);
+  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'tervezo.html'), 'utf8'), /google-site-verification/);
 });

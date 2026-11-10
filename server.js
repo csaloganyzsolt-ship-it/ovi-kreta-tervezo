@@ -128,6 +128,9 @@ const STATIC_ROOT = __dirname;
 for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
+for (const file of ['tervezo.html', 'styles.css', 'site.js']) {
+  app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
+}
 
 for (const file of ['robots.txt', 'sitemap.xml']) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));

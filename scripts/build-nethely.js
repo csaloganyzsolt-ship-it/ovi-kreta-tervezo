@@ -25,10 +25,13 @@ function applySiteVerification(html) {
   return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
 }
 
-for (const file of ['robots.txt', 'sitemap.xml']) {
+// Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, site.js, config.js), ezért bármilyen gyökérben működik.
+for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
-fs.writeFileSync(path.join(out, 'index.html'), applySiteVerification(fs.readFileSync(path.join(root, 'index.html'), 'utf8')));
+for (const page of ['index.html', 'tervezo.html']) {
+  fs.writeFileSync(path.join(out, page), applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')));
+}
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }

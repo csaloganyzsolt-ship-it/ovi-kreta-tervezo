@@ -3,6 +3,9 @@ const path = require('path');
 
 const requiredFiles = [
   'index.html',
+  'tervezo.html',
+  'styles.css',
+  'site.js',
   '.github/workflows/test.yml',
   '.github/workflows/deploy.yml',
 ];
@@ -15,8 +18,8 @@ for (const file of requiredFiles) {
   }
 }
 
-const html = fs.existsSync(path.join(process.cwd(), 'index.html'))
-  ? fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8')
+const html = fs.existsSync(path.join(process.cwd(), 'tervezo.html'))
+  ? fs.readFileSync(path.join(process.cwd(), 'tervezo.html'), 'utf8')
   : '';
 
 const requiredMarkers = [
@@ -27,7 +30,7 @@ const requiredMarkers = [
 
 for (const marker of requiredMarkers) {
   if (!html.includes(marker)) {
-    failures.push(`Missing required marker in index.html: ${marker}`);
+    failures.push(`Missing required marker in tervezo.html: ${marker}`);
   }
 }
 

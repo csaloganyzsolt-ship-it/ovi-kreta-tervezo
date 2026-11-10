@@ -3,9 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
-const { makePayload, makePlan } = require('./fixtures');
+const { makePayload, makePlan, readPage } = require('./fixtures');
 
-const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+const html = readPage('tervezo.html');
 
 async function loadApp(t) {
   const dom = new JSDOM(html, {
@@ -425,16 +425,10 @@ test('DOCX is a native Word document with real tables, not an embedded HTML chun
   assert.match(xml, /Napi tervezet/);
 });
 
-test('SEO metadata, indexable sections and legal footer data are present', async (t) => {
+test('planner page keeps the legal footer and checkout withdrawal note', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
-  assert.match(doc.title, /Kréta-kompatibilis Óvodai Tervezet/);
-  assert.ok(doc.querySelector('meta[name="description"]'));
-  assert.ok(doc.querySelector('meta[property="og:title"]'));
-  const ld = [...doc.querySelectorAll('script[type="application/ld+json"]')].map((s) => JSON.parse(s.textContent)['@type']);
-  assert.deepEqual(ld.sort(), ['FAQPage', 'SoftwareApplication']);
-  assert.ok(doc.querySelectorAll('#seoContent h2').length >= 4);
-  assert.ok(doc.querySelectorAll('#seoContent details').length >= 3);
+  assert.match(doc.title, /Tervező/);
   const footer = doc.getElementById('siteFooter').textContent;
   assert.match(footer, /Nethely Kft\./);
   assert.match(footer, /Békéltető Testület/);

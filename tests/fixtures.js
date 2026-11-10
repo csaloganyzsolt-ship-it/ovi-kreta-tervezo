@@ -61,3 +61,12 @@ function makePlan(rowCount = 5) {
 }
 
 module.exports = { makePayload, makePlan };
+// A jsdom-tesztek nem töltenek külső fájlokat, ezért a közös site.js tartalmát a lapba ágyazzuk.
+function readPage(name) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  return fs.readFileSync(path.join(root, name), 'utf8')
+    .replace('<script src="site.js"></script>', () => `<script>${fs.readFileSync(path.join(root, 'site.js'), 'utf8')}</script>`);
+}
+module.exports.readPage = readPage;
