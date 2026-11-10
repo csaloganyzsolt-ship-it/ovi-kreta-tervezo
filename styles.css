@@ -1485,10 +1485,14 @@
   .lock-note { margin-left: 6px; color: var(--muted); font-size: 13px; }
   .modal-error { color: #c0392b; font-size: 14px; margin-top: 8px; }
   .seo-content { max-width: 1280px; margin: 28px auto 0; padding: 0 18px; color: var(--muted); line-height: 1.65; }
-  .seo-content h2 { font-size: 20px; margin: 22px 0 8px; color: var(--text); }
+  .seo-content h2 { font-size: 22px; margin: 26px 0 12px; text-align: center; color: #1f5f52; }
+  .seo-content .benefit-grid { margin-bottom: 8px; }
+  .seo-content .benefit-grid .landing-card { text-align: left; }
+  :root[data-theme="dark"] .seo-content h2 { color: #9fd8c0; }
   .seo-content .seo-cards { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-  .seo-content .seo-cards li { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--soft); }
-  .seo-content details { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; }
+  .seo-content .seo-cards li { padding: 12px 14px; border: 1px solid #cfe8da; border-radius: 20px; background: var(--panel); text-align: center; color: var(--text); }
+  :root[data-theme="dark"] .seo-content .seo-cards li { border-color: #38564a; }
+  .seo-content details { border: 1px solid #cfe8da; border-radius: 16px; background: var(--panel); padding: 10px 14px; margin-bottom: 8px; }
   .seo-content summary { cursor: pointer; font-weight: 600; color: var(--text); }
   .site-footer { margin: 28px auto 0; max-width: 1280px; padding: 26px 18px 34px; border-top: 1px solid var(--border); color: var(--muted); font-size: .875rem; line-height: 1.65; }
   .site-footer .footer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; align-items: start; }

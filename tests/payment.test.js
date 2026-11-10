@@ -662,7 +662,7 @@ test('purchase e-mail is copied (BCC) to the admin address with all attachments 
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {
   const landing = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const planner = fs.readFileSync(path.join(__dirname, '..', 'tervezo.html'), 'utf8');
-  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Adja meg', '2. Elkészül', '3. Töltse le', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
+  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Kréta OVI kompatibilis', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
   assert.equal((landing.match(/href="tervezo\.html"/g) || []).length >= 2, true);
   for (const absent of ['id="wizardList"', 'id="generateBtn"', 'id="previewPanel"', 'id="checkoutModal"', 'html2pdf']) assert.ok(!landing.includes(absent), `landing: ${absent}`);
   for (const text of ['id="wizardList"', 'id="previewPanel"', 'id="checkoutModal"', 'id="siteFooter"', 'href="index.html"']) assert.ok(planner.includes(text), `planner: ${text}`);
