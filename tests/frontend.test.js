@@ -58,13 +58,13 @@ test('all form settings, including group characteristics and focus areas, enter 
     else field.value = value;
   };
   setField('child-count', 23);
-  setField('energy-level', 0);
+  document.querySelector('.segment[data-group="energy"][data-value="Nyugodt, kiegyensúlyozott"]').click();
   setField('has-preschoolers', false);
   setField('group-note', 'Vizuális jelzés szükséges.');
   setField('required-text', 'Saját levélmondóka.');
-  setField('idea-note', 'Nagyító.');
+  setField('available-tools', 'Nagyító.');
   setField('custom-request', 'Páros levélválogatás.');
-  setField('detail-level', 80);
+  document.querySelector('.segment[data-group="detail"][data-value="concise"]').click();
   const focus = document.querySelector('[data-focus-area]');
   assert.ok(focus);
   focus.checked = true;
@@ -72,13 +72,15 @@ test('all form settings, including group characteristics and focus areas, enter 
   sni.checked = true;
   const payload = window.buildGenerationPayload();
   assert.equal(payload.childCount, 23);
-  assert.equal(payload.energyLevel, 0);
+  assert.equal(payload.energyLevel, 'Nyugodt, kiegyensúlyozott');
   assert.equal(payload.hasPreschoolers, false);
   assert.equal(payload.focusAreas[0], focus.dataset.focusArea);
   assert.equal(payload.specialNeeds[0], sni.dataset.sniLabel);
   assert.equal(payload.customNotes.requiredText, 'Saját levélmondóka.');
   assert.equal(payload.customNotes.customRequest, 'Páros levélválogatás.');
-  assert.equal(payload.detailLevel, 80);
+  assert.equal(payload.detailLevel, 30);
+  assert.equal(payload.outputMode, 'Szakmai tervezet');
+  assert.equal(payload.availableTools, 'Nagyító.');
   window.setDurationSelection('Heti');
   assert.equal(window.buildGenerationPayload().planMode, 'weekly');
 });
@@ -145,9 +147,9 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   const values = {
     'kindergarten-name': 'Próba Óvoda', 'teacher-name': 'Próba Pedagógus',
     'group-name': 'Próba Csoport', group: 'Vegyes csoport', theme: 'Tavaszi megfigyelés',
-    'tevekenyseg-forma': 'Mozgás', elozmeny: 'Korábbi udvari játék.',
+    'tevekenyseg-forma': 'Mikrocsoportos / egyéni fejlesztés', elozmeny: 'Korábbi udvari játék.',
     'custom-note': 'Egyéni kiegészítés.', 'group-note': 'Csoportkérés.',
-    'required-text': 'Saját mondóka.', 'idea-note': 'Labdák.', 'custom-request': 'Csendes lezárás.'
+    'required-text': 'Saját mondóka.', 'custom-request': 'Csendes lezárás.'
   };
   for (const [field, value] of Object.entries(values)) document.querySelector(`[data-field="${field}"]`).value = value;
   document.querySelectorAll('[data-focus-area], [data-sni-label]').forEach((checkbox) => { checkbox.checked = true; });
@@ -167,7 +169,6 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.specialNeeds.length, 4);
   assert.equal(daily.customNotes.primary, values['custom-note']);
   assert.equal(daily.customNotes.groupNote, values['group-note']);
-  assert.equal(daily.customNotes.ideaNote, values['idea-note']);
   assert.equal(daily.showLiteratureAtBottom, true);
   assert.equal(daily.outputMode, 'Szülői tájékoztató');
   window.setDurationSelection('Heti');
@@ -246,7 +247,8 @@ test('a clean draft clears the document and restores usable export defaults', as
   window.clearDraftState();
   assert.equal(window.document.querySelector('#resultDocument').textContent.trim(), '');
   assert.equal(window.document.querySelector('#previewContent').style.display, 'none');
-  assert.equal(window.document.querySelector('[data-field="energy-level"]').value, '65');
+  assert.equal(window.document.querySelector('.segment.active[data-group="energy"]').dataset.value, 'Átlagos');
+  assert.equal(window.document.querySelector('.segment.active[data-group="detail"]').dataset.value, 'detailed');
   assert.equal(window.document.querySelector('[data-export="margin"]').value, 'comfortable');
   assert.ok(Array.from(window.document.querySelectorAll('[data-export-section]')).every((control) => control.checked));
 });
@@ -316,10 +318,10 @@ test('the summary checklist lists every setting, including the new ones', async 
   window.updateSummary();
   const text = doc.querySelector('#summaryChecklist').textContent;
   for (const label of ['Óvoda:', 'Óvodapedagógus:', 'Csoport neve:', 'Korcsoport:', 'Időtartam:', 'Dátum:', 'Téma:',
-    'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Energiaszint:', 'Iskola-előkészítő', 'Speciális nevelési igények',
-    'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök: xilofon', 'Kötelező mese/vers/dal:', 'Saját ötletek', 'Kiválasztott célkifejezések:',
+    'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Csoport hangulata', 'Iskola-előkészítő', 'Speciális nevelési igények',
+    'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök és saját ötletek: xilofon', 'Kötelező mese/vers/dal:', 'Kiválasztott célkifejezések:',
     'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
-    'Részletességi szint:', 'Modell: Gemini 3.1 Pro', 'Kimeneti forma:']) {
+    'Kidolgozottság:', 'Modell: Gemini 3.1 Pro', 'Kimeneti forma:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
   const premium = doc.querySelector('#premiumQuality');

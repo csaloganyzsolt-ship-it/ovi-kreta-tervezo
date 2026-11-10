@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tervező – OviTervező óvodai tervezet készítő</title>
-    <meta name="description" content="Óvodai tervezés percek alatt: tematikus terv, heti tervezet és foglalkozásterv minta az ONAP-hoz igazodva. Kréta-kompatibilis, letölthető Word és PDF tervezetek óvodapedagógusoknak." />
+    <meta name="description" content="Óvodai tervezés percek alatt: tematikus terv, heti tervezet és foglalkozásterv minta az ONAP-hoz igazodva. szerkeszthető, letölthető Word és PDF tervezetek óvodapedagógusoknak." />
     <!--GOOGLE_SITE_VERIFICATION-->
-    <meta name="keywords" content="óvodai tervezés, tematikus terv, foglalkozásterv minta, heti tervezet, ONAP, óvodai tervezet sablon, kréta óvodai tervezet" />
+    <meta name="keywords" content="óvodai tervezés, tematikus terv, foglalkozásterv minta, heti tervezet, ONAP, óvodai tervezet sablon" />
     <link rel="canonical" href="https://ovitervezo.hu/tervezo.html" />
     <meta property="og:title" content="OviTervező – Óvodai Tervezet Készítő Szoftver" />
-    <meta property="og:description" content="Spórolj heti több óra adminisztrációt. Kréta-kompatibilis óvodai tervezetek 1 kattintással." />
+    <meta property="og:description" content="Spórolj heti több óra adminisztrációt. Szerkeszthető óvodai tervezetek 1 kattintással." />
     <meta property="og:image" content="https://ovitervezo.hu/assets/og-preview.png" />
     <meta property="og:url" content="https://ovitervezo.hu/tervezo.html" />
     <meta property="og:type" content="website" />
@@ -36,25 +36,31 @@
         <div class="main-form-layout">
         <aside class="panel wizard">
           <button class="wizard-progress" id="wizardProgressToggle" type="button" aria-expanded="false" aria-controls="wizardList">
-            <span class="wizard-progress-text" id="wizardProgressText">1/4. lépés: Alapadatok</span>
+            <span class="wizard-progress-text" id="wizardProgressText">1/4. lépés: Téma és időkeret</span>
             <span class="wizard-progress-track"><span class="wizard-progress-bar" id="wizardProgressBar"></span></span>
           </button>
           <p class="wizard-header">Folyamat</p>
           <div class="wizard-list" id="wizardList">
-            <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span>Alapadatok</span></button>
-            <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span>A mi csoportunk</span></button>
-            <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span>Konkrétumok</span></button>
+            <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span>Téma és időkeret</span></button>
+            <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span>A csoport profilja</span></button>
+            <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span>Pedagógiai kívánságok</span></button>
             <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span>Generálás</span></button>
           </div>
         </aside>
 
         <section class="panel content">
           <div class="step-panel active" data-step="1">
-            <h2>1. Alapadatok</h2>
-            <p class="subhead">A legfontosabb adminisztratív és tartalmi adatok gyors és egyszerű kitöltése.</p>
+            <h2>1. Miről szól a hét/nap?</h2>
+            <p class="subhead">Téma és időkeret: add meg, mikorra és miről készüljön a tervezet.</p>
 
             <div class="field-grid">
-              <div class="field">
+              <div class="field full">
+                <label>Korábbi terv betöltése</label>
+                <button class="btn secondary" id="loadPreviousBtn" type="button">Korábbi terv betöltése</button>
+                <div class="history-panel" id="historyPanel"></div>
+              </div>
+
+              <div class="field full">
                 <label>Időtartam</label>
                 <div class="segmented" data-group="duration">
                   <button class="segment active" type="button" data-group="duration" data-value="Napi">Napi</button>
@@ -74,14 +80,41 @@
                 </div>
               </div>
 
-              <div class="field">
-                <label>Korcsoport</label>
-                <select data-field="group">
-                  <option value="Kiscsoport">Kiscsoport</option>
-                  <option value="Középső csoport">Középső csoport</option>
-                  <option value="Nagycsoport" selected>Nagycsoport</option>
-                  <option value="Vegyes csoport">Vegyes csoport</option>
+              <div class="field full">
+                <label>Időpont</label>
+                <div class="field date-inline" id="dateFieldWrapper">
+                  <input type="date" id="dailyDateField" data-field="date-value" placeholder="Válassz dátumot" />
+                  <input type="week" id="weeklyDateField" data-field="week-value" placeholder="Válassz hetet" style="display:none;" />
+                </div>
+              </div>
+
+              <div class="field full">
+                <label>Téma / projekt címe</label>
+                <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
+                <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
+                <div style="margin-top: 12px;">
+                  <button id="clearDraftBtn" class="btn secondary" type="button">Új tervezet / Tiszta lap</button>
+                </div>
+              </div>
+
+              <div class="field full">
+                <label for="tevekenysegForma">Tevékenységi forma</label>
+                <select id="tevekenysegForma" data-field="tevekenyseg-forma">
+                  <option value="Kezdeményezett tevékenység (kötetlen)" selected>Kezdeményezett tevékenység (kötetlen)</option>
+                  <option value="Irányított / szervezett foglalkozás (kötött)">Irányított / szervezett foglalkozás (kötött)</option>
+                  <option value="Mikrocsoportos / egyéni fejlesztés">Mikrocsoportos / egyéni fejlesztés</option>
                 </select>
+              </div>
+
+              <div class="field full">
+                <label>Melyik nevelési területek lesznek fókuszban?</label>
+                <div class="check-grid">
+                  <label class="check-item"><input type="checkbox" data-focus-area="Külső világ tevékeny megismerése" /> Külső világ tevékeny megismerése</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Ének, zene, énekes játék" /> Ének, zene, énekes játék</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Rajzolás, mintázás, kézimunka" /> Rajzolás, mintázás, kézimunka</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Mozgás" /> Mozgás</label>
+                </div>
               </div>
 
               <div class="field">
@@ -100,60 +133,6 @@
               </div>
 
               <div class="field full">
-                <label>Téma / projekt címe</label>
-                <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
-                <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
-                <div style="margin-top: 12px;">
-                  <button id="clearDraftBtn" class="btn secondary" type="button">Új tervezet / Tiszta lap</button>
-                </div>
-              </div>
-
-              <div class="field full">
-                <label>Tevékenységi forma</label>
-                <input type="text" data-field="tevekenyseg-forma" placeholder="Pl.: Ének, zene" />
-              </div>
-
-              <div class="field full">
-                <label for="availableTools">Ovi/csoport eszközkészlete</label>
-                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok, tornaszerek"></textarea>
-                <small class="field-hint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
-              </div>
-
-              <div class="field full">
-                <label>A tevékenység előzménye</label>
-                <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről."></textarea>
-              </div>
-
-              <div class="field full">
-                <label>Időpont</label>
-                <div class="field date-inline" id="dateFieldWrapper">
-                  <input type="date" id="dailyDateField" data-field="date-value" placeholder="Válassz dátumot" />
-                  <input type="week" id="weeklyDateField" data-field="week-value" placeholder="Válassz hetet" style="display:none;" />
-                </div>
-              </div>
-
-              <div class="field full">
-                <label>Melyik nevelési területek lesznek fókuszban?</label>
-                <div class="check-grid">
-                  <label class="check-item"><input type="checkbox" data-focus-area="Külső világ tevékeny megismerése" /> Külső világ tevékeny megismerése</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Ének, zene, énekes játék" /> Ének, zene, énekes játék</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Rajzolás, mintázás, kézimunka" /> Rajzolás, mintázás, kézimunka</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Mozgás" /> Mozgás</label>
-                </div>
-              </div>
-
-              <div class="field full">
-                <label>OH-kompatibilis sablonkifejezések</label>
-                <div class="quick-actions">
-                  <button class="chip active" type="button">finommotorika fejlesztése</button>
-                  <button class="chip active" type="button">szociális kompetenciák erősítése</button>
-                  <button class="chip" type="button">szabálytudat erősítése</button>
-                  <button class="chip" type="button">beszédfejlesztés</button>
-                </div>
-              </div>
-
-              <div class="field full">
                 <label>Saját megjegyzés / egyéni kiegészítés</label>
                 <textarea data-field="custom-note" placeholder="Pl.: A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni."></textarea>
               </div>
@@ -161,23 +140,31 @@
           </div>
 
           <div class="step-panel" data-step="2">
-            <h2>2. A mi csoportunk</h2>
-            <p class="subhead">Itt adható meg a csoport hangulata és az egyes speciális igények, hogy az AI személyre szabottabban dolgozzon.</p>
+            <h2>2. Kiknek tervezünk?</h2>
+            <p class="subhead">A csoport profilja: csak a gyerekekről szóló adatok, hogy az AI személyre szabottabban dolgozzon.</p>
 
             <div class="field-grid">
+              <div class="field">
+                <label>Korcsoport</label>
+                <select data-field="group">
+                  <option value="Kiscsoport">Kiscsoport</option>
+                  <option value="Középső csoport">Középső csoport</option>
+                  <option value="Nagycsoport" selected>Nagycsoport</option>
+                  <option value="Vegyes csoport">Vegyes csoport</option>
+                </select>
+              </div>
+
               <div class="field">
                 <label>Hány gyerek van a csoportban?</label>
                 <input type="number" min="1" step="1" data-field="child-count" placeholder="Pl.: 20" />
               </div>
 
-              <div class="field">
-                <label>Csoport energiaszintje</label>
-                <div class="slider-wrap">
-                  <input type="range" min="0" max="100" value="65" data-field="energy-level" />
-                  <div class="slider-labels">
-                    <span>Nyugodt</span>
-                    <span>Forgalmas</span>
-                  </div>
+              <div class="field full">
+                <label id="energyLabel">Milyen a csoport hangulata, mozgékonysága?</label>
+                <div class="segmented" data-group="energy" role="group" aria-labelledby="energyLabel">
+                  <button class="segment" type="button" data-group="energy" data-value="Nyugodt, kiegyensúlyozott">Nyugodt, kiegyensúlyozott</button>
+                  <button class="segment active" type="button" data-group="energy" data-value="Átlagos">Átlagos</button>
+                  <button class="segment" type="button" data-group="energy" data-value="Nagyon mozgékony, eleven">Nagyon mozgékony, eleven</button>
                 </div>
               </div>
 
@@ -189,16 +176,6 @@
                     <input type="checkbox" checked data-field="has-preschoolers" />
                     <span class="slider"></span>
                   </label>
-                </div>
-              </div>
-
-              <div class="field full">
-                <label>OH-kompatibilis sablonkifejezések</label>
-                <div class="quick-actions">
-                  <button class="chip active" type="button">figyelem tartósítása</button>
-                  <button class="chip" type="button">szabálytudat erősítése</button>
-                  <button class="chip active" type="button">differenciált feladatok</button>
-                  <button class="chip" type="button">kommunikációs készségek</button>
                 </div>
               </div>
 
@@ -223,23 +200,31 @@
           </div>
 
           <div class="step-panel" data-step="3">
-            <h2>3. Konkrétumok és kívánságok</h2>
-            <p class="subhead">Itt írhatja le a már előre megfogalmazott mese-, vers- vagy dalkívánságokat, eszközöket és célokat.</p>
+            <h2>3. Mit szeretnénk látni?</h2>
+            <p class="subhead">Konkrét pedagógiai kívánságok: eszközök, kötelező szövegek, célok és a kidolgozottság.</p>
 
             <div class="field-grid">
+              <div class="field full">
+                <label for="availableTools">Rendelkezésre álló eszközök és saját ötletek</label>
+                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok; gyűjtött gesztenye és falevelek a barkácsoláshoz"></textarea>
+                <small class="field-hint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
+              </div>
+
               <div class="field full">
                 <label>Van kötelező mese, vers vagy dal?</label>
                 <textarea data-field="required-text" placeholder="Pl.: Mindig legyen benne a „Süni, süni, sünikém” című dal."></textarea>
               </div>
 
               <div class="field full">
-                <label>Saját ötletek, eszközök, amiket felhasználnál</label>
-                <textarea data-field="idea-note" placeholder="Pl.: Gyűjtöttünk gesztenyét és faleveleket, szeretném felhasználni a barkácsoláshoz."></textarea>
-              </div>
-
-              <div class="field full">
-                <label>OH-kompatibilis célkifejezések</label>
+                <label>Célkifejezések</label>
                 <div class="quick-actions">
+                  <button class="chip active" type="button">finommotorika fejlesztése</button>
+                  <button class="chip active" type="button">szociális kompetenciák erősítése</button>
+                  <button class="chip" type="button">szabálytudat erősítése</button>
+                  <button class="chip" type="button">beszédfejlesztés</button>
+                  <button class="chip active" type="button">figyelem tartósítása</button>
+                  <button class="chip active" type="button">differenciált feladatok</button>
+                  <button class="chip" type="button">kommunikációs készségek</button>
                   <button class="chip active" type="button">megfigyelés fejlesztése</button>
                   <button class="chip" type="button">kreativitás fejlesztése</button>
                   <button class="chip active" type="button">ritmusérzék fejlesztése</button>
@@ -248,24 +233,15 @@
               </div>
 
               <div class="field full">
-                <label>Korábbi terv behívása</label>
-                <button class="btn secondary" id="loadPreviousBtn" type="button">Tavalyi terv újrahasznosítása</button>
-                <div class="history-panel" id="historyPanel"></div>
-              </div>
-
-              <div class="field full">
                 <label>Saját kérés vagy további elképzelés</label>
                 <textarea data-field="custom-request" placeholder="Pl.: Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen."></textarea>
               </div>
 
               <div class="field full">
-                <label>Generálás hossza és kidolgozottsága</label>
-                <div class="slider-wrap">
-                  <input type="range" min="0" max="100" value="68" data-field="detail-level" />
-                  <div class="slider-labels">
-                    <span>Vázlatos</span>
-                    <span>Részletesen kidolgozott</span>
-                  </div>
+                <label id="detailLabel">Kidolgozottság</label>
+                <div class="segmented" data-group="detail" role="group" aria-labelledby="detailLabel">
+                  <button class="segment" type="button" data-group="detail" data-value="concise">Tömör vázlat</button>
+                  <button class="segment active" type="button" data-group="detail" data-value="detailed">Részletesen kidolgozott tervezet</button>
                 </div>
               </div>
 
@@ -287,6 +263,11 @@
                     <label for="blacklist">Tiltások / Amit NE használjon</label>
                     <textarea id="blacklist" data-field="blacklist" placeholder="Pl.: Ne legyen gyurma, ne használja a Süss fel napot."></textarea>
                     <small class="field-hint">Témák, dalok, eszközök vagy szavak, amelyeket az AI szigorúan kerüljön.</small>
+                  </div>
+
+                  <div class="field">
+                    <label>A tevékenység előzménye</label>
+                    <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről."></textarea>
                   </div>
 
                   <label class="check-item" style="display:flex; align-items:center; gap:10px; font-weight:600; color: var(--text);">
@@ -346,14 +327,14 @@
                 <span class="tag">Célok összeállítása</span>
                 <span class="tag">Tevékenységek kiválasztása</span>
                 <span class="tag">Differenciálás beépítése</span>
-                <span class="tag">Kréta formátumra igazítás</span>
+                <span class="tag">Szakmai tervezet formázása</span>
               </div>
             </div>
 
             <div class="add-card">
               <label>Választható kimeneti forma</label>
               <div class="output-mode" style="margin-top: 12px;">
-                <button class="mode-pill active" type="button" data-mode="Kréta">Kréta</button>
+                <button class="mode-pill active" type="button" data-mode="Szakmai tervezet">Szakmai tervezet</button>
                 <button class="mode-pill" type="button" data-mode="Szülői tájékoztató">Szülői tájékoztató</button>
               </div>
             </div>
@@ -420,7 +401,7 @@
                 <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
               </div>
 
-              <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
+              <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
               <div class="test-deliver-row" id="testDeliverRow" hidden>
                 <label for="testDeliverEmail"><strong>Teszt kézbesítés</strong> (fizetés nélkül)</label>
@@ -496,7 +477,7 @@
       <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
         <form class="modal-box checkout-box" id="checkoutForm" novalidate>
           <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
-          <h2 id="checkoutTitle">Teljes tervezet és Kréta-letöltés feloldása</h2>
+          <h2 id="checkoutTitle">Teljes tervezet és letöltés feloldása</h2>
           <p id="checkoutTestNote" class="modal-test-strip" hidden>Teszt üzemmód – tesztkártya: 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
           <p id="checkoutSummary" class="modal-note"></p>
           <p class="modal-note" id="checkoutDeliveryNote">A sikeres fizetés után a tervezet azonnal letölthető (PDF, Word), az e-számlát pedig a megadott e-mail címre küldjük, és a felületen is letölthető.</p>
@@ -620,6 +601,19 @@
         if (advancedBlock) advancedBlock.hidden = !isWeekly;
       }
 
+      const ENERGY_DEFAULT = 'Átlagos';
+      const DETAIL_LEVELS = { concise: 30, detailed: 68 };
+
+      function getChoice(group, fallback) {
+        return document.querySelector(`.segment.active[data-group="${group}"]`)?.dataset.value || fallback;
+      }
+
+      function setChoice(group, value, fallback) {
+        const options = Array.from(document.querySelectorAll(`.segment[data-group="${group}"]`));
+        const target = options.some((option) => option.dataset.value === value) ? value : fallback;
+        options.forEach((option) => option.classList.toggle('active', option.dataset.value === target));
+      }
+
       function getAvailableTools() {
         return document.querySelector('[data-field="available-tools"]')?.value.trim() || '';
       }
@@ -638,6 +632,7 @@
         const details = document.getElementById('advancedSettings');
         if (!details) return;
         const hasCustomValue = Boolean(getBlacklist()) ||
+          Boolean(document.querySelector('[data-field="elozmeny"]')?.value.trim()) ||
           Boolean(document.querySelector('[data-field="show-literature"]')?.checked) ||
           (getSelectedDuration() === 'Heti' && (
             getWeeklyProgressionType() !== 'progressive' ||
@@ -677,45 +672,42 @@
         const weeklyOnly = (value) => (isWeekly ? value : `${value} (csak heti tervnél érvényes)`);
 
         const sections = [
-          ['Alapadatok', [
-            `Óvoda: ${payload.kindergartenName || none}`,
-            `Óvodapedagógus: ${payload.teacherName || none}`,
-            `Csoport neve: ${payload.groupName || none}`,
-            `Korcsoport: ${payload.group}`,
+          ['Téma és időkeret', [
             `Időtartam: ${describeDuration(payload)}`,
             `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
             `Téma: ${payload.theme || none}`,
             `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
-            `Előzmény: ${payload.elozmeny || none}`,
             `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
+            `Óvoda: ${payload.kindergartenName || none}`,
+            `Óvodapedagógus: ${payload.teacherName || none}`,
+            `Csoport neve: ${payload.groupName || none}`,
             `Saját megjegyzés: ${customNotes.primary || none}`
           ]],
-          ['Csoport profilja', [
+          ['A csoport profilja', [
+            `Korcsoport: ${payload.group}`,
             `Gyereklétszám: ${payload.childCount ?? none}`,
-            `Energiaszint: ${payload.energyLevel} / 100`,
+            `Csoport hangulata, mozgékonysága: ${payload.energyLevel}`,
             `Iskola-előkészítő gyermekek: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
             `Speciális nevelési igények (SNI): ${specialNeeds.join(', ') || none}`,
             `Csoportmegjegyzés: ${customNotes.groupNote || none}`
           ]],
-          ['Eszközkészlet', [
-            `Rendelkezésre álló eszközök: ${payload.availableTools || defaultToolsText}`
-          ]],
-          ['Konkrétumok', [
+          ['Pedagógiai kívánságok', [
+            `Rendelkezésre álló eszközök és saját ötletek: ${payload.availableTools || defaultToolsText}`,
             `Kötelező mese/vers/dal: ${customNotes.requiredText || none}`,
-            `Saját ötletek, eszközök: ${customNotes.ideaNote || none}`,
             `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
-            `Külön kérés: ${customNotes.customRequest || none}`
+            `Külön kérés: ${customNotes.customRequest || none}`,
+            `Kidolgozottság: ${payload.detail === 'concise' ? 'Tömör vázlat' : 'Részletesen kidolgozott tervezet'}`
           ]],
           ['Speciális beállítások', [
             `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
+            `Előzmény: ${payload.elozmeny || none}`,
             `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
             `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
             `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
           ]],
           ['Generálási beállítások', [
-            `Részletességi szint: ${payload.detailLevel} / 100`,
             'Modell: Gemini 3.1 Pro (a prémium generálás hamarosan elérhető)',
-            `Kimeneti forma: ${payload.outputMode}`
+            `Kimeneti forma: ${displayOutputMode(payload.outputMode)}`
           ]]
         ];
 
@@ -791,6 +783,8 @@
           duration: getSelectedDuration(),
           dateValue: getDateValue(),
           selectedDays: getSelectedDays(),
+          energy: getChoice('energy', ENERGY_DEFAULT),
+          detail: getChoice('detail', 'detailed'),
           selectedGoals,
           docSettings,
           fields: {}
@@ -847,6 +841,8 @@
         });
 
         setSelectedDays(draft.selectedDays);
+        setChoice('energy', draft.energy, ENERGY_DEFAULT);
+        setChoice('detail', draft.detail, 'detailed');
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
         syncAdvancedSettingsOpenState();
@@ -1082,12 +1078,18 @@
           </div>`;
       }
 
+      // A dokumentumban nem szerepelhet a "Kréta" szó; a korábban mentett tervek régi értékét is átírjuk.
+      function displayOutputMode(mode) {
+        const value = String(mode || '').trim();
+        return !value || /kréta/i.test(value) ? 'Szakmai tervezet' : value;
+      }
+
       function buildDocumentHtml(result, request, docId) {
         const { settings } = getExportSettings();
         const { orientation } = getDocSettings(docId);
         const showMethods = settings.differentiation !== false;
         const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
-        const outputMode = escapeHtml(request.outputMode || 'Kréta');
+        const outputMode = escapeHtml(displayOutputMode(request.outputMode));
 
         if (result.is_weekly === true && Array.isArray(result.napok)) {
           const frame = result.heti_keretterv || {};
@@ -1474,13 +1476,8 @@
             return;
           }
 
-          if (field.matches('[data-field="detail-level"]')) {
-            field.value = '68';
-            return;
-          }
-
-          if (field.matches('[data-field="energy-level"]')) {
-            field.value = '65';
+          if (field.matches('[data-field="tevekenyseg-forma"]')) {
+            field.selectedIndex = 0;
             return;
           }
 
@@ -1511,13 +1508,16 @@
         });
 
         setSelectedDays(ALL_WEEKDAYS);
+        setChoice('energy', ENERGY_DEFAULT);
+        setChoice('detail', 'detailed');
         document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
+          if (button.matches('.segment[data-group="energy"], .segment[data-group="detail"]')) return;
           if (button.matches('.segment[data-group="duration"]')) {
             button.classList.toggle('active', button.dataset.value === 'Napi');
           } else if (button.matches('.chip')) {
             button.classList.remove('active');
           } else if (button.matches('.mode-pill')) {
-            button.classList.toggle('active', button.dataset.mode === 'Kréta');
+            button.classList.toggle('active', button.dataset.mode === 'Szakmai tervezet');
           }
         });
 
@@ -1581,7 +1581,7 @@
               customNote: document.querySelector('textarea[data-field="custom-note"]'),
               groupNote: document.querySelector('textarea[data-field="group-note"]'),
               requiredText: document.querySelector('textarea[data-field="required-text"]'),
-              ideaNote: document.querySelector('textarea[data-field="idea-note"]'),
+              availableTools: document.querySelector('textarea[data-field="available-tools"]'),
               customRequest: document.querySelector('textarea[data-field="custom-request"]')
             };
 
@@ -1592,7 +1592,7 @@
             if (formFields.customNote) formFields.customNote.value = plan.customNote || '';
             if (formFields.groupNote) formFields.groupNote.value = plan.customNotes?.groupNote ?? plan.groupNote ?? '';
             if (formFields.requiredText) formFields.requiredText.value = plan.customNotes?.requiredText ?? plan.requiredText ?? '';
-            if (formFields.ideaNote) formFields.ideaNote.value = plan.customNotes?.ideaNote ?? plan.ideaNote ?? '';
+            if (formFields.availableTools) formFields.availableTools.value = [plan.availableTools, plan.customNotes?.ideaNote ?? plan.ideaNote].filter(Boolean).join('; ');
             if (formFields.customRequest) formFields.customRequest.value = plan.customNotes?.customRequest ?? plan.customRequest ?? '';
             const duration = plan.duration || 'Napi';
             document.querySelectorAll('.segment').forEach((segment) => {
@@ -1676,6 +1676,14 @@
           });
         });
       }
+
+      document.querySelectorAll('.segment[data-group="energy"], .segment[data-group="detail"]').forEach((option) => {
+        option.addEventListener('click', () => {
+          setChoice(option.dataset.group, option.dataset.value);
+          updateSummary();
+          persistDraftState();
+        });
+      });
 
       document.querySelectorAll('.mode-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
@@ -1992,8 +2000,7 @@
       }
 
       function getDetailLevel() {
-        const value = Number(document.querySelector('[data-field="detail-level"]')?.value ?? 68);
-        return Number.isFinite(value) ? Math.min(Math.max(value, 0), 100) : 68;
+        return DETAIL_LEVELS[getChoice('detail', 'detailed')] ?? DETAIL_LEVELS.detailed;
       }
 
       function getCustomNotes() {
@@ -2001,7 +2008,6 @@
           primary: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
           groupNote: document.querySelector('textarea[data-field="group-note"]')?.value || '',
           requiredText: document.querySelector('textarea[data-field="required-text"]')?.value || '',
-          ideaNote: document.querySelector('textarea[data-field="idea-note"]')?.value || '',
           customRequest: document.querySelector('textarea[data-field="custom-request"]')?.value || '',
           specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]'))
             .filter((checkbox) => checkbox.checked)
@@ -2029,17 +2035,18 @@
           teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
           groupName: document.querySelector('input[data-field="group-name"]')?.value || '',
           dateValue: getDateValue(),
-          tevekenysegForma: document.querySelector('input[data-field="tevekenyseg-forma"]')?.value || '',
+          tevekenysegForma: document.querySelector('[data-field="tevekenyseg-forma"]')?.value || '',
           elozmeny: document.querySelector('textarea[data-field="elozmeny"]')?.value || '',
           childCount: document.querySelector('[data-field="child-count"]')?.value
             ? Number(document.querySelector('[data-field="child-count"]').value) : null,
-          energyLevel: Number(document.querySelector('[data-field="energy-level"]')?.value ?? 65),
+          energyLevel: getChoice('energy', ENERGY_DEFAULT),
           hasPreschoolers: document.querySelector('[data-field="has-preschoolers"]')?.checked ?? false,
           focusAreas: Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea),
           customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
           customNotes: getCustomNotes(),
           detailLevel: getDetailLevel(),
-          outputMode: document.querySelector('.mode-pill.active')?.dataset.mode || 'Kréta',
+          detail: getChoice('detail', 'detailed'),
+          outputMode: document.querySelector('.mode-pill.active')?.dataset.mode || 'Szakmai tervezet',
           selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
           specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
           showLiteratureAtBottom: document.querySelector('input[data-field="show-literature"]')?.checked || false,
@@ -2050,13 +2057,13 @@
         [0, 'Heti tematikus keret és célok tervezése...'],
         [30, 'Hétfői és keddi tevékenységek kidolgozása...'],
         [65, 'Szerdai és csütörtöki játékok és differenciálás összeállítása...'],
-        [100, 'Pénteki záróélmény kidolgozása és Kréta-formázás...']
+        [100, 'Pénteki záróélmény kidolgozása és formázás...']
       ];
       const DAILY_PHASES = [
         [0, 'Ráhangolódás a témára...'],
         [12, 'A fő tevékenység kidolgozása...'],
         [28, 'Differenciálás és gyakorlás összeállítása...'],
-        [42, 'Összegzés és Kréta-formázás...']
+        [42, 'Összegzés és formázás...']
       ];
 
       function startGenerationLoader(payload) {
@@ -2335,7 +2342,7 @@
         return `gen_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
       }
 
-      const LOCK_MESSAGE = 'A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el.';
+      const LOCK_MESSAGE = 'A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.';
 
       // Zárolt állapotban a tevékenység-szekciót a renderelő már eleve kihagyja; a kapu csak a feloldó felületet teszi a dokumentum végére.
       function applyPaywall(host) {

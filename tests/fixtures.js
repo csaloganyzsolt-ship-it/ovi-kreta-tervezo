@@ -27,7 +27,7 @@ function makePayload(overrides = {}) {
       specialNeeds: ['Mozgásfejlődési elmaradás']
     },
     detailLevel: 90,
-    outputMode: 'Kréta',
+    outputMode: 'Szakmai tervezet',
     showLiteratureAtBottom: false,
     ...overrides
   };

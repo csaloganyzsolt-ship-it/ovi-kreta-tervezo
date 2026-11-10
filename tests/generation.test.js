@@ -280,3 +280,19 @@ test('weekly generation covers only the selected days in prompt and response val
   assert.throws(() => normalizeResponse(make(['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']), payload), /kiválasztott 3 napot/);
   assert.throws(() => normalizeResponse(make(['Hétfő']), payload), /kiválasztott 3 napot/);
 });
+
+test('mixed group prompts carry the mandatory 3-level differentiation rule', () => {
+  const mixed = buildPrompt(makePayload({ group: 'Vegyes csoport' }));
+  assert.match(mixed, /3 szintű differenciálás korcsoportok szerint/);
+  const weekly = buildPrompt(makePayload({ group: 'Vegyes csoport', duration: 'Heti', includeDailyBreakdown: true }));
+  assert.match(weekly, /3 szintű differenciálás korcsoportok szerint/);
+  assert.doesNotMatch(buildPrompt(makePayload({ group: 'Nagycsoport' })), /3 szintű differenciálás/);
+});
+
+test('generated output never contains the word Kréta', () => {
+  const plan = makePlan();
+  plan.tema = 'Kréta-kompatibilis falevelek';
+  plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = 'A Kréta rendszerbe másolható.';
+  const result = normalizeResponse(plan, makePayload());
+  assert.doesNotMatch(JSON.stringify(result), /kréta/i);
+});

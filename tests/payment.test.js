@@ -360,7 +360,7 @@ test('locked preview renders no activity section at all and shows the unlock not
   assert.equal(host.querySelectorAll('.official-table tbody tr').length, 0);
   assert.ok(!host.textContent.includes(secret));
   assert.doesNotMatch(host.textContent, /TITKOS-MODSZER/);
-  assert.match(host.textContent, /A részletes tevékenységmenet kidolgozása és a Kréta-letöltés a terv feloldása után érhető el\./);
+  assert.match(host.textContent, /A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el\./);
 
   window.unlockGeneration('g9', 'cs_test_g9');
   window.renderResultDocument(window.lastResult);
@@ -485,7 +485,7 @@ test('footer has three organised columns and checkout modal has the new title', 
   const window = await loadLockedApp(t);
   const document = window.document;
   assert.equal(document.querySelectorAll('#siteFooter .footer-col').length, 3);
-  assert.equal(document.getElementById('checkoutTitle').textContent, 'Teljes tervezet és Kréta-letöltés feloldása');
+  assert.equal(document.getElementById('checkoutTitle').textContent, 'Teljes tervezet és letöltés feloldása');
 });
 
 test('CORS allows ovitervezo.hu, www and localhost but rejects other origins', () => {
