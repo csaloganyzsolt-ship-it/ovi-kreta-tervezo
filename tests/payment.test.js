@@ -619,3 +619,56 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
   assert.match(test.html, /teszt/);
   assert.doesNotMatch(test.html, /E-számla/);
 });
+
+test('sheets webhook payload has all purchase fields and failures never throw', async () => {
+  const sheets = require('../services/sheetsService');
+  const session = { id: 'cs_live_a1oHW2xOQfzz8abc7TTU12', created: Date.UTC(2026, 10, 10, 8) / 1000, metadata: { plan: 'weekly_detailed', title: 'Őszi erdő' } };
+  const customer = { name: 'Teszt Elek', email: 'a@b.hu', zip: '9153', city: 'Öttevény', address: 'Arany J. u. 10.' };
+  const payload = sheets.buildPayload({ session, invoiceNumber: 'OVITE-2026-1', customer }, new Date(Date.UTC(2026, 10, 10, 8, 5)));
+  assert.deepEqual(payload, {
+    datum: '2026-11-10 09:05', rendelesszam: 'OVI-261110-7TTU12', szamlaszam: 'OVITE-2026-1', vevo_neve: 'Teszt Elek', vevo_email: 'a@b.hu',
+    szamlazasi_cim: '9153, Öttevény, Arany J. u. 10.', csomag: 'Heti csomag', tervezet_temaja: 'Őszi erdő', fizetett_osszeg_huf: 890, stripe_session_id: session.id
+  });
+  assert.deepEqual(await sheets.recordPurchase({ session, customer }, { env: {} }), { sent: false, reason: 'not_configured' });
+  const env = { GOOGLE_SHEETS_WEBHOOK_URL: 'https://script.google.com/macros/s/x/exec' };
+  const calls = [];
+  const ok = await sheets.recordPurchase({ session, customer }, { env, fetch: async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return { ok: true }; } });
+  assert.equal(ok.sent, true);
+  assert.equal(calls[0].body.rendelesszam, 'OVI-261110-7TTU12');
+  const down = await sheets.recordPurchase({ session, customer }, { env, fetch: async () => { throw new Error('ECONNREFUSED'); } });
+  assert.equal(down.sent, false);
+  const bad = await sheets.recordPurchase({ session, customer }, { env, fetch: async () => ({ ok: false, status: 500 }) });
+  assert.equal(bad.sent, false);
+});
+
+test('purchase e-mail is copied (BCC) to the admin address with all attachments when configured', async () => {
+  const mailService = require('../services/mailService');
+  const sent = [];
+  const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
+  const args = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF') };
+  await mailService.sendPurchaseEmail(args, { transport, env: { ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' } });
+  await mailService.sendPurchaseEmail(args, { transport, env: {} });
+  assert.equal(sent[0].bcc, 'admin@ovitervezo.hu');
+  assert.equal(sent[0].attachments.length, 2);
+  assert.equal(sent[1].bcc, undefined);
+});
+
+test('landing page precedes the planner and the SEO/Google bits are in place', () => {
+  const { execFileSync } = require('node:child_process');
+  const cwd = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(cwd, 'index.html'), 'utf8');
+  assert.ok(html.indexOf('id="landing"') > 0 && html.indexOf('id="landing"') < html.indexOf('id="tervezo"'));
+  for (const text of ['Tervező indítása', '390 Ft', '890 Ft', '1. Adja meg', '2. Elkészül', '3. Töltse le']) assert.ok(html.includes(text), text);
+  assert.match(html, /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
+  assert.match(html, /policies\.google\.com\/privacy/);
+  assert.match(html, /policies\.google\.com\/terms/);
+  assert.match(html, /<meta name="description" content="[^"]*ONAP/);
+  for (const kw of ['óvodai tervezés', 'tematikus terv', 'foglalkozásterv minta', 'heti tervezet', 'ONAP']) assert.ok(html.includes(kw), kw);
+  const env = { ...process.env, API_BASE_URL: 'https://api.example.onrender.com', GOOGLE_SITE_VERIFICATION: 'abcDEF1234567890xyz' };
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd, env });
+  const built = fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8');
+  assert.match(built, /<meta name="google-site-verification" content="abcDEF1234567890xyz" \/>/);
+  const { GOOGLE_SITE_VERIFICATION, ...clean } = env;
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd, env: clean });
+  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'index.html'), 'utf8'), /google-site-verification/);
+});

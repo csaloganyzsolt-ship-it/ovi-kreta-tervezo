@@ -49,3 +49,7 @@ services:
         sync: false
       - key: TEST_DELIVERY_RECIPIENTS
         sync: false
+      - key: GOOGLE_SHEETS_WEBHOOK_URL
+        sync: false
+      - key: ADMIN_NOTIFICATION_EMAIL
+        sync: false

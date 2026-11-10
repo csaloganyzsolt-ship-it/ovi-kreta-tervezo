@@ -76,7 +76,7 @@ function getClient(env = process.env, deps = {}) {
   return cachedClient;
 }
 
-async function createCheckoutSession({ plan, email, generationId } = {}, deps = {}) {
+async function createCheckoutSession({ plan, email, generationId, title } = {}, deps = {}) {
   const env = deps.env || process.env;
   const product = parsePlan(plan);
   const customerEmail = parseEmail(email);
@@ -108,7 +108,7 @@ async function createCheckoutSession({ plan, email, generationId } = {}, deps = 
         product_data: { name: product.invoiceName, description: product.invoiceName }
       }
     }],
-    metadata: { plan: product.key, generationId: String(generationId || '').slice(0, 100) },
+    metadata: { plan: product.key, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
     success_url: `${baseUrl}/?checkout_session={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/?checkout=cancelled`
   });

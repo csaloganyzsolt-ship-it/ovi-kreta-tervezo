@@ -104,3 +104,17 @@ A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel a
 - A teszt végpont a Renderen csak `TEST_DELIVERY_ENABLED=true` mellett, a GitHub Pages/localhost eredetről, IP-nként 10/óra korláttal működik (opcionális `TEST_DELIVERY_RECIPIENTS`, `TEST_DELIVERY_ORIGINS`).
 - Mindkét deploy a `main` push után fut (`deploy.yml`, `deploy-nethely.yml`).
 - SMTP ellenőrzés: `node scripts/test-email.js sajat@email.hu` (a `.env` SMTP_* változóival).
+
+## Vásárlások mentése Google Táblázatba
+
+1. Google Táblázat → Bővítmények → Apps Script, és illeszd be:
+   ```js
+   function doPost(e) {
+     const d = JSON.parse(e.postData.contents);
+     SpreadsheetApp.getActiveSheet().appendRow([d.datum, d.rendelesszam, d.szamlaszam, d.vevo_neve, d.vevo_email, d.szamlazasi_cim, d.csomag, d.tervezet_temaja, d.fizetett_osszeg_huf, d.stripe_session_id]);
+     return ContentService.createTextOutput('ok');
+   }
+   ```
+2. Üzembe helyezés → Webalkalmazás (Futtatás: én; Hozzáférés: bárki) → a kapott URL a Renderen a `GOOGLE_SHEETS_WEBHOOK_URL`.
+3. `ADMIN_NOTIFICATION_EMAIL`: erre a címre BCC-ben megy a vásárlói levél (tervezet + számla).
+4. Search Console: a `GOOGLE_SITE_VERIFICATION` a Nethely deploy build környezetében kerül az oldalba (GitHub Secret: `GOOGLE_SITE_VERIFICATION`, a deploy-nethely workflow átadja a buildnek).

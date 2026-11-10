@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OviTervező – Kréta-kompatibilis Óvodai Tervezet Sablon és Készítő</title>
-    <meta name="description" content="Készíts professzionális, Kréta-kompatibilis napi és heti óvodai foglalkozástervezeteket percek alatt. Letölthető Word és PDF sablonok óvodapedagógusoknak." />
-    <meta name="keywords" content="óvodai tervezet sablon, óvodai foglalkozás tervezet letöltés, heti tervezet minta óvoda, kréta óvodai tervezet, tematikus terv óvoda" />
+    <meta name="description" content="Óvodai tervezés percek alatt: tematikus terv, heti tervezet és foglalkozásterv minta az ONAP-hoz igazodva. Kréta-kompatibilis, letölthető Word és PDF tervezetek óvodapedagógusoknak." />
+    <!--GOOGLE_SITE_VERIFICATION-->
+    <meta name="keywords" content="óvodai tervezés, tematikus terv, foglalkozásterv minta, heti tervezet, ONAP, óvodai tervezet sablon, kréta óvodai tervezet" />
     <link rel="canonical" href="https://ovitervezo.hu/" />
     <meta property="og:title" content="OviTervező – Óvodai Tervezet Készítő Szoftver" />
     <meta property="og:description" content="Spórolj heti több óra adminisztrációt. Kréta-kompatibilis óvodai tervezetek 1 kattintással." />
@@ -1482,6 +1483,28 @@
       .modal-actions button.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
       .modal-note { padding: 10px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 14px; }
       .btn.is-busy, .btn.is-busy:disabled { opacity: .6; cursor: progress; filter: grayscale(.4); }
+      /* Fogadóoldal: menta/pasztell kártyák, az e-mail sablonnal azonos arculat */
+      .landing { margin: 8px 0 28px; display: grid; gap: 22px; }
+      .landing-hero { background: linear-gradient(135deg, #d8f0e3, #eef6f1); border: 1px solid #cfe8da; border-radius: 24px; padding: 40px 28px; text-align: center; color: #1f3d34; }
+      .landing-hero h1 { margin: 0 0 12px; font-size: clamp(26px, 5vw, 40px); line-height: 1.2; color: #1f5f52; }
+      .landing-hero p { margin: 0 auto 22px; max-width: 640px; font-size: 18px; line-height: 1.6; }
+      .landing-cta { display: inline-block; min-height: 48px; padding: 14px 30px; border-radius: 999px; background: #3fae84; color: #fff; font-weight: 700; font-size: 17px; text-decoration: none; }
+      .landing-cta:hover, .landing-cta:focus-visible { background: #2f946f; }
+      .landing-steps, .landing-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .landing-prices { grid-template-columns: repeat(2, 1fr); }
+      .landing-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 20px; padding: 20px; text-align: center; }
+      .landing-card .icon { font-size: 30px; display: block; margin-bottom: 8px; }
+      .landing-card h3 { margin: 0 0 6px; font-size: 18px; color: #1f5f52; }
+      .landing-card p { margin: 0; color: var(--muted, #5b6b64); line-height: 1.5; }
+      .landing-card .price { font-size: 28px; font-weight: 700; color: #e0885a; margin: 4px 0; }
+      .landing h2 { margin: 0; text-align: center; font-size: 22px; color: #1f5f52; }
+      .landing-note { text-align: center; font-size: 14px; color: var(--muted, #5b6b64); margin: 0; }
+      :root[data-theme="dark"] .landing-hero { background: linear-gradient(135deg, #24382f, #1f2b26); border-color: #38564a; color: #e6f2ec; }
+      :root[data-theme="dark"] .landing-hero h1, :root[data-theme="dark"] .landing h2, :root[data-theme="dark"] .landing-card h3 { color: #9fd8c0; }
+      :root[data-theme="dark"] .landing-card { border-color: #38564a; }
+      @media (max-width: 768px) { .landing-steps, .landing-prices { grid-template-columns: 1fr; } .landing-hero { padding: 28px 18px; } }
+      .grecaptcha-badge { visibility: hidden !important; }
+      .recaptcha-note { font-size: 12px; opacity: .8; }
       .unlock-cta { min-height: 48px; padding: 12px 22px; border: 0; border-radius: 14px; background: var(--primary-dark); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
       .unlock-cta[hidden], .unlocked-badge[hidden] { display: none; }
       .preview-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
@@ -1536,7 +1559,27 @@
         <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">🌙 Sötét mód</button>
       </header>
 
-      <main class="app">
+      <section class="landing" id="landing" aria-label="Bemutatkozás">
+        <div class="landing-hero">
+          <h1>Óvodai tervezés percek alatt, hogy több idő jusson a gyerekekre</h1>
+          <p>Tematikus terv, heti tervezet és részletes foglalkozásterv minta az ONAP-hoz igazodva – szerkeszthető Word és nyomtatható PDF formátumban, Kréta-kompatibilis szerkezettel.</p>
+          <a class="landing-cta" id="startPlannerBtn" href="#tervezo">Tervező indítása</a>
+        </div>
+        <h2>Három egyszerű lépésben a kész tervezetig</h2>
+        <div class="landing-steps">
+          <div class="landing-card"><span class="icon" aria-hidden="true">📝</span><h3>1. Adja meg az alapadatokat</h3><p>Korcsoport, téma, tevékenységi terület és a csoport igényei.</p></div>
+          <div class="landing-card"><span class="icon" aria-hidden="true">✨</span><h3>2. Elkészül a tervezet</h3><p>Napi vagy heti, részletesen kidolgozott foglalkozásmenettel.</p></div>
+          <div class="landing-card"><span class="icon" aria-hidden="true">📥</span><h3>3. Töltse le vagy másolja a Krétába</h3><p>Word, PDF és heti csomagnál ZIP – azonnal, e-számlával.</p></div>
+        </div>
+        <h2>Egyszeri díj, havidíj nélkül</h2>
+        <div class="landing-prices">
+          <div class="landing-card"><h3>Napi tervezet</h3><div class="price">390 Ft</div><p>Egy napra szóló, részletes tervezet.</p></div>
+          <div class="landing-card"><h3>Heti csomag</h3><div class="price">890 Ft</div><p>Heti keretterv és 5 napi részletes tervezet.</p></div>
+        </div>
+        <p class="landing-note">Az árak bruttó összegek. A tervező kipróbálása és az előnézet fizetés előtt is elérhető.</p>
+      </section>
+
+      <main class="app" id="tervezo">
         <div class="main-form-layout">
         <aside class="panel wizard">
           <button class="wizard-progress" id="wizardProgressToggle" type="button" aria-expanded="false" aria-controls="wizardList">
@@ -1982,6 +2025,7 @@
             </div>
             <span>Fogyasztói jogvita esetén: Győr-Moson-Sopron Vármegyei Békéltető Testület (9021 Győr, Szent István út 10/a)</span>
             <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">Online vitarendezési platform</a>
+            <span class="recaptcha-note">Az oldalt a Google reCAPTCHA védheti: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Adatvédelmi irányelvek</a> és <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Szolgáltatási feltételek</a>.</span>
           </div>
           <div class="footer-col">
             <h3>Tárhely és kapcsolat</h3>
@@ -3949,7 +3993,7 @@
           const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan: planKind(), email, generationId: lastResult.generationId }),
+            body: JSON.stringify({ plan: planKind(), email, generationId: lastResult.generationId, title: planTitle() }),
           });
           const data = await response.json();
           if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);

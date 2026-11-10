@@ -4,6 +4,7 @@ const express = require('express');
 const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
 const mailService = require('../services/mailService');
+const sheetsService = require('../services/sheetsService');
 
 function sendPaymentError(res, error, context) {
   const status = error.status || 500;
@@ -139,6 +140,10 @@ async function stripeWebhook(req, res) {
         address: [address.line1, address.line2].filter(Boolean).join(' ')
       }
     });
+    if (!result.duplicate && !result.mock) {
+      // Nem várjuk meg: a Google Táblázat hibája nem érintheti a Stripe válaszát és a vevőt.
+      sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, customer: { name: details.name, email: details.email || session.customer_email, zip: address.postal_code, city: address.city, address: [address.line1, address.line2].filter(Boolean).join(' ') } }).catch(() => {});
+    }
     return res.json({ received: true, invoice: result });
   } catch (error) {
     // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.

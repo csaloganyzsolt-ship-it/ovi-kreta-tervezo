@@ -19,9 +19,16 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) {
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 
-for (const file of ['index.html', 'robots.txt', 'sitemap.xml']) {
+function applySiteVerification(html) {
+  const code = String(process.env.GOOGLE_SITE_VERIFICATION || '').trim();
+  if (code && !/^[\w-]{10,200}$/.test(code)) throw new Error('Érvénytelen GOOGLE_SITE_VERIFICATION érték.');
+  return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
+}
+
+for (const file of ['robots.txt', 'sitemap.xml']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
+fs.writeFileSync(path.join(out, 'index.html'), applySiteVerification(fs.readFileSync(path.join(root, 'index.html'), 'utf8')));
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }

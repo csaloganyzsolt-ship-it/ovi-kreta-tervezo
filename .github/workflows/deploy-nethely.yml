@@ -30,6 +30,8 @@ jobs:
         run: npm test
 
       - name: Build static package for Nethely
+        env:
+          GOOGLE_SITE_VERIFICATION: ${{ secrets.GOOGLE_SITE_VERIFICATION }}
         run: node scripts/build-nethely.js
 
       - name: Sync dist-nethely to Nethely over FTP
