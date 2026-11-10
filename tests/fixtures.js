@@ -1,3 +1,5 @@
+process.env.GENERATE_RATE_LIMIT = process.env.GENERATE_RATE_LIMIT || '1000';
+
 function makePayload(overrides = {}) {
   return {
     duration: 'Napi',

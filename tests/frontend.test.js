@@ -105,6 +105,7 @@ test('a failed retry clears the previous result and shows the actual backend det
     error: 'A generálás sikertelen.',
     details: 'Gemini MAX_TOKENS: a válasz nem teljes.'
   }, { status: 502 });
+  window.document.querySelector('[data-field="theme"]').value = 'Másik téma';
   await window.generatePlan();
   assert.match(window.document.querySelector('#generationErrorBanner').textContent, /MAX_TOKENS/);
   assert.equal(window.document.querySelector('#previewContent').style.display, 'none');
@@ -458,4 +459,37 @@ test('weekly day picker toggles days, keeps at least one and feeds payload and s
   assert.match(document.querySelector('#weeklyDaysHint').textContent, /Legalább egy napot ki kell választani!/);
   window.setDurationSelection('Napi');
   assert.equal(document.querySelector('#weeklySettingsPanel').hidden, true);
+});
+
+test('identical input is served from the local cache without calling the backend', async (t) => {
+  const window = await loadApp(t);
+  let calls = 0;
+  window.fetch = async () => { calls += 1; return Response.json({ success: true, ...makePlan() }); };
+  await window.generatePlan();
+  await window.generatePlan();
+  assert.equal(calls, 1);
+  assert.equal(window.document.querySelector('#previewContent').style.display, 'block');
+  assert.equal(JSON.parse(window.localStorage.getItem('oviKreta_dailyCount')).count, 1);
+});
+
+test('the daily free limit blocks a different request after 3 generations and unlock resets it', async (t) => {
+  const window = await loadApp(t);
+  let calls = 0;
+  window.fetch = async () => { calls += 1; return Response.json({ success: true, ...makePlan() }); };
+  const theme = window.document.querySelector('[data-field="theme"]');
+  for (const value of ['A', 'B', 'C']) { theme.value = value; await window.generatePlan(); }
+  assert.equal(calls, 3);
+  theme.value = 'D';
+  await window.generatePlan();
+  assert.equal(calls, 3);
+  assert.match(window.document.querySelector('#generationErrorBanner').textContent, /Elérted a napi ingyenes tervezési limitet \(3\/3\)/);
+  window.unlockGeneration('g1');
+  assert.equal(JSON.parse(window.localStorage.getItem('oviKreta_dailyCount')).count, 0);
+});
+
+test('a 429 from the server shows the limit message', async (t) => {
+  const window = await loadApp(t);
+  window.fetch = async () => Response.json({ success: false, error: 'Napi generálási limit túllépve.' }, { status: 429 });
+  await window.generatePlan();
+  assert.match(window.document.querySelector('#generationErrorBanner').textContent, /napi ingyenes tervezési limitet/);
 });

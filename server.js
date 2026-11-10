@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 
@@ -482,7 +483,17 @@ async function callGemini(prompt, { model = FAST_MODEL, maxOutputTokens = 12288,
   return text;
 }
 
-app.post('/api/generate', async (req, res) => {
+// IP-alapú napi limit; csak a sikeres generálások számítanak, így a hibás próbálkozás nem fogyasztja el a keretet.
+const generateLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: () => Number(process.env.GENERATE_RATE_LIMIT) || 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipFailedRequests: true,
+  handler: (_req, res) => res.status(429).json({ success: false, error: 'Napi generálási limit túllépve.' })
+});
+
+app.post('/api/generate', generateLimiter, async (req, res) => {
   const payload = req.body || {};
   try {
     if (typeof payload !== 'object' || Array.isArray(payload)) {
@@ -525,4 +536,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+module.exports = { generateLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };

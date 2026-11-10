@@ -520,8 +520,37 @@
         history: 'oviKretaPlansHistory',
         draft: 'oviKretaDraft',
         theme: 'oviKretaTheme',
-        generatedPlan: 'oviKretaGeneratedPlan'
+        generatedPlan: 'oviKretaGeneratedPlan',
+        lastGeneration: 'oviKreta_lastGeneration',
+        dailyCount: 'oviKreta_dailyCount'
       };
+      const DAILY_FREE_LIMIT = 3;
+      const LIMIT_MESSAGE = 'Elérted a napi ingyenes tervezési limitet (3/3). Kérjük, fizesd ki a már elkészült tervezetet a letöltéshez, vagy térj vissza holnap új tervezet generálásához!';
+
+      function todayKey() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      }
+
+      function readDailyCount() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.dailyCount) || 'null');
+          if (stored && stored.date === todayKey() && Number.isFinite(stored.count)) return stored;
+        } catch (_error) { /* hibás érték: új számláló */ }
+        return { date: todayKey(), count: 0 };
+      }
+
+      function writeDailyCount(count) {
+        try { localStorage.setItem(STORAGE_KEYS.dailyCount, JSON.stringify({ date: todayKey(), count })); } catch (_error) { /* nincs tár */ }
+      }
+
+      function readCachedGeneration(payload) {
+        try {
+          const cached = JSON.parse(localStorage.getItem(STORAGE_KEYS.lastGeneration) || 'null');
+          if (cached && cached.payload === JSON.stringify(payload) && cached.result) return cached.result;
+        } catch (_error) { /* hibás gyorsítótár */ }
+        return null;
+      }
 
       function resolveActiveDurationFromDom() {
         const activeSegment = document.querySelector('.segment.active[data-group="duration"]');
@@ -2089,6 +2118,22 @@
 
       async function generatePlan() {
         hideGenerationErrorBanner();
+        const earlyPayload = buildGenerationPayload();
+        const cachedResult = readCachedGeneration(earlyPayload);
+        if (cachedResult) {
+          console.info('Azonos bemenet: a mentett tervezet jelenik meg, a szerver hívása kimarad.');
+          renderResultDocument(cachedResult);
+          lastResult = cachedResult;
+          previewReady = true;
+          renderPreview();
+          updateExportLock();
+          document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        if (readDailyCount().count >= DAILY_FREE_LIMIT) {
+          showGenerationError(LIMIT_MESSAGE);
+          return;
+        }
         revokeUnlock(lastResult?.generationId);
         resetGeneratedResult();
         nextBtn.disabled = true;
@@ -2120,6 +2165,10 @@
 
           if (!response.ok || !data || data.success !== true) {
             const message = [data?.error, data?.details].filter((part) => typeof part === 'string' && part.trim()).join(' ');
+            if (response.status === 429) {
+              writeDailyCount(DAILY_FREE_LIMIT);
+              throw new Error(LIMIT_MESSAGE);
+            }
             throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
           }
 
@@ -2131,6 +2180,12 @@
             localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
           } catch (storageError) {
             console.warn('A generált terv nem menthető a böngészőbe:', storageError);
+          }
+          writeDailyCount(readDailyCount().count + 1);
+          try {
+            localStorage.setItem(STORAGE_KEYS.lastGeneration, JSON.stringify({ payload: JSON.stringify(payload), result: generatedResult }));
+          } catch (storageError) {
+            console.warn('A gyorsítótár nem menthető:', storageError);
           }
           renderPreview();
           setTimeout(() => {
@@ -2146,7 +2201,7 @@
         } catch (error) {
           resetGeneratedResult();
           const message = error?.message || 'A generálás hiba miatt nem tudott lefutni.';
-          showGenerationError(`Generálási hiba: ${message}`);
+          showGenerationError(message === LIMIT_MESSAGE ? message : `Generálási hiba: ${message}`);
         } finally {
           stopLoader();
           nextBtn.disabled = false;
@@ -2167,7 +2222,7 @@
           currentStep += 1;
           renderStep();
           scrollToFormTop();
-        } else if (needsOverwriteConfirm()) {
+        } else if (needsOverwriteConfirm() && !readCachedGeneration(buildGenerationPayload())) {
           openModal('confirmRegenModal');
         } else {
           generatePlan();
@@ -2437,6 +2492,7 @@
         const ids = getUnlockedIds();
         if (!ids.includes(generationId)) ids.push(generationId);
         localStorage.setItem('oviKretaUnlocked', JSON.stringify(ids));
+        writeDailyCount(0);
         if (sessionId) {
           const sessions = getPaidSessions();
           sessions[generationId] = sessionId;

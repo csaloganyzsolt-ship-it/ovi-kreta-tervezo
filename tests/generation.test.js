@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { test } = require('node:test');
-const { app, buildPrompt, callGemini, clampRows, normalizeResponse } = require('../server');
+const { app, generateLimiter, buildPrompt, callGemini, clampRows, normalizeResponse } = require('../server');
 const { makePayload, makePlan } = require('./fixtures');
 
 function stubGemini(t, body, status = 200) {
@@ -292,5 +292,35 @@ test('mixed group prompts carry the mandatory 3-level differentiation rule', () 
 test('prompts never mention protected state systems', () => {
   for (const payload of [makePayload(), makePayload({ duration: 'Heti', includeDailyBreakdown: true, group: 'Vegyes csoport' })]) {
     assert.doesNotMatch(buildPrompt(payload), /onap|onoap|\bOAP\b|kréta/i);
+  }
+});
+
+test('POST /api/generate answers 429 after the per-IP daily limit', async () => {
+  const previous = process.env.GENERATE_RATE_LIMIT;
+  process.env.GENERATE_RATE_LIMIT = '2';
+  await Promise.all(['127.0.0.1', '::ffff:127.0.0.1', '::1'].map((ip) => generateLimiter.resetKey(ip)));
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}/api/generate`;
+  const original = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  try {
+    // Sikertelen (503) hívások nem számítanak bele, ezért a limit-ellenőrzés külön, sikeres hívásokkal történik.
+    const realFetch = global.fetch;
+    global.fetch = async (input, init) => (String(input).includes('generativelanguage')
+      ? Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(makePlan()) }] } }] })
+      : realFetch(input, init));
+    process.env.GEMINI_API_KEY = 'test';
+    const post = () => realFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(makePayload()) });
+    assert.equal((await post()).status, 200);
+    assert.equal((await post()).status, 200);
+    const blocked = await post();
+    assert.equal(blocked.status, 429);
+    assert.deepEqual(await blocked.json(), { success: false, error: 'Napi generálási limit túllépve.' });
+    global.fetch = realFetch;
+  } finally {
+    process.env.GENERATE_RATE_LIMIT = previous;
+    if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original;
+    server.close();
   }
 });
