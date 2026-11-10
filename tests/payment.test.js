@@ -496,7 +496,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'index.html', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -734,4 +734,17 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   assert.equal(app.offers.highPrice, '890');
   assert.match(html, /<title>Óvodai tervezet készítés gyorsan és egyszerűen \| OviTervező<\/title>/);
   assert.match(html, /name="description" content="Óvodai tervezet készítés az ONAP alapján\. Készíts pedagógiailag átgondolt heti tervezetet és foglalkozásterv mintát percek alatt/);
+});
+
+test('both pages use the OT logo and favicon, and both builds ship the icon files', () => {
+  const root = path.join(__dirname, '..');
+  for (const page of ['index.html', 'tervezo.html']) {
+    const html = fs.readFileSync(path.join(root, page), 'utf8');
+    assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg"/);
+    assert.match(html, /class="brand-mark"/);
+    assert.match(html, /<span class="brand-text">Ovi<strong>Tervező<\/strong><\/span>/);
+    assert.ok(!html.includes('✦'));
+  }
+  for (const f of ['favicon.svg', 'logo.svg']) assert.match(fs.readFileSync(path.join(root, f), 'utf8'), /^<svg /);
+  assert.equal(fs.readFileSync(path.join(root, 'favicon.ico')).readUInt16LE(2), 1);
 });

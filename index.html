@@ -24,13 +24,16 @@
         document.documentElement.dataset.theme = localStorage.getItem('oviKretaTheme') === 'dark' ? 'dark' : 'light';
       } catch (_error) {}
     </script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="any" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="page">
       <header class="topbar">
         <a class="brand" href="index.html" aria-label="OviTervező főoldal" style="text-decoration:none;color:inherit;">
-          <span>OviTervező <small style="font-weight:500;opacity:.7">ovitervezo.hu</small></span>
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
+          <span class="brand-text">Ovi<strong>Tervező</strong></span>
         </a>
         <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
       </header>

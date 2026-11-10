@@ -32,7 +32,7 @@ function applySiteVerification(html) {
 }
 
 // Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, site.js, config.js), ezért bármilyen gyökérben működik.
-for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js']) {
+for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 for (const page of ['index.html', 'tervezo.html']) {

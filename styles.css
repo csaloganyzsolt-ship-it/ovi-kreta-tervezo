@@ -208,16 +208,10 @@
     letter-spacing: 0.01em;
   }
 
-  .brand-mark {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    background: linear-gradient(135deg, var(--mint), var(--blue));
-    color: var(--primary-text);
-    font-size: 22px;
-  }
+  .brand-mark { width: 42px; height: 42px; flex: none; }
+  .brand-text { font-size: 22px; font-weight: 500; color: var(--text); }
+  .brand-text strong { font-weight: 800; color: #2f946f; }
+  :root[data-theme="dark"] .brand-text strong { color: #7fd8b4; }
 
   .tiny-link {
     background: transparent;

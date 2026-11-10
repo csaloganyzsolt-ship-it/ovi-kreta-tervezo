@@ -5,7 +5,7 @@ const requiredFiles = [
   'index.html',
   'tervezo.html',
   'styles.css',
-  'site.js',
+  'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg',
   '.github/workflows/test.yml',
   '.github/workflows/deploy.yml',
 ];
