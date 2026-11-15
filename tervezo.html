@@ -476,9 +476,11 @@
           <p id="checkoutTestNote" class="modal-test-strip" hidden>Teszt üzemmód – tesztkártya: 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
           <p id="checkoutSummary" class="modal-note"></p>
           <p class="modal-note" id="checkoutDeliveryNote">A sikeres fizetés után a tervezet azonnal letölthető (PDF, Word), az e-számlát pedig a megadott e-mail címre küldjük, és a felületen is letölthető.</p>
+          <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
           <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatkezelési Tájékoztatót</a>.</span></label>
+          <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <div class="modal-actions">
             <button type="submit" class="primary" id="checkoutSubmit">Tovább a fizetéshez</button>
@@ -2489,8 +2491,8 @@
         const errorEl = document.getElementById('checkoutError');
         const email = document.getElementById('checkoutEmail').value.trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return; }
-        if (!document.getElementById('consentTerms').checked) {
-          errorEl.textContent = 'A fizetéshez az ÁSZF és az Adatkezelési Tájékoztató elfogadása szükséges.';
+        if (!document.getElementById('consentTerms').checked || !document.getElementById('consentDigital').checked) {
+          errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
           return;
         }
         const submit = document.getElementById('checkoutSubmit');

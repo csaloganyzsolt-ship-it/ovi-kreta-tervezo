@@ -427,15 +427,15 @@ test('DOCX is a native Word document with real tables, not an embedded HTML chun
   assert.match(xml, /Napi tervezet/);
 });
 
-test('planner page keeps the legal footer and checkout consent without withdrawal waiver', async (t) => {
+test('planner page keeps the legal footer and checkout withdrawal note', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
   assert.match(doc.title, /Tervező/);
   const footer = doc.getElementById('siteFooter').textContent;
   assert.match(footer, /Nethely Kft\./);
   assert.match(footer, /Békéltető Testület/);
-  assert.equal(doc.getElementById('checkoutWithdrawalNote'), null);
-  assert.equal(doc.getElementById('consentDigital'), null);
+  assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
+  assert.ok(doc.getElementById('consentDigital'));
   assert.ok(doc.getElementById('consentTerms'));
 });
 

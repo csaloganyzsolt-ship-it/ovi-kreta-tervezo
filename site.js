@@ -21,8 +21,9 @@ const LEGAL_TEXTS = {
 <p>Az árak magyar forintban (HUF) értendők, és tartalmazzák a 27%-os általános forgalmi adót (ÁFA).</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
 <p>A fizetés a Stripe nemzetközi, biztonságos, PCI-DSS minősítésű felületén történik bankkártyával. A Szolgáltató bankkártyaadatokat nem kezel és nem tárol.</p>
-<h3>4. Teljesítés</h3>
+<h3>4. Teljesítés és az elállási jog kizárása</h3>
 <p>A teljesítés a sikeres bankkártyás fizetést követően azonnal megtörténik: a rendszer a tervezetet a böngészőben letölthetővé teszi, valamint ezzel párhuzamosan elektronikus levélben elküldi a Felhasználó által megadott e-mail címre.</p>
+<p>A fogyasztó és a vállalkozás közötti szerződések részletes szabályairól szóló 45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pontja alapján a Felhasználó kifejezetten tudomásul veszi és beleegyezik, hogy nem tárgyi adathordozón nyújtott digitális adattartalom esetén a teljesítés a fizetéssel azonnal megkezdődik, amelynek következtében a Felhasználó a szerződéskötést követően elveszíti a 14 napos indokolás nélküli elállási jogát. A fizetés indításával a Felhasználó ezt a feltételt kifejezetten elfogadja; ezt fizetés előtt külön jelölőnégyzettel is megerősíti.</p>
 <h3>5. Szellemi tulajdon és felhasználási jogok</h3>
 <p>Az OviTervező weboldal felülete, forráskódja, grafikai elemei és adatbázisai a Szolgáltató kizárólagos szellemi tulajdonát képezik. A megvásárolt tervezetek tekintetében a Szolgáltató nem kizárólagos, határozatlan idejű felhasználási jogot biztosít a vásárlónak saját, illetve intézményi pedagógiai munkájához (szabadon módosítható, kinyomtatható, beilleszthető az óvodai naplóba). A megvásárolt anyagok és a szoftver viszonteladása, nyilvános kereskedelmi terjesztése vagy tömeges továbbértékesítése szigorúan tilos.</p>
 <h3>6. Szavatosság és felelősségkorlátozás</h3>
