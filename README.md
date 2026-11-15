@@ -128,5 +128,5 @@ A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel a
    ```
    Első mentésnél a script engedélyt kér a Táblázathoz és a Drive-hoz. A mappa azonosítóját a szerver a `GOOGLE_DRIVE_FOLDER_ID` változóból küldi (alapértelmezés: az OviTervező számlamappa).
 2. Üzembe helyezés → Webalkalmazás (Futtatás: én; Hozzáférés: bárki) → a kapott URL a Renderen a `GOOGLE_SHEETS_WEBHOOK_URL`.
-3. `ADMIN_NOTIFICATION_EMAIL`: erre a címre BCC-ben megy a vásárlói levél (tervezet + számla).
+3. `ADMIN_NOTIFICATION_EMAIL`: erre a címre megy a sikeres fizetésről szóló rendszergazdai értesítő a számla PDF-fel.
 4. Search Console: a `GOOGLE_SITE_VERIFICATION` a Nethely deploy build környezetében kerül az oldalba (GitHub Secret: `GOOGLE_SITE_VERIFICATION`, a deploy-nethely workflow átadja a buildnek).

@@ -325,10 +325,7 @@ test('the summary checklist lists every setting, including the new ones', async 
     'Kidolgozottság:', 'Modell: Gemini 3.1 Pro', 'Kimeneti forma:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
-  const premium = doc.querySelector('#premiumQuality');
-  assert.equal(premium.disabled, true);
-  assert.equal(premium.checked, false);
-  premium.checked = true;
+  assert.equal(doc.querySelector('#premiumQuality'), null);
   assert.equal(window.getRequestedModel(), 'gemini-3.1-pro-preview');
 });
 
@@ -430,14 +427,16 @@ test('DOCX is a native Word document with real tables, not an embedded HTML chun
   assert.match(xml, /Napi tervezet/);
 });
 
-test('planner page keeps the legal footer and checkout withdrawal note', async (t) => {
+test('planner page keeps the legal footer and checkout consent without withdrawal waiver', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
   assert.match(doc.title, /Tervező/);
   const footer = doc.getElementById('siteFooter').textContent;
   assert.match(footer, /Nethely Kft\./);
   assert.match(footer, /Békéltető Testület/);
-  assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
+  assert.equal(doc.getElementById('checkoutWithdrawalNote'), null);
+  assert.equal(doc.getElementById('consentDigital'), null);
+  assert.ok(doc.getElementById('consentTerms'));
 });
 
 test('weekly day picker toggles days, keeps at least one and feeds payload and summary', async (t) => {

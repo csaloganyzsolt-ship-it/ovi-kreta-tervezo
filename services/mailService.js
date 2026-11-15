@@ -185,7 +185,6 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to,
-    bcc: adminEmail(env),
     replyTo: support,
     subject: 'OviTervező – a megvásárolt tervezet és az e-számla',
     text,

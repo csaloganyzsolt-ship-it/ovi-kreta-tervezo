@@ -658,16 +658,15 @@ test('sheets webhook payload has all purchase fields and failures never throw', 
   assert.equal(bad.sent, false);
 });
 
-test('purchase e-mail is copied (BCC) to the admin address with all attachments when configured', async () => {
+test('purchase e-mail is sent to the customer without BCC copying plan attachments to admin', async () => {
   const mailService = require('../services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
   const args = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF') };
   await mailService.sendPurchaseEmail(args, { transport, env: { ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' } });
-  await mailService.sendPurchaseEmail(args, { transport, env: {} });
-  assert.equal(sent[0].bcc, 'admin@ovitervezo.hu');
+  assert.equal(sent[0].to, 'v@b.hu');
+  assert.equal(sent[0].bcc, undefined);
   assert.equal(sent[0].attachments.length, 3);
-  assert.equal(sent[1].bcc, 'info@ovitervezo.hu');
 });
 
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {

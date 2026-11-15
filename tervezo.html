@@ -59,6 +59,10 @@
             </div>
 
             <div class="field-grid">
+              <div class="field full" style="margin-bottom: 4px;">
+                <button id="clearDraftBtn" class="btn secondary" type="button" title="Minden beírt adat és mentett piszkozat törlése">🗑️ Beírt adatok törlése (Új tervezet indítása)</button>
+              </div>
+
               <div class="field full">
                 <label>Korábbi terv betöltése</label>
                 <button class="btn secondary" id="loadPreviousBtn" type="button">Korábbi terv betöltése</button>
@@ -103,13 +107,10 @@
                 </select>
               </div>
 
-<div class="field full">
+              <div class="field full">
                 <label>Téma / projekt címe</label>
                 <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
                 <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
-                <div style="margin-top: 12px;">
-                  <button id="clearDraftBtn" class="btn secondary" type="button">Új tervezet / Tiszta lap</button>
-                </div>
               </div>
 
               <div class="field full">
@@ -248,17 +249,6 @@
                   <button class="segment" type="button" data-group="detail" data-value="concise">Tömör vázlat</button>
                   <button class="segment active" type="button" data-group="detail" data-value="detailed">Részletesen kidolgozott tervezet</button>
                 </div>
-              </div>
-
-              <div class="field full">
-                <div class="toggle-row">
-                  <span>Prémium generálás <em class="lock-note">(Hamarosan elérhető)</em></span>
-                  <label class="switch" title="Hamarosan elérhető" style="opacity:.5;cursor:not-allowed">
-                    <input type="checkbox" id="premiumQuality" data-field="premium-quality" disabled />
-                    <span class="slider"></span>
-                  </label>
-                </div>
-                <small class="field-hint">Jelenleg minden tervezet a gemini-3.1-pro-preview modellel készül. A prémium generálás hamarosan elérhető.</small>
               </div>
 
               <details class="advanced-settings" id="advancedSettings">
@@ -486,11 +476,9 @@
           <p id="checkoutTestNote" class="modal-test-strip" hidden>Teszt üzemmód – tesztkártya: 4242 4242 4242 4242, bármely jövőbeli lejárat és CVC. Valódi terhelés nem történik.</p>
           <p id="checkoutSummary" class="modal-note"></p>
           <p class="modal-note" id="checkoutDeliveryNote">A sikeres fizetés után a tervezet azonnal letölthető (PDF, Word), az e-számlát pedig a megadott e-mail címre küldjük, és a felületen is letölthető.</p>
-          <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
           <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatkezelési Tájékoztatót</a>.</span></label>
-          <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <div class="modal-actions">
             <button type="submit" class="primary" id="checkoutSubmit">Tovább a fizetéshez</button>
@@ -770,7 +758,7 @@
             `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
           ]],
           ['Generálási beállítások', [
-            'Modell: Gemini 3.1 Pro (a prémium generálás hamarosan elérhető)',
+            'Modell: Gemini 3.1 Pro',
             `Kimeneti forma: ${displayOutputMode(payload.outputMode)}`
           ]]
         ];
@@ -2501,8 +2489,8 @@
         const errorEl = document.getElementById('checkoutError');
         const email = document.getElementById('checkoutEmail').value.trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return; }
-        if (!document.getElementById('consentTerms').checked || !document.getElementById('consentDigital').checked) {
-          errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
+        if (!document.getElementById('consentTerms').checked) {
+          errorEl.textContent = 'A fizetéshez az ÁSZF és az Adatkezelési Tájékoztató elfogadása szükséges.';
           return;
         }
         const submit = document.getElementById('checkoutSubmit');
