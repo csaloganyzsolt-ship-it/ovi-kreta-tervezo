@@ -322,9 +322,12 @@ test('the summary checklist lists every setting, including the new ones', async 
     'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Csoport hangulata', 'Iskola-előkészítő', 'Speciális nevelési igények',
     'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök és saját ötletek: xilofon', 'Kötelező mese/vers/dal:', 'Kiválasztott célkifejezések:',
     'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
-    'Kidolgozottság:', 'Modell: Gemini 3.1 Pro', 'Kimeneti forma:']) {
+    'Kidolgozottság:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
+  assert.equal(text.includes('Modell:'), false);
+  assert.equal(text.includes('Kimeneti forma:'), false);
+  assert.equal(text.includes('Generálási beállítások'), false);
   assert.equal(doc.querySelector('#premiumQuality'), null);
   assert.equal(window.getRequestedModel(), 'gemini-3.1-pro-preview');
 });

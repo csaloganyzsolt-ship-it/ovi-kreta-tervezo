@@ -60,7 +60,7 @@
 
             <div class="field-grid">
               <div class="field full" style="margin-bottom: 4px;">
-                <button id="clearDraftBtn" class="btn secondary" type="button" title="Minden beírt adat és mentett piszkozat törlése">🗑️ Beírt adatok törlése (Új tervezet indítása)</button>
+                <button id="clearDraftBtn" class="btn secondary" type="button" title="Minden beírt adat és mentett piszkozat törlése">Beírt adatok törlése (Új tervezet indítása)</button>
               </div>
 
               <div class="field full">
@@ -758,10 +758,6 @@
             `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
             `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
             `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
-          ]],
-          ['Generálási beállítások', [
-            'Modell: Gemini 3.1 Pro',
-            `Kimeneti forma: ${displayOutputMode(payload.outputMode)}`
           ]]
         ];
 
