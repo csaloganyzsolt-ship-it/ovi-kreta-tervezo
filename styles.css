@@ -812,23 +812,18 @@
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid rgba(142, 129, 116, 0.25);
-    padding-bottom: 18px;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
   }
 
   .document-sheet .doc-header h2 {
     margin: 0;
     font-size: 1.65rem;
     letter-spacing: 0.02em;
+    color: #000000;
   }
 
   .document-sheet .doc-meta {
-    font-size: 0.8rem;
-    color: var(--muted);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    display: none;
   }
 
   .document-sheet .doc-section {
@@ -840,7 +835,7 @@
   .document-sheet .doc-day {
     margin-top: 18px;
     padding-top: 18px;
-    border-top: 1px solid rgba(142, 129, 116, 0.2);
+    border-top: 1px solid #000000;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -853,14 +848,14 @@
   .document-sheet .doc-section h3 {
     margin: 0 0 10px;
     font-size: 1.05rem;
-    color: #2d3640;
+    color: #000000;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
   .document-sheet .doc-section p,
   .document-sheet .doc-section li {
-    color: #37434d;
+    color: #000000;
     line-height: 1.7;
     margin: 0 0 10px;
     font-size: 0.98rem;
@@ -872,10 +867,10 @@
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 8px 18px;
-    border: 1px solid rgba(142, 129, 116, 0.2);
-    border-radius: 12px;
+    border: 1px solid #000000;
+    border-radius: 4px;
     padding: 12px 14px;
-    background: #faf7f4;
+    background: transparent;
   }
 
   .document-sheet .meta-row {
@@ -884,28 +879,31 @@
 
   .document-sheet .meta-label {
     font-weight: 700;
-    color: #2d3640;
+    color: #000000;
   }
 
   .document-sheet .meta-value {
-    color: #37434d;
+    color: #000000;
   }
 
   .document-sheet .official-table {
     width: 100%;
     border-collapse: collapse;
-    border: 1px solid rgba(142, 129, 116, 0.45);
+    border: 1px solid #000000;
     font-size: 0.92rem;
     table-layout: fixed;
+    background: transparent;
   }
 
   .document-sheet .official-table th,
   .document-sheet .official-table td {
-    border: 1px solid rgba(142, 129, 116, 0.45);
+    border: 1px solid #000000;
     vertical-align: top;
     padding: 10px 8px;
     text-align: left;
-    color: #2f3b42;
+    color: #000000;
+    background: transparent;
+    background-color: transparent;
     overflow-wrap: anywhere;
     hyphens: auto;
     line-height: 1.6;
@@ -913,9 +911,18 @@
     page-break-inside: auto;
   }
 
+  .document-sheet .official-table tr {
+    background: transparent;
+    background-color: transparent;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .document-sheet .official-table th {
-    background: #f4efe9;
+    background: transparent;
+    background-color: transparent;
     font-weight: 700;
+    color: #000000;
   }
 
   .document-sheet .doc-table-section,

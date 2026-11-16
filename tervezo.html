@@ -1210,7 +1210,6 @@
             return `
               <div class="doc-header">
                 <h2>Napi tervezet – ${escapeHtml(day.nap_neve || '')}</h2>
-                <span class="doc-meta">${outputMode}</span>
               </div>
               ${buildMetaBlock([...baseMeta, ['Téma', frame.tema || '—'], ['Forma', day.tevekenyseg_forma || '—'], ['Napi cél', day.napi_cel || '—']])}
               ${settings.activities !== false ? `
@@ -1229,7 +1228,6 @@
           return `
             <div class="doc-header">
               <h2>Heti tervezet</h2>
-              <span class="doc-meta">${outputMode}</span>
             </div>
             ${settings.summary !== false ? `
               <div class="doc-section">
@@ -1288,7 +1286,6 @@
         return `
           <div class="doc-header">
             <h2>${escapeHtml(title)}</h2>
-            <span class="doc-meta">${outputMode}</span>
           </div>
           ${settings.summary !== false ? `
             <div class="doc-section">
@@ -1952,23 +1949,23 @@
         node.childNodes.forEach((child) => {
           if (child.nodeType === 3) {
             const text = child.textContent.replace(/\s+/g, ' ');
-            if (text.trim() || text === ' ') runs.push(new TextRun({ text, ...base }));
+            if (text.trim() || text === ' ') runs.push(new TextRun({ color: '000000', ...base, text }));
           } else if (child.nodeName === 'BR') {
             runs.push(new TextRun({ break: 1 }));
           } else if (child.nodeType === 1) {
             const bold = ['STRONG', 'B'].includes(child.nodeName) || base.bold;
-            runs.push(...docxRunsFromNode(child, { ...base, bold }));
+            runs.push(...docxRunsFromNode(child, { color: '000000', ...base, bold }));
           }
         });
         return runs;
       }
 
       function docxTable(table, contentWidth) {
-        const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, ShadingType, TableLayoutType } = window.docx;
+        const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, TableLayoutType } = window.docx;
         const cols = Array.from(table.querySelectorAll('col')).map((col) => parseFloat(col.style.width) || 0);
         const count = cols.length || table.rows[0].cells.length;
         const widths = (cols.length ? cols : Array(count).fill(100 / count)).map((pct) => Math.round(contentWidth * pct / 100));
-        const line = { style: BorderStyle.SINGLE, size: 6, color: '8E8174' };
+        const line = { style: BorderStyle.SINGLE, size: 6, color: '000000' };
         const borders = { top: line, bottom: line, left: line, right: line };
         const buildRow = (row, header) => new TableRow({
           tableHeader: header,
@@ -1976,14 +1973,13 @@
           children: Array.from(row.cells).map((cell, index) => {
             const paragraphs = Array.from(cell.querySelectorAll(':scope > p')).map((para) => new Paragraph({
               spacing: { after: 100, line: 276 },
-              children: docxRunsFromNode(para, { size: 20, bold: header, font: 'Arial' })
+              children: docxRunsFromNode(para, { size: 20, bold: header, font: 'Arial', color: '000000' })
             }));
             return new TableCell({
               borders,
               width: { size: widths[index], type: WidthType.DXA },
               margins: { top: 80, bottom: 80, left: 110, right: 110 },
-              shading: header ? { type: ShadingType.CLEAR, fill: 'F2E9DF', color: 'auto' } : undefined,
-              children: paragraphs.length ? paragraphs : [new Paragraph({ children: docxRunsFromNode(cell, { size: 20, bold: header, font: 'Arial' }) })]
+              children: paragraphs.length ? paragraphs : [new Paragraph({ children: docxRunsFromNode(cell, { size: 20, bold: header, font: 'Arial', color: '000000' }) })]
             });
           })
         });
@@ -1991,6 +1987,14 @@
         Array.from(table.tHead?.rows || []).forEach((row) => rows.push(buildRow(row, true)));
         Array.from(table.tBodies[0]?.rows || []).forEach((row) => rows.push(buildRow(row, false)));
         return new Table({
+          borders: {
+            top: line,
+            bottom: line,
+            left: line,
+            right: line,
+            insideHorizontal: line,
+            insideVertical: line
+          },
           width: { size: widths.reduce((a, b) => a + b, 0), type: WidthType.DXA },
           columnWidths: widths,
           layout: TableLayoutType.FIXED,
@@ -1999,8 +2003,8 @@
       }
 
       function docxMetaTable(block, contentWidth) {
-        const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, ShadingType, TableLayoutType } = window.docx;
-        const line = { style: BorderStyle.SINGLE, size: 4, color: 'D9CFC4' };
+        const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, TableLayoutType } = window.docx;
+        const line = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
         const borders = { top: line, bottom: line, left: line, right: line };
         const widths = [Math.round(contentWidth * 0.28), Math.round(contentWidth * 0.72)];
         const rows = Array.from(block.querySelectorAll('.meta-row')).map((row) => new TableRow({
@@ -2009,16 +2013,28 @@
             borders,
             width: { size: widths[index], type: WidthType.DXA },
             margins: { top: 70, bottom: 70, left: 110, right: 110 },
-            shading: { type: ShadingType.CLEAR, fill: 'FAF6F1', color: 'auto' },
-            children: [new Paragraph({ children: [new TextRun({ text: cell?.textContent || '', bold: index === 0, size: 21, font: 'Arial' })] })]
+            children: [new Paragraph({ children: [new TextRun({ text: cell?.textContent || '', bold: index === 0, size: 21, font: 'Arial', color: '000000' })] })]
           }))
         }));
-        return new Table({ width: { size: widths[0] + widths[1], type: WidthType.DXA }, columnWidths: widths, layout: TableLayoutType.FIXED, rows });
+        return new Table({
+          borders: {
+            top: line,
+            bottom: line,
+            left: line,
+            right: line,
+            insideHorizontal: line,
+            insideVertical: line
+          },
+          width: { size: widths[0] + widths[1], type: WidthType.DXA },
+          columnWidths: widths,
+          layout: TableLayoutType.FIXED,
+          rows
+        });
       }
 
       async function renderDocxBlob(docId) {
         if (!window.docx) throw new Error('A DOCX könyvtár nem tölthető be.');
-        const { Document, Packer, Paragraph, TextRun, PageOrientation, BorderStyle, HeadingLevel } = window.docx;
+        const { Document, Packer, Paragraph, TextRun, PageOrientation, HeadingLevel } = window.docx;
         const { orientation, margin } = getDocSettings(docId);
         const marginMm = MARGIN_MM[margin] || MARGIN_MM.comfortable;
         const marginTw = Math.round(marginMm * 56.7);
@@ -2034,13 +2050,8 @@
           if (node.matches('.doc-header')) {
             children.push(new Paragraph({
               heading: HeadingLevel.HEADING_1,
-              spacing: { after: 60 },
-              children: [new TextRun({ text: node.querySelector('h2')?.textContent || '', bold: true, size: 34, font: 'Arial', color: '1D2329' })]
-            }));
-            children.push(new Paragraph({
-              spacing: { after: 240 },
-              border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'C9BDB0', space: 6 } },
-              children: [new TextRun({ text: (node.querySelector('.doc-meta')?.textContent || '').toUpperCase(), color: '6A5E5B', size: 18, bold: true, font: 'Arial' })]
+              spacing: { before: 0, after: 140 },
+              children: [new TextRun({ text: node.querySelector('h2')?.textContent || '', bold: true, size: 34, font: 'Arial', color: '000000' })]
             }));
           } else if (node.matches('.doc-meta-block')) {
             children.push(docxMetaTable(node, contentWidth), spacer());
@@ -2049,12 +2060,12 @@
               heading: HeadingLevel.HEADING_2,
               keepNext: true,
               spacing: { before: 200, after: 120 },
-              children: [new TextRun({ text: node.textContent, bold: true, size: 26, font: 'Arial', color: '1D2329' })]
+              children: [new TextRun({ text: node.textContent, bold: true, size: 26, font: 'Arial', color: '000000' })]
             }));
           } else if (node.tagName === 'TABLE') {
             children.push(docxTable(node, contentWidth), spacer());
           } else if (node.tagName === 'P') {
-            children.push(new Paragraph({ spacing: { after: 120, line: 288 }, children: docxRunsFromNode(node, { size: 22, font: 'Arial' }) }));
+            children.push(new Paragraph({ spacing: { after: 120, line: 288 }, children: docxRunsFromNode(node, { size: 22, font: 'Arial', color: '000000' }) }));
           } else {
             node.childNodes.forEach(visit);
           }

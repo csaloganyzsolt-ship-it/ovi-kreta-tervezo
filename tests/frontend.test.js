@@ -436,6 +436,9 @@ test('preview is built from A4 page containers and the export element is not fix
 test('DOCX is a native Word document with real tables, not an embedded HTML chunk', async (t) => {
   const window = await loadApp(t);
   window.renderResultDocument({ ...makePlan(4), request: makePayload() });
+  const doc = window.document;
+  assert.equal(doc.querySelector('#resultDocument .doc-meta'), null);
+  assert.equal(doc.querySelector('#resultDocument .doc-header').textContent.includes('Szakmai tervezet'), false);
   const docxLib = require('docx');
   window.docx = docxLib;
   const blob = await window.renderDocxBlob('main');
@@ -447,6 +450,12 @@ test('DOCX is a native Word document with real tables, not an embedded HTML chun
   assert.ok((xml.match(/<w:tr>/g) || []).length >= 5);
   assert.match(xml, /<w:tblHeader\/>/);
   assert.match(xml, /Napi tervezet/);
+  assert.equal(xml.includes('SZAKMAI TERVEZET'), false);
+  assert.equal(xml.includes('F2E9DF'), false);
+  assert.equal(xml.includes('FAF6F1'), false);
+  assert.equal(xml.includes('C9BDB0'), false);
+  assert.equal(xml.includes('8E8174'), false);
+  assert.match(xml, /w:color="000000"/);
 });
 
 test('planner page keeps the legal footer and checkout withdrawal note', async (t) => {
