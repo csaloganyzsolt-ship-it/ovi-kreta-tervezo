@@ -1589,3 +1589,37 @@
 
 .restore-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--primary); border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .restore-banner[hidden] { display: none; }
+
+/* ===== Értékelő aloldal csillagai ===== */
+.interactive-star-group { display: inline-flex; gap: 8px; align-items: center; justify-content: center; }
+.interactive-star-group .star-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  line-height: 1;
+  border-radius: 8px;
+  transition: transform 0.15s ease;
+}
+.interactive-star-group .star-btn:hover,
+.interactive-star-group .star-btn:focus-visible {
+  transform: scale(1.18);
+  outline: none;
+}
+.interactive-star-group .star-btn svg {
+  width: 40px;
+  height: 40px;
+  display: block;
+}
+.interactive-star-group .star-btn.filled svg path {
+  fill: #f59e0b;
+  stroke: #f59e0b;
+}
+.interactive-star-group .star-btn.empty svg path {
+  fill: transparent;
+  stroke: #cbd5e1;
+}
+:root[data-theme="dark"] .interactive-star-group .star-btn.empty svg path {
+  stroke: #4b5563;
+}
+

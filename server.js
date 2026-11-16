@@ -4,6 +4,7 @@ const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
+const mailService = require('./services/mailService');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -160,7 +161,7 @@ const STATIC_ROOT = __dirname;
 for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
-for (const file of ['tervezo.html', 'styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
+for (const file of ['tervezo.html', 'ertekeles.html', 'styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 
@@ -573,6 +574,50 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
   }
 });
 
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Túl sok visszajelzési kísérlet. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.post('/api/feedback', feedbackLimiter, async (req, res) => {
+  try {
+    const { email, sig, rating, name, comment } = req.body || {};
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      return res.status(400).json({ success: false, error: 'Érvénytelen vagy hiányzó e-mail cím.' });
+    }
+    if (!sig || typeof sig !== 'string') {
+      return res.status(403).json({ success: false, error: 'Hiányzó hitelesítő aláírás.' });
+    }
+    if (!mailService.verifyFeedbackSignature(email.trim(), sig.trim(), process.env)) {
+      return res.status(403).json({ success: false, error: 'Érvénytelen hitelesítő aláírás. Értékelést csak vásárlói levélből lehet elküldeni.' });
+    }
+    const numRating = parseInt(rating, 10);
+    if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+      return res.status(400).json({ success: false, error: 'A csillagos értékelésnek 1 és 5 közötti egész számnak kell lennie.' });
+    }
+    const cleanComment = typeof comment === 'string' ? comment.trim().slice(0, 3000) : '';
+    if (!cleanComment) {
+      return res.status(400).json({ success: false, error: 'Kérjük, írd meg a véleményed vagy tapasztalatod a tervezettel kapcsolatban.' });
+    }
+    const cleanName = typeof name === 'string' ? name.trim().slice(0, 100) : '';
+
+    await mailService.sendFeedbackNotification(process.env, {
+      email: email.trim(),
+      rating: numRating,
+      name: cleanName,
+      comment: cleanComment
+    });
+
+    return res.json({ success: true, message: 'Köszönjük a visszajelzésed!' });
+  } catch (error) {
+    console.error('Feedback submission error:', error);
+    return res.status(500).json({ success: false, error: 'A visszajelzés elküldése nem sikerült.' });
+  }
+});
+
 function start(port = PORT) {
   return app.listen(port, HOST, () => {
     console.log(`OviTervező is running on ${HOST}:${port}`);
@@ -581,4 +626,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+module.exports = { generateLimiter, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };

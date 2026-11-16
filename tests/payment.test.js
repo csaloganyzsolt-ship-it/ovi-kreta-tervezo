@@ -507,7 +507,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -715,7 +715,7 @@ test('both builds ship both pages with every local reference resolvable and the 
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env });
   execFileSync('node', ['scripts/build-pages.js'], { cwd, env });
   for (const dir of ['dist-nethely', 'dist-pages']) {
-    for (const page of ['index.html', 'tervezo.html']) {
+    for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
       const html = fs.readFileSync(path.join(cwd, dir, page), 'utf8');
       const refs = [...html.matchAll(/(?:href|src)="([^"#]+)"/g)].map((m) => m[1]).filter((r) => !/^(https?:|mailto:|data:)/.test(r));
       assert.ok(refs.length > 0);
@@ -726,10 +726,10 @@ test('both builds ship both pages with every local reference resolvable and the 
       assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
       for (const f of ['styles.css', 'site.js', 'config.js', 'favicon.svg', 'favicon.ico']) assert.match(html, new RegExp(`(?:href|src)="${f.replace('.', '\\.')}\\?v=\\d{12}"`), `${dir}/${page}: ${f} verzió nélkül`);
       assert.doesNotMatch(html, /(?:cdn|stripe)[^"]*\?v=/);
-      assert.doesNotMatch(html, /href="(?:index|tervezo)\.html\?v=/);
+      assert.doesNotMatch(html, /href="(?:index|tervezo|ertekeles)\.html\?v=/);
     }
   }
-  for (const page of ['index.html', 'tervezo.html']) {
+  for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
     assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', page), 'utf8'), /<meta name="google-site-verification" content="abcDEF1234567890xyz" \/>/);
     assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-pages', page), 'utf8'), /google-site-verification/);
   }
@@ -812,4 +812,123 @@ test('the webhook-side admin notification carries the invoice PDF', async () => 
   assert.equal(result.sent, true);
   assert.equal(sent[0].to, 'info@ovitervezo.hu');
   assert.equal(sent[0].attachments.length, 1);
+});
+
+test('feedback signature generation and verification with HMAC-SHA256', () => {
+  const mailService = require('../services/mailService');
+  const email = 'teszt.ovono@example.com';
+  const sig = mailService.createFeedbackSignature(email);
+  assert.equal(typeof sig, 'string');
+  assert.equal(sig.length, 64);
+  assert.equal(mailService.verifyFeedbackSignature(email, sig), true);
+  assert.equal(mailService.verifyFeedbackSignature('TESZT.OVONO@EXAMPLE.COM', sig), true);
+  assert.equal(mailService.verifyFeedbackSignature('other@example.com', sig), false);
+  assert.equal(mailService.verifyFeedbackSignature(email, 'invalid-signature-hex-0000000000000000000000000000000000000000000000'), false);
+  assert.equal(mailService.verifyFeedbackSignature(email, ''), false);
+  assert.equal(mailService.verifyFeedbackSignature('', sig), false);
+});
+
+test('purchase e-mail contains discrete 5-star rating bar with HMAC link and zero emojis', () => {
+  const mailService = require('../services/mailService');
+  const to = 'vasarlo@example.com';
+  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false, to }, {});
+  assert.match(mail.html, /Hogy sikerült a tervezet\? Kattints a csillagokra/);
+  assert.match(mail.html, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=/);
+  assert.match(mail.html, /ertekeles\.html\?rating=1&email=vasarlo%40example\.com&sig=/);
+  assert.match(mail.text, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=/);
+  // Zero emoji rule check in feedback block
+  assert.doesNotMatch(mail.html, /⭐|🌟|✨/);
+  assert.doesNotMatch(mail.text, /⭐|🌟|✨/);
+});
+
+test('sendFeedbackNotification sends notification to admin with customer replyTo and zero emojis', async () => {
+  const mailService = require('../services/mailService');
+  const sent = [];
+  const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
+  const env = { SMTP_HOST: 'smtp.test', ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' };
+  const result = await mailService.sendFeedbackNotification(env, {
+    email: 'vevo@ovoda.hu',
+    rating: 5,
+    name: 'K. Anna – óvodapedagógus',
+    comment: 'Nagyon hasznos volt a heti tervezet, köszönöm!'
+  }, { transport });
+  assert.equal(result.sent, true);
+  assert.equal(sent[0].to, 'admin@ovitervezo.hu');
+  assert.equal(sent[0].replyTo, 'vevo@ovoda.hu');
+  assert.equal(sent[0].subject, 'OviTervező értékelés: 5/5 csillag – vevo@ovoda.hu');
+  assert.match(sent[0].text, /5 \/ 5 csillag/);
+  assert.match(sent[0].text, /K\. Anna – óvodapedagógus/);
+  assert.match(sent[0].text, /Nagyon hasznos volt/);
+  assert.doesNotMatch(sent[0].subject + sent[0].text + sent[0].html, /⭐|🌟|✨/);
+});
+
+test('POST /api/feedback validates HMAC signature, rating, comment and sends email', async () => {
+  const { app, feedbackLimiter } = require('../server');
+  const mailService = require('../services/mailService');
+  const email = 'ertekeles.teszt@example.com';
+  const sig = mailService.createFeedbackSignature(email, process.env);
+  const server = app.listen(0);
+  const port = server.address().port;
+  const url = `http://127.0.0.1:${port}/api/feedback`;
+
+  try {
+    // 1. Missing or invalid email
+    const resBadEmail = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'nem-email', sig, rating: 5, comment: 'Szuper' })
+    });
+    assert.equal(resBadEmail.status, 400);
+
+    // 2. Missing sig
+    const resNoSig = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, rating: 5, comment: 'Szuper' })
+    });
+    assert.equal(resNoSig.status, 403);
+
+    // 3. Invalid sig
+    const resBadSig = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, sig: 'rossz-alairas', rating: 5, comment: 'Szuper' })
+    });
+    assert.equal(resBadSig.status, 403);
+
+    // 4. Invalid rating (out of range or not an integer)
+    const resBadRating = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, sig, rating: 6, comment: 'Szuper' })
+    });
+    assert.equal(resBadRating.status, 400);
+
+    // 5. Missing comment
+    const resNoComment = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, sig, rating: 5, comment: '' })
+    });
+    assert.equal(resNoComment.status, 400);
+
+    // 6. Valid submission
+    const resOk = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        sig,
+        rating: 5,
+        name: 'Teszt Eszter',
+        comment: 'Kiváló minőségű volt a kidolgozás!'
+      })
+    });
+    assert.equal(resOk.status, 200);
+    const dataOk = await resOk.json();
+    assert.equal(dataOk.success, true);
+    assert.match(dataOk.message, /Köszönjük/);
+  } finally {
+    server.close();
+  }
 });

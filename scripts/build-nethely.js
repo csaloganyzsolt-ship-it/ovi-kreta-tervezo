@@ -43,7 +43,7 @@ function applySiteVerification(html) {
 for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
-for (const page of ['index.html', 'tervezo.html']) {
+for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
   fs.writeFileSync(path.join(out, page), addVersion(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')), version));
 }
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {

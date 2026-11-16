@@ -4,6 +4,7 @@ const path = require('path');
 const requiredFiles = [
   'index.html',
   'tervezo.html',
+  'ertekeles.html',
   'styles.css',
   'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg',
   '.github/workflows/test.yml',

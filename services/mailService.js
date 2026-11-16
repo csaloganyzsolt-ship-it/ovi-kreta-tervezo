@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { supportEmail, storageDir } = require('./invoiceService');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
@@ -83,12 +84,33 @@ function companyLines(env) {
   };
 }
 
+function feedbackSecret(env = process.env) {
+  return String(env.FEEDBACK_SECRET || env.STRIPE_SECRET_KEY || 'ovitervezo-feedback-key').trim();
+}
+
+function createFeedbackSignature(email, env = process.env) {
+  const normalized = String(email || '').trim().toLowerCase();
+  const secret = feedbackSecret(env);
+  return crypto.createHmac('sha256', secret).update(normalized).digest('hex');
+}
+
+function verifyFeedbackSignature(email, sig, env = process.env) {
+  if (!email || !sig) return false;
+  const expected = createFeedbackSignature(email, env);
+  if (typeof sig !== 'string' || sig.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'));
+  } catch (_e) {
+    return false;
+  }
+}
+
 // Közös levélsablon: meleg hangvétel, az OviTervező arculatához igazodó kártya, jogi lábléc.
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber }, env) {
+function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber, to }, env) {
   const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   const c = companyLines(env);
   const support = supportEmail(env);
@@ -100,7 +122,28 @@ function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber },
   const testText = test ? 'Ez egy TESZT levél: fizetés és számla nélkül érkezett.\n\n' : '';
   const legalText = `${c.name} | Székhely: ${c.address} | Adószám: ${c.taxId} | Cégjegyzékszám: ${c.regNo}`;
 
-  const text = `Kedves Kolléganő!\n\n${testText}Köszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
+  let feedbackBlock = '';
+  let textFeedbackBlock = '';
+  if (to && !test) {
+    const sig = createFeedbackSignature(to, env);
+    const feedbackUrl = (r) => `${site}/ertekeles.html?rating=${r}&email=${encodeURIComponent(to)}&sig=${sig}`;
+    const starSvg = '<svg width="26" height="26" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;"><path fill="#f59e0b" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+    const starsHtml = [5, 4, 3, 2, 1].map((r) =>
+      `<a href="${feedbackUrl(r)}" title="${r} csillag" style="display:inline-block;padding:2px 4px;text-decoration:none;">${starSvg}</a>`
+    ).join('');
+
+    feedbackBlock = `
+<div style="margin:22px 0 0;padding:16px 18px;background:#f9fbf9;border:1px solid #d9ebe0;border-radius:14px;text-align:center;">
+<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#4a5953;font-weight:600;">Hogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:</p>
+<div class="star-rating" style="direction:rtl;unicode-bidi:bidi-override;display:inline-block;text-align:center;">
+${starsHtml}
+</div>
+</div>`;
+
+    textFeedbackBlock = `\n\nHogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:\n${feedbackUrl(5)}`;
+  }
+
+  const text = `Kedves Kolléganő!\n\n${testText}Köszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})${textFeedbackBlock}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
 
   const testBanner = test
     ? '<div style="background:#fff4e0;border:1px solid #f3d29b;color:#8a5a00;border-radius:12px;padding:10px 14px;margin:0 0 16px;font-size:14px;">🧪 Ez egy <strong>teszt</strong> levél: fizetés és számla nélkül érkezett.</div>'
@@ -113,7 +156,16 @@ function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber },
     : '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr><tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📕 <strong>Tervezet PDF</strong> formátumban</td></tr>';
 
   const html = `<!doctype html>
-<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OviTervező</title></head>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OviTervező</title>
+<style>
+.star-rating { direction: rtl; unicode-bidi: bidi-override; display: inline-block; }
+.star-rating > a { display: inline-block; padding: 2px 4px; text-decoration: none; }
+.star-rating > a svg { display: inline-block; vertical-align: middle; fill: #f59e0b; }
+.star-rating:hover > a svg { fill: #d1d5db; }
+.star-rating > a:hover svg,
+.star-rating > a:hover ~ a svg { fill: #f59e0b !important; }
+</style>
+</head>
 <body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #d9ebe0;">
@@ -140,6 +192,7 @@ ${orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendel
 <p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
 <p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Melegséggel,<br><strong>Az OviTervező csapata</strong></p>
 <p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk!</p>
+${feedbackBlock}
 </td></tr>
 <tr><td style="background:#f6f7f7;padding:18px 28px;border-top:1px solid #e6eae8;font-size:12px;line-height:1.6;color:#7a8480;">
 <strong>Kibocsátó:</strong> ${c.name}, székhely: ${c.address}, adószám: ${c.taxId}, cégjegyzékszám: ${c.regNo}.<br>
@@ -180,7 +233,7 @@ async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumbe
 async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: true, test: false, title, orderNumber }, env);
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: true, test: false, title, orderNumber, to }, env);
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
@@ -191,6 +244,66 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
     html,
     attachments: [...attachments, { filename: invoiceName || 'szamla.pdf', content: invoicePdf, contentType: 'application/pdf' }, logoAttachment()]
   });
+}
+
+// Vásárlói visszajelzés és értékelés értesítő a rendszergazdának
+async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
+  let env, data, actualDeps;
+  if (firstArg && (firstArg.SMTP_HOST || firstArg.ADMIN_NOTIFICATION_EMAIL || firstArg.NODE_ENV !== undefined)) {
+    env = firstArg;
+    data = secondArg || {};
+    actualDeps = deps;
+  } else {
+    data = firstArg || {};
+    actualDeps = secondArg || {};
+    env = actualDeps.env || process.env;
+  }
+  if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  const support = supportEmail(env);
+  const transport = createTransport(env, actualDeps);
+
+  const subject = `OviTervező értékelés: ${data.rating}/5 csillag – ${data.email}`;
+  const text = [
+    `Új vásárlói értékelés érkezett az OviTervező felületén.`,
+    ``,
+    `Értékelés: ${data.rating} / 5 csillag`,
+    `Vásárló: ${data.email}`,
+    `Név / beosztás: ${data.name || 'Nem adott meg nevet'}`,
+    ``,
+    `Vélemény, tapasztalat:`,
+    data.comment || 'Nem fűzött hozzá szöveges megjegyzést.'
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><title>OviTervező értékelés</title></head>
+<body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #d9ebe0;">
+<tr><td style="height:5px;line-height:5px;font-size:0;background:#3fae84;">&nbsp;</td></tr>
+<tr><td style="padding:24px 28px;">
+<h2 style="margin:0 0 16px;color:#1f5f52;font-size:20px;">Új vásárlói értékelés érkezett</h2>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+  <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;width:140px;">Értékelés:</td><td style="padding:6px 0;font-size:16px;font-weight:700;color:#1f3d34;">${data.rating} / 5 csillag</td></tr>
+  <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;">Vásárló:</td><td style="padding:6px 0;font-size:15px;color:#1f3d34;"><a href="mailto:${escapeHtml(data.email)}" style="color:#2f946f;text-decoration:none;">${escapeHtml(data.email)}</a></td></tr>
+  <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;">Név / beosztás:</td><td style="padding:6px 0;font-size:15px;color:#1f3d34;">${escapeHtml(data.name || 'Nem adott meg nevet')}</td></tr>
+</table>
+<div style="background:#f4fbf7;border:1px solid #cfe8da;border-left:4px solid #3fae84;border-radius:8px;padding:14px 16px;">
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;color:#1f5f52;margin-bottom:6px;">Vélemény, tapasztalat:</div>
+  <div style="font-size:15px;line-height:1.6;color:#2d3b36;white-space:pre-wrap;">${escapeHtml(data.comment || 'Nem fűzött hozzá szöveges megjegyzést.')}</div>
+</div>
+<p style="margin:18px 0 0;font-size:13px;color:#7a8480;">Erre a levélre közvetlenül válaszolva a vásárlónak (${escapeHtml(data.email)}) küldhetsz választ.</p>
+</td></tr>
+</table></td></tr></table></body></html>`;
+
+  await transport.sendMail({
+    from: env.MAIL_FROM || `OviTervező <${support}>`,
+    to: adminEmail(env),
+    replyTo: data.email,
+    subject,
+    text,
+    html
+  });
+  return { sent: true };
 }
 
 // Staging tesztkézbesítés: ugyanaz a levélsablon, de Stripe-fizetés és számla nélkül.
@@ -213,4 +326,18 @@ async function sendTestDeliveryEmail({ to, plan, attachments, title }, deps = {}
   return info;
 }
 
-module.exports = { adminEmail, sendAdminNotification, buildEmailContent, isConfigured, sanitizeAttachments, sendPurchaseEmail, sendTestDeliveryEmail, wasSent, markSent };
+module.exports = {
+  adminEmail,
+  sendAdminNotification,
+  buildEmailContent,
+  isConfigured,
+  sanitizeAttachments,
+  sendPurchaseEmail,
+  sendTestDeliveryEmail,
+  wasSent,
+  markSent,
+  feedbackSecret,
+  createFeedbackSignature,
+  verifyFeedbackSignature,
+  sendFeedbackNotification
+};
