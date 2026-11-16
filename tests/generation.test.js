@@ -327,6 +327,19 @@ test('kindergarten profile and IKT digital rules reach both prompts', () => {
   }));
   assert.match(weeklyIkt, /ÓVODA ARCULATA.*Néphagyományőrző/);
   assert.match(weeklyIkt, /IKT \/ DIGITÁLIS ESZKÖZÖK MÓDSZERTANI SZABÁLYAI/);
+
+  const mathPayload = makePayload({
+    focusAreas: ['A külső világ tevékeny megismerése – matematikai tartalommal', 'Mozgás']
+  });
+  const promptMath = buildPrompt(mathPayload);
+  assert.match(promptMath, /MATEMATIKAI TARTALMÚ TEVÉKENYSÉG KÖVETELMÉNYE/);
+  assert.match(promptMath, /halmazképzés/);
+  assert.match(promptMath, /számlálás/);
+
+  const noMathPayload = makePayload({
+    focusAreas: ['A külső világ tevékeny megismerése', 'Verselés, mesélés']
+  });
+  assert.doesNotMatch(buildPrompt(noMathPayload), /MATEMATIKAI TARTALMÚ TEVÉKENYSÉG KÖVETELMÉNYE/);
 });
 
 test('POST /api/generate answers 429 after the per-IP daily limit', async () => {

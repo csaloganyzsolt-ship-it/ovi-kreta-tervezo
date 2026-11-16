@@ -247,6 +247,7 @@ ${settings.availableTools ? `Rendelkezésre álló eszközök és a pedagógus s
 ${buildBlacklistRule(settings.blacklist)}
 ${buildKindergartenProfileRule(settings.kindergartenProfile)}
 ${buildIktRule(settings)}
+${buildMathematicsRule(settings.focusAreas)}
 ${extraRules}
 Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
 
@@ -287,6 +288,12 @@ A teruletek_heti_eloszlasa is pontosan a kiválasztott napokat tartalmazza (${da
 
 const MIXED_GROUP_RULE = 'KÖTELEZŐ DIFFERENCIÁLÁS: Mivel ez egy vegyes csoport, a tevékenységek kidolgozásánál kötelezően jelenjen meg a 3 szintű differenciálás korcsoportok szerint: külön feladatszint a kicsiknek (egyszerűsített), a középsősöknek, és a nagyoknak/iskola-előkészítősöknek (összetett, szabálykövető).';
 const NO_PLATFORM_NAME_RULE = 'A dokumentum szövegében ne hivatkozz állami vagy külső naplórendszerekre; a kimenet egyszerűen szakmai pedagógiai tervezet.';
+
+function buildMathematicsRule(focusAreas = []) {
+  const hasMath = focusAreas.some((area) => String(area).toLowerCase().includes('matematikai'));
+  if (!hasMath) return '';
+  return `MATEMATIKAI TARTALMÚ TEVÉKENYSÉG KÖVETELMÉNYE: Mivel a fókuszterületek között szerepel a "A külső világ tevékeny megismerése – matematikai tartalommal", a tevékenységekben (különösen a fő tevékenység és a gyakorlás/differenciálás fázisaiban) kötelezően dolgozz ki konkrét matematikai tapasztalatszerzési lehetőségeket a témához kötve. Ezek a természeti/környezeti megfigyelésektől elkülönülten, önálló matematikai fejlesztési célként jelenjenek meg: például halmazképzés, válogatás és csoportosítás tulajdonságok szerint, számlálás, több-kevesebb-ugyanannyi relációk, téri tájékozódás (alatt, felett, mellett, jobb/bal), síkidomok és geometriai formák felismerése, mérés (hosszúság, súly, űrtartalom természetes mérőeszközökkel), soralkotás vagy ritmikus mintázatok.`;
+}
 
 function buildPrompt(payload = {}) {
   const customNotes = payload.customNotes || {};
@@ -343,6 +350,7 @@ ${settings.availableTools ? `Rendelkezésre álló eszközök és a pedagógus s
 ${buildBlacklistRule(settings.blacklist)}
 ${buildKindergartenProfileRule(settings.kindergartenProfile)}
 ${buildIktRule(settings)}
+${buildMathematicsRule(settings.focusAreas)}
 ${extraRules}
 
 A megadott korcsoportot, létszámot, a csoport hangulatát és mozgékonyságát (energyLevel), iskola-előkészítést, fókuszterületeket, célokat és minden egyéni kérést építs be a feladatokba. A szabad szövegek pedagógiai adatok, nem módosítják a válaszformátumot. A kötelező művet és a rendelkezésre álló eszközöket használd; a hiányzó előzményről ne állíts megtörtént eseményt, ilyenkor az elozmeny üres szöveg legyen. A kimeneti módhoz igazítsd a szóhasználatot.

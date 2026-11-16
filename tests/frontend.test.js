@@ -170,7 +170,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.groupName, values['group-name']);
   assert.equal(daily.group, values.group);
   assert.equal(daily.theme, values.theme);
-  assert.equal(daily.focusAreas.length, 5);
+  assert.equal(daily.focusAreas.length, 6);
   assert.equal(daily.specialNeeds.length, 4);
   assert.equal(daily.customNotes.primary, values['custom-note']);
   assert.equal(daily.customNotes.groupNote, values['group-note']);

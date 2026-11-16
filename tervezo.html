@@ -125,11 +125,12 @@
               <div class="field full">
                 <label>Melyik nevelési területek lesznek fókuszban?</label>
                 <div class="check-grid">
-                  <label class="check-item"><input type="checkbox" data-focus-area="Külső világ tevékeny megismerése" /> Külső világ tevékeny megismerése</label>
                   <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Ének, zene, énekes játék" /> Ének, zene, énekes játék</label>
-                  <label class="check-item"><input type="checkbox" data-focus-area="Rajzolás, mintázás, kézimunka" /> Rajzolás, mintázás, kézimunka</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Ének, zene, népi játék, tánc" /> Ének, zene, népi játék, tánc</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="Rajzolás, festés, mintázás, kézi munka" /> Rajzolás, festés, mintázás, kézi munka</label>
                   <label class="check-item"><input type="checkbox" data-focus-area="Mozgás" /> Mozgás</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="A külső világ tevékeny megismerése" /> A külső világ tevékeny megismerése</label>
+                  <label class="check-item"><input type="checkbox" data-focus-area="A külső világ tevékeny megismerése – matematikai tartalommal" /> A külső világ tevékeny megismerése – matematikai tartalommal</label>
                 </div>
               </div>
 
@@ -912,7 +913,15 @@
           map.set(getAutoSaveKey(element), element);
         });
 
-        Object.entries(draft.fields || {}).forEach(([key, value]) => {
+        // Korábbi fókuszterület elnevezések migrálása az új hivatalos megnevezésekre
+        const legacyFocusAreaMap = {
+          'label:Külső világ tevékeny megismerése': 'label:A külső világ tevékeny megismerése',
+          'label:Ének, zene, énekes játék': 'label:Ének, zene, népi játék, tánc',
+          'label:Rajzolás, mintázás, kézimunka': 'label:Rajzolás, festés, mintázás, kézi munka'
+        };
+
+        Object.entries(draft.fields || {}).forEach(([rawKey, value]) => {
+          const key = legacyFocusAreaMap[rawKey] || rawKey;
           const element = map.get(key);
           if (!element) return;
 
