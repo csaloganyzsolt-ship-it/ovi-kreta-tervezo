@@ -146,7 +146,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   const window = await loadApp(t);
   const document = window.document;
   const values = {
-    'kindergarten-name': 'Próba Óvoda', 'teacher-name': 'Próba Pedagógus',
+    'kindergarten-name': 'Próba Óvoda', 'kindergarten-profile': 'Zöld Óvoda', 'teacher-name': 'Próba Pedagógus',
     'group-name': 'Próba Csoport', group: 'Vegyes csoport', theme: 'Tavaszi megfigyelés',
     'tevekenyseg-forma': 'Mikrocsoportos / egyéni fejlesztés', elozmeny: 'Korábbi udvari játék.',
     'custom-note': 'Egyéni kiegészítés.', 'group-note': 'Csoportkérés.',
@@ -156,12 +156,16 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   document.querySelectorAll('[data-focus-area], [data-sni-label]').forEach((checkbox) => { checkbox.checked = true; });
   document.querySelector('[data-field="date-value"]').value = '2026-11-03';
   document.querySelector('[data-field="show-literature"]').checked = true;
+  document.querySelector('#iktEnabled').checked = true;
+  document.querySelector('#iktToolsPicker [data-ikt-tool]').click();
+  document.querySelector('#iktCustomApp').value = 'Saját fejlesztő játék';
   document.querySelector('.mode-pill[data-mode="Szülői tájékoztató"]').click();
   const daily = window.buildGenerationPayload();
   assert.equal(daily.dateValue, '2026-11-03');
   assert.equal(daily.tevekenysegForma, values['tevekenyseg-forma']);
   assert.equal(daily.elozmeny, values.elozmeny);
   assert.equal(daily.kindergartenName, values['kindergarten-name']);
+  assert.equal(daily.kindergartenProfile, values['kindergarten-profile']);
   assert.equal(daily.teacherName, values['teacher-name']);
   assert.equal(daily.groupName, values['group-name']);
   assert.equal(daily.group, values.group);
@@ -171,6 +175,9 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.customNotes.primary, values['custom-note']);
   assert.equal(daily.customNotes.groupNote, values['group-note']);
   assert.equal(daily.showLiteratureAtBottom, true);
+  assert.equal(daily.iktEnabled, true);
+  assert.ok(daily.iktTools.length >= 1);
+  assert.equal(daily.iktCustomApp, 'Saját fejlesztő játék');
   assert.equal(daily.outputMode, 'Szülői tájékoztató');
   window.setDurationSelection('Heti');
   document.querySelector('[data-field="week-value"]').value = '2026-W45';
@@ -318,10 +325,10 @@ test('the summary checklist lists every setting, including the new ones', async 
   doc.querySelector('[data-field="available-tools"]').value = 'xilofon';
   window.updateSummary();
   const text = doc.querySelector('#summaryChecklist').textContent;
-  for (const label of ['Óvoda:', 'Óvodapedagógus:', 'Csoport neve:', 'Korcsoport:', 'Időtartam:', 'Dátum:', 'Téma:',
+  for (const label of ['Óvoda:', 'Óvoda arculata:', 'Óvodapedagógus:', 'Csoport neve:', 'Korcsoport:', 'Időtartam:', 'Dátum:', 'Téma:',
     'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Csoport hangulata', 'Iskola-előkészítő', 'Speciális nevelési igények',
     'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök és saját ötletek: xilofon', 'Kötelező mese/vers/dal:', 'Kiválasztott célkifejezések:',
-    'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
+    'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'IKT / Digitális eszközök: Nem', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
     'Kidolgozottság:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
@@ -338,20 +345,32 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   const set = (selector, value) => { const el = doc.querySelector(selector); el.value = value; };
   set('[data-field="available-tools"]', 'xilofon');
   set('[data-field="blacklist"]', 'gyurma');
+  set('[data-field="kindergarten-profile"]', 'Zöld Óvoda');
+  doc.querySelector('#iktEnabled').checked = true;
+  doc.querySelector('#iktCustomApp').value = 'Bee-Bot szőnyeg';
   let payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, 'xilofon');
   assert.equal(payload.blacklist, 'gyurma');
+  assert.equal(payload.kindergartenProfile, 'Zöld Óvoda');
+  assert.equal(payload.iktEnabled, true);
+  assert.equal(payload.iktCustomApp, 'Bee-Bot szőnyeg');
   assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
   const draft = window.collectDraftState();
   window.clearDraftState();
   payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, '');
   assert.equal(payload.blacklist, '');
+  assert.equal(payload.kindergartenProfile, '');
+  assert.equal(payload.iktEnabled, false);
+  assert.equal(payload.iktCustomApp, '');
   assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
   window.applyDraftState(draft);
   payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, 'xilofon');
   assert.equal(payload.blacklist, 'gyurma');
+  assert.equal(payload.kindergartenProfile, 'Zöld Óvoda');
+  assert.equal(payload.iktEnabled, true);
+  assert.equal(payload.iktCustomApp, 'Bee-Bot szőnyeg');
   assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
   assert.equal(doc.querySelector('#advancedSettings').open, true);
 });

@@ -295,6 +295,40 @@ test('prompts never mention protected state systems', () => {
   }
 });
 
+test('kindergarten profile and IKT digital rules reach both prompts', () => {
+  const base = makePayload();
+  const promptOff = buildPrompt(base);
+  assert.match(promptOff, /SZIGORÚ DIGITÁLIS\/IKT TILTÁS/);
+  assert.doesNotMatch(promptOff, /ÓVODA ARCULATA/);
+
+  const profilePayload = makePayload({ kindergartenProfile: 'Zöld Óvoda' });
+  const promptProfile = buildPrompt(profilePayload);
+  assert.match(promptProfile, /ÓVODA ARCULATA.*Zöld Óvoda/);
+
+  const iktPayload = makePayload({
+    iktEnabled: true,
+    iktTools: ['Padlórobotok (Bee-Bot, Andy, Edison)', 'Tablet, diagnosztika és kreatív/3D appok (Quiver)'],
+    iktCustomApp: 'eDia teszt'
+  });
+  const promptIkt = buildPrompt(iktPayload);
+  assert.match(promptIkt, /IKT \/ DIGITÁLIS ESZKÖZÖK MÓDSZERTANI SZABÁLYAI/);
+  assert.match(promptIkt, /Padlórobotok/);
+  assert.match(promptIkt, /eDia teszt/);
+  assert.match(promptIkt, /3–20 perc/);
+  assert.match(promptIkt, /Quiver/);
+  assert.doesNotMatch(promptIkt, /SZIGORÚ DIGITÁLIS\/IKT TILTÁS/);
+
+  const weeklyIkt = buildPrompt(makePayload({
+    duration: 'Heti',
+    includeDailyBreakdown: true,
+    kindergartenProfile: 'Néphagyományőrző',
+    iktEnabled: true,
+    iktTools: ['Interaktív tábla és gyakorlóprogramok']
+  }));
+  assert.match(weeklyIkt, /ÓVODA ARCULATA.*Néphagyományőrző/);
+  assert.match(weeklyIkt, /IKT \/ DIGITÁLIS ESZKÖZÖK MÓDSZERTANI SZABÁLYAI/);
+});
+
 test('POST /api/generate answers 429 after the per-IP daily limit', async () => {
   const previous = process.env.GENERATE_RATE_LIMIT;
   process.env.GENERATE_RATE_LIMIT = '2';

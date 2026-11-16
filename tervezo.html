@@ -139,6 +139,11 @@
               </div>
 
               <div class="field">
+                <label>Óvoda arculata (opcionális)</label>
+                <input type="text" data-field="kindergarten-profile" placeholder="pl. Zöld Óvoda, néphagyományőrző, Boldog Óvoda, mozgásfejlesztő..." />
+              </div>
+
+              <div class="field">
                 <label>Óvodapedagógus neve</label>
                 <input type="text" data-field="teacher-name" placeholder="Pl.: Nagy Eszter" />
               </div>
@@ -269,6 +274,32 @@
                     <input type="checkbox" data-field="show-literature" />
                     Felhasznált irodalom megjelenítése a lap alján
                   </label>
+
+                  <div class="field full" style="margin-top: 4px;">
+                    <label>IKT / Digitális eszközök beépítése</label>
+                    <div class="toggle-row">
+                      <span id="iktToggleStatusLabel">Nem</span>
+                      <label class="switch">
+                        <input type="checkbox" id="iktEnabled" data-field="ikt-enabled" />
+                        <span class="slider"></span>
+                      </label>
+                    </div>
+                    <small class="field-hint">Alapértelmezetten kikapcsolva. Bekapcsolva az AI szigorúan fejlesztő, korosztályhoz mért (alkalmanként 3–20 perc) IKT tevékenységet tervez.</small>
+                  </div>
+
+                  <div id="iktOptionsPanel" class="weekly-settings-panel" hidden style="margin-top: 0;">
+                    <span class="weekly-days-label">Választható IKT eszközcsoportok és alkalmazások</span>
+                    <div class="quick-actions" id="iktToolsPicker">
+                      <button class="chip" type="button" data-ikt-tool="Padlórobotok (Bee-Bot, Andy, Edison)">Padlórobotok (Bee-Bot, Andy, Edison)</button>
+                      <button class="chip" type="button" data-ikt-tool="Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)">Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)</button>
+                      <button class="chip" type="button" data-ikt-tool="Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)">Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)</button>
+                      <button class="chip" type="button" data-ikt-tool="Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)">Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)</button>
+                    </div>
+                    <div class="field full" style="margin-top: 8px;">
+                      <label for="iktCustomApp">Egyéb IKT eszköz vagy alkalmazás</label>
+                      <input type="text" id="iktCustomApp" data-field="ikt-custom-app" placeholder="Pl.: saját fejlesztő játék, YouTube zenei illusztráció, fényasztal..." />
+                    </div>
+                  </div>
 
                   <div id="weeklyAdvancedBlock" class="weekly-advanced" hidden>
                     <div class="field">
@@ -672,6 +703,18 @@
         return document.querySelector('[data-field="available-tools"]')?.value.trim() || '';
       }
 
+      function getIktEnabled() {
+        return Boolean(document.getElementById('iktEnabled')?.checked);
+      }
+
+      function getSelectedIktTools() {
+        return Array.from(document.querySelectorAll('#iktToolsPicker [data-ikt-tool].active')).map((btn) => btn.dataset.iktTool);
+      }
+
+      function getIktCustomApp() {
+        return document.getElementById('iktCustomApp')?.value.trim() || '';
+      }
+
       function getBlacklist() {
         return document.querySelector('[data-field="blacklist"]')?.value.trim() || '';
       }
@@ -688,6 +731,8 @@
         const hasCustomValue = Boolean(getBlacklist()) ||
           Boolean(document.querySelector('[data-field="elozmeny"]')?.value.trim()) ||
           Boolean(document.querySelector('[data-field="show-literature"]')?.checked) ||
+          getIktEnabled() ||
+          Boolean(getIktCustomApp()) ||
           (getSelectedDuration() === 'Heti' && (
             getWeeklyProgressionType() !== 'progressive' ||
             getFridayClosingType() !== 'Kiállítás a csoportszobában'));
@@ -734,6 +779,7 @@
             `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
             `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
             `Óvoda: ${payload.kindergartenName || none}`,
+            `Óvoda arculata: ${payload.kindergartenProfile || none}`,
             `Óvodapedagógus: ${payload.teacherName || none}`,
             `Csoport neve: ${payload.groupName || none}`,
             `Saját megjegyzés: ${customNotes.primary || none}`
@@ -756,6 +802,7 @@
             `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
             `Előzmény: ${payload.elozmeny || none}`,
             `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
+            `IKT / Digitális eszközök: ${payload.iktEnabled ? (payload.iktSummary || 'Igen') : 'Nem'}`,
             `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
             `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
           ]]
@@ -1472,6 +1519,7 @@
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.profile) || '{}');
           const fields = [
             ['input[data-field="kindergarten-name"]', saved.kindergartenName || ''],
+            ['input[data-field="kindergarten-profile"]', saved.kindergartenProfile || ''],
             ['input[data-field="teacher-name"]', saved.teacherName || ''],
             ['input[data-field="group-name"]', saved.groupName || ''],
           ];
@@ -1487,6 +1535,7 @@
       function saveProfileToStorage() {
         const profile = {
           kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          kindergartenProfile: document.querySelector('input[data-field="kindergarten-profile"]')?.value || '',
           teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
           groupName: document.querySelector('input[data-field="group-name"]')?.value || ''
         };
@@ -1496,11 +1545,13 @@
       function clearDraftState() {
         const preservedProfile = {
           kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          kindergartenProfile: '',
           teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
           groupName: document.querySelector('input[data-field="group-name"]')?.value || '',
         };
         const profileFieldMap = {
           'kindergarten-name': 'kindergartenName',
+          'kindergarten-profile': 'kindergartenProfile',
           'teacher-name': 'teacherName',
           'group-name': 'groupName'
         };
@@ -1549,6 +1600,11 @@
           if (field.matches('[data-field="kindergarten-name"], [data-field="teacher-name"], [data-field="group-name"]')) {
             const key = profileFieldMap[field.dataset.field];
             field.value = preservedProfile[key] || '';
+            return;
+          }
+
+          if (field.matches('[data-field="kindergarten-profile"]')) {
+            field.value = '';
             return;
           }
 
@@ -1626,6 +1682,7 @@
             const formFields = {
               theme: document.querySelector('input[data-field="theme"]'),
               kindergartenName: document.querySelector('input[data-field="kindergarten-name"]'),
+              kindergartenProfile: document.querySelector('input[data-field="kindergarten-profile"]'),
               teacherName: document.querySelector('input[data-field="teacher-name"]'),
               groupName: document.querySelector('input[data-field="group-name"]'),
               customNote: document.querySelector('textarea[data-field="custom-note"]'),
@@ -1637,6 +1694,7 @@
 
             if (formFields.theme) formFields.theme.value = plan.theme || '';
             if (formFields.kindergartenName) formFields.kindergartenName.value = plan.kindergartenName || '';
+            if (formFields.kindergartenProfile) formFields.kindergartenProfile.value = plan.kindergartenProfile || '';
             if (formFields.teacherName) formFields.teacherName.value = plan.teacherName || '';
             if (formFields.groupName) formFields.groupName.value = plan.groupName || '';
             if (formFields.customNote) formFields.customNote.value = plan.customNote || '';
@@ -1694,13 +1752,38 @@
         });
 
         document.querySelectorAll('.chip').forEach((button) => {
-          if (button.dataset.themeOption) return;
+          if (button.dataset.themeOption || button.dataset.iktTool) return;
           button.addEventListener('click', () => {
             button.classList.toggle('active');
             saveProfileToStorage();
             persistDraftState();
             updateSummary();
           });
+        });
+
+        const iktToggle = document.getElementById('iktEnabled');
+        if (iktToggle) {
+          iktToggle.addEventListener('change', () => {
+            const statusLabel = document.getElementById('iktToggleStatusLabel');
+            if (statusLabel) statusLabel.textContent = iktToggle.checked ? 'Igen' : 'Nem';
+            const panel = document.getElementById('iktOptionsPanel');
+            if (panel) panel.hidden = !iktToggle.checked;
+            updateSummary();
+            persistDraftState();
+          });
+        }
+
+        document.querySelectorAll('#iktToolsPicker [data-ikt-tool]').forEach((button) => {
+          button.addEventListener('click', () => {
+            button.classList.toggle('active');
+            updateSummary();
+            persistDraftState();
+          });
+        });
+
+        document.getElementById('iktCustomApp')?.addEventListener('input', () => {
+          updateSummary();
+          persistDraftState();
         });
 
         document.querySelectorAll('.segment[data-group="duration"]').forEach((button) => {
@@ -2068,6 +2151,13 @@
       function buildGenerationPayload() {
         const activeDurationButton = document.querySelector('.segment.active[data-group="duration"]');
         const selectedDuration = (activeDurationButton?.dataset?.value || activeDurationButton?.textContent || '').trim() || getSelectedDuration() || 'Napi';
+        const iktEnabled = getIktEnabled();
+        const iktTools = getSelectedIktTools();
+        const iktCustomApp = getIktCustomApp();
+        const iktParts = [...iktTools, iktCustomApp].filter(Boolean);
+        const iktSummary = iktEnabled
+          ? (iktParts.length ? iktParts.join('; ') : 'Bekapcsolva (általános óvodai IKT eszközök)')
+          : 'Nem';
 
         return {
           duration: selectedDuration,
@@ -2082,6 +2172,7 @@
           theme: getTheme(),
           group: getGroup(),
           kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
+          kindergartenProfile: document.querySelector('input[data-field="kindergarten-profile"]')?.value.trim() || '',
           teacherName: document.querySelector('input[data-field="teacher-name"]')?.value || '',
           groupName: document.querySelector('input[data-field="group-name"]')?.value || '',
           dateValue: getDateValue(),
@@ -2100,6 +2191,10 @@
           selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
           specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
           showLiteratureAtBottom: document.querySelector('input[data-field="show-literature"]')?.checked || false,
+          iktEnabled,
+          iktTools,
+          iktCustomApp,
+          iktSummary
         };
       }
 
