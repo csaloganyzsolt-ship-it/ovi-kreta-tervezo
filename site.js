@@ -206,6 +206,13 @@ function getLockedMeta(result) {
 }
 
 if (typeof window !== 'undefined') {
+  window.OVITERVEZO_CONFIG = Object.assign(
+    {
+      turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9'
+    },
+    window.OVITERVEZO_CONFIG || {},
+    window.APP_CONFIG || {}
+  );
   window.formatExtentSummary = formatExtentSummary;
   window.getLockedMeta = getLockedMeta;
 }

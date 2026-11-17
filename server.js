@@ -177,7 +177,7 @@ app.get('/config.js', (_req, res) => {
     apiBaseUrl: 'same-origin',
     paywallEnabled: env.PAYWALL_ENABLED === 'true',
     stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
-    turnstileSiteKey: env.TURNSTILE_SITE_KEY || '',
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || '0x4AAAAAAGFSc8Zzow6VmxQ9',
     company: {
       name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
       taxId: env.COMPANY_TAX_ID || '27891788-2-08',
