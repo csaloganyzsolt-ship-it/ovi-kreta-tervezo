@@ -188,7 +188,12 @@ async function issueInvoice(order, deps = {}) {
   writeStore(env, issued);
   const pdf = Buffer.from(await response.arrayBuffer());
   if (pdf.subarray(0, 4).toString() === '%PDF') {
-    saveInvoicePdf(order.orderId, pdf, env);
+    // A számla már kiállt, ezért a PDF mentési hibája nem dobhat hibát (a webhook újrapróbálása duplikátumot adna).
+    try {
+      saveInvoicePdf(order.orderId, pdf, env);
+    } catch (error) {
+      console.error(`A számla PDF mentése sikertelen (${order.orderId}):`, error.message);
+    }
   } else {
     console.warn(`A Számlázz.hu válasza nem PDF (${order.orderId}), a számla letöltése nem érhető el.`);
   }

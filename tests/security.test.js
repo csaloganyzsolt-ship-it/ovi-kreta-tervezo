@@ -349,3 +349,25 @@ test('seasonal theme chips and the paywall gate stay inert with hostile data', a
   assert.equal(host.querySelector('img[src="x"]'), null);
   assert.equal(window.__xss, undefined);
 });
+
+test('Turnstile is skipped without a token only for the GitHub Pages origin', async (t) => {
+  const calls = stubGemini(t, JSON.stringify(makePlan()));
+  const saved = process.env.TURNSTILE_SECRET_KEY;
+  process.env.TURNSTILE_SECRET_KEY = 'test-secret';
+  t.after(() => { if (saved === undefined) delete process.env.TURNSTILE_SECRET_KEY; else process.env.TURNSTILE_SECRET_KEY = saved; });
+  const base = await listen(t);
+  const send = (origin) => fetch(`${base}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
+    body: JSON.stringify(makePayload())
+  });
+
+  assert.equal((await send('https://csaloganyzsolt-ship-it.github.io')).status, 200);
+  for (const origin of ['https://ovitervezo.hu', 'https://csaloganyzsolt-ship-it.github.io.evil.com', '']) {
+    const response = await send(origin);
+    assert.equal(response.status, 403, origin || 'no origin');
+  }
+  assert.equal(calls.length, 1);
+  assert.equal(server.isTurnstileExemptOrigin('https://csaloganyzsolt-ship-it.github.io/'), true);
+  assert.equal(server.isTurnstileExemptOrigin(undefined), false);
+});

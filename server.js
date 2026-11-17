@@ -677,6 +677,13 @@ function resetDailyGenerations() {
   dailyGenerations.count = 0;
 }
 
+const TURNSTILE_EXEMPT_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
+
+// A GitHub Pages demó nincs felvéve a Turnstile-ba; token nélkül csak innen engedjük át. Az Origin kliensoldali fejléc, ezért ez nem erős hitelesítés.
+function isTurnstileExemptOrigin(origin) {
+  return TURNSTILE_EXEMPT_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
+}
+
 async function verifyTurnstileToken(token, ip, env = process.env) {
   const secretKey = String(env.TURNSTILE_SECRET_KEY || '').trim();
   if (!secretKey) return true;
@@ -740,7 +747,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     const request = validateGeneratePayload(rawPayload);
 
     // Cloudflare Turnstile token ellenőrzése (opcionális, csak ha TURNSTILE_SECRET_KEY be van állítva)
-    const turnstileValid = await verifyTurnstileToken(payload.turnstileToken, clientIp, process.env);
+    const exempt = !payload.turnstileToken && isTurnstileExemptOrigin(req.get('origin'));
+    const turnstileValid = exempt || await verifyTurnstileToken(payload.turnstileToken, clientIp, process.env);
     if (!turnstileValid) {
       return res.status(403).json({
         success: false,
@@ -863,4 +871,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };
+module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

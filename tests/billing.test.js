@@ -387,3 +387,58 @@ test('/health reports the active billing profile with booleans only and never le
   for (const secret of Object.values(ALL_KEYS)) assert.equal(result.text.includes(secret), false, secret);
   for (const value of Object.values(result.body.billing.keys)) assert.equal(typeof value, 'boolean');
 });
+
+test('EV webhook end to end: _EV keys, AAM, net = gross, no prefix, retry after a Számlázz.hu error', async (t) => {
+  const Stripe = require('stripe');
+  const { app } = require('../server');
+  const saved = { ...process.env };
+  t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
+  for (const key of Object.keys(process.env)) if (/^(STRIPE_|SZAMLAZZ_|BILLING_PROFILE)/.test(key)) delete process.env[key];
+  const store = path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'ev-')), 's.json');
+  Object.assign(process.env, {
+    BILLING_PROFILE: 'ev', STRIPE_SECRET_KEY_EV: 'sk_test_ev', STRIPE_WEBHOOK_SECRET_EV: 'whsec_ev', SZAMLAZZ_API_KEY_EV: 'agent-ev',
+    STRIPE_SECRET_KEY_KFT: 'sk_test_kft', STRIPE_WEBHOOK_SECRET_KFT: 'whsec_kft', SZAMLAZZ_API_KEY_KFT: 'agent-kft', INVOICE_STORE_PATH: store
+  });
+  const instance = app.listen(0, '127.0.0.1');
+  await once(instance, 'listening');
+  t.after(() => new Promise((resolve) => instance.close(resolve)));
+
+  const realFetch = global.fetch;
+  let xml = '';
+  let failNext = false;
+  global.fetch = async (url, options) => {
+    if (!String(url).includes('szamlazz.hu')) return realFetch(url, options);
+    xml = await options.body.get('action-xmlagentxmlfile').text();
+    if (failNext) return { ok: true, headers: new Map([['szlahu_error', 'Hib%C3%A1s'], ['szlahu_error_code', '57']]) };
+    return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-1']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 x') };
+  };
+  t.after(() => { global.fetch = realFetch; });
+
+  const post = (secret, plan, id) => {
+    const payload = JSON.stringify({ id: `evt_${id}`, object: 'event', type: 'checkout.session.completed', data: { object: { id, payment_status: 'paid', metadata: { plan }, customer_details: { name: 'Vevő', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } } });
+    const signature = Stripe.webhooks.generateTestHeaderString({ payload, secret });
+    return realFetch(`http://127.0.0.1:${instance.address().port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': signature }, body: payload });
+  };
+
+  assert.equal((await post('whsec_kft', 'daily', 'cs_test_wrongkey')).status, 400, 'a Kft. webhook titka nem fogadható el EV profilnál');
+
+  for (const [plan, gross] of [['daily', 390], ['weekly_detailed', 890]]) {
+    const response = await post('whsec_ev', plan, `cs_test_${plan}`);
+    assert.equal(response.status, 200);
+    assert.match(xml, /<szamlaagentkulcs>agent-ev<\/szamlaagentkulcs>/);
+    assert.match(xml, /<afakulcs>AAM<\/afakulcs>/);
+    assert.match(xml, new RegExp(`<nettoEgysegar>${gross}</nettoEgysegar>`));
+    assert.match(xml, new RegExp(`<nettoErtek>${gross}</nettoErtek>`));
+    assert.match(xml, /<afaErtek>0<\/afaErtek>/);
+    assert.match(xml, new RegExp(`<bruttoErtek>${gross}</bruttoErtek>`));
+    assert.doesNotMatch(xml, /szamlaszamElotag/);
+    assert.doesNotMatch(xml, /agent-kft/);
+  }
+
+  failNext = true;
+  const failed = await post('whsec_ev', 'daily', 'cs_test_failing');
+  assert.equal(failed.status, 500);
+  assert.match((await failed.json()).error, /Számlázz\.hu hiba \(57\): Hibás/);
+  failNext = false;
+  assert.equal((await post('whsec_ev', 'daily', 'cs_test_failing')).status, 200, 'a Stripe újrapróbálása után kiállítja a számlát');
+});

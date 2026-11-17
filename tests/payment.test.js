@@ -1024,7 +1024,7 @@ test('every config source emits the same turnstile key and support e-mail under 
     const code = fs.readFileSync(path.join(ROOT, dir, 'config.js'), 'utf8');
     assert.doesNotMatch(code, /OVITERVEZO_CONFIG/);
     const cfg = evalConfig(code).APP_CONFIG;
-    assert.equal(cfg.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY, script);
+    assert.equal(cfg.turnstileSiteKey, script.includes('pages') ? '' : SHARED.TURNSTILE_SITE_KEY, script);
     assert.equal(cfg.company.email, SHARED.SUPPORT_EMAIL, script);
   }
   const local = evalConfig(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'));
