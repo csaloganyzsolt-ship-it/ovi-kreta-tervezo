@@ -168,16 +168,9 @@ async function stripeWebhook(req, res) {
   }
 }
 
-function getStoredPlan(req, res) {
-  const plan = planStore.getPlan(req.params.id);
-  if (!plan) return res.status(404).json({ success: false, error: 'A tervezet nem található vagy lejárt.' });
-  return res.json({ success: true, plan });
-}
-
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
-router.get('/plan/:id', getStoredPlan);
 
-module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited, getStoredPlan };
+module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited };

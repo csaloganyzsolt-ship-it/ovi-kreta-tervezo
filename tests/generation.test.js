@@ -215,6 +215,25 @@ test('HTTP /api/generate with preview=true returns the structural mirror and hid
   assert.equal(stored.kidolgozas_tablazat[0].tevekenyseg_menete[0], secretPhrase);
 });
 
+test('the unlocked stored plan is not publicly retrievable by generationId', async (t) => {
+  const secretPhrase = 'Titkos zárolt foglalkozási lépés a paywall teszthez';
+  const plan = makePlan(6);
+  plan.kidolgozas_tablazat[0].tevekenyseg_menete = [secretPhrase];
+  stubGemini(t, geminiResponse(JSON.stringify(plan)));
+  const { data } = await postPlan(t, makePayload({ preview: true }));
+  assert.match(data.generationId, /^gen_[0-9a-f-]{36}$/);
+
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  for (const route of [`/api/plan/${data.generationId}`, `/plan/${data.generationId}`]) {
+    const res = await fetch(base + route);
+    assert.equal(res.status, 404, route);
+    assert.equal((await res.text()).includes(secretPhrase), false, route);
+  }
+});
+
 test('HTTP API failures return details and no fake document or fallback rows', async (t) => {
   const calls = stubGemini(t, { error: { message: 'Requested model is unavailable for this API key.' } }, 404);
   const { response, data } = await postPlan(t, makePayload());

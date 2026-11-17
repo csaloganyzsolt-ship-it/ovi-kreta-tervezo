@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
@@ -642,7 +643,7 @@ function shouldLockPlan(payload = {}, env = process.env) {
 }
 
 function newServerGenerationId() {
-  return `gen_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  return `gen_${crypto.randomUUID()}`;
 }
 
 app.post('/api/generate', generateLimiter, async (req, res) => {
