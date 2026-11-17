@@ -512,7 +512,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html', 'theme-init.js']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -1060,4 +1060,40 @@ test('static HTML carries no inline styles except the JS-toggled display:none on
   }
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
   assert.equal((css.match(/@media print/g) || []).length, 1, 'egyetlen @media print blokk');
+});
+
+test('the synchronous theme bootstrap lives in theme-init.js and is shipped everywhere', async () => {
+  const { execFileSync } = require('node:child_process');
+  const script = fs.readFileSync(path.join(ROOT, 'theme-init.js'), 'utf8');
+  for (const [stored, expected] of [['dark', 'dark'], ['light', 'light'], [null, 'light']]) {
+    const dom = new JSDOM('<!doctype html><html><head></head></html>', { url: 'http://localhost/', runScripts: 'outside-only' });
+    if (stored) dom.window.localStorage.setItem('oviKretaTheme', stored);
+    dom.window.eval(script);
+    assert.equal(dom.window.document.documentElement.dataset.theme, expected);
+    dom.window.close();
+  }
+  for (const page of ['index.html', 'tervezo.html']) {
+    const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    const head = html.slice(0, html.indexOf('</head>'));
+    assert.ok(head.indexOf('<script src="theme-init.js"></script>') !== -1 && head.indexOf('<script src="theme-init.js"></script>') < head.indexOf('rel="stylesheet"'), `${page}: theme-init.js a stíluslap előtt`);
+    assert.doesNotMatch(head, /<script>[\s\S]*oviKretaTheme/, `${page}: nincs inline téma-script`);
+  }
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
+  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
+  for (const dir of ['dist-nethely', 'dist-pages']) {
+    assert.ok(fs.existsSync(path.join(ROOT, dir, 'theme-init.js')), `${dir}: theme-init.js hiányzik`);
+    for (const page of ['index.html', 'tervezo.html']) {
+      assert.match(fs.readFileSync(path.join(ROOT, dir, page), 'utf8'), /<script src="theme-init\.js\?v=\d{12}"><\/script>/, `${dir}/${page}`);
+    }
+  }
+  const { start } = require('../server');
+  const server = start(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/theme-init.js`);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), script);
+  } finally {
+    server.close();
+  }
 });

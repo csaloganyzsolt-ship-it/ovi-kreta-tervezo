@@ -40,8 +40,8 @@ function applySiteVerification(html) {
   return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
 }
 
-// Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, site.js, config.js), ezért bármilyen gyökérben működik.
-for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
+// Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, site.js, theme-init.js, config.js), ezért bármilyen gyökérben működik.
+for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'theme-init.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {

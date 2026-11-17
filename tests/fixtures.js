@@ -69,6 +69,7 @@ function readPage(name) {
   const path = require('node:path');
   const root = path.join(__dirname, '..');
   return fs.readFileSync(path.join(root, name), 'utf8')
+    .replace('<script src="theme-init.js"></script>', () => `<script>${fs.readFileSync(path.join(root, 'theme-init.js'), 'utf8')}</script>`)
     .replace('<script src="site.js"></script>', () => `<script>${fs.readFileSync(path.join(root, 'site.js'), 'utf8')}</script>`);
 }
 module.exports.readPage = readPage;
