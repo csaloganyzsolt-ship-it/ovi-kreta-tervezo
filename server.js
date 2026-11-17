@@ -607,7 +607,7 @@ const generateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skipFailedRequests: true,
-  handler: (_req, res) => res.status(429).json({ success: false, error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' })
+  handler: (_req, res) => res.status(429).json({ success: false, code: 'RATE_LIMITED', error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' })
 });
 
 const activeGenerationsByIp = new Set();
@@ -649,8 +649,9 @@ function newServerGenerationId() {
 app.post('/api/generate', generateLimiter, async (req, res) => {
   const clientIp = getClientIp(req);
   if (activeGenerationsByIp.has(clientIp)) {
-    return res.status(429).json({
+    return res.status(409).json({
       success: false,
+      code: 'GENERATION_IN_PROGRESS',
       error: 'Már folyamatban van egy tervezet generálása erről az IP-címről. Kérjük, várd meg a befejezést!'
     });
   }

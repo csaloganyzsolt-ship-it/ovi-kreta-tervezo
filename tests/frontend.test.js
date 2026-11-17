@@ -665,13 +665,6 @@ test('the daily free limit blocks a different request after 3 generations and un
   assert.equal(JSON.parse(window.localStorage.getItem('oviKreta_dailyCount')).count, 0);
 });
 
-test('a 429 from the server shows the limit message', async (t) => {
-  const window = await loadApp(t);
-  window.fetch = async () => Response.json({ success: false, error: 'Napi generálási limit túllépve.' }, { status: 429 });
-  await window.generatePlan();
-  assert.match(window.document.querySelector('#generationErrorBanner').textContent, /napi ingyenes tervezési limitet/);
-});
-
 test('cache hit is served even when the daily limit is already used up', async (t) => {
   const window = await loadApp(t);
   let calls = 0;
@@ -727,4 +720,32 @@ test('the payment=success return unlocks the restored plan, jumps to step 4 and 
   assert.equal(window.document.querySelector('.step-panel.active').dataset.step, '4');
   assert.equal(window.document.querySelector('#previewContent').style.display, 'block');
   assert.ok(JSON.parse(window.localStorage.getItem('oviKretaUnlocked')).length >= 1);
+});
+
+test('429 and 409 responses show the server message and never set the daily counter', async (t) => {
+  for (const [status, code, error] of [[429, 'RATE_LIMITED', 'Óránkénti limit.'], [409, 'GENERATION_IN_PROGRESS', 'Már folyamatban van.']]) {
+    const window = await loadApp(t);
+    window.fetch = async () => Response.json({ success: false, code, error }, { status });
+    await window.generatePlan();
+    assert.match(window.document.querySelector('#generationErrorBanner').textContent, new RegExp(error));
+    assert.equal(window.localStorage.getItem('oviKreta_dailyCount'), null);
+    assert.equal(window.document.querySelector('#nextBtn').disabled, false);
+  }
+});
+
+test('a double click sends only one generation request', async (t) => {
+  const window = await loadApp(t);
+  let calls = 0;
+  let release;
+  window.fetch = () => {
+    calls += 1;
+    return new Promise((resolve) => { release = () => resolve(Response.json({ success: true, ...makePlan() })); });
+  };
+  const first = window.generatePlan();
+  const second = window.generatePlan();
+  await second;
+  release();
+  await first;
+  assert.equal(calls, 1);
+  assert.equal(window.document.querySelectorAll('.official-table tbody tr').length, 5);
 });

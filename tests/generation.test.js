@@ -453,7 +453,7 @@ test('POST /api/generate answers 429 after the per-IP daily limit', async () => 
     assert.equal((await post()).status, 200);
     const blocked = await post();
     assert.equal(blocked.status, 429);
-    assert.deepEqual(await blocked.json(), { success: false, error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' });
+    assert.deepEqual(await blocked.json(), { success: false, code: 'RATE_LIMITED', error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' });
     global.fetch = realFetch;
   } finally {
     process.env.GENERATE_RATE_LIMIT = previous;
@@ -462,7 +462,7 @@ test('POST /api/generate answers 429 after the per-IP daily limit', async () => 
   }
 });
 
-test('POST /api/generate rejects concurrent requests from the same IP with 429', async () => {
+test('POST /api/generate rejects concurrent requests from the same IP with 409', async () => {
   const { activeGenerationsByIp } = require('../server');
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -476,9 +476,10 @@ test('POST /api/generate rejects concurrent requests from the same IP with 429',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(makePayload({ preview: false }))
     });
-    assert.equal(res.status, 429);
+    assert.equal(res.status, 409);
     const data = await res.json();
     assert.equal(data.success, false);
+    assert.equal(data.code, 'GENERATION_IN_PROGRESS');
     assert.match(data.error, /Már folyamatban van egy tervezet generálása/);
   } finally {
     activeGenerationsByIp.delete('127.0.0.1');

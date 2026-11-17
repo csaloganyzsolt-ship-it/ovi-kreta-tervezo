@@ -2915,7 +2915,10 @@
         };
       }
 
+      let generationInFlight = false;
+
       async function generatePlan() {
+        if (generationInFlight) return;
         hideGenerationErrorBanner();
         const earlyPayload = buildGenerationPayload();
         const cachedResult = readCachedGeneration(earlyPayload);
@@ -2936,6 +2939,7 @@
         }
         revokeUnlock(lastResult?.generationId);
         resetGeneratedResult();
+        generationInFlight = true;
         nextBtn.disabled = true;
         nextBtn.classList.add('is-busy');
         nextBtn.textContent = 'Tervezet generálása folyamatban...';
@@ -2965,10 +2969,6 @@
 
           if (!response.ok || !data || data.success !== true) {
             const message = [data?.error, data?.details].filter((part) => typeof part === 'string' && part.trim()).join(' ');
-            if (response.status === 429) {
-              writeDailyCount(DAILY_FREE_LIMIT);
-              throw new Error(LIMIT_MESSAGE);
-            }
             throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
           }
 
@@ -3008,6 +3008,7 @@
             currentTurnstileToken = '';
           }
           stopLoader();
+          generationInFlight = false;
           refreshRestoreBanner();
           nextBtn.disabled = false;
           nextBtn.classList.remove('is-busy');
