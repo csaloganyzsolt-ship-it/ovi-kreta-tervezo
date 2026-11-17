@@ -1526,6 +1526,39 @@
   .landing-hero p { margin: 0 auto 22px; max-width: 640px; font-size: 18px; line-height: 1.6; }
   .landing-cta { display: inline-block; min-height: 48px; padding: 14px 30px; border-radius: 999px; background: #3fae84; color: #fff; font-weight: 700; font-size: 17px; text-decoration: none; }
   .landing-cta:hover, .landing-cta:focus-visible { background: #2f946f; }
+  .landing-hero-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
+  .landing-action-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 0; }
+  .landing-secondary-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 24px;
+    border-radius: 999px;
+    border: 1.5px solid var(--primary);
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--primary-dark, #2f946f);
+    font: inherit;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+  }
+  .landing-secondary-cta:hover, .landing-secondary-cta:focus-visible {
+    background: var(--primary);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+  :root[data-theme="dark"] .landing-secondary-cta {
+    background: var(--card);
+    border-color: var(--primary);
+    color: #9fd8c0;
+  }
+  :root[data-theme="dark"] .landing-secondary-cta:hover, :root[data-theme="dark"] .landing-secondary-cta:focus-visible {
+    background: var(--primary);
+    color: #ffffff;
+  }
   .landing-steps, .landing-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .landing-prices { grid-template-columns: repeat(2, 1fr); }
   .landing-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 20px; padding: 20px; text-align: center; }
@@ -1778,6 +1811,210 @@
   .locked-floating-bar,
   .locked-boundary-card {
     display: none !important;
+  }
+}
+
+/* ===== Mintatervezet modál (főoldal) ===== */
+.sample-modal-backdrop .modal-box.sample-modal-box {
+  width: min(920px, 95vw);
+  max-width: 920px;
+  max-height: 90vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card, #ffffff);
+  border-radius: 24px;
+}
+
+.sample-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.sample-modal-header-titles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sample-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.sample-modal-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(63, 174, 132, 0.15);
+  color: var(--primary-dark, #2f946f);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+:root[data-theme="dark"] .sample-modal-badge {
+  background: rgba(63, 174, 132, 0.25);
+  color: #9fd8c0;
+}
+
+.sample-modal-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 4px 20px;
+  flex-grow: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sample-document-sheet {
+  background: #ffffff;
+  color: #000000;
+  padding: 32px 36px;
+  border: 1px solid #d2ded8;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07);
+  margin: 0 auto;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  line-height: 1.6;
+}
+
+.sample-document-sheet .doc-header h2 {
+  margin: 0 0 16px 0;
+  font-size: 1.65rem;
+  letter-spacing: 0.02em;
+  color: #000000;
+  border-bottom: none;
+}
+
+.sample-document-sheet .doc-section {
+  margin-bottom: 24px;
+}
+
+.sample-document-sheet .doc-section h3 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+  color: #000000;
+  border-bottom: none;
+}
+
+.sample-document-sheet .doc-section p {
+  color: #000000;
+  line-height: 1.65;
+  margin: 0 0 10px;
+  font-size: 0.96rem;
+}
+
+.sample-document-sheet .official-meta {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 8px 18px;
+  border: 1px solid #000000;
+  border-radius: 4px;
+  padding: 12px 14px;
+  background: transparent;
+  color: #000000;
+}
+
+.sample-document-sheet .meta-row {
+  display: contents;
+}
+
+.sample-document-sheet .meta-label {
+  font-weight: 700;
+  color: #000000;
+}
+
+.sample-document-sheet .meta-value {
+  color: #000000;
+}
+
+.sample-document-sheet .official-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000000;
+  font-size: 0.92rem;
+  table-layout: fixed;
+  background: transparent;
+}
+
+.sample-document-sheet .official-table th,
+.sample-document-sheet .official-table td {
+  border: 1px solid #000000;
+  vertical-align: top;
+  padding: 10px 8px;
+  text-align: left;
+  color: #000000;
+  background: transparent;
+  background-color: transparent;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  line-height: 1.6;
+}
+
+.sample-document-sheet .official-table th {
+  font-weight: 700;
+  color: #000000;
+}
+
+.sample-document-sheet .official-table p {
+  margin: 0 0 0.6em;
+}
+
+.sample-document-sheet .official-table p:last-child {
+  margin-bottom: 0;
+}
+
+.sample-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .sample-modal-backdrop .modal-box.sample-modal-box {
+    width: 100%;
+    max-width: 100%;
+    height: 96vh;
+    max-height: 96vh;
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
+
+  .sample-document-sheet {
+    padding: 16px 12px;
+  }
+
+  .sample-document-sheet .official-meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .sample-document-sheet .meta-label {
+    margin-top: 6px;
+  }
+
+  .sample-modal-footer {
+    justify-content: stretch;
+  }
+
+  .sample-modal-footer button,
+  .sample-modal-footer a {
+    width: 100%;
+    text-align: center;
   }
 }
 

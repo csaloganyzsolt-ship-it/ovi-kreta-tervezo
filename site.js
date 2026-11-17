@@ -160,6 +160,8 @@ function initSite() {
   const mail = document.getElementById('footerEmail');
   if (mail) { mail.textContent = email; mail.href = `mailto:${email}`; }
   document.addEventListener('click', (event) => {
+    const sample = event.target.closest('[data-sample-modal]');
+    if (sample) { event.preventDefault(); openModal('sampleModal'); return; }
     const legal = event.target.closest('[data-legal]');
     if (legal) { event.preventDefault(); openLegalModal(legal.dataset.legal); return; }
     if (event.target.closest('[data-close-modal]') || event.target.classList.contains('modal-backdrop')) closeModals();

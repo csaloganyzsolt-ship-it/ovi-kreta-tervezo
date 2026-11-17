@@ -712,6 +712,48 @@ test('landing page footer and legal modal work and the footer is filled from the
   assert.equal(document.documentElement.dataset.theme, 'dark');
 });
 
+test('August 20 sample plan modal opens via Mintatervezet megtekintése button and contains required data', async (t) => {
+  const dom = new JSDOM(readPage('index.html'), { url: 'http://localhost:8000/', runScripts: 'dangerously' });
+  t.after(() => dom.window.close());
+  const { document, window } = dom.window;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const sampleButtons = Array.from(document.querySelectorAll('[data-sample-modal]'));
+  assert.ok(sampleButtons.length >= 1, 'Missing sample plan button');
+  assert.equal(sampleButtons[0].textContent.trim(), 'Mintatervezet megtekintése');
+
+  const modal = document.getElementById('sampleModal');
+  assert.ok(modal, 'Missing sampleModal');
+  assert.equal(modal.classList.contains('open'), false);
+
+  sampleButtons[0].click();
+  assert.ok(modal.classList.contains('open'));
+
+  // Verify contents
+  const text = modal.textContent;
+  assert.match(text, /Napsugár Óvoda \(nyári összevont ügyelet\)/);
+  assert.match(text, /Süni vegyes csoport \(3–7 évesek\)/);
+  assert.match(text, /Kovács Eszter/);
+  assert.match(text, /2026\. augusztus 20\. \(csütörtök\)/);
+  assert.match(text, /A külső világ tevékeny megismerése/);
+  assert.match(text, /Verselés, mesélés/);
+  assert.match(text, /Rajzolás, festés, mintázás, kézi munka/);
+  assert.match(text, /Az új kenyér ünnepe/);
+  assert.match(text, /búzakalász/i);
+  assert.doesNotMatch(text, /Szakmai tervezet/);
+  assert.doesNotMatch(text, /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
+
+  // Close modal via close button
+  modal.querySelector('[data-close-modal]').click();
+  assert.equal(modal.classList.contains('open'), false);
+
+  // Re-open and close via Escape key
+  sampleButtons[0].click();
+  assert.ok(modal.classList.contains('open'));
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(modal.classList.contains('open'), false);
+});
+
 test('both builds ship both pages with every local reference resolvable and the Search Console tag on both', () => {
   const { execFileSync } = require('node:child_process');
   const cwd = path.join(__dirname, '..');
