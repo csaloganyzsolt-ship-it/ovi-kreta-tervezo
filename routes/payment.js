@@ -7,6 +7,11 @@ const mailService = require('../services/mailService');
 const sheetsService = require('../services/sheetsService');
 const planStore = require('../services/planStore');
 
+// A levél sablonját a kliens jelzi; csak az ismert érték fogadható el.
+function requestedPlanMode(req) {
+  return req.body?.planMode === 'academic' ? 'academic' : 'standard';
+}
+
 function sendPaymentError(res, error, context) {
   const status = error.status || 500;
   if (status >= 500) console.error(`${context} failed:`, error.message);
@@ -66,7 +71,7 @@ async function deliverPurchase(req, res) {
     if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
     if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
     const attachments = mailService.sanitizeAttachments(req.body?.files);
-    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: invoiceService.orderNumber(id, session.created || new Date()), attachments, invoicePdf, title: req.body?.title });
+    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: invoiceService.orderNumber(id, session.created || new Date()), attachments, invoicePdf, title: req.body?.title, planMode: requestedPlanMode(req) });
     mailService.markSent(id);
     return res.json({ success: true, sent: true });
   } catch (error) {
@@ -123,7 +128,7 @@ async function testDeliver(req, res) {
     console.log('[test-deliver] Mellékletek ellenőrzése (DOCX/PDF/ZIP) kezdete');
     const attachments = mailService.sanitizeAttachments(req.body?.files);
     console.log(`[test-deliver] Mellékletek kész: ${attachments.map((a) => a.filename).join(', ')}`);
-    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments, title: req.body?.title });
+    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments, title: req.body?.title, planMode: requestedPlanMode(req) });
     console.log('[test-deliver] Kész, válasz a kliensnek');
     return res.json({ success: true, sent: true });
   } catch (error) {

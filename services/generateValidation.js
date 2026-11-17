@@ -104,12 +104,15 @@ function validateGeneratePayload(payload) {
   const put = (key, value) => { if (value !== undefined) clean[key] = value; };
 
   put('duration', oneOf(payload.duration, 'duration', ['Napi', 'Heti']));
-  put('planMode', oneOf(payload.planMode, 'planMode', ['daily', 'weekly']));
+  // Régi kliensek a napi/heti jelzést még planMode néven küldték: ezt planKind-ra képezzük le.
+  const legacyKind = ['daily', 'weekly'].includes(payload.planMode) ? payload.planMode : undefined;
+  put('planMode', oneOf(legacyKind ? undefined : payload.planMode, 'planMode', ['standard', 'academic']));
+  put('planKind', oneOf(payload.planKind ?? legacyKind, 'planKind', ['daily', 'weekly']));
   put('weeklyProgressionType', oneOf(payload.weeklyProgressionType, 'weeklyProgressionType', ['progressive', 'area_focused']));
   put('requestedModel', text(payload.requestedModel, 'requestedModel', 60));
   for (const [key, max] of [
     ['theme', 300], ['group', 100], ['kindergartenName', 200], ['kindergartenProfile', 300],
-    ['teacherName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
+    ['teacherName', 200], ['studentName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
     ['tevekenysegForma', 300], ['elozmeny', 4000], ['customNote', 4000], ['availableTools', 4000],
     ['blacklist', 4000], ['iktCustomApp', 300], ['iktSummary', 600], ['detail', 30], ['outputMode', 60]
   ]) put(key, text(payload[key], key, max));

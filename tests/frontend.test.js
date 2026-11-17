@@ -83,7 +83,8 @@ test('all form settings, including group characteristics and focus areas, enter 
   assert.equal(payload.outputMode, 'Szakmai tervezet');
   assert.equal(payload.availableTools, 'Nagyító.');
   window.setDurationSelection('Heti');
-  assert.equal(window.buildGenerationPayload().planMode, 'weekly');
+  assert.equal(window.buildGenerationPayload().planKind, 'weekly');
+  assert.equal(window.buildGenerationPayload().planMode, 'standard');
 });
 
 test('successful generation renders the real response and never silently replaces methods', async (t) => {
@@ -184,7 +185,8 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   document.querySelector('[data-field="week-value"]').value = '2026-W45';
   const weekly = window.buildGenerationPayload();
   assert.equal(weekly.dateValue, '2026-W45');
-  assert.equal(weekly.planMode, 'weekly');
+  assert.equal(weekly.planKind, 'weekly');
+  assert.equal(weekly.planMode, 'standard');
   assert.equal(weekly.includeDailyBreakdown, true);
   assert.deepEqual([...weekly.selectedDays], ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']);
   assert.equal(document.querySelector('#includeDailyBreakdown'), null);

@@ -511,7 +511,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -684,7 +684,9 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   for (const absent of ['id="landing"', 'id="seoContent"', 'landing-hero', 'Egyszeri díj, havidíj nélkül', 'application/ld+json']) assert.ok(!planner.includes(absent), `planner: ${absent}`);
   assert.match(landing, /<a class="brand" href="index\.html"/);
   assert.match(planner, /<a class="brand" href="index\.html"/);
-  assert.doesNotMatch(landing + planner, /ONAP|Kréta OVI|Kréta-kompatibilis/);
+  // Az ONAP-ra csak a tervező oktatási célú módjának leírása hivatkozik.
+  assert.doesNotMatch(landing, /ONAP|Kréta OVI|Kréta-kompatibilis/);
+  assert.doesNotMatch(planner, /Kréta OVI|Kréta-kompatibilis/);
   for (const page of [landing, planner]) {
     assert.match(page, /Cloudflare Turnstile/);
     assert.match(page, /href="https:\/\/www\.cloudflare\.com\/privacypolicy\/"/);
@@ -1098,7 +1100,7 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
   }
 });
 
-const PLANNER_SCRIPTS = ['core', 'form', 'preview', 'export', 'generate', 'paywall', 'init'].map((name) => `tervezo-${name}.js`);
+const PLANNER_SCRIPTS = ['core', 'academic', 'form', 'preview', 'export', 'generate', 'paywall', 'init'].map((name) => `tervezo-${name}.js`);
 
 test('tervezo.html loads the planner scripts in order and the single static list covers every shipped file', async () => {
   const { SITE_ASSETS, PAGES } = require('../services/siteConstants');

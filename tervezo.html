@@ -49,6 +49,37 @@
             <h2>1. Miről szól a hét/nap?</h2>
             <p class="subhead">Téma és időkeret: add meg, mikorra és miről készüljön a tervezet.</p>
 
+            <div class="plan-mode-block" id="planModeBlock">
+              <span class="plan-mode-label" id="planModeLabel">Milyen típusú tervezetet készítsünk?</span>
+              <div class="plan-mode-cards" role="group" aria-labelledby="planModeLabel">
+                <button class="plan-mode-card active" type="button" data-plan-mode="standard" aria-pressed="true">
+                  <span class="plan-mode-title">Óvodai tervezet</span>
+                  <span class="plan-mode-sub">Mindennapi óvodai gyakorlathoz</span>
+                </button>
+                <button class="plan-mode-card" type="button" data-plan-mode="academic" aria-pressed="false">
+                  <span class="plan-mode-title">Oktatási célú tervezet</span>
+                  <span class="plan-mode-sub">Hallgatói / egyetemi beadandó</span>
+                </button>
+              </div>
+              <div class="plan-mode-compare" id="planModeCompare">
+                <div class="plan-mode-info active" data-plan-mode-info="standard">
+                  <strong>Óvodai tervezet</strong>
+                  <p>Mindennapi óvodai gyakorlathoz optimalizált, gyors és áttekinthető tervezet a főbb célokkal és tevékenységekkel.</p>
+                </div>
+                <div class="plan-mode-info" data-plan-mode-info="academic">
+                  <strong>Oktatási célú tervezet</strong>
+                  <p>Egyetemi gyakorlatra, hospitálásra és zárótanításra szabott részletes szakmai dokumentáció: percre bontott 3 oszlopos foglalkozásmenettel vagy 7 oszlopos fekvő tematikus mátrixszal, nevelési–didaktikai–képességfejlesztési feladatbontással, dőlt betűvel szedett teljes vers-/mondókaszövegekkel és pontos szakirodalmi hivatkozásokkal (ÉNÓ, KEE, ONAP + Felhasznált irodalom).</p>
+                </div>
+              </div>
+              <div class="plan-mode-academic-extra" id="planModeAcademicExtra" hidden>
+                <div class="field full">
+                  <label for="studentName">Hallgató / Óvodapedagógus neve (opcionális)</label>
+                  <input type="text" id="studentName" data-field="student-name" placeholder="Pl.: Kovács Anna" autocomplete="off" />
+                </div>
+                <small class="field-hint" id="planModeAcademicHint">Napi időtartamnál Foglalkozási/tevékenységi terv (A4 álló), heti időtartamnál egyhetes Tematikus terv (A4 fekvő) készül. A szakirodalmi hivatkozásokat (oldalszámok) beadás előtt ellenőrizd a kiadványokban.</small>
+              </div>
+            </div>
+
             <div class="restore-banner" id="restoreBanner" hidden>
               <span>Van egy befejezetlen, letöltésre váró tervezeted. Szeretnéd visszatölteni?</span>
               <button class="btn" id="restoreLastBtn" type="button">Visszatöltés</button>
@@ -631,6 +662,7 @@
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js" integrity="sha384-4xaIisuLEy2lo2HkB2C4rEf7v8jbTb2kuogX6TkuEt9feTWKBSFSOzsqNNbV+sKh" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
     <script src="tervezo-core.js"></script>
+    <script src="tervezo-academic.js"></script>
     <script src="tervezo-form.js"></script>
     <script src="tervezo-preview.js"></script>
     <script src="tervezo-export.js"></script>

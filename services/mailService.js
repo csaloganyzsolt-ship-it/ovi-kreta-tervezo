@@ -108,12 +108,14 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber, to }, env) {
+function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber, to, hasZip, planMode }, env) {
   const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   const c = companyLines(env);
   const support = supportEmail(env);
   const site = 'https://ovitervezo.hu';
-  const attachmentText = planLabel === 'heti csomag'
+  // A ZIP-szöveg a tényleges mellékleteket követi (az oktatási célú tematikus terv egyetlen PDF/DOCX), ennek hiányában a csomag nevét.
+  const zip = hasZip ?? planLabel === 'heti csomag';
+  const attachmentText = zip
     ? 'a heti csomag ZIP archívuma (benne Word és PDF formátumú tervezetekkel)'
     : 'a tervezet Word (.docx) és PDF formátumban is';
   const invoiceText = withInvoice ? ' Az e-számlát is mellékeltük PDF-ben.' : '';
@@ -141,7 +143,7 @@ ${starsHtml}
     textFeedbackBlock = `\n\nHogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:\n${feedbackUrl(5)}`;
   }
 
-  const text = `Kedves Kolléganő!\n\n${testText}Köszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})${textFeedbackBlock}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
+  const text = `Kedves Kolléganő!\n\n${testText}Köszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}${planMode === 'academic' ? 'Tervezet típusa: Oktatási célú tervezet\n\n' : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})${textFeedbackBlock}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
 
   const testBanner = test
     ? '<div style="background:#fff4e0;border:1px solid #f3d29b;color:#8a5a00;border-radius:12px;padding:10px 14px;margin:0 0 16px;font-size:14px;">🧪 Ez egy <strong>teszt</strong> levél: fizetés és számla nélkül érkezett.</div>'
@@ -149,7 +151,7 @@ ${starsHtml}
   const invoiceItem = withInvoice
     ? '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">🧾 <strong>E-számla</strong> (PDF)</td></tr>'
     : '';
-  const fileItems = planLabel === 'heti csomag'
+  const fileItems = zip
     ? '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">🗂️ <strong>Heti csomag</strong> (ZIP – Word és PDF fájlokkal)</td></tr>'
     : '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr><tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📕 <strong>Tervezet PDF</strong> formátumban</td></tr>';
 
@@ -180,6 +182,7 @@ ${testBanner}
 <p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – és köszönjük az elhivatott munkát, amellyel nap mint nap a gyerekek mellett áll.</p>
 <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#2d3b36;">Reméljük, hogy a kész tervezet sok időt spórol Önnek, így több jut a legfontosabbra: a közös játékra és felfedezésre.</p>
 ${cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : ''}
+${planMode === 'academic' ? '<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Tervezet típusa: <strong>Oktatási célú tervezet</strong></p>' : ''}
 ${orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>${escapeHtml(orderNumber)}</strong></p>` : ''}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;">
 <div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek</div>
@@ -199,6 +202,10 @@ Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
 </td></tr>
 </table></td></tr></table></body></html>`;
   return { text, html };
+}
+
+function hasZipAttachment(attachments) {
+  return Array.isArray(attachments) && attachments.some((file) => /\.zip$/i.test(String(file?.filename || '')));
 }
 
 function planLabelOf(plan) {
@@ -228,10 +235,10 @@ async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumbe
 }
 
 // Egyetlen levél: a megvásárolt tervezet fájljai és az e-számla PDF együtt.
-async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber }, deps = {}) {
+async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber, planMode }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: true, test: false, title, orderNumber, to }, env);
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: true, test: false, title, orderNumber, to, hasZip: hasZipAttachment(attachments), planMode }, env);
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
@@ -305,10 +312,10 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
 }
 
 // Staging tesztkézbesítés: ugyanaz a levélsablon, de Stripe-fizetés és számla nélkül.
-async function sendTestDeliveryEmail({ to, plan, attachments, title }, deps = {}) {
+async function sendTestDeliveryEmail({ to, plan, attachments, title, planMode }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: false, test: true, title }, env);
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: false, test: true, title, hasZip: hasZipAttachment(attachments), planMode }, env);
   const transport = createTransport(env, deps);
   console.log(`[test-deliver] SMTP kapcsolódás és küldés: ${env.SMTP_HOST}:${env.SMTP_PORT || 587}`);
   const info = await transport.sendMail({

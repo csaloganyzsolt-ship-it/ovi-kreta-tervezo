@@ -53,9 +53,30 @@ function generateFillerText(text) {
   }).join('\n\n');
 }
 
+// Minden szöveglevél (tömbök és objektumok mélyén is) hasonló hosszúságú töltelékszöveg lesz; a szerkezet és a kulcsok megmaradnak.
+function mirrorValue(value) {
+  if (typeof value === 'string') return generateFillerText(value);
+  if (Array.isArray(value)) return value.map(mirrorValue);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, mirrorValue(item)]));
+  return value;
+}
+
+function countStrings(value) {
+  if (typeof value === 'string') return value.trim() ? 1 : 0;
+  if (Array.isArray(value)) return value.reduce((total, item) => total + countStrings(item), 0);
+  if (value && typeof value === 'object') return Object.values(value).reduce((total, item) => total + countStrings(item), 0);
+  return 0;
+}
+
 function countLockedContent(plan) {
   if (!plan || typeof plan !== 'object') {
     return { table_count: 0, activity_count: 0 };
+  }
+  if (plan.is_thematic === true && Array.isArray(plan.hetek)) {
+    return {
+      table_count: plan.hetek.length,
+      activity_count: plan.hetek.reduce((total, week) => total + countStrings(week?.teruletek), 0)
+    };
   }
   if (plan.is_weekly === true && Array.isArray(plan.napok)) {
     let table_count = 0;
@@ -88,6 +109,20 @@ function createMirrorPlan(plan) {
     activity_count: counts.activity_count,
     summary_text: formatExtentSummary(counts.table_count, counts.activity_count)
   };
+
+  if (plan.is_thematic === true && Array.isArray(plan.hetek)) {
+    return {
+      ...plan,
+      locked_meta,
+      felhasznalt_irodalom: mirrorValue(plan.felhasznalt_irodalom || ''),
+      hetek: plan.hetek.map((week) => ({
+        ...week,
+        teruletek: mirrorValue(week.teruletek),
+        keretrendszer: mirrorValue(week.keretrendszer)
+      })),
+      megjegyzes_egyeb_tevekenysegek: mirrorValue(plan.megjegyzes_egyeb_tevekenysegek ?? null)
+    };
+  }
 
   if (plan.is_weekly === true && Array.isArray(plan.napok)) {
     const mirror = {

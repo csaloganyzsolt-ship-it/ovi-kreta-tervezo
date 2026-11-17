@@ -2179,3 +2179,124 @@ a.brand { text-decoration: none; color: inherit; }
       display: none !important;
     }
 }
+
+/* ===== Tervezet típusa: óvodai / oktatási célú ===== */
+.plan-mode-block {
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--soft);
+  display: grid;
+  gap: 12px;
+}
+.plan-mode-label { font-weight: 700; color: var(--text); }
+.plan-mode-cards,
+.plan-mode-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.plan-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.plan-mode-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(63, 174, 132, 0.2);
+}
+.plan-mode-title { font-weight: 800; }
+.plan-mode-sub { font-size: 0.85rem; color: var(--muted); }
+.plan-mode-info {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+.plan-mode-info.active { opacity: 1; border-color: var(--primary); }
+.plan-mode-info p { margin: 4px 0 0; }
+.plan-mode-academic-extra { display: grid; gap: 8px; }
+.plan-mode-academic-extra[hidden] { display: none; }
+@media (max-width: 720px) {
+  .plan-mode-cards,
+  .plan-mode-compare { grid-template-columns: 1fr; }
+}
+
+/* ===== Oktatási célú dokumentumok (táblázatok, fejléc, dőlt szöveg) ===== */
+.document-sheet em { font-style: italic; }
+
+.document-sheet .academic-meta {
+  grid-template-columns: 30% 70%;
+  gap: 0;
+  padding: 0;
+  border: 1px solid #555555;
+  border-radius: 0;
+}
+.document-sheet .academic-meta .meta-label {
+  padding: 6px 10px;
+  background: #e3f2ea;
+  border-right: 1px solid #555555;
+  border-bottom: 1px solid #555555;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.document-sheet .academic-meta .meta-value {
+  padding: 6px 10px;
+  border-bottom: 1px solid #555555;
+  overflow-wrap: anywhere;
+}
+.document-sheet .academic-meta .meta-row:last-child .meta-label,
+.document-sheet .academic-meta .meta-row:last-child .meta-value { border-bottom: 0; }
+.document-sheet .academic-meta .meta-value p {
+  margin: 0 0 4px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+.document-sheet .academic-meta .meta-value p:last-child { margin-bottom: 0; }
+
+.document-sheet .official-table.academic-table { border: 1px solid #555555; }
+.document-sheet .official-table.academic-table th,
+.document-sheet .official-table.academic-table td {
+  border: 1px solid #555555;
+  padding: 6px 8px;
+}
+.document-sheet .official-table.academic-table th {
+  background: #dcefe6;
+  background-color: #dcefe6;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.document-sheet .official-table.academic-table th,
+.document-sheet .official-table.academic-table td { break-inside: auto; page-break-inside: auto; }
+
+.document-sheet .thematic-table { font-size: 0.7rem; }
+.document-sheet .official-table.thematic-table th,
+.document-sheet .official-table.thematic-table td {
+  padding: 4px 5px;
+  line-height: 1.35;
+}
+.document-sheet .official-table.thematic-table td p { margin: 0 0 0.3em; }
+.document-sheet .official-table .cell-label { margin: 0.5em 0 0.15em; }
+.document-sheet .official-table td > .cell-label:first-child { margin-top: 0; }
+
+.document-sheet .academic-frame h3 { margin: 12px 0 6px; }
+.document-sheet .academic-frame p {
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+.document-sheet .academic-literature .lit-item {
+  margin: 0 0 6px;
+  padding-left: 1.4em;
+  text-indent: -1.4em;
+  line-height: 1.5;
+}

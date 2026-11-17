@@ -86,6 +86,21 @@ function formatTableCell(value) {
     .join('');
 }
 
+// Oktatási célú tervezet jelölései: **félkövér** és *dőlt*; minden más karakter escape-elve marad.
+function formatRichText(value) {
+  return escapeHtml(value)
+    .replace(/\*\*([^*\s](?:[^*]*[^*\s])?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\s](?:[^*]*[^*\s])?)\*/g, '<em>$1</em>')
+    .replace(/\r?\n/g, '<br>');
+}
+
+function formatRichCell(value) {
+  const parts = Array.isArray(value)
+    ? value.map((part) => String(part ?? '').trim()).filter(Boolean)
+    : String(value ?? '').split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  return parts.map((part) => `<p>${formatRichText(part)}</p>`).join('');
+}
+
 const DOC_DEFAULTS = { orientation: 'portrait', margin: 'comfortable' };
 
 const WEEKDAY_ORDER = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];

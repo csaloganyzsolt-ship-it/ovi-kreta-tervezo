@@ -14,11 +14,20 @@ function validateGeneratedPlan(result) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw new Error('A szerver nem dokumentumot tartalmazó JSON objektumot adott vissza.');
   }
+  if (result.is_thematic === true) {
+    if (!Array.isArray(result.hetek) || !result.hetek.length || result.hetek.some((week) => !week || typeof week.teruletek !== 'object' || typeof week.keretrendszer !== 'object')) {
+      throw new Error('A tematikus tervből hiányzik a heti mátrix vagy a pedagógiai keretrendszer.');
+    }
+    return;
+  }
   if (result.is_weekly === true && Array.isArray(result.napok)) {
     if (!result.heti_keretterv || typeof result.heti_keretterv !== 'object' || !result.napok.length) {
       throw new Error('A heti tervezetből hiányzik a keretterv vagy a napi bontás.');
     }
     return;
+  }
+  if (result.planMode === 'academic' && (!result.tartalom || typeof result.tartalom !== 'object')) {
+    throw new Error('Az oktatási célú tervezetből hiányzik a tevékenység tartalma (tartalom).');
   }
   const textFields = ['tevekenyseg_forma', 'elozmeny', 'tema', 'cel',
     'nevelesi_feladatok', 'didaktikai_feladatok', 'kepessegfejlesztes', 'felhasznalt_irodalom'];
@@ -93,6 +102,14 @@ function getDocumentList(result = lastResult) {
       })
     ];
   }
+  if (result?.is_thematic === true) {
+    const req = result.request || lastResult?.request || {};
+    const mondayDateStr = getMondayDateForWeek(req.dateValue).toISOString().slice(0, 10);
+    return [{ id: 'main', label: 'Tematikus terv', fileBase: `tematikus-terv_${mondayDateStr}`, kind: 'thematic' }];
+  }
+  if (result?.planMode === 'academic') {
+    return [{ id: 'main', label: 'Tervezet', fileBase: 'foglalkozasi-terv', kind: 'daily' }];
+  }
   return [{ id: 'main', label: 'Tervezet', fileBase: 'ovi-kreta-terv', kind: 'daily' }];
 }
 
@@ -101,7 +118,10 @@ function currentDocKey() {
 }
 
 function getDocSettings(docId = currentDocKey()) {
-  return { ...DOC_DEFAULTS, ...(docSettings[docId] || {}) };
+  const settings = { ...DOC_DEFAULTS, ...(docSettings[docId] || {}) };
+  // A 7 oszlopos tematikus mátrix csak fekvő A4-en olvasható.
+  if (lastResult?.is_thematic === true) settings.orientation = 'landscape';
+  return settings;
 }
 
 function applyDocSettingsToElement(element, docId) {
@@ -116,7 +136,10 @@ function syncDocControls() {
   const marginSelect = document.querySelector('[data-export="margin"]');
   const orientationSelect = document.querySelector('[data-export="orientation"]');
   if (marginSelect) marginSelect.value = margin;
-  if (orientationSelect) orientationSelect.value = orientation;
+  if (orientationSelect) {
+    orientationSelect.value = orientation;
+    orientationSelect.disabled = lastResult?.is_thematic === true;
+  }
   const scope = document.getElementById('docSettingsScope');
   if (scope) {
     const doc = getDocumentList().find((item) => item.id === currentDocKey());
@@ -208,6 +231,9 @@ function buildDocumentHtml(result, request, docId) {
   const showMethods = settings.differentiation !== false;
   const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
   const locked = isPlanLocked(result);
+
+  if (result.is_thematic === true) return buildThematicHtml(result, request, { settings, locked });
+  if (result.planMode === 'academic') return buildAcademicDailyHtml(result, request, { settings, showMethods, locked });
 
   if (result.is_weekly === true && Array.isArray(result.napok)) {
     const frame = result.heti_keretterv || {};
@@ -403,7 +429,9 @@ function paginateDocument(host) {
 
     const table = block.querySelector('.official-table');
     const rows = table ? Array.from(table.tBodies[0]?.rows || []) : [];
-    if (!rows.length || rows.length < 2) {
+    // Az oktatási célú táblázatok egyetlen lapnál magasabb sora a cellák bekezdései mentén tovább osztható.
+    const splittable = Boolean(table?.classList.contains('academic-table'));
+    if (!rows.length || (rows.length < 2 && !splittable)) {
       if (body.children.length > 1) {
         newPage();
         body.appendChild(block);
@@ -416,6 +444,26 @@ function paginateDocument(host) {
     rows.forEach((row) => row.remove());
     let current = block;
     let currentBody = tbody;
+    const openContinuation = () => {
+      const continuation = current.cloneNode(true);
+      continuation.querySelectorAll('h3').forEach((node) => node.remove());
+      const continuationBody = continuation.querySelector('.official-table').tBodies[0];
+      continuationBody.replaceChildren();
+      newPage();
+      body.appendChild(continuation);
+      current = continuation;
+      currentBody = continuationBody;
+    };
+    const splitOversizedRow = (row) => {
+      let pending = row;
+      while (overflows()) {
+        const tail = splitTallRow(pending, overflows);
+        if (!tail) return;
+        openContinuation();
+        currentBody.appendChild(tail);
+        pending = tail;
+      }
+    };
     rows.forEach((row) => {
       currentBody.appendChild(row);
       if (!overflows()) return;
@@ -424,18 +472,13 @@ function paginateDocument(host) {
           newPage();
           body.appendChild(current);
         }
+        if (splittable) splitOversizedRow(row);
         return;
       }
       currentBody.removeChild(row);
-      const continuation = current.cloneNode(true);
-      continuation.querySelectorAll('h3').forEach((node) => node.remove());
-      const continuationBody = continuation.querySelector('.official-table').tBodies[0];
-      continuationBody.replaceChildren();
-      newPage();
-      body.appendChild(continuation);
-      continuationBody.appendChild(row);
-      current = continuation;
-      currentBody = continuationBody;
+      openContinuation();
+      currentBody.appendChild(row);
+      if (splittable) splitOversizedRow(row);
     });
   });
 

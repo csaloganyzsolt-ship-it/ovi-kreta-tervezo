@@ -11,6 +11,8 @@ const stripeService = require('./services/stripeService');
 const invoiceService = require('./services/invoiceService');
 const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
+const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
+const academicPlan = require('./services/academicPlan');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -73,66 +75,12 @@ const RESPONSE_TEXT_FIELDS = [
   'felhasznalt_irodalom'
 ];
 
-function generationError(message, status = 502) {
-  return Object.assign(new Error(message), { status });
-}
-
-function readText(value, field, allowEmpty = false) {
-  if (value === null || value === undefined) {
-    if (allowEmpty) return '';
-    throw generationError(`Hiányzó vagy hibás szövegmező a Gemini válaszában: ${field}.`);
-  }
-  if (typeof value !== 'string') {
-    throw generationError(`Hiányzó vagy hibás szövegmező a Gemini válaszában: ${field}.`);
-  }
-  if (!allowEmpty && !value.trim()) {
-    throw generationError(`Hiányzó vagy hibás szövegmező a Gemini válaszában: ${field}.`);
-  }
-  return value.trim();
-}
-
-function readStringArray(value, field) {
-  if (!Array.isArray(value) || !value.length) {
-    throw generationError(`Hiányzó vagy üres szövegtömb a Gemini válaszában: ${field}.`);
-  }
-  return value.map((part, index) => readText(part, `${field}[${index}]`));
-}
-
-function clampRows(rows) {
-  if (!Array.isArray(rows)) {
-    throw generationError('A Gemini válaszában a kidolgozas_tablazat mező nem tömb.');
-  }
-
-  // Validate, but never shorten text, deduplicate notes, or silently remove rows.
-  return rows.map((row, index) => {
-    const field = `kidolgozas_tablazat[${index}]`;
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      throw generationError(`Hibás táblázatsor a Gemini válaszában: ${field}.`);
-    }
-    const activity = typeof row.tevekenyseg_menete === 'string'
-      ? row.tevekenyseg_menete.split(/\r?\n\s*\r?\n/).map((part) => part.trim()).filter(Boolean)
-      : row.tevekenyseg_menete;
-
-    return {
-      ido: readText(row.ido, `${field}.ido`),
-      tevekenyseg_menete: readStringArray(activity, `${field}.tevekenyseg_menete`),
-      modszerek_megjegyzesek: readText(row.modszerek_megjegyzesek, `${field}.modszerek_megjegyzesek`)
-    };
-  });
-}
-
-function normalizeTable(rows) {
-  const normalized = clampRows(rows);
-  if (!normalized.length) {
-    throw generationError('A Gemini válaszában a kidolgozas_tablazat üres. Nem készült dokumentum.');
-  }
-  return normalized;
-}
-
-function getPlanMode(payload = {}) {
-  const explicitMode = String(payload.planMode || '').trim().toLowerCase();
+// Napi vagy heti terv (planKind); a régi kliensek ezt még planMode: 'daily'|'weekly' néven küldték.
+function getPlanKind(payload = {}) {
+  const legacyKind = ['daily', 'weekly'].includes(payload.planMode) ? payload.planMode : '';
+  const explicitKind = String(payload.planKind || legacyKind).trim().toLowerCase();
   const duration = String(payload.duration || 'Napi').toLowerCase();
-  return duration === 'heti' || explicitMode === 'weekly' ? 'weekly' : 'daily';
+  return duration === 'heti' || explicitKind === 'weekly' ? 'weekly' : 'daily';
 }
 
 // Hibrid üzem: a frontend a Nethelyen (ovitervezo.hu), a backend a Renderen fut, ezért a böngészős hívásokhoz kifejezett CORS-lista kell.
@@ -256,7 +204,7 @@ function getSelectedDays(payload = {}) {
 }
 
 function isWeeklyBreakdown(payload = {}) {
-  return payload.duration === 'Heti' && payload.includeDailyBreakdown === true;
+  return payload.duration === 'Heti' && payload.includeDailyBreakdown === true && !academicPlan.isAcademic(payload);
 }
 
 function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays, focusAreas = []) {
@@ -386,7 +334,7 @@ function buildPrompt(payload = {}) {
     groupName: payload.groupName || '',
     dateValue: payload.dateValue || '',
     duration: payload.duration || 'Napi',
-    planMode: getPlanMode(payload),
+    planMode: getPlanKind(payload),
     includeDailyBreakdown: Boolean(payload.includeDailyBreakdown),
     selectedDays: getSelectedDays(payload),
     weeklyProgressionType: payload.weeklyProgressionType === 'area_focused' ? 'area_focused' : 'progressive',
@@ -420,6 +368,18 @@ function buildPrompt(payload = {}) {
   };
 
   const extraRules = [settings.group === 'Vegyes csoport' ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');
+  if (academicPlan.isAcademic(payload)) {
+    const academicSettings = { ...settings, planMode: 'academic', planKind: getPlanKind(payload), includeDailyBreakdown: false, studentName: normalizeFreeText(payload.studentName, 200) };
+    const commonRules = [
+      buildBlacklistRule(settings.blacklist),
+      buildKindergartenProfileRule(settings.kindergartenProfile),
+      buildIktRule(settings),
+      buildMathematicsRule(settings.focusAreas),
+      buildPreviousPlanContextRule(settings.previousPlanContext),
+      extraRules
+    ].filter(Boolean).join('\n');
+    return academicPlan.buildAcademicPrompt(academicSettings, detail, commonRules);
+  }
   if (isWeeklyBreakdown(payload)) return buildWeeklyPrompt(settings, detail, extraRules);
 
   return `Elhivatott, kreatív magyar mester-óvodapedagógus vagy, aki a magyar óvodapedagógiai irányelveknek és a hivatalos pedagógiai tervezetekkel szemben támasztott követelményeknek megfelelően készít élményszerű, gazdag napi foglalkozástervet.
@@ -529,6 +489,7 @@ function normalizeResponse(rawText, payload = {}) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw generationError('A Gemini API válasza nem valid JSON objektum. Nem készült dokumentum.');
   }
+  if (academicPlan.isAcademic(payload)) return academicPlan.normalizeAcademicResponse(parsed, payload);
   if (isWeeklyBreakdown(payload)) return normalizeWeeklyResponse(parsed, payload);
 
   const result = {};
@@ -770,8 +731,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       rawText = await callGemini(prompt, {
         model,
         blacklist: normalizeFreeText(request.blacklist),
-        maxOutputTokens: isWeeklyBreakdown(request) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined,
-        timeoutMs: isWeeklyBreakdown(request) ? WEEKLY_TIMEOUT_MS : undefined
+        maxOutputTokens: academicPlan.isAcademic(request) ? academicPlan.MAX_ACADEMIC_OUTPUT_TOKENS : (isWeeklyBreakdown(request) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined),
+        timeoutMs: academicPlan.isAcademic(request) ? academicPlan.ACADEMIC_TIMEOUT_MS : (isWeeklyBreakdown(request) ? WEEKLY_TIMEOUT_MS : undefined)
       });
     } catch (error) {
       releaseDailyGeneration();
@@ -781,7 +742,9 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     const generationId = newServerGenerationId();
     planStore.savePlan(generationId, { ...result, request, generationId });
 
-    console.info('Generated document:', result.is_weekly
+    console.info('Generated document:', result.is_thematic
+      ? { weeks: result.hetek.length }
+      : result.is_weekly
       ? { days: result.napok.length }
       : {
         rows: result.kidolgozas_tablazat.length,

@@ -109,17 +109,24 @@ const DAILY_PHASES = [
   [42, 'Összegzés és formázás...']
 ];
 
+const ACADEMIC_PHASES = [
+  [0, 'Szakmódszertani váz és célrendszer összeállítása...'],
+  [20, 'Percre bontott foglalkozásmenet / tematikus mátrix kidolgozása...'],
+  [60, 'Versek, mondókák és forráskódok pontosítása...'],
+  [100, 'Felhasznált irodalom és formázás...']
+];
+
 function startGenerationLoader(payload) {
   const loader = document.getElementById('generationLoader');
   const status = document.getElementById('generationStatus');
   const elapsed = document.getElementById('generationElapsed');
-  const phases = payload.duration === 'Heti' && payload.includeDailyBreakdown ? WEEKLY_PHASES : DAILY_PHASES;
+  const phases = payload.planMode === 'academic' ? ACADEMIC_PHASES : (payload.duration === 'Heti' && payload.includeDailyBreakdown ? WEEKLY_PHASES : DAILY_PHASES);
   const startedAt = Date.now();
   const tick = () => {
     const seconds = Math.floor((Date.now() - startedAt) / 1000);
     const phase = phases.filter(([from]) => seconds >= from).pop();
     if (status) status.textContent = phase[1];
-    if (elapsed) elapsed.textContent = `Eltelt idő: ${seconds} mp${phases === WEEKLY_PHASES ? ' – a heti terv akár 2–3 percig is eltarthat' : ''}`;
+    if (elapsed) elapsed.textContent = `Eltelt idő: ${seconds} mp${phases === WEEKLY_PHASES ? ' – a heti terv akár 2–3 percig is eltarthat' : (phases === ACADEMIC_PHASES ? ' – az oktatási célú tervezet akár 2–3 percig is eltarthat' : '')}`;
   };
   tick();
   if (loader) loader.hidden = false;

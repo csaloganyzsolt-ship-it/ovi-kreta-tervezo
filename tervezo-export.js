@@ -95,32 +95,42 @@ function docxRunsFromNode(node, base = {}) {
       runs.push(new TextRun({ break: 1 }));
     } else if (child.nodeType === 1) {
       const bold = ['STRONG', 'B'].includes(child.nodeName) || base.bold;
-      runs.push(...docxRunsFromNode(child, { color: '000000', ...base, bold }));
+      const italics = ['EM', 'I'].includes(child.nodeName) || base.italics;
+      runs.push(...docxRunsFromNode(child, { color: '000000', ...base, bold, ...(italics ? { italics: true } : {}) }));
     }
   });
   return runs;
 }
 
+// Oktatási célú táblázatok (academic-table): vékony szegély, színezett ismétlődő fejlécsor, a lapnál magasabb sor is törhető.
+const ACADEMIC_HEADER_FILL = 'DCEFE6';
+
 function docxTable(table, contentWidth) {
-  const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, TableLayoutType } = window.docx;
+  const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, TableLayoutType, ShadingType } = window.docx;
+  const academic = table.classList.contains('academic-table');
+  const thematic = table.classList.contains('thematic-table');
   const cols = Array.from(table.querySelectorAll('col')).map((col) => parseFloat(col.style.width) || 0);
   const count = cols.length || table.rows[0].cells.length;
   const widths = (cols.length ? cols : Array(count).fill(100 / count)).map((pct) => Math.round(contentWidth * pct / 100));
-  const line = { style: BorderStyle.SINGLE, size: 6, color: '000000' };
+  const line = { style: BorderStyle.SINGLE, size: academic ? 4 : 6, color: academic ? '444444' : '000000' };
   const borders = { top: line, bottom: line, left: line, right: line };
+  const fontSize = thematic ? 16 : 20;
   const buildRow = (row, header) => new TableRow({
     tableHeader: header,
-    cantSplit: true,
+    cantSplit: !academic,
     children: Array.from(row.cells).map((cell, index) => {
-      const paragraphs = Array.from(cell.querySelectorAll(':scope > p')).map((para) => new Paragraph({
-        spacing: { after: 100, line: 276 },
-        children: docxRunsFromNode(para, { size: 20, bold: header, font: 'Arial', color: '000000' })
+      const cellParagraphs = academic ? Array.from(cell.querySelectorAll('p')) : Array.from(cell.querySelectorAll(':scope > p'));
+      const paragraphs = cellParagraphs.map((para) => new Paragraph({
+        spacing: { after: thematic ? 50 : 100, line: thematic ? 240 : 276 },
+        keepNext: para.classList.contains('cell-label'),
+        children: docxRunsFromNode(para, { size: fontSize, bold: header, font: 'Arial', color: '000000' })
       }));
       return new TableCell({
         borders,
         width: { size: widths[index], type: WidthType.DXA },
-        margins: { top: 80, bottom: 80, left: 110, right: 110 },
-        children: paragraphs.length ? paragraphs : [new Paragraph({ children: docxRunsFromNode(cell, { size: 20, bold: header, font: 'Arial', color: '000000' }) })]
+        margins: thematic ? { top: 60, bottom: 60, left: 70, right: 70 } : { top: 80, bottom: 80, left: 110, right: 110 },
+        ...(academic && header ? { shading: { type: ShadingType.CLEAR, color: 'auto', fill: ACADEMIC_HEADER_FILL } } : {}),
+        children: paragraphs.length ? paragraphs : [new Paragraph({ children: docxRunsFromNode(cell, { size: fontSize, bold: header, font: 'Arial', color: '000000' }) })]
       });
     })
   });
@@ -144,17 +154,32 @@ function docxTable(table, contentWidth) {
 }
 
 function docxMetaTable(block, contentWidth) {
-  const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, TableLayoutType } = window.docx;
-  const line = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
+  const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, TableLayoutType, ShadingType } = window.docx;
+  const academic = Boolean(block.querySelector('.academic-meta'));
+  const line = { style: BorderStyle.SINGLE, size: 4, color: academic ? '444444' : '000000' };
   const borders = { top: line, bottom: line, left: line, right: line };
-  const widths = [Math.round(contentWidth * 0.28), Math.round(contentWidth * 0.72)];
+  const widths = academic
+    ? [Math.round(contentWidth * 0.3), Math.round(contentWidth * 0.7)]
+    : [Math.round(contentWidth * 0.28), Math.round(contentWidth * 0.72)];
+  // Az oktatási célú fejléc értékei több bekezdést és dőlt/félkövér szöveget is tartalmazhatnak.
+  const academicChildren = (cell) => {
+    const paragraphs = Array.from(cell.querySelectorAll(':scope > p'));
+    const sources = paragraphs.length ? paragraphs : [cell];
+    return sources.map((source) => new Paragraph({
+      spacing: { after: 40 },
+      children: docxRunsFromNode(source, { size: 21, font: 'Arial', color: '000000' })
+    }));
+  };
   const rows = Array.from(block.querySelectorAll('.meta-row')).map((row) => new TableRow({
-    cantSplit: true,
+    cantSplit: !academic,
     children: [row.querySelector('.meta-label'), row.querySelector('.meta-value')].map((cell, index) => new TableCell({
       borders,
       width: { size: widths[index], type: WidthType.DXA },
       margins: { top: 70, bottom: 70, left: 110, right: 110 },
-      children: [new Paragraph({ children: [new TextRun({ text: cell?.textContent || '', bold: index === 0, size: 21, font: 'Arial', color: '000000' })] })]
+      ...(academic && index === 0 ? { shading: { type: ShadingType.CLEAR, color: 'auto', fill: ACADEMIC_HEADER_FILL } } : {}),
+      children: academic && index === 1 && cell
+        ? academicChildren(cell)
+        : [new Paragraph({ children: [new TextRun({ text: cell?.textContent || '', bold: index === 0, size: 21, font: 'Arial', color: '000000' })] })]
     }))
   }));
   return new Table({

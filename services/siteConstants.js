@@ -6,7 +6,7 @@
 const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html'];
 const SITE_ASSETS = [
   'styles.css', 'site.js', 'theme-init.js',
-  'tervezo-core.js', 'tervezo-form.js', 'tervezo-preview.js', 'tervezo-export.js',
+  'tervezo-core.js', 'tervezo-academic.js', 'tervezo-form.js', 'tervezo-preview.js', 'tervezo-export.js',
   'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-init.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
 ];

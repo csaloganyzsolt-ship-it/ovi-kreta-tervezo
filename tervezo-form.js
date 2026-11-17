@@ -51,9 +51,33 @@ function getSelectedDuration() {
 
 const ALL_WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
 
-// Heti időtartamnál mindig készül napi bontás; a kijelölt napok hétfő–péntek sorrendben jönnek vissza.
+// 'standard' = óvodai tervezet, 'academic' = oktatási célú (egyetemi) tervezet.
+function getPlanMode() {
+  return document.querySelector('.plan-mode-card.active')?.dataset.planMode === 'academic' ? 'academic' : 'standard';
+}
+
+function isAcademicMode() {
+  return getPlanMode() === 'academic';
+}
+
+function setPlanMode(mode) {
+  const next = mode === 'academic' ? 'academic' : 'standard';
+  document.querySelectorAll('.plan-mode-card').forEach((card) => {
+    const active = card.dataset.planMode === next;
+    card.classList.toggle('active', active);
+    card.setAttribute('aria-pressed', String(active));
+  });
+  document.querySelectorAll('[data-plan-mode-info]').forEach((info) => {
+    info.classList.toggle('active', info.dataset.planModeInfo === next);
+  });
+  const extra = document.getElementById('planModeAcademicExtra');
+  if (extra) extra.hidden = next !== 'academic';
+  updateWeeklyDailyBreakdownVisibility();
+}
+
+// Heti időtartamnál mindig készül napi bontás (kivéve az oktatási célú tematikus tervet); a kijelölt napok hétfő–péntek sorrendben jönnek vissza.
 function getWeeklyDailyBreakdown() {
-  return getSelectedDuration() === 'Heti';
+  return getSelectedDuration() === 'Heti' && !isAcademicMode();
 }
 
 function getSelectedDays() {
@@ -89,7 +113,8 @@ function toggleWeekday(chip) {
 }
 
 function describeDuration(payload) {
-  return payload.duration === 'Heti' ? `Heti tervezet (${(payload.selectedDays || []).join(', ')})` : payload.duration;
+  if (payload.duration !== 'Heti') return payload.duration;
+  return payload.planMode === 'academic' ? 'Heti tematikus terv (egy hét)' : `Heti tervezet (${(payload.selectedDays || []).join(', ')})`;
 }
 
 function getWeeklyProgressionType() {
@@ -101,7 +126,7 @@ function getFridayClosingType() {
 }
 
 function updateFocusAreaDayRows() {
-  const isWeekly = getSelectedDuration() === 'Heti';
+  const isWeekly = getSelectedDuration() === 'Heti' && !isAcademicMode();
   document.querySelectorAll('.focus-area-card').forEach((card) => {
     const checkbox = card.querySelector('input[data-focus-area]');
     const dayRow = card.querySelector('.focus-area-day-row');
@@ -112,7 +137,7 @@ function updateFocusAreaDayRows() {
 }
 
 function updateWeeklyDailyBreakdownVisibility() {
-  const isWeekly = getSelectedDuration() === 'Heti';
+  const isWeekly = getSelectedDuration() === 'Heti' && !isAcademicMode();
   const panel = document.getElementById('weeklySettingsPanel');
   if (panel) panel.hidden = !isWeekly;
   const advancedBlock = document.getElementById('weeklyAdvancedBlock');
@@ -243,10 +268,16 @@ function renderSummaryChecklist() {
     area_focused: 'Klasszikus területváltó'
   };
   const defaultToolsText = 'Nincs megadva – az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) veszi alapul';
-  const weeklyOnly = (value) => (isWeekly ? value : `${value} (csak heti tervnél érvényes)`);
+  const academic = payload.planMode === 'academic';
+  const weeklyOnly = (value) => {
+    if (academic) return `${value} (oktatási célú tervnél nem érvényes)`;
+    return isWeekly ? value : `${value} (csak heti tervnél érvényes)`;
+  };
 
   const sections = [
     ['Téma és időkeret', [
+      `Tervezet típusa: ${payload.planMode === 'academic' ? 'Oktatási célú tervezet' : 'Óvodai tervezet'}`,
+      ...(payload.planMode === 'academic' ? [`Hallgató / Óvodapedagógus: ${payload.studentName || none}`] : []),
       `Időtartam: ${describeDuration(payload)}`,
       `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
       `Korcsoport: ${payload.group}`,
@@ -359,6 +390,7 @@ function collectDraftState() {
   const draft = {
     version: 1,
     currentStep,
+    planMode: getPlanMode(),
     duration: getSelectedDuration(),
     dateValue: getDateValue(),
     selectedDays: getSelectedDays(),
@@ -429,6 +461,7 @@ function applyDraftState(draft) {
     segment.classList.toggle('active', segment.dataset.value === duration);
   });
 
+  setPlanMode(draft.planMode);
   setSelectedDays(draft.selectedDays);
   setChoice('energy', draft.energy, ENERGY_DEFAULT);
   setChoice('detail', draft.detail, 'detailed');
@@ -638,6 +671,7 @@ function clearDraftState() {
     }
   });
 
+  setPlanMode('standard');
   setSelectedDays(ALL_WEEKDAYS);
   setChoice('energy', ENERGY_DEFAULT);
   setChoice('detail', 'detailed');
@@ -742,6 +776,8 @@ function restorePlanSettings(plan) {
   setText('input[data-field="kindergarten-profile"]', plan.kindergartenProfile);
   setText('input[data-field="teacher-name"]', plan.teacherName);
   setText('input[data-field="group-name"]', plan.groupName);
+  setText('input[data-field="student-name"]', plan.studentName);
+  setPlanMode(plan.planMode);
   setText('textarea[data-field="custom-note"]', plan.customNote);
   setText('textarea[data-field="group-note"]', plan.customNotes?.groupNote ?? plan.groupNote);
   setText('textarea[data-field="required-text"]', plan.customNotes?.requiredText ?? plan.requiredText);
@@ -1020,6 +1056,14 @@ function bindAutoSaveListeners() {
     });
   });
 
+  document.querySelectorAll('.plan-mode-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      setPlanMode(card.dataset.planMode);
+      updateSummary();
+      persistDraftState();
+    });
+  });
+
   document.querySelectorAll('input[data-focus-area]').forEach((checkbox) => {
     checkbox.addEventListener('change', () => {
       updateFocusAreaDayRows();
@@ -1127,7 +1171,8 @@ function getCustomNotes() {
 function buildGenerationPayload() {
   const activeDurationButton = document.querySelector('.segment.active[data-group="duration"]');
   const selectedDuration = (activeDurationButton?.dataset?.value || activeDurationButton?.textContent || '').trim() || getSelectedDuration() || 'Napi';
-  const isWeekly = selectedDuration === 'Heti';
+  const planMode = getPlanMode();
+  const isWeekly = selectedDuration === 'Heti' && planMode !== 'academic';
   const weeklyFocusAreas = isWeekly ? getWeeklyFocusAreas() : {};
   const weeklyAreaAssignments = isWeekly ? getWeeklyAreaAssignments() : {};
   const focusAreas = Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea);
@@ -1148,7 +1193,9 @@ function buildGenerationPayload() {
     availableTools: getAvailableTools(),
     blacklist: getBlacklist(),
     requestedModel: getRequestedModel(),
-    planMode: selectedDuration === 'Heti' ? 'weekly' : 'daily',
+    planMode,
+    planKind: selectedDuration === 'Heti' ? 'weekly' : 'daily',
+    studentName: planMode === 'academic' ? (document.querySelector('input[data-field="student-name"]')?.value.trim() || '') : '',
     theme: getTheme(),
     group: getGroup(),
     kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
@@ -1175,7 +1222,7 @@ function buildGenerationPayload() {
     outputMode: 'Szakmai tervezet',
     selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
     specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
-    showLiteratureAtBottom: document.querySelector('input[data-field="show-literature"]')?.checked || false,
+    showLiteratureAtBottom: planMode === 'academic' || (document.querySelector('input[data-field="show-literature"]')?.checked || false),
     iktEnabled,
     iktTools,
     iktCustomApp,
