@@ -1051,3 +1051,13 @@ test('the planner reads the Turnstile key only from APP_CONFIG', () => {
   assert.doesNotMatch(html, /OVITERVEZO_CONFIG/);
   assert.doesNotMatch(html, /0x4AAAAAAGFSc8Zzow6VmxQ9/);
 });
+
+test('static HTML carries no inline styles except the JS-toggled display:none ones', () => {
+  for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
+    const html = fs.readFileSync(path.join(ROOT, page), 'utf8').replace(/<script\b[\s\S]*?<\/script>/g, '');
+    const inline = [...html.matchAll(/\sstyle="([^"]*)"/g)].map((m) => m[1]);
+    for (const style of inline) assert.match(style, /^display:\s*none;$/, `${page}: ${style}`);
+  }
+  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  assert.equal((css.match(/@media print/g) || []).length, 1, 'egyetlen @media print blokk');
+});

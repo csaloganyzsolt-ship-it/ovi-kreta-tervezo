@@ -2053,6 +2053,45 @@
   color: #9fd8c0;
 }
 
+/* ===== Korábbi inline stílusok osztályokként ===== */
+a.brand { text-decoration: none; color: inherit; }
+.official-table col.col-time { width: 10%; }
+.official-table col.col-activity { width: 58%; }
+.official-table col.col-notes { width: 32%; }
+.u-mb-4 { margin-bottom: 4px !important; }
+.u-mb-16 { margin-bottom: 16px !important; }
+.u-mb-18 { margin-bottom: 18px !important; }
+.u-mb-20 { margin-bottom: 20px !important; }
+.u-mt-0 { margin-top: 0 !important; }
+.u-mt-4 { margin-top: 4px !important; }
+.u-mt-8 { margin-top: 8px !important; }
+.u-mt-12 { margin-top: 12px !important; }
+.u-mt-18 { margin-top: 18px !important; }
+.hp-field { position: absolute; left: -9999px; top: -9999px; width: 0; height: 0; overflow: hidden; }
+.check-item.check-item-strong { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); }
+.summary-checklist { display: grid; gap: 10px; margin-top: 12px; }
+.generation-error-banner { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2b8; font-weight: 600; }
+.doc-settings-scope { margin: 0 0 10px; }
+.fb-main { max-width: 680px; margin: 32px auto 48px; padding: 0 16px; }
+.fb-notice { padding: 36px 28px; text-align: center; }
+.fb-notice-title { color: #1f5f52; margin: 0 0 14px; font-size: 22px; }
+.fb-text { color: var(--muted); line-height: 1.6; margin: 0 0 14px; font-size: 15px; }
+.fb-text-small { color: var(--muted); line-height: 1.6; margin: 0 0 24px; font-size: 14px; }
+.fb-link-btn { display: inline-block; text-decoration: none; }
+.fb-link-plain { text-decoration: none; }
+.fb-form { padding: 32px 28px; }
+.fb-title { margin: 0 0 10px; font-size: 24px; color: #1f5f52; }
+.fb-intro { margin: 0 0 24px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.fb-rating { margin-bottom: 24px; text-align: center; }
+.fb-rating-label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+.fb-rating-text { margin-top: 8px; font-size: 15px; font-weight: 700; color: #1f5f52; }
+.fb-actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
+.fb-success { padding: 40px 24px; text-align: center; }
+.fb-success-icon { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: #d8f0e3; color: #1f5f52; margin-bottom: 18px; }
+.fb-success-title { color: #1f5f52; margin: 0 0 12px; font-size: 24px; }
+.fb-success-text { color: var(--muted); line-height: 1.6; margin: 0 0 28px; font-size: 15px; max-width: 480px; margin-left: auto; margin-right: auto; }
+.history-item-empty { pointer-events: none; opacity: 0.7; }
+
 /* ===== Nyomtatás (egyetlen blokk, az eredeti kaszkád-sorrendben) ===== */
 @media print {
     .test-deliver-row { display: none !important; }

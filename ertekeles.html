@@ -12,27 +12,27 @@
   <body>
     <div class="page">
       <header class="topbar">
-        <a class="brand" href="index.html" aria-label="OviTervező főoldal" style="text-decoration:none;color:inherit;">
+        <a class="brand" href="index.html" aria-label="OviTervező főoldal">
           <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
           <span class="brand-text">Ovi<strong>Tervező</strong></span>
         </a>
         <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
       </header>
 
-      <main style="max-width: 680px; margin: 32px auto 48px; padding: 0 16px;">
-        <div id="invalidNotice" class="panel" style="padding: 36px 28px; text-align: center;" hidden>
-          <h2 style="color: #1f5f52; margin: 0 0 14px; font-size: 22px;">Értékeléshez vásárlói link szükséges</h2>
-          <p style="color: var(--muted); line-height: 1.6; margin: 0 0 14px; font-size: 15px;">Visszajelzést és értékelést kizárólag a vásárlást követően kapott visszaigazoló e-mailben található linkre kattintva lehet beküldeni.</p>
-          <p style="color: var(--muted); line-height: 1.6; margin: 0 0 24px; font-size: 14px;">Ha nemrég vásároltál tervezetet, kérjük, nyisd meg a megadott e-mail címedre érkezett visszaigazolást, és kattints az e-mail alján található csillagok egyikére!</p>
-          <a href="index.html" class="btn primary" style="display: inline-block; text-decoration: none;">Vissza a főoldalra</a>
+      <main class="fb-main">
+        <div id="invalidNotice" class="panel fb-notice" hidden>
+          <h2 class="fb-notice-title">Értékeléshez vásárlói link szükséges</h2>
+          <p class="fb-text">Visszajelzést és értékelést kizárólag a vásárlást követően kapott visszaigazoló e-mailben található linkre kattintva lehet beküldeni.</p>
+          <p class="fb-text-small">Ha nemrég vásároltál tervezetet, kérjük, nyisd meg a megadott e-mail címedre érkezett visszaigazolást, és kattints az e-mail alján található csillagok egyikére!</p>
+          <a href="index.html" class="btn primary fb-link-btn">Vissza a főoldalra</a>
         </div>
 
-        <form id="feedbackForm" class="panel" style="padding: 32px 28px;" novalidate>
-          <h1 style="margin: 0 0 10px; font-size: 24px; color: #1f5f52;">Hogy sikerült a tervezet?</h1>
-          <p style="margin: 0 0 24px; color: var(--muted); font-size: 15px; line-height: 1.6;">Oszd meg velünk 1 percben tapasztalataidat és észrevételeidet, hogy az OviTervező még hasznosabb segítséget nyújthasson a mindennapi pedagógiai munkádban.</p>
+        <form id="feedbackForm" class="panel fb-form" novalidate>
+          <h1 class="fb-title">Hogy sikerült a tervezet?</h1>
+          <p class="fb-intro">Oszd meg velünk 1 percben tapasztalataidat és észrevételeidet, hogy az OviTervező még hasznosabb segítséget nyújthasson a mindennapi pedagógiai munkádban.</p>
 
-          <div style="margin-bottom: 24px; text-align: center;">
-            <label style="display: block; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Értékelés</label>
+          <div class="fb-rating">
+            <label class="fb-rating-label">Értékelés</label>
             <div id="starRatingGroup" class="interactive-star-group" role="radiogroup" aria-label="Értékelés csillagokkal">
               <button class="star-btn filled" type="button" data-rating="1" aria-label="1 csillag" role="radio" aria-checked="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               <button class="star-btn filled" type="button" data-rating="2" aria-label="2 csillag" role="radio" aria-checked="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -40,34 +40,34 @@
               <button class="star-btn filled" type="button" data-rating="4" aria-label="4 csillag" role="radio" aria-checked="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               <button class="star-btn filled" type="button" data-rating="5" aria-label="5 csillag" role="radio" aria-checked="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
-            <div id="starRatingText" style="margin-top: 8px; font-size: 15px; font-weight: 700; color: #1f5f52;">5 / 5 csillag</div>
+            <div class="fb-rating-text" id="starRatingText">5 / 5 csillag</div>
           </div>
 
-          <div class="field full" style="margin-bottom: 18px;">
+          <div class="field full u-mb-18">
             <label for="feedbackName">Név vagy monogram és beosztás (opcionális, pl. K. Anna – óvodapedagógus)</label>
             <input type="text" id="feedbackName" placeholder="pl. K. Anna – óvodapedagógus" maxlength="100" />
           </div>
 
-          <div class="field full" style="margin-bottom: 20px;">
+          <div class="field full u-mb-20">
             <label for="feedbackComment">Véleményed, tapasztalatod a tervezettel kapcsolatban</label>
             <textarea id="feedbackComment" rows="5" placeholder="Írd le bátran tapasztalataidat és észrevételeidet..." required></textarea>
           </div>
 
-          <div id="feedbackError" class="modal-error" role="alert" style="margin-bottom: 16px;" hidden></div>
+          <div id="feedbackError" class="modal-error u-mb-16" role="alert" hidden></div>
 
-          <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end;">
-            <a href="index.html" class="btn secondary" style="text-decoration: none;">Mégse</a>
+          <div class="fb-actions">
+            <a href="index.html" class="btn secondary fb-link-plain">Mégse</a>
             <button type="submit" id="feedbackSubmitBtn" class="btn primary">Küldés</button>
           </div>
         </form>
 
-        <div id="feedbackSuccess" class="panel" style="padding: 40px 24px; text-align: center;" hidden>
-          <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: #d8f0e3; color: #1f5f52; margin-bottom: 18px;">
+        <div id="feedbackSuccess" class="panel fb-success" hidden>
+          <div class="fb-success-icon">
             <svg viewBox="0 0 20 20" width="32" height="32" fill="#1f5f52" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
           </div>
-          <h2 style="color: #1f5f52; margin: 0 0 12px; font-size: 24px;">Köszönjük a visszajelzésed!</h2>
-          <p style="color: var(--muted); line-height: 1.6; margin: 0 0 28px; font-size: 15px; max-width: 480px; margin-left: auto; margin-right: auto;">Nagyra értékeljük, hogy időt szántál a véleményed megosztására. Visszajelzésed közvetlenül segíti a szolgáltatás fejlesztését.</p>
-          <a href="index.html" class="btn primary" style="display: inline-block; text-decoration: none;">Vissza a főoldalra</a>
+          <h2 class="fb-success-title">Köszönjük a visszajelzésed!</h2>
+          <p class="fb-success-text">Nagyra értékeljük, hogy időt szántál a véleményed megosztására. Visszajelzésed közvetlenül segíti a szolgáltatás fejlesztését.</p>
+          <a href="index.html" class="btn primary fb-link-btn">Vissza a főoldalra</a>
         </div>
       </main>
     </div>

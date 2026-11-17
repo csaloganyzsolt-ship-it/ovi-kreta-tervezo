@@ -25,7 +25,7 @@
   <body>
     <div class="page">
       <header class="topbar">
-        <a class="brand" href="index.html" aria-label="OviTervező – vissza a főoldalra" style="text-decoration:none;color:inherit;">
+        <a class="brand" href="index.html" aria-label="OviTervező – vissza a főoldalra">
           <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
           <span class="brand-text">Ovi<strong>Tervező</strong></span>
         </a>
@@ -67,11 +67,11 @@
             </div>
 
             <div class="field-grid">
-              <div class="field full" style="margin-bottom: 4px;">
+              <div class="field full u-mb-4">
                 <button id="clearDraftBtn" class="btn secondary" type="button" title="Minden beírt adat és mentett piszkozat törlése">Beírt adatok törlése (Új tervezet indítása)</button>
               </div>
 
-              <div style="position: absolute; left: -9999px; top: -9999px; width: 0; height: 0; overflow: hidden;" aria-hidden="true" tabindex="-1">
+              <div class="hp-field" aria-hidden="true" tabindex="-1">
                 <label for="contact_website">Honlap címe (kérjük hagyd üresen):</label>
                 <input type="text" id="contact_website" name="contact_website" data-field="contact-website" tabindex="-1" autocomplete="off" />
               </div>
@@ -123,7 +123,7 @@
               <div class="field full">
                 <label>Téma / projekt címe</label>
                 <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
-                <div class="theme-suggestions" id="themeSuggestions" style="margin-top: 12px;"></div>
+                <div class="theme-suggestions u-mt-12" id="themeSuggestions"></div>
               </div>
 
               <div class="field full">
@@ -367,12 +367,12 @@
                     <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről."></textarea>
                   </div>
 
-                  <label class="check-item" style="display:flex; align-items:center; gap:10px; font-weight:600; color: var(--text);">
+                  <label class="check-item check-item-strong">
                     <input type="checkbox" data-field="show-literature" />
                     Felhasznált irodalom megjelenítése a lap alján
                   </label>
 
-                  <div class="field full" style="margin-top: 4px;">
+                  <div class="field full u-mt-4">
                     <label>IKT / Digitális eszközök beépítése</label>
                     <div class="toggle-row">
                       <span id="iktToggleStatusLabel">Nem</span>
@@ -384,7 +384,7 @@
                     <small class="field-hint">Alapértelmezetten kikapcsolva. Bekapcsolva az AI szigorúan fejlesztő, korosztályhoz mért (alkalmanként 3–20 perc) IKT tevékenységet tervez.</small>
                   </div>
 
-                  <div id="iktOptionsPanel" class="weekly-settings-panel" hidden style="margin-top: 0;">
+                  <div id="iktOptionsPanel" class="weekly-settings-panel u-mt-0" hidden>
                     <span class="weekly-days-label">Választható IKT eszközcsoportok és alkalmazások</span>
                     <div class="quick-actions" id="iktToolsPicker">
                       <button class="chip" type="button" data-ikt-tool="Padlórobotok (Bee-Bot, Andy, Edison)">Padlórobotok (Bee-Bot, Andy, Edison)</button>
@@ -392,7 +392,7 @@
                       <button class="chip" type="button" data-ikt-tool="Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)">Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)</button>
                       <button class="chip" type="button" data-ikt-tool="Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)">Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)</button>
                     </div>
-                    <div class="field full" style="margin-top: 8px;">
+                    <div class="field full u-mt-8">
                       <label for="iktCustomApp">Egyéb IKT eszköz vagy alkalmazás</label>
                       <input type="text" id="iktCustomApp" data-field="ikt-custom-app" placeholder="Pl.: saját fejlesztő játék, YouTube zenei illusztráció, fényasztal..." />
                     </div>
@@ -427,10 +427,10 @@
 
             <div class="inline-box">
               <h3>Ellenőrző lista</h3>
-              <div id="summaryChecklist" style="display: grid; gap: 10px; margin-top: 12px;"></div>
+              <div class="summary-checklist" id="summaryChecklist"></div>
             </div>
 
-            <div id="generationErrorBanner" role="alert" hidden style="margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2b8; font-weight: 600; display: none;"></div>
+            <div class="generation-error-banner" id="generationErrorBanner" role="alert" hidden style="display: none;"></div>
 
             <div id="generationLoader" class="generation-loader" role="status" aria-live="polite" hidden>
               <div class="loader-stage" aria-hidden="true">
@@ -444,7 +444,7 @@
               <small id="generationElapsed" class="field-hint"></small>
             </div>
 
-            <div class="inline-box" style="margin-top: 18px;">
+            <div class="inline-box u-mt-18">
               <h3>Generálási folyamat</h3>
               <div class="mini-badges">
                 <span class="tag">Célok összeállítása</span>
@@ -483,7 +483,7 @@
 
               <div class="export-settings-panel">
                 <h3>Dokumentum beállítások</h3>
-                <p class="field-hint" id="docSettingsScope" style="margin: 0 0 10px;"></p>
+                <p class="field-hint doc-settings-scope" id="docSettingsScope"></p>
                 <div class="export-settings-grid">
                   <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
@@ -2262,7 +2262,7 @@
         historyPanel.innerHTML = '';
 
         if (history.length === 0) {
-          historyPanel.innerHTML = '<div class="history-item" style="pointer-events:none; opacity:0.7;">Még nincs mentett terv.</div>';
+          historyPanel.innerHTML = '<div class="history-item history-item-empty">Még nincs mentett terv.</div>';
           return;
         }
 
