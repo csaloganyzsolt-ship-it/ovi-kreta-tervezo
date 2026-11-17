@@ -137,33 +137,76 @@ function createMirrorPlan(plan) {
 
 const plans = new Map();
 const MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const MAX_PLANS = 500;
+const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const MAX_REQUEST_CHARS = 16000;
+const MAX_REQUEST_STRING = 4000;
+// Titkos vagy a mentéshez felesleges mezők: a tárolt kérésbe soha nem kerülhetnek be.
+const REQUEST_BLOCKED_KEYS = ['turnstileToken', 'contact_website', 'website', 'honeypot'];
 
-function cleanup() {
-  const now = Date.now();
+function sanitizeRequest(request) {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) return undefined;
+  const clean = {};
+  for (const [key, value] of Object.entries(request)) {
+    if (REQUEST_BLOCKED_KEYS.includes(key)) continue;
+    clean[key] = typeof value === 'string' ? value.slice(0, MAX_REQUEST_STRING) : value;
+  }
+  if (JSON.stringify(clean).length <= MAX_REQUEST_CHARS) return clean;
+  // Túl nagy kérés: a nagy szabad szövegek és objektumok kimaradnak, a skalár beállítások megmaradnak.
+  const compact = {};
+  for (const [key, value] of Object.entries(clean)) {
+    if (value === null || ['number', 'boolean'].includes(typeof value)) compact[key] = value;
+    else if (typeof value === 'string') compact[key] = value.slice(0, 200);
+  }
+  return compact;
+}
+
+function isExpired(entry, now = Date.now()) {
+  return now - entry.createdAt > MAX_AGE_MS;
+}
+
+function cleanup(now = Date.now()) {
   for (const [id, entry] of plans.entries()) {
-    if (now - entry.createdAt > MAX_AGE_MS) {
-      plans.delete(id);
-    }
+    if (isExpired(entry, now)) plans.delete(id);
   }
 }
 
+// A lejárt bejegyzések időzítve törlődnek; olvasáskor csak az adott bejegyzést ellenőrizzük.
+setInterval(cleanup, CLEANUP_INTERVAL_MS).unref();
+
 function savePlan(id, plan) {
   if (!id || !plan) return;
-  cleanup();
-  plans.set(String(id), { plan, createdAt: Date.now() });
+  const key = String(id);
+  const stored = plan.request === undefined ? plan : { ...plan, request: sanitizeRequest(plan.request) };
+  plans.delete(key);
+  plans.set(key, { plan: stored, createdAt: Date.now() });
+  // A Map beszúrási sorrendet őriz, ezért az első kulcs a legrégebbi.
+  while (plans.size > MAX_PLANS) plans.delete(plans.keys().next().value);
+}
+
+function readEntry(id) {
+  if (!id) return null;
+  const key = String(id);
+  const entry = plans.get(key);
+  if (!entry) return null;
+  if (isExpired(entry)) {
+    plans.delete(key);
+    return null;
+  }
+  return entry;
 }
 
 function getPlan(id) {
-  if (!id) return null;
-  cleanup();
-  const entry = plans.get(String(id));
+  const entry = readEntry(id);
   return entry ? entry.plan : null;
 }
 
 function hasPlan(id) {
-  if (!id) return false;
-  cleanup();
-  return plans.has(String(id));
+  return readEntry(id) !== null;
+}
+
+function planCount() {
+  return plans.size;
 }
 
 function clearPlans() {
@@ -178,5 +221,9 @@ module.exports = {
   savePlan,
   getPlan,
   hasPlan,
-  clearPlans
+  clearPlans,
+  cleanup,
+  planCount,
+  sanitizeRequest,
+  MAX_PLANS
 };

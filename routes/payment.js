@@ -80,6 +80,15 @@ const TEST_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
 const TEST_LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const TEST_LIMIT = { windowMs: 60 * 60 * 1000, max: 10 };
 const testHits = new Map();
+const MAX_TEST_HIT_KEYS = 5000;
+
+function pruneTestHits(now = Date.now()) {
+  for (const [ip, hits] of testHits.entries()) {
+    if (!hits.some((t) => now - t < TEST_LIMIT.windowMs)) testHits.delete(ip);
+  }
+}
+
+setInterval(pruneTestHits, TEST_LIMIT.windowMs).unref();
 
 function testDeliveryAllowed(req, env = process.env) {
   if (String(env.TEST_DELIVERY_ENABLED || '').toLowerCase() !== 'true') return false;
@@ -92,7 +101,12 @@ function testRateLimited(ip, now = Date.now()) {
   const recent = (testHits.get(ip) || []).filter((t) => now - t < TEST_LIMIT.windowMs);
   if (recent.length >= TEST_LIMIT.max) { testHits.set(ip, recent); return true; }
   recent.push(now);
+  testHits.delete(ip);
   testHits.set(ip, recent);
+  if (testHits.size > MAX_TEST_HIT_KEYS) {
+    pruneTestHits(now);
+    while (testHits.size > MAX_TEST_HIT_KEYS) testHits.delete(testHits.keys().next().value);
+  }
   return false;
 }
 
@@ -173,4 +187,4 @@ router.post('/create-checkout-session', createCheckout);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
 
-module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited };
+module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited, testHits, pruneTestHits, MAX_TEST_HIT_KEYS };

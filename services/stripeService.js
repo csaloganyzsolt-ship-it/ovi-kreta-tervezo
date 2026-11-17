@@ -10,6 +10,17 @@ const PRODUCTS = Object.freeze({
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MOCK_PREFIX = 'cs_mock_';
 const mockSessions = new Map();
+const MAX_MOCK_SESSIONS = 1000;
+const MOCK_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function pruneMockSessions(now = Date.now()) {
+  for (const [id, session] of mockSessions.entries()) {
+    if (now - session.createdAt > MOCK_SESSION_TTL_MS) mockSessions.delete(id);
+  }
+  while (mockSessions.size > MAX_MOCK_SESSIONS) mockSessions.delete(mockSessions.keys().next().value);
+}
+
+setInterval(pruneMockSessions, MOCK_SESSION_TTL_MS / 24).unref();
 
 class PaymentError extends Error {
   constructor(message, status = 400) {
@@ -87,7 +98,8 @@ async function createCheckoutSession({ plan, email, generationId, title } = {}, 
 
   if (!isLive(env)) {
     const id = `${MOCK_PREFIX}${Date.now().toString(36)}`;
-    mockSessions.set(id, { plan: product.key, email: customerEmail, generationId: String(generationId || '').slice(0, 100) });
+    mockSessions.set(id, { plan: product.key, email: customerEmail, generationId: String(generationId || '').slice(0, 100), createdAt: Date.now() });
+    pruneMockSessions();
     return {
       mock: true,
       id,
@@ -155,5 +167,6 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
 
 module.exports = {
   PRODUCTS, PaymentError, MOCK_PREFIX, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
-  createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent
+  createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent,
+  mockSessions, pruneMockSessions, MAX_MOCK_SESSIONS
 };
