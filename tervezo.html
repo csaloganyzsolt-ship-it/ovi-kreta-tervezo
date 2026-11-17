@@ -854,6 +854,15 @@
         return Boolean(document.getElementById('iktEnabled')?.checked);
       }
 
+      function syncIktPanel() {
+        const iktToggle = document.getElementById('iktEnabled');
+        const enabled = Boolean(iktToggle?.checked);
+        const statusLabel = document.getElementById('iktToggleStatusLabel');
+        if (statusLabel) statusLabel.textContent = enabled ? 'Igen' : 'Nem';
+        const panel = document.getElementById('iktOptionsPanel');
+        if (panel) panel.hidden = !enabled;
+      }
+
       function getSelectedIktTools() {
         return Array.from(document.querySelectorAll('#iktToolsPicker [data-ikt-tool].active')).map((btn) => btn.dataset.iktTool);
       }
@@ -2057,10 +2066,13 @@
 
       function restorePlanSettings(plan) {
         if (!plan || typeof plan !== 'object') return;
-        if (plan.theme) {
-          const themeInput = document.querySelector('input[data-field="theme"]');
-          if (themeInput) themeInput.value = plan.theme;
-        }
+        // A mentett üres érték is érvényes és törli a mezőt; csak a hiányzó kulcs hagyja érintetlenül.
+        const setText = (selector, value) => {
+          if (value === undefined || value === null) return;
+          const field = document.querySelector(selector);
+          if (field) field.value = value;
+        };
+        setText('[data-field="theme"]', plan.theme);
         if (plan.group) {
           const groupSelect = document.querySelector('select[data-field="group"]');
           if (groupSelect) groupSelect.value = plan.group;
@@ -2069,46 +2081,16 @@
           const formaSelect = document.querySelector('select[data-field="tevekenyseg-forma"]');
           if (formaSelect) formaSelect.value = plan.tevekenysegForma;
         }
-        if (plan.kindergartenName) {
-          const input = document.querySelector('input[data-field="kindergarten-name"]');
-          if (input) input.value = plan.kindergartenName;
-        }
-        if (plan.kindergartenProfile) {
-          const input = document.querySelector('input[data-field="kindergarten-profile"]');
-          if (input) input.value = plan.kindergartenProfile;
-        }
-        if (plan.teacherName) {
-          const input = document.querySelector('input[data-field="teacher-name"]');
-          if (input) input.value = plan.teacherName;
-        }
-        if (plan.groupName) {
-          const input = document.querySelector('input[data-field="group-name"]');
-          if (input) input.value = plan.groupName;
-        }
-        if (plan.customNote) {
-          const input = document.querySelector('textarea[data-field="custom-note"]');
-          if (input) input.value = plan.customNote;
-        }
-        const groupNoteVal = plan.customNotes?.groupNote ?? plan.groupNote;
-        if (groupNoteVal !== undefined) {
-          const input = document.querySelector('textarea[data-field="group-note"]');
-          if (input) input.value = groupNoteVal;
-        }
-        const reqTextVal = plan.customNotes?.requiredText ?? plan.requiredText;
-        if (reqTextVal !== undefined) {
-          const input = document.querySelector('textarea[data-field="required-text"]');
-          if (input) input.value = reqTextVal;
-        }
-        const toolsVal = plan.availableTools || [plan.customNotes?.ideaNote, plan.ideaNote].filter(Boolean).join('; ');
-        if (toolsVal) {
-          const input = document.querySelector('textarea[data-field="available-tools"]');
-          if (input) input.value = toolsVal;
-        }
-        const customReqVal = plan.customNotes?.customRequest ?? plan.customRequest;
-        if (customReqVal !== undefined) {
-          const input = document.querySelector('textarea[data-field="custom-request"]');
-          if (input) input.value = customReqVal;
-        }
+        setText('input[data-field="kindergarten-name"]', plan.kindergartenName);
+        setText('input[data-field="kindergarten-profile"]', plan.kindergartenProfile);
+        setText('input[data-field="teacher-name"]', plan.teacherName);
+        setText('input[data-field="group-name"]', plan.groupName);
+        setText('textarea[data-field="custom-note"]', plan.customNote);
+        setText('textarea[data-field="group-note"]', plan.customNotes?.groupNote ?? plan.groupNote);
+        setText('textarea[data-field="required-text"]', plan.customNotes?.requiredText ?? plan.requiredText);
+        const legacyTools = [plan.customNotes?.ideaNote, plan.ideaNote].filter(Boolean).join('; ');
+        setText('textarea[data-field="available-tools"]', plan.availableTools ?? (legacyTools || undefined));
+        setText('textarea[data-field="custom-request"]', plan.customNotes?.customRequest ?? plan.customRequest);
         if (plan.childCount !== undefined && plan.childCount !== null) {
           const countInput = document.querySelector('input[data-field="child-count"]');
           if (countInput) countInput.value = plan.childCount;
@@ -2119,13 +2101,19 @@
           const pres = document.querySelector('input[data-field="has-preschoolers"]');
           if (pres) pres.checked = Boolean(plan.hasPreschoolers);
         }
-        if (plan.blacklist) {
-          const bl = document.querySelector('input[data-field="blacklist"]');
-          if (bl) bl.value = plan.blacklist;
+        setText('[data-field="blacklist"]', plan.blacklist);
+        setText('textarea[data-field="elozmeny"]', plan.elozmeny);
+        if (plan.showLiteratureAtBottom !== undefined) {
+          const literature = document.querySelector('input[data-field="show-literature"]');
+          if (literature) literature.checked = Boolean(plan.showLiteratureAtBottom);
         }
-        if (plan.elozmeny) {
-          const el = document.querySelector('textarea[data-field="elozmeny"]');
-          if (el) el.value = plan.elozmeny;
+        if (plan.weeklyProgressionType) {
+          const progression = document.getElementById('weeklyProgressionType');
+          if (progression) progression.value = plan.weeklyProgressionType;
+        }
+        if (plan.fridayClosingType) {
+          const closing = document.getElementById('fridayClosingType');
+          if (closing) closing.value = plan.fridayClosingType;
         }
 
         const areas = Array.isArray(plan.focusAreas) ? plan.focusAreas : [];
@@ -2153,9 +2141,21 @@
         });
 
         const goals = Array.isArray(plan.selectedGoals) ? plan.selectedGoals : [];
-        document.querySelectorAll('.chip:not([data-theme-option])').forEach((chip) => {
+        document.querySelectorAll('.chip:not([data-theme-option]):not([data-ikt-tool])').forEach((chip) => {
           chip.classList.toggle('active', goals.includes(chip.textContent.trim()));
         });
+
+        if (plan.iktEnabled !== undefined) {
+          const iktToggle = document.getElementById('iktEnabled');
+          if (iktToggle) iktToggle.checked = Boolean(plan.iktEnabled);
+          const iktTools = Array.isArray(plan.iktTools) ? plan.iktTools : [];
+          document.querySelectorAll('#iktToolsPicker [data-ikt-tool]').forEach((button) => {
+            button.classList.toggle('active', iktTools.includes(button.dataset.iktTool));
+          });
+          const iktCustomApp = document.getElementById('iktCustomApp');
+          if (iktCustomApp) iktCustomApp.value = plan.iktCustomApp || '';
+          syncIktPanel();
+        }
 
         const duration = plan.duration || 'Napi';
         document.querySelectorAll('.segment[data-group="duration"]').forEach((segment) => {
@@ -2408,10 +2408,7 @@
         const iktToggle = document.getElementById('iktEnabled');
         if (iktToggle) {
           iktToggle.addEventListener('change', () => {
-            const statusLabel = document.getElementById('iktToggleStatusLabel');
-            if (statusLabel) statusLabel.textContent = iktToggle.checked ? 'Igen' : 'Nem';
-            const panel = document.getElementById('iktOptionsPanel');
-            if (panel) panel.hidden = !iktToggle.checked;
+            syncIktPanel();
             updateSummary();
             persistDraftState();
           });

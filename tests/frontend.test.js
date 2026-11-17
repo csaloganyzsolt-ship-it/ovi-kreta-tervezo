@@ -749,3 +749,62 @@ test('a double click sends only one generation request', async (t) => {
   assert.equal(calls, 1);
   assert.equal(window.document.querySelectorAll('.official-table tbody tr').length, 5);
 });
+
+function fillHistoryFields(window) {
+  const { document } = window;
+  const values = {
+    'kindergarten-name': 'Próba Óvoda', 'kindergarten-profile': 'Zöld Óvoda', 'teacher-name': 'Próba Pedagógus',
+    'group-name': 'Próba Csoport', group: 'Vegyes csoport', theme: 'Tavaszi megfigyelés',
+    'tevekenyseg-forma': 'Mikrocsoportos / egyéni fejlesztés', elozmeny: 'Korábbi udvari játék.',
+    'custom-note': 'Egyéni kiegészítés.', 'group-note': 'Csoportkérés.', 'required-text': 'Saját mondóka.',
+    'available-tools': 'Nagyító.', 'custom-request': 'Csendes lezárás.', 'child-count': 21,
+    blacklist: 'Ne legyen gyurma, ne legyen Süss fel nap.'
+  };
+  for (const [field, value] of Object.entries(values)) document.querySelector(`[data-field="${field}"]`).value = value;
+  document.querySelector('[data-field="show-literature"]').checked = true;
+  const iktToggle = document.querySelector('#iktEnabled');
+  iktToggle.checked = true;
+  iktToggle.dispatchEvent(new window.Event('change'));
+  document.querySelectorAll('#iktToolsPicker [data-ikt-tool]')[1].click();
+  document.querySelector('#iktCustomApp').value = 'Fényasztal';
+  document.querySelectorAll('[data-focus-area]').forEach((box, index) => { box.checked = index < 3; });
+  window.setDurationSelection('Heti');
+  document.querySelector('[data-field="week-value"]').value = '2026-W45';
+  const selects = Array.from(document.querySelectorAll('.focus-area-card .focus-area-day-select'));
+  selects[0].value = 'Kedd';
+  document.querySelector('#weeklyProgressionType').selectedIndex = 1;
+  document.querySelector('#fridayClosingType').selectedIndex = 2;
+}
+
+test('restorePlanSettings round-trips every setting, including blacklist, IKT, literature and weekly options', async (t) => {
+  const window = await loadApp(t);
+  const { document } = window;
+  fillHistoryFields(window);
+  const saved = JSON.parse(JSON.stringify(window.buildGenerationPayload()));
+  assert.equal(saved.iktEnabled, true);
+  assert.equal(saved.iktTools.length, 1);
+
+  window.clearDraftState();
+  assert.equal(window.buildGenerationPayload().blacklist, '');
+  window.restorePlanSettings(saved);
+
+  const restored = JSON.parse(JSON.stringify(window.buildGenerationPayload()));
+  assert.deepEqual(restored, saved);
+  assert.equal(document.querySelector('#iktOptionsPanel').hidden, false);
+  assert.equal(document.querySelector('#iktToggleStatusLabel').textContent, 'Igen');
+});
+
+test('restorePlanSettings clears fields that were empty in the saved plan', async (t) => {
+  const window = await loadApp(t);
+  const { document } = window;
+  const saved = JSON.parse(JSON.stringify(window.buildGenerationPayload()));
+  fillHistoryFields(window);
+  window.restorePlanSettings(saved);
+  const restored = window.buildGenerationPayload();
+  assert.equal(restored.blacklist, '');
+  assert.equal(restored.elozmeny, '');
+  assert.equal(restored.iktEnabled, false);
+  assert.equal(restored.showLiteratureAtBottom, false);
+  assert.equal(document.querySelector('#iktOptionsPanel').hidden, true);
+  assert.equal(document.querySelector('#iktToggleStatusLabel').textContent, 'Nem');
+});
