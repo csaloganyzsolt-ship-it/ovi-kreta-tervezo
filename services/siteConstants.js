@@ -12,7 +12,22 @@ const SITE_ASSETS = [
 ];
 const SEO_FILES = ['robots.txt', 'sitemap.xml'];
 
+// Egyetlen CSP: a server.js Report-Only fejlécként küldi, a .htaccess ezzel azonos szöveget tartalmaz (tesztelt).
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com",
+  "style-src 'self' 'unsafe-inline'",
+  "connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com",
+  'frame-src https://challenges.cloudflare.com https://checkout.stripe.com',
+  "img-src 'self' data: blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self' https://checkout.stripe.com",
+  "frame-ancestors 'none'"
+].join('; ');
+
 module.exports = {
+  CONTENT_SECURITY_POLICY,
   PAGES,
   SITE_ASSETS,
   SEO_FILES,
