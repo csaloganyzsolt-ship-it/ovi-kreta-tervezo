@@ -5,6 +5,7 @@ const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 const mailService = require('./services/mailService');
+const planStore = require('./services/planStore');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -557,6 +558,16 @@ const generateLimiter = rateLimit({
   handler: (_req, res) => res.status(429).json({ success: false, error: 'Napi generálási limit túllépve.' })
 });
 
+function shouldLockPlan(payload = {}, env = process.env) {
+  if (payload.preview === false || payload.unlocked === true) return false;
+  if (payload.preview === true) return true;
+  return String(env.PAYWALL_ENABLED || '').toLowerCase() === 'true';
+}
+
+function newServerGenerationId() {
+  return `gen_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
 app.post('/api/generate', generateLimiter, async (req, res) => {
   const payload = req.body || {};
   try {
@@ -572,6 +583,9 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       timeoutMs: isWeeklyBreakdown(payload) ? WEEKLY_TIMEOUT_MS : undefined
     });
     const result = normalizeResponse(rawText, payload);
+    const generationId = newServerGenerationId();
+    planStore.savePlan(generationId, { ...result, request: payload, generationId });
+
     console.info('Generated document:', result.is_weekly
       ? { days: result.napok.length }
       : {
@@ -579,7 +593,14 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
         tableCharacters: result.kidolgozas_tablazat.reduce((total, row) =>
           total + row.tevekenyseg_menete.join('\n\n').length + row.modszerek_megjegyzesek.length, 0)
       });
-    res.json({ success: true, ...result });
+
+    if (shouldLockPlan(payload, process.env)) {
+      const mirror = planStore.createMirrorPlan(result);
+      mirror.generationId = generationId;
+      return res.json({ success: true, ...mirror });
+    }
+
+    res.json({ success: true, ...result, generationId });
   } catch (error) {
     const reason = error?.message || 'Unknown backend error';
     console.error('Generation failed:', reason);
@@ -644,4 +665,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse };
+module.exports = { generateLimiter, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan };

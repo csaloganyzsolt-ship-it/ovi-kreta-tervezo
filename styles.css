@@ -1665,3 +1665,120 @@
   stroke: #4b5563;
 }
 
+/* ===== Fizetés előtti tükör-struktúra és terjedelem-jelző sáv (emoji nélkül) ===== */
+.locked-mirror-text {
+  filter: blur(5px);
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.locked-mirror-table {
+  border: 1px solid #000000;
+  width: 100%;
+}
+
+.locked-mirror-table th,
+.locked-mirror-table td {
+  border: 1px solid #000000 !important;
+}
+
+.locked-boundary-card {
+  margin: 18px 0 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(63, 174, 132, 0.12), rgba(255, 255, 255, 0.96));
+  border: 1.5px solid var(--primary);
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(47, 148, 111, 0.08);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+:root[data-theme="dark"] .locked-boundary-card {
+  background: linear-gradient(135deg, rgba(63, 174, 132, 0.16), rgba(32, 44, 39, 0.96));
+  border-color: var(--primary);
+}
+
+.locked-boundary-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.locked-boundary-text {
+  margin: 0 0 12px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.locked-floating-bar {
+  position: sticky;
+  top: 14px;
+  z-index: 20;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--card, #ffffff);
+  border: 1.5px solid var(--primary);
+  box-shadow: 0 6px 20px rgba(47, 148, 111, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.locked-floating-bar[hidden] {
+  display: none !important;
+}
+
+.locked-floating-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 280px;
+}
+
+.locked-floating-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(63, 174, 132, 0.15);
+  color: var(--primary-dark, #2f946f);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .locked-floating-badge {
+  background: rgba(63, 174, 132, 0.25);
+  color: #9fd8c0;
+}
+
+.locked-floating-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+@media print {
+  .locked-floating-bar,
+  .locked-boundary-card {
+    display: none !important;
+  }
+}
+
+

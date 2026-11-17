@@ -174,11 +174,45 @@ test('a MAX_TOKENS finish is reported even if the remaining JSON happens to pars
 test('the real HTTP generation route returns the actual model rows', async (t) => {
   const plan = makePlan();
   stubGemini(t, geminiResponse(JSON.stringify(plan)));
-  const { response, data } = await postPlan(t, makePayload());
+  const { response, data } = await postPlan(t, makePayload({ preview: false }));
   assert.equal(response.status, 200);
   assert.equal(data.success, true);
   assert.deepEqual(data.kidolgozas_tablazat, plan.kidolgozas_tablazat);
   assert.equal(data.cel, plan.cel);
+});
+
+test('HTTP /api/generate with preview=true returns the structural mirror and hides locked text', async (t) => {
+  const plan = makePlan(6);
+  const secretPhrase = 'Szigorúan bizalmas és titkos foglalkozási lépés a gyerekekkel';
+  const secretMethod = 'Titkos differenciálási megfigyelés és egyedi fa bábu';
+  plan.kidolgozas_tablazat[0].tevekenyseg_menete = [secretPhrase];
+  plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = secretMethod;
+
+  stubGemini(t, geminiResponse(JSON.stringify(plan)));
+  const { response, data } = await postPlan(t, makePayload({ preview: true }));
+
+  assert.equal(response.status, 200);
+  assert.equal(data.success, true);
+  assert.equal(data.locked_meta.is_locked, true);
+  assert.equal(data.locked_meta.table_count, 1);
+  assert.equal(data.locked_meta.activity_count, 6);
+  assert.equal(data.kidolgozas_tablazat.length, 6);
+
+  // Introductory fields are intact
+  assert.equal(data.cel, plan.cel);
+  assert.equal(data.tema, plan.tema);
+
+  // Locked text is NOT leaked
+  const bodyText = JSON.stringify(data);
+  assert.equal(bodyText.includes(secretPhrase), false);
+  assert.equal(bodyText.includes(secretMethod), false);
+
+  // Plan is stored on server and retrievable via generationId
+  const { planStore } = require('../server');
+  assert.ok(data.generationId);
+  const stored = planStore.getPlan(data.generationId);
+  assert.ok(stored);
+  assert.equal(stored.kidolgozas_tablazat[0].tevekenyseg_menete[0], secretPhrase);
 });
 
 test('HTTP API failures return details and no fake document or fallback rows', async (t) => {

@@ -474,7 +474,7 @@
                 <div class="export-settings-grid">
                   <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenység kidolgozása <span id="activitiesLockNote" class="lock-note" hidden>🔒 (Fizetés után elérhető prémium funkció)</span></label>
+                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenység kidolgozása <span id="activitiesLockNote" class="lock-note" hidden>(Fizetés után elérhető prémium funkció)</span></label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="differentiation" /> Differenciálás</label>
                   <label class="setting-option"><input type="checkbox" checked data-export-section="materials" /> Eszközök</label>
                 </div>
@@ -495,9 +495,17 @@
                 </div>
               </div>
 
+              <div class="locked-floating-bar" id="lockedFloatingBar" hidden>
+                <div class="locked-floating-info">
+                  <span class="locked-floating-badge">Előnézet</span>
+                  <span class="locked-floating-text" id="lockedFloatingText"></span>
+                </div>
+                <button type="button" class="unlock-cta" id="unlockFloatingBtn" hidden></button>
+              </div>
+
               <div class="preview-actionbar" id="previewActionbar">
                 <button class="unlock-cta" id="unlockTopBtn" type="button" hidden></button>
-                <span class="unlocked-badge" id="unlockedBadge" hidden>✅ Feloldva</span>
+                <span class="unlocked-badge" id="unlockedBadge" hidden>Feloldva</span>
               </div>
 
               <div class="document-shell">
@@ -510,11 +518,11 @@
                 <label for="testDeliverEmail"><strong>Teszt kézbesítés</strong> (fizetés nélkül)</label>
                 <div class="test-deliver-controls">
                   <input type="email" id="testDeliverEmail" placeholder="sajat@email.hu" autocomplete="email" />
-                  <button id="testDeliverBtn" class="download-btn" type="button">✉️ Tervezet elküldése e-mailben</button>
+                  <button id="testDeliverBtn" class="download-btn" type="button">Tervezet elküldése e-mailben</button>
                 </div>
               </div>
               <div class="download-row">
-                <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>📄 Számla letöltése (PDF)</button>
+                <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>Számla letöltése (PDF)</button>
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
                 <button id="downloadDocxBtn" class="download-btn" type="button">DOCX letöltése</button>
                 <button id="downloadZipBtn" class="download-btn download-zip" type="button" hidden>Összes letöltése ZIP-ben</button>
@@ -1121,9 +1129,6 @@
         document.querySelectorAll('[data-export-section]').forEach((checkbox) => {
           settings[checkbox.dataset.exportSection] = checkbox.checked;
         });
-        // Zárolt állapotban a teaser a foglalkozás-táblázat első sorait mutatja, ezért a kapcsoló értéke ilyenkor nem érvényesül.
-        // Fizetés előtt a tevékenység-szekció egyáltalán nem rajzolódik ki, mintha az exportbeállításban ki lenne kapcsolva.
-        if (isPlanLocked()) settings.activities = false;
         const margin = document.querySelector('[data-export="margin"]')?.value || 'comfortable';
         return { settings, margin };
       }
@@ -1349,9 +1354,22 @@
         return `<colgroup><col style="width: ${time}%;" /><col style="width: ${middle}%;" />${showMethods ? `<col style="width: ${methods}%;" />` : ''}</colgroup>`;
       }
 
-      function buildActivityTable(rows, showMethods, orientation) {
+      function buildLockedBoundaryCard(result) {
+        const meta = (typeof window !== 'undefined' && window.getLockedMeta)
+          ? window.getLockedMeta(result)
+          : (typeof getLockedMeta === 'function' ? getLockedMeta(result) : { table_count: 1, activity_count: (result?.kidolgozas_tablazat || []).length });
+        const price = PAYWALL_PRICES[planKind(result)] || 390;
         return `
-          <table class="official-table">
+          <div class="locked-boundary-card">
+            <div class="locked-boundary-badge">Zárolt szakasz</div>
+            <p class="locked-boundary-text">A teljes dokumentum elkészült: ${meta.table_count} részletes táblázat és ${meta.activity_count} kidolgozott tevékenységi egység vár feloldásra.</p>
+            <button type="button" class="unlock-cta" data-action="unlock">Teljes tervezet feloldása – ${price} Ft</button>
+          </div>`;
+      }
+
+      function buildActivityTable(rows, showMethods, orientation, locked = false) {
+        return `
+          <table class="official-table ${locked ? 'locked-mirror-table' : ''}">
             ${renderTableColumns(showMethods, orientation)}
             <thead>
               <tr>
@@ -1363,9 +1381,9 @@
             <tbody>
               ${(Array.isArray(rows) ? rows : []).map((row) => `
                 <tr>
-                  <td>${formatTableCell(row.ido)}</td>
-                  <td>${formatTableCell(row.tevekenyseg_menete)}</td>
-                  ${showMethods ? `<td>${formatTableCell(row.modszerek_megjegyzesek)}</td>` : ''}
+                  <td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.ido)}</div></td>
+                  <td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.tevekenyseg_menete)}</div></td>
+                  ${showMethods ? `<td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.modszerek_megjegyzesek)}</div></td>` : ''}
                 </tr>`).join('')}
             </tbody>
           </table>`;
@@ -1396,6 +1414,7 @@
         const showMethods = settings.differentiation !== false;
         const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
         const outputMode = escapeHtml(displayOutputMode(request.outputMode));
+        const locked = isPlanLocked(result);
 
         if (result.is_weekly === true && Array.isArray(result.napok)) {
           const frame = result.heti_keretterv || {};
@@ -1428,10 +1447,11 @@
                 ['Forma', day.tevekenyseg_forma || '—'],
                 ['Napi cél', day.napi_cel || '—']
               ])}
-              ${settings.activities !== false ? `
-                <div class="doc-section document-day-sheet">
+              ${(settings.activities !== false || locked) ? `
+                ${locked ? buildLockedBoundaryCard(result) : ''}
+                <div class="doc-section document-day-sheet ${locked ? 'locked-mirror-section' : ''}">
                   <h3>A tevékenység/foglalkozás kidolgozása</h3>
-                  ${buildActivityTable(day.kidolgozas_tablazat, showMethods, orientation)}
+                  ${buildActivityTable(day.kidolgozas_tablazat, showMethods, orientation, locked)}
                 </div>` : ''}`;
           }
 
@@ -1517,10 +1537,11 @@
               <h3>Cél- és feladatrendszer</h3>
               ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
             </div>` : ''}
-          ${settings.activities !== false ? `
-            <div class="doc-section doc-table-section">
+          ${(settings.activities !== false || locked) ? `
+            ${locked ? buildLockedBoundaryCard(result) : ''}
+            <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
               <h3>A tevékenység/foglalkozás kidolgozása</h3>
-              ${buildActivityTable(result.kidolgozas_tablazat, showMethods, orientation)}
+              ${buildActivityTable(result.kidolgozas_tablazat, showMethods, orientation, locked)}
             </div>` : ''}
           ${showLiterature && result.felhasznalt_irodalom.trim() ? `
             <div class="doc-section">
@@ -2507,7 +2528,7 @@
         resetGeneratedResult();
         nextBtn.disabled = true;
         nextBtn.classList.add('is-busy');
-        nextBtn.textContent = '⏳ Tervezet generálása folyamatban...';
+        nextBtn.textContent = 'Tervezet generálása folyamatban...';
         const payload = buildGenerationPayload();
         const stopLoader = startGenerationLoader(payload);
         document.getElementById('generationLoader')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2541,7 +2562,7 @@
             throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
           }
 
-          const generatedResult = { ...data, request: payload, generationId: newGenerationId() };
+          const generatedResult = { ...data, request: payload, generationId: data.generationId || newGenerationId() };
           renderResultDocument(generatedResult);
           lastResult = generatedResult;
           previewReady = true;
@@ -2769,7 +2790,6 @@
 
       const LOCK_MESSAGE = 'A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.';
 
-      // Zárolt állapotban a tevékenység-szekciót a renderelő már eleve kihagyja; a kapu csak a feloldó felületet teszi a dokumentum végére.
       function applyPaywall(host) {
         if (!isPlanLocked()) return;
         const bodies = host.querySelectorAll('.a4-page-body');
@@ -2778,9 +2798,17 @@
         const gate = document.createElement('div');
         gate.className = 'paywall-gate';
         gate.id = 'paywallGate';
-        gate.innerHTML = `<div class="paywall-lock" aria-hidden="true">🔒</div>
-          <p>${LOCK_MESSAGE}</p>
-          <button type="button" class="unlock-cta" id="unlockBtn">🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft</button>`;
+        const meta = (typeof window !== 'undefined' && window.getLockedMeta)
+          ? window.getLockedMeta(lastResult)
+          : (typeof getLockedMeta === 'function' ? getLockedMeta(lastResult) : { table_count: 1, activity_count: (lastResult?.kidolgozas_tablazat || []).length });
+        const summary = (typeof window !== 'undefined' && window.formatExtentSummary)
+          ? window.formatExtentSummary(meta.table_count, meta.activity_count)
+          : `A teljes dokumentum elkészült: ${meta.table_count} részletes táblázat és ${meta.activity_count} kidolgozott tevékenységi egység vár feloldásra.`;
+        const price = PAYWALL_PRICES[planKind(lastResult)] || 390;
+        gate.innerHTML = `
+          <div class="locked-boundary-badge">Teljes kidolgozás feloldása</div>
+          <p>${escapeHtml(summary)}</p>
+          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet feloldása – ${price} Ft</button>`;
         body.appendChild(gate);
       }
 
@@ -2800,8 +2828,9 @@
         // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
         const justPaid = paywallEnabled() && Boolean(lastResult) && !locked && onResultStep;
         nextBtn.hidden = justPaid && !isFormDirty() && !nextBtn.classList.contains('is-busy');
-        const label = `🔓 Teljes tervezet feloldása – ${PAYWALL_PRICES[planKind()]} Ft`;
-        ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'].forEach((id) => {
+        const price = PAYWALL_PRICES[planKind()];
+        const label = `Teljes tervezet feloldása – ${price} Ft`;
+        ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockFloatingBtn'].forEach((id) => {
           const button = document.getElementById(id);
           if (!button) return;
           button.hidden = !showCta;
@@ -2811,6 +2840,21 @@
         if (bottomNote) bottomNote.hidden = !showCta;
         const badge = document.getElementById('unlockedBadge');
         if (badge) badge.hidden = !justPaid;
+
+        const floatingBar = document.getElementById('lockedFloatingBar');
+        const floatingText = document.getElementById('lockedFloatingText');
+        if (floatingBar) {
+          floatingBar.hidden = !showCta;
+          if (showCta && floatingText) {
+            const meta = (typeof window !== 'undefined' && window.getLockedMeta)
+              ? window.getLockedMeta(lastResult)
+              : (typeof getLockedMeta === 'function' ? getLockedMeta(lastResult) : { table_count: 1, activity_count: (lastResult?.kidolgozas_tablazat || []).length });
+            const summary = (typeof window !== 'undefined' && window.formatExtentSummary)
+              ? window.formatExtentSummary(meta.table_count, meta.activity_count)
+              : `A teljes dokumentum elkészült: ${meta.table_count} részletes táblázat és ${meta.activity_count} kidolgozott tevékenységi egység vár feloldásra.`;
+            floatingText.textContent = summary;
+          }
+        }
       }
 
       function guardLocked() {
@@ -2883,9 +2927,15 @@
           const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
           const data = await response.json();
           if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
-          const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId;
+          const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId || data.generationId;
           if (pending) unlockGeneration(pending, sessionId);
           localStorage.removeItem('oviKretaPendingCheckout');
+          if (data.planData) {
+            lastResult = { ...data.planData, request: lastResult?.request || data.planData.request, generationId: pending };
+            try {
+              localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
+            } catch (_e) {}
+          }
           if (lastResult) {
             currentStep = steps.length - 1;
             renderStep();
@@ -2973,7 +3023,7 @@
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
-          showPurchaseNotice(`✅ A tesztlevelet elküldtük ide: ${email}`);
+          showPurchaseNotice(`A tesztlevelet elküldtük ide: ${email}`);
         } catch (error) {
           showPurchaseNotice('');
           const reason = error.name === 'AbortError' ? 'a szerver 20 másodpercen belül nem válaszolt' : error.message;
@@ -2997,7 +3047,7 @@
             const data = await response.json().catch(() => ({}));
             if (response.status === 409) { await new Promise((resolve) => setTimeout(resolve, 3000)); continue; }
             if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-            showPurchaseNotice(data.sent ? '✅ A tervezetet és az e-számlát elküldtük a megadott e-mail címre.' : '');
+            showPurchaseNotice(data.sent ? 'A tervezetet és az e-számlát elküldtük a megadott e-mail címre.' : '');
             return;
           }
           throw new Error('A számla még nem készült el.');

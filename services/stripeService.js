@@ -9,6 +9,7 @@ const PRODUCTS = Object.freeze({
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MOCK_PREFIX = 'cs_mock_';
+const mockSessions = new Map();
 
 class PaymentError extends Error {
   constructor(message, status = 400) {
@@ -86,6 +87,7 @@ async function createCheckoutSession({ plan, email, generationId, title } = {}, 
 
   if (!isLive(env)) {
     const id = `${MOCK_PREFIX}${Date.now().toString(36)}`;
+    mockSessions.set(id, { plan: product.key, email: customerEmail, generationId: String(generationId || '').slice(0, 100) });
     return {
       mock: true,
       id,
@@ -124,13 +126,15 @@ async function retrieveCheckoutSession(sessionId, deps = {}) {
 
   if (!isLive(env)) {
     if (!id.startsWith(MOCK_PREFIX)) throw new PaymentError('Ismeretlen fizetési azonosító (mock mód).', 404);
-    return { mock: true, paid: true, plan: null, email: null };
+    const mock = mockSessions.get(id) || {};
+    return { mock: true, paid: true, plan: mock.plan || null, email: mock.email || null, generationId: mock.generationId || null };
   }
   const session = await getClient(env, deps).checkout.sessions.retrieve(id);
   return {
     mock: false,
     paid: session.payment_status === 'paid',
     plan: session.metadata?.plan || null,
+    generationId: session.metadata?.generationId || null,
     created: session.created || null,
     email: session.customer_details?.email || session.customer_email || null
   };

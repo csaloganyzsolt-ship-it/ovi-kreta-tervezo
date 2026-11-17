@@ -5,6 +5,7 @@ const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
 const mailService = require('../services/mailService');
 const sheetsService = require('../services/sheetsService');
+const planStore = require('../services/planStore');
 
 function sendPaymentError(res, error, context) {
   const status = error.status || 500;
@@ -24,9 +25,14 @@ async function createCheckout(req, res) {
 async function verifyCheckout(req, res) {
   try {
     const result = await stripeService.retrieveCheckoutSession(req.params.id);
+    let planData = null;
+    if (result.paid && result.generationId) {
+      planData = planStore.getPlan(result.generationId);
+    }
     return res.json({
       success: true,
       ...result,
+      planData,
       invoiceReady: Boolean(invoiceService.getInvoicePdf(req.params.id)),
       emailEnabled: mailService.isConfigured() && !result.mock
     });
@@ -162,9 +168,16 @@ async function stripeWebhook(req, res) {
   }
 }
 
+function getStoredPlan(req, res) {
+  const plan = planStore.getPlan(req.params.id);
+  if (!plan) return res.status(404).json({ success: false, error: 'A tervezet nem található vagy lejárt.' });
+  return res.json({ success: true, plan });
+}
+
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
+router.get('/plan/:id', getStoredPlan);
 
-module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited };
+module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited, getStoredPlan };

@@ -167,5 +167,49 @@ function initSite() {
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModals(); });
 }
 
+function formatExtentSummary(tableCount, activityCount) {
+  return `A teljes dokumentum elkészült: ${tableCount} részletes táblázat és ${activityCount} kidolgozott tevékenységi egység vár feloldásra.`;
+}
+
+function getLockedMeta(result) {
+  if (!result || typeof result !== 'object') {
+    return { table_count: 0, activity_count: 0, summary_text: formatExtentSummary(0, 0) };
+  }
+  if (result.locked_meta) {
+    const table_count = Number(result.locked_meta.table_count) || 0;
+    const activity_count = Number(result.locked_meta.activity_count) || 0;
+    return {
+      table_count,
+      activity_count,
+      summary_text: formatExtentSummary(table_count, activity_count)
+    };
+  }
+  if (result.is_weekly === true && Array.isArray(result.napok)) {
+    let table_count = 0;
+    let activity_count = 0;
+    for (const day of result.napok) {
+      if (Array.isArray(day?.kidolgozas_tablazat) && day.kidolgozas_tablazat.length) {
+        table_count += 1;
+        activity_count += day.kidolgozas_tablazat.length;
+      }
+    }
+    return { table_count, activity_count, summary_text: formatExtentSummary(table_count, activity_count) };
+  }
+  const rows = Array.isArray(result.kidolgozas_tablazat) ? result.kidolgozas_tablazat.length : 0;
+  return {
+    table_count: rows > 0 ? 1 : 0,
+    activity_count: rows,
+    summary_text: formatExtentSummary(rows > 0 ? 1 : 0, rows)
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.formatExtentSummary = formatExtentSummary;
+  window.getLockedMeta = getLockedMeta;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS };
+}
+
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSite);
 else initSite();

@@ -108,13 +108,17 @@ test('paywall shows a teaser with the unlock button and blocks exports until unl
   const window = await loadLockedApp(t);
   window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g1' });
   const document = window.document;
-  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 0);
+  assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.ok(document.querySelector('.locked-mirror-text'));
+  assert.match(document.querySelector('.locked-boundary-text').textContent, /1 részletes táblázat és 8 kidolgozott tevékenységi egység vár feloldásra/);
+  assert.match(document.getElementById('lockedFloatingText').textContent, /1 részletes táblázat és 8 kidolgozott tevékenységi egység vár feloldásra/);
   assert.match(document.getElementById('unlockBtn').textContent, /390 Ft/);
   assert.equal(document.getElementById('downloadPdfBtn').disabled, true);
 
   window.unlockGeneration('g1');
   window.renderResultDocument(window.lastResult);
   assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.equal(document.querySelector('.locked-mirror-text'), null);
   assert.equal(document.getElementById('unlockBtn'), null);
   assert.equal(document.getElementById('downloadPdfBtn').disabled, false);
 });
@@ -350,7 +354,7 @@ test('unrelated export settings do not revoke the unlock', async (t) => {
   assert.equal(window.isPlanLocked(), false);
 });
 
-test('locked preview renders no activity section at all and shows the unlock notice', async (t) => {
+test('locked preview renders 1:1 mirror activity section with blur and shows the unlock notice', async (t) => {
   const window = await loadLockedApp(t);
   const plan = makePlan(8);
   const secret = 'RÉSZLETES-FOGLALKOZÁSMENET';
@@ -358,16 +362,16 @@ test('locked preview renders no activity section at all and shows the unlock not
   plan.kidolgozas_tablazat[0].modszerek_megjegyzesek = 'TITKOS-MODSZER';
   window.renderResultDocument({ ...plan, request: makePayload(), generationId: 'g9' });
   const host = window.document.getElementById('resultDocument');
-  assert.equal(host.querySelectorAll('.official-table tbody tr').length, 0);
-  assert.ok(!host.textContent.includes(secret));
-  assert.doesNotMatch(host.textContent, /TITKOS-MODSZER/);
-  assert.match(host.textContent, /A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el\./);
+  assert.equal(host.querySelectorAll('.official-table tbody tr').length, 8);
+  assert.ok(host.querySelector('.locked-mirror-text'));
+  assert.match(host.textContent, /A teljes dokumentum elkészült: 1 részletes táblázat és 8 kidolgozott tevékenységi egység vár feloldásra\./);
 
   window.unlockGeneration('g9', 'cs_test_g9');
   window.renderResultDocument(window.lastResult);
   const full = window.document.getElementById('resultDocument').textContent;
   assert.ok(full.includes(secret));
   assert.match(full, /TITKOS-MODSZER/);
+  assert.equal(host.querySelector('.locked-mirror-text'), null);
 });
 
 test('plan kinds map to the three price tiers', async (t) => {
