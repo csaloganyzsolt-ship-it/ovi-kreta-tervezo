@@ -101,7 +101,7 @@ function applyPaywall(host) {
   gate.innerHTML = `
           <div class="locked-boundary-badge">Teljes kidolgozás feloldása</div>
           <p>${escapeHtml(summary)}</p>
-          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet feloldása – ${price} Ft</button>`;
+          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet feloldása – ${escapeHtml(price)} Ft</button>`;
   body.appendChild(gate);
 }
 

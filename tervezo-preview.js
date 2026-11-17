@@ -162,8 +162,8 @@ function buildLockedBoundaryCard(result) {
   return `
           <div class="locked-boundary-card">
             <div class="locked-boundary-badge">Zárolt szakasz</div>
-            <p class="locked-boundary-text">A teljes dokumentum elkészült: ${meta.table_count} részletes táblázat és ${meta.activity_count} kidolgozott tevékenységi egység vár feloldásra.</p>
-            <button type="button" class="unlock-cta" data-action="unlock">Teljes tervezet feloldása – ${price} Ft</button>
+            <p class="locked-boundary-text">A teljes dokumentum elkészült: ${escapeHtml(meta.table_count)} részletes táblázat és ${escapeHtml(meta.activity_count)} kidolgozott tevékenységi egység vár feloldásra.</p>
+            <button type="button" class="unlock-cta" data-action="unlock">Teljes tervezet feloldása – ${escapeHtml(price)} Ft</button>
           </div>`;
 }
 

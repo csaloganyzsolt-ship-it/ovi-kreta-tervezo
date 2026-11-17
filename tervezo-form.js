@@ -1208,7 +1208,7 @@ function renderSeasonalThemeSuggestions() {
 
   const themes = seasonalMap[month] || seasonalMap[9];
   const activeTheme = document.querySelector('input[data-field="theme"]')?.value?.trim();
-  container.innerHTML = themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${theme}">${theme}</button>`).join('');
+  container.innerHTML = themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme)}">${escapeHtml(theme)}</button>`).join('');
 
   container.querySelectorAll('[data-theme-option]').forEach((button) => {
     button.addEventListener('click', () => {
