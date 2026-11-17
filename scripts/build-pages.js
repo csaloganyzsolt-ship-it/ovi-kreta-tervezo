@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-pages');
@@ -15,10 +15,10 @@ const version = buildVersion();
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 // A staging oldal nem indexelhető, ezért nem kap Search Console igazolást.
-for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
+for (const page of PAGES) {
   fs.writeFileSync(path.join(out, page), addVersion(fs.readFileSync(path.join(root, page), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', ''), version));
 }
-for (const file of ['styles.css', 'site.js', 'theme-init.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) fs.copyFileSync(path.join(root, file), path.join(out, file));
+for (const file of SITE_ASSETS) fs.copyFileSync(path.join(root, file), path.join(out, file));
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }

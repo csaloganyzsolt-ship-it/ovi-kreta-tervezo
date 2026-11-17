@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('./services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES } = require('./services/siteConstants');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -164,11 +164,11 @@ const STATIC_ROOT = __dirname;
 for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
-for (const file of ['tervezo.html', 'ertekeles.html', 'styles.css', 'site.js', 'theme-init.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
+for (const file of ['tervezo.html', 'ertekeles.html', ...SITE_ASSETS]) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 
-for (const file of ['robots.txt', 'sitemap.xml']) {
+for (const file of SEO_FILES) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 

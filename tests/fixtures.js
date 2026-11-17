@@ -63,13 +63,16 @@ function makePlan(rowCount = 5) {
 }
 
 module.exports = { makePayload, makePlan };
-// A jsdom-tesztek nem töltenek külső fájlokat, ezért a közös site.js tartalmát a lapba ágyazzuk.
+// A jsdom-tesztek nem töltenek külső fájlokat, ezért minden helyi <script src> tartalmát (az eredeti sorrendben) a lapba ágyazzuk;
+// a config.js kivétel, mert a tesztek a saját APP_CONFIG-jukat adják.
 function readPage(name) {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
   return fs.readFileSync(path.join(root, name), 'utf8')
-    .replace('<script src="theme-init.js"></script>', () => `<script>${fs.readFileSync(path.join(root, 'theme-init.js'), 'utf8')}</script>`)
-    .replace('<script src="site.js"></script>', () => `<script>${fs.readFileSync(path.join(root, 'site.js'), 'utf8')}</script>`);
+    .replace(/<script src="([^":?]+)(?:\?v=\d+)?"><\/script>/g, (tag, file) => {
+      const target = path.join(root, file);
+      return file !== 'config.js' && fs.existsSync(target) ? `<script>${fs.readFileSync(target, 'utf8')}</script>` : tag;
+    });
 }
 module.exports.readPage = readPage;

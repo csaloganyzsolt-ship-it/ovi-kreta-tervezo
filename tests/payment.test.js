@@ -512,7 +512,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo.html', 'theme-init.js']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -1093,6 +1093,40 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
     const res = await fetch(`http://127.0.0.1:${server.address().port}/theme-init.js`);
     assert.equal(res.status, 200);
     assert.equal(await res.text(), script);
+  } finally {
+    server.close();
+  }
+});
+
+const PLANNER_SCRIPTS = ['core', 'form', 'preview', 'export', 'generate', 'paywall', 'init'].map((name) => `tervezo-${name}.js`);
+
+test('tervezo.html loads the planner scripts in order and the single static list covers every shipped file', async () => {
+  const { SITE_ASSETS, PAGES } = require('../services/siteConstants');
+  const html = fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8');
+  const loaded = [...html.matchAll(/<script src="(tervezo-[a-z]+\.js)"><\/script>/g)].map((m) => m[1]);
+  assert.deepEqual(loaded, PLANNER_SCRIPTS);
+  assert.doesNotMatch(html.replace(/<script src=[^>]*><\/script>/g, ''), /<script\b/, 'nincs beágyazott script a tervezőben');
+  assert.deepEqual(fs.readdirSync(ROOT).filter((f) => /^tervezo-.*\.js$/.test(f)).sort(), [...PLANNER_SCRIPTS].sort());
+  for (const f of PLANNER_SCRIPTS) assert.ok(SITE_ASSETS.includes(f), `${f} hiányzik a közös listáról`);
+
+  const { execFileSync } = require('node:child_process');
+  execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
+  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
+  for (const dir of ['dist-nethely', 'dist-pages']) {
+    const built = fs.readFileSync(path.join(ROOT, dir, 'tervezo.html'), 'utf8');
+    const versioned = [...built.matchAll(/<script src="(tervezo-[a-z]+\.js)\?v=\d{12}"><\/script>/g)].map((m) => m[1]);
+    assert.deepEqual(versioned, PLANNER_SCRIPTS, `${dir}: verziózott tervezo-*.js`);
+    for (const file of [...SITE_ASSETS, ...PAGES]) assert.ok(fs.existsSync(path.join(ROOT, dir, file)), `${dir}: ${file} hiányzik`);
+  }
+
+  const { start } = require('../server');
+  const server = start(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    for (const file of SITE_ASSETS) {
+      const res = await fetch(`http://127.0.0.1:${server.address().port}/${file}`);
+      assert.equal(res.status, 200, `/${file}`);
+    }
   } finally {
     server.close();
   }

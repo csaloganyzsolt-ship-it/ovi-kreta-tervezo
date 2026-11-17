@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS, SEO_FILES } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-nethely');
@@ -40,11 +40,11 @@ function applySiteVerification(html) {
   return html.replace('<!--GOOGLE_SITE_VERIFICATION-->', code ? `<meta name="google-site-verification" content="${code}" />` : '');
 }
 
-// Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, site.js, theme-init.js, config.js), ezért bármilyen gyökérben működik.
-for (const file of ['robots.txt', 'sitemap.xml', 'styles.css', 'site.js', 'theme-init.js', 'favicon.svg', 'favicon.ico', 'logo.svg']) {
+// Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, tervezo-*.js, config.js), ezért bármilyen gyökérben működik.
+for (const file of [...SEO_FILES, ...SITE_ASSETS]) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
-for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
+for (const page of PAGES) {
   fs.writeFileSync(path.join(out, page), addVersion(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')), version));
 }
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
