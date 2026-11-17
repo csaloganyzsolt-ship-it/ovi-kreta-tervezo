@@ -74,6 +74,7 @@ const LEGAL_TEXTS = {
 <li>Nethely Kft. (Magyarország) – weboldal domain és DNS kiszolgálás, statikus tárhely.</li>
 <li>Render Services, Inc. (USA / EU) – backend szerverkörnyezet és API futtatás.</li>
 <li>Google Ireland Limited / Google LLC – tervezetszövegek generálása (Gemini API), valamint a vásárlási nyilvántartás és a számlamásolat mentése (Google Táblázatok és Drive).</li>
+<li>Cloudflare, Inc. (USA) – Turnstile robotvédelmi szolgáltatás: az űrlap visszaélés elleni védelme a böngésző és az IP-cím technikai adatainak kiértékelésével.</li>
 </ol>
 <h3>5. Az érintettek jogai</h3>
 <p>Kérheted az Adatkezelőtől a rád vonatkozó személyes adatokhoz való hozzáférést, azok helyesbítését, törlését (kivéve a számviteli törvény által kötelezően előírt 8 éves számlaadatokat), illetve az adatkezelés korlátozását. Kérelmet az info@csb-vill.com címre küldhetsz.</p>

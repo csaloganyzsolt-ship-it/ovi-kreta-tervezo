@@ -1841,8 +1841,7 @@
   :root[data-theme="dark"] .landing-hero h1, :root[data-theme="dark"] .landing h2, :root[data-theme="dark"] .landing-card h3 { color: #9fd8c0; }
   :root[data-theme="dark"] .landing-card { border-color: #38564a; }
   @media (max-width: 768px) { .landing-steps, .landing-prices { grid-template-columns: 1fr; } .landing-hero { padding: 28px 18px; } }
-  .grecaptcha-badge { visibility: hidden !important; }
-  .recaptcha-note { font-size: 12px; opacity: .8; }
+  .footer-note { font-size: 12px; opacity: .8; }
   .unlock-cta { min-height: 48px; padding: 12px 22px; border: 0; border-radius: 14px; background: var(--primary-dark); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
   .unlock-cta[hidden], .unlocked-badge[hidden] { display: none; }
   .preview-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }

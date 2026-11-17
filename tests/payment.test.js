@@ -684,9 +684,15 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   assert.match(landing, /<a class="brand" href="index\.html"/);
   assert.match(planner, /<a class="brand" href="index\.html"/);
   assert.doesNotMatch(landing + planner, /ONAP|Kréta OVI|Kréta-kompatibilis/);
-  assert.match(landing, /policies\.google\.com\/privacy/);
-  assert.match(landing, /policies\.google\.com\/terms/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.grecaptcha-badge \{ visibility: hidden !important; \}/);
+  for (const page of [landing, planner]) {
+    assert.match(page, /Cloudflare Turnstile/);
+    assert.match(page, /href="https:\/\/www\.cloudflare\.com\/privacypolicy\/"/);
+    assert.match(page, /href="https:\/\/www\.cloudflare\.com\/website-terms\/"/);
+    assert.doesNotMatch(page, /reCAPTCHA|policies\.google\.com/);
+  }
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.doesNotMatch(css, /grecaptcha|recaptcha/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'site.js'), 'utf8'), /Cloudflare, Inc\. \(USA\) – Turnstile/);
   for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
