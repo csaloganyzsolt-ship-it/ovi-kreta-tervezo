@@ -143,6 +143,15 @@ function slugifyAreaName(area) {
   return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
 }
 
+// ISO-8601 hét (a csütörtök határozza meg az évet): mindig érvényes "YYYY-Www" érték, az évhatáron is.
+function isoWeekValue(date = new Date()) {
+  const thursday = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+  const year = thursday.getUTCFullYear();
+  const week = Math.ceil(((thursday - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
 function getMondayDateForWeek(dateValue) {
   const val = String(dateValue || '').trim();
   const weekMatch = val.match(/^(\d{4})-W(\d{1,2})$/i);

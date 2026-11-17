@@ -353,13 +353,7 @@ function setDurationSelection(nextValue) {
     weekField.type = 'week';
     weekField.style.display = showDaily ? 'none' : 'inline-block';
     if (!showDaily && !weekField.value && typeof document !== 'undefined') {
-      const currentDate = new Date();
-      const weekStart = new Date(currentDate);
-      const day = weekStart.getDay() || 7;
-      weekStart.setDate(weekStart.getDate() - day + 1);
-      const weekYear = Number(weekStart.toISOString().slice(0, 4));
-      const weekNumber = Math.ceil((((new Date(weekYear, 0, 1) - weekStart) / 86400000) + 1) / 7);
-      weekField.value = `${weekYear}-W${String(weekNumber).padStart(2, '0')}`;
+      weekField.value = isoWeekValue();
     }
   }
 

@@ -119,8 +119,8 @@ function docxTable(table, contentWidth) {
     tableHeader: header,
     cantSplit: !academic,
     children: Array.from(row.cells).map((cell, index) => {
-      const cellParagraphs = academic ? Array.from(cell.querySelectorAll('p')) : Array.from(cell.querySelectorAll(':scope > p'));
-      const paragraphs = cellParagraphs.map((para) => new Paragraph({
+      // A bekezdések a cellában lévő div-ekben is lehetnek: mindegyik külön Word-bekezdés.
+      const paragraphs = Array.from(cell.querySelectorAll('p')).map((para) => new Paragraph({
         spacing: { after: thematic ? 50 : 100, line: thematic ? 240 : 276 },
         keepNext: para.classList.contains('cell-label'),
         children: docxRunsFromNode(para, { size: fontSize, bold: header, font: 'Arial', color: '000000' })

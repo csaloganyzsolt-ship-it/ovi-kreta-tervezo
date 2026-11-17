@@ -912,3 +912,63 @@ test('a Turnstile load or verification error shows a clear Hungarian message', a
   widget.options['error-callback']();
   assert.match(box.textContent, /nem sikerült/);
 });
+
+test('isoWeekValue always returns a valid ISO week, also across year boundaries', async (t) => {
+  const window = await loadApp(t);
+  const week = (year, month, day) => window.isoWeekValue(new window.Date(year, month - 1, day));
+  assert.equal(week(2026, 11, 3), '2026-W45');
+  assert.equal(week(2026, 11, 2), '2026-W45');
+  assert.equal(week(2026, 11, 8), '2026-W45');
+  assert.equal(week(2026, 1, 1), '2026-W01');
+  assert.equal(week(2024, 12, 30), '2025-W01');
+  assert.equal(week(2021, 1, 3), '2020-W53');
+  assert.equal(week(2027, 1, 1), '2026-W53');
+  assert.equal(week(2026, 12, 31), '2026-W53');
+  assert.equal(week(2027, 1, 4), '2027-W01');
+
+  // Minden nap 2019–2031 között érvényes, és a hét hétfője pontosan a nap hétfője.
+  const mondayOf = (date) => {
+    const monday = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() || 7) - 1)));
+    return monday.toISOString().slice(0, 10);
+  };
+  for (let date = new Date(2019, 0, 1); date.getFullYear() <= 2031; date.setDate(date.getDate() + 1)) {
+    const value = window.isoWeekValue(new window.Date(date.getFullYear(), date.getMonth(), date.getDate()));
+    assert.match(value, /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/, value);
+    assert.equal(window.getMondayDateForWeek(value).toISOString().slice(0, 10), mondayOf(date), `${date.toDateString()} -> ${value}`);
+  }
+});
+
+test('switching to the weekly duration pre-fills a valid current week in the week field', async (t) => {
+  const window = await loadApp(t);
+  const field = window.document.querySelector('[data-field="week-value"]');
+  field.value = '';
+  window.setDurationSelection('Heti');
+  assert.match(field.value, /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/);
+  assert.equal(field.value, window.isoWeekValue());
+  assert.equal(window.buildGenerationPayload().dateValue, field.value);
+  field.value = '2026-W45';
+  window.setDurationSelection('Napi');
+  window.setDurationSelection('Heti');
+  assert.equal(field.value, '2026-W45', 'a már megadott hét nem íródik felül');
+});
+
+test('the standard DOCX keeps every paragraph of a table cell as its own Word paragraph', async (t) => {
+  const window = await loadApp(t);
+  window.docx = require('docx');
+  const plan = makePlan(3);
+  plan.kidolgozas_tablazat[0].tevekenyseg_menete = ['Első bekezdés.', 'Második bekezdés.', 'Harmadik bekezdés.'];
+  window.renderResultDocument({ ...plan, request: makePayload() });
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(Buffer.from(await (await window.renderDocxBlob('main')).arrayBuffer()));
+  const xml = await zip.file('word/document.xml').async('string');
+  const table = xml.split('<w:tbl>')[2];
+  const rows = table.split('<w:tr>').slice(2);
+  const paragraphsPerCell = rows.map((row) => row.split('<w:tc>').slice(1).map((cell) => (cell.split('</w:tc>')[0].match(/<w:p>/g) || []).length));
+  assert.deepEqual(paragraphsPerCell, [[1, 3, 1], [1, 2, 1], [1, 2, 1]]);
+  const firstActivityCell = rows[0].split('<w:tc>')[2];
+  for (const sentence of ['Első bekezdés.', 'Második bekezdés.', 'Harmadik bekezdés.']) {
+    const holders = firstActivityCell.split('</w:p>').filter((paragraph) => paragraph.includes(sentence));
+    assert.equal(holders.length, 1);
+    assert.equal(holders[0].includes('Első bekezdés.') && holders[0].includes('Második bekezdés.'), false, 'a bekezdések nem olvadhatnak össze');
+  }
+});
