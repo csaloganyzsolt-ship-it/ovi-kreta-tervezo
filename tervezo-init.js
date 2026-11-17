@@ -49,7 +49,7 @@ nextBtn.addEventListener('click', () => {
   } else if (needsOverwriteConfirm() && !readCachedGeneration(buildGenerationPayload())) {
     openModal('confirmRegenModal');
   } else {
-    generatePlan();
+    requestGeneration();
   }
 });
 
@@ -57,7 +57,7 @@ document.getElementById('testDeliverBtn').addEventListener('click', sendTestDeli
 
 document.getElementById('confirmRegenYes').addEventListener('click', () => {
   closeModals();
-  generatePlan();
+  requestGeneration();
 });
 
 backBtn.addEventListener('click', () => {

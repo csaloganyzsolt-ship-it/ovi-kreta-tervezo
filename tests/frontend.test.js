@@ -808,3 +808,105 @@ test('restorePlanSettings clears fields that were empty in the saved plan', asyn
   assert.equal(document.querySelector('#iktOptionsPanel').hidden, true);
   assert.equal(document.querySelector('#iktToggleStatusLabel').textContent, 'Nem');
 });
+
+function stubTurnstile(window) {
+  const widget = { options: null, resets: 0, removed: 0 };
+  window.turnstile = {
+    render: (_selector, options) => { widget.options = options; return 'w1'; },
+    reset: () => { widget.resets += 1; },
+    remove: () => { widget.removed += 1; }
+  };
+  return widget;
+}
+
+async function clickToGenerate(window) {
+  const step = window.document.querySelector('.wizard-item[data-step="3"]');
+  step.click();
+  window.document.getElementById('nextBtn').click();
+}
+
+test('the planner page has no static Turnstile box, only the check modal', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  const modal = doc.getElementById('turnstileModal');
+  assert.ok(modal);
+  assert.equal(modal.classList.contains('open'), false);
+  assert.equal(doc.querySelectorAll('#turnstileContainer').length, 1);
+  assert.ok(modal.contains(doc.getElementById('turnstileContainer')));
+  assert.equal(modal.querySelector('h2').textContent, 'Biztonsági ellenőrzés');
+  assert.match(modal.textContent, /Kérjük, igazold, hogy nem robot vagy a tervezet elkészítéséhez\./);
+  assert.equal(modal.querySelector('#turnstileCancel').textContent, 'Mégse');
+  for (const step of [0, 1, 2, 3]) {
+    doc.querySelector(`.wizard-item[data-step="${step}"]`).click();
+    assert.equal(modal.classList.contains('open'), false);
+    assert.equal(doc.querySelector('.step.active #turnstileContainer, .form-step.active #turnstileContainer'), null);
+  }
+});
+
+test('without a site key generation starts directly and no modal opens', async (t) => {
+  const window = await loadApp(t);
+  let calls = 0;
+  window.APP_CONFIG = { ...(window.APP_CONFIG || {}), turnstileSiteKey: '' };
+  window.fetch = async () => { calls += 1; return Response.json({ success: true, ...makePlan() }); };
+  await clickToGenerate(window);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(calls, 1);
+  assert.equal(window.document.getElementById('turnstileModal').classList.contains('open'), false);
+});
+
+test('with a site key the click opens the modal first and the verified token auto-starts generation', async (t) => {
+  const window = await loadApp(t);
+  const widget = stubTurnstile(window);
+  const bodies = [];
+  window.APP_CONFIG = { ...(window.APP_CONFIG || {}), turnstileSiteKey: 'site-key' };
+  window.fetch = async (_url, options) => { bodies.push(JSON.parse(options.body)); return Response.json({ success: true, ...makePlan() }); };
+  const modal = window.document.getElementById('turnstileModal');
+
+  await clickToGenerate(window);
+  assert.equal(modal.classList.contains('open'), true);
+  assert.equal(bodies.length, 0);
+  assert.equal(widget.options.sitekey, 'site-key');
+
+  widget.options.callback('tok-123');
+  assert.equal(modal.classList.contains('open'), true, 'a pipa látszik a várakozás alatt');
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(modal.classList.contains('open'), false);
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0].turnstileToken, 'tok-123');
+  assert.equal(window.eval('currentTurnstileToken'), '', 'a token a generálás után törlődik');
+  assert.ok(widget.resets >= 1);
+});
+
+test('cancelling the modal blocks the backend call and a late token does not start generation', async (t) => {
+  const window = await loadApp(t);
+  const widget = stubTurnstile(window);
+  let calls = 0;
+  window.APP_CONFIG = { ...(window.APP_CONFIG || {}), turnstileSiteKey: 'site-key' };
+  window.fetch = async () => { calls += 1; return Response.json({ success: true, ...makePlan() }); };
+  await clickToGenerate(window);
+  window.document.getElementById('turnstileCancel').click();
+  assert.equal(window.document.getElementById('turnstileModal').classList.contains('open'), false);
+  widget.options.callback('late-token');
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(calls, 0);
+});
+
+test('a Turnstile load or verification error shows a clear Hungarian message', async (t) => {
+  const window = await loadApp(t);
+  window.APP_CONFIG = { ...(window.APP_CONFIG || {}), turnstileSiteKey: 'site-key' };
+  window.fetch = async () => { throw new Error('nem hívható'); };
+  await clickToGenerate(window);
+  const script = window.document.getElementById('turnstileScript');
+  assert.ok(script);
+  script.onerror();
+  const box = window.document.getElementById('turnstileError');
+  assert.equal(box.hidden, false);
+  assert.match(box.textContent, /nem tölthető be/);
+  assert.equal(window.document.getElementById('turnstileScript'), null);
+
+  const widget = stubTurnstile(window);
+  window.document.getElementById('turnstileCancel').click();
+  window.document.getElementById('nextBtn').click();
+  widget.options['error-callback']();
+  assert.match(box.textContent, /nem sikerült/);
+});

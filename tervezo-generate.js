@@ -9,53 +9,90 @@ function getTurnstileSiteKey() {
   return String(window.APP_CONFIG?.turnstileSiteKey || '').trim();
 }
 
-function initTurnstile() {
-  const container = document.getElementById('turnstileContainer');
-  if (!container) return;
-  const siteKey = getTurnstileSiteKey();
-  if (!siteKey) {
-    container.hidden = true;
-    return;
-  }
-  container.hidden = false;
+let turnstileWidgetTheme = '';
 
-  if (!window.turnstile) {
-    if (!document.getElementById('turnstileScript')) {
-      const script = document.createElement('script');
-      script.id = 'turnstileScript';
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        renderTurnstileWidget(siteKey);
-      };
-      document.head.appendChild(script);
-    }
-  } else {
-    renderTurnstileWidget(siteKey);
-  }
+function setTurnstileError(message) {
+  const box = document.getElementById('turnstileError');
+  if (!box) return;
+  box.textContent = message || '';
+  box.hidden = !message;
+}
+
+function onTurnstileVerified(token) {
+  currentTurnstileToken = token;
+  setTurnstileError('');
+  // Rövid várakozás, hogy a zöld pipa látszódjon.
+  setTimeout(() => {
+    const modal = document.getElementById('turnstileModal');
+    if (!modal || !modal.classList.contains('open')) return;
+    closeModals();
+    generatePlan();
+  }, 350);
 }
 
 function renderTurnstileWidget(siteKey) {
   const container = document.getElementById('turnstileContainer');
-  if (!container || !window.turnstile || turnstileWidgetId !== null) return;
+  if (!container || !window.turnstile) return;
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  if (turnstileWidgetId !== null && turnstileWidgetTheme === theme) {
+    try { window.turnstile.reset(turnstileWidgetId); } catch (_e) {}
+    return;
+  }
+  if (turnstileWidgetId !== null) {
+    try { window.turnstile.remove(turnstileWidgetId); } catch (_e) {}
+    turnstileWidgetId = null;
+  }
   try {
     turnstileWidgetId = window.turnstile.render('#turnstileContainer', {
       sitekey: siteKey,
-      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
-      callback: (token) => {
-        currentTurnstileToken = token;
-      },
+      theme,
+      callback: onTurnstileVerified,
       'expired-callback': () => {
         currentTurnstileToken = '';
       },
       'error-callback': () => {
         currentTurnstileToken = '';
+        setTurnstileError('A biztonsági ellenőrzés nem sikerült. Kérjük, próbáld újra, vagy frissítsd az oldalt.');
       }
     });
+    turnstileWidgetTheme = theme;
   } catch (err) {
     console.warn('Turnstile render warning:', err);
+    setTurnstileError('A biztonsági ellenőrzés nem tölthető be. Kérjük, frissítsd az oldalt, és próbáld újra.');
   }
+}
+
+function openTurnstileModal(siteKey) {
+  currentTurnstileToken = '';
+  setTurnstileError('');
+  openModal('turnstileModal');
+  if (window.turnstile) {
+    renderTurnstileWidget(siteKey);
+    return;
+  }
+  const existing = document.getElementById('turnstileScript');
+  if (existing) existing.remove();
+  const script = document.createElement('script');
+  script.id = 'turnstileScript';
+  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async = true;
+  script.defer = true;
+  script.onload = () => renderTurnstileWidget(siteKey);
+  script.onerror = () => {
+    script.remove();
+    setTurnstileError('A biztonsági ellenőrzés nem tölthető be (a Cloudflare szolgáltatás nem érhető el). Ellenőrizd az internetkapcsolatot, és próbáld újra.');
+  };
+  document.head.appendChild(script);
+}
+
+// Kattintásra indított generálás: élő Turnstile-token nélkül előbb a felugró ellenőrzés fut.
+function requestGeneration() {
+  const siteKey = getTurnstileSiteKey();
+  if (!siteKey || currentTurnstileToken || readCachedGeneration(buildGenerationPayload()) || readDailyCount().count >= DAILY_FREE_LIMIT) {
+    generatePlan();
+    return;
+  }
+  openTurnstileModal(siteKey);
 }
 
 const WEEKLY_PHASES = [

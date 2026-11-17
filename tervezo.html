@@ -451,7 +451,6 @@
             </div>
           </div>
 
-          <div id="turnstileContainer" class="turnstile-container" hidden></div>
           <div class="footer-actions">
             <button class="btn secondary" id="backBtn" type="button">Vissza</button>
             <button class="btn primary" id="nextBtn" type="button">Következő lépés</button>
@@ -581,6 +580,17 @@
           <h2 id="legalModalTitle"></h2>
           <div id="legalModalBody"></div>
           <div class="modal-actions"><button type="button" data-close-modal>Bezárás</button></div>
+        </div>
+      </div>
+      <div class="modal-backdrop" id="turnstileModal" role="dialog" aria-modal="true" aria-labelledby="turnstileTitle">
+        <div class="modal-box turnstile-box">
+          <h2 id="turnstileTitle">Biztonsági ellenőrzés</h2>
+          <p>Kérjük, igazold, hogy nem robot vagy a tervezet elkészítéséhez.</p>
+          <div id="turnstileContainer" class="turnstile-container"></div>
+          <div id="turnstileError" class="modal-error" role="alert" hidden></div>
+          <div class="modal-actions">
+            <button type="button" data-close-modal id="turnstileCancel">Mégse</button>
+          </div>
         </div>
       </div>
       <div class="modal-backdrop" id="confirmRegenModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmRegenTitle">

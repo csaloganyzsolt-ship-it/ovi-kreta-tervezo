@@ -1242,9 +1242,10 @@
     min-height: 65px;
   }
 
-  .turnstile-container[hidden] {
-    display: none !important;
-  }
+  .modal-box.turnstile-box { width: min(400px, 100%); text-align: center; }
+  .modal-box.turnstile-box h2 { margin-right: 0; }
+  .modal-box.turnstile-box .modal-actions { justify-content: center; }
+  .modal-box.turnstile-box .modal-error[hidden] { display: none; }
 
   .history-item {
     width: 100%;

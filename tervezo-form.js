@@ -512,9 +512,6 @@ function renderStep() {
   updateWizardProgress();
   backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
   nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
-  if (currentStep === 3) {
-    initTurnstile();
-  }
   renderPreview();
   updateExportLock();
   persistDraftState();
