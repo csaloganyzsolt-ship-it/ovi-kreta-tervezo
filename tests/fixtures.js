@@ -1,4 +1,5 @@
 process.env.GENERATE_RATE_LIMIT = process.env.GENERATE_RATE_LIMIT || '1000';
+process.env.DAILY_GENERATION_CAP = process.env.DAILY_GENERATION_CAP || '100000';
 
 function makePayload(overrides = {}) {
   return {
