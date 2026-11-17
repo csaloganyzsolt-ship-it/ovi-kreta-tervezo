@@ -5,6 +5,5 @@ window.APP_CONFIG = {
   apiBaseUrl: 'https://ovi-kreta-tervezo-api.onrender.com',
   paywallEnabled: true,
   turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9',
-  company: { stripeTestMode: true },
+  company: { email: 'info@ovitervezo.hu', stripeTestMode: true },
 };
-window.OVITERVEZO_CONFIG = window.APP_CONFIG;

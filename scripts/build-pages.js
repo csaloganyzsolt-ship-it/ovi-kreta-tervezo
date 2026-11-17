@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-pages');
@@ -21,7 +22,7 @@ for (const file of ['styles.css', 'site.js', 'favicon.svg', 'favicon.ico', 'logo
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }
-const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, company: { stripeTestMode: false } };
+const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, turnstileSiteKey: TURNSTILE_SITE_KEY, company: { email: SUPPORT_EMAIL, stripeTestMode: false } };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 // A teszt oldal ne kerüljön indexelésre, hogy ne versenyezzen az éles oldallal.
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nDisallow: /\n');

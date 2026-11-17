@@ -7,6 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-nethely');
@@ -53,7 +54,8 @@ for (const file of fs.readdirSync(path.join(root, 'assets'))) {
 const config = {
   apiBaseUrl,
   paywallEnabled: true,
-  company: { stripeTestMode: testMode },
+  turnstileSiteKey: TURNSTILE_SITE_KEY,
+  company: { email: SUPPORT_EMAIL, stripeTestMode: testMode },
 };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 

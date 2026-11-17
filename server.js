@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY } = require('./services/siteConstants');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -178,17 +179,17 @@ app.get('/config.js', (_req, res) => {
     apiBaseUrl: 'same-origin',
     paywallEnabled: env.PAYWALL_ENABLED === 'true',
     stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
-    turnstileSiteKey: env.TURNSTILE_SITE_KEY || '0x4AAAAAAGFSc8Zzow6VmxQ9',
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY,
     company: {
       name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
       taxId: env.COMPANY_TAX_ID || '27891788-2-08',
       regNo: env.COMPANY_REG_NO || '08 09 031727',
       address: env.COMPANY_ADDRESS || '9153 Öttevény, Arany János utca 10.',
-      email: String(env.SUPPORT_EMAIL || '').trim() || 'info@csb-vill.com',
+      email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL,
       stripeTestMode: String(env.STRIPE_SECRET_KEY || '').startsWith('sk_test_')
     }
   };
-  res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};\nwindow.OVITERVEZO_CONFIG = window.APP_CONFIG;`);
+  res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};`);
 });
 
 app.get('/health', (_req, res) => {

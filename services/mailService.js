@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { supportEmail, storageDir } = require('./invoiceService');
+const { SUPPORT_EMAIL } = require('./siteConstants');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
 const LOGO_CID = 'ovitervezo-logo';
@@ -207,9 +208,9 @@ function planLabelOf(plan) {
   return String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
 }
 
-// A rendszergazdai másolat kötelező: alapértelmezetten info@ovitervezo.hu, az ADMIN_NOTIFICATION_EMAIL felülírhatja.
+// A rendszergazdai másolat kötelező: alapértelmezetten a közös ügyfélszolgálati cím, az ADMIN_NOTIFICATION_EMAIL felülírhatja.
 function adminEmail(env = process.env) {
-  return String(env.ADMIN_NOTIFICATION_EMAIL || '').trim() || 'info@ovitervezo.hu';
+  return String(env.ADMIN_NOTIFICATION_EMAIL || '').trim() || SUPPORT_EMAIL;
 }
 
 // Külön értesítő a webhookból: a számla a rendszergazdához akkor is eljut, ha a vevő böngészője nem indítja a kézbesítést.

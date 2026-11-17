@@ -6,6 +6,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
+const mailService = require('../services/mailService');
 const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const devEnv = { BASE_URL: 'https://ovitervezo.hu' };
@@ -179,7 +180,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
   assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti alapcsomag<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
-  assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@csb-vill\.com \| Köszönjük a vásárlást!<\/megjegyzes>/);
+  assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@ovitervezo\.hu \| Köszönjük a vásárlást!<\/megjegyzes>/);
   assert.match(daily, /<eszamla>true<\/eszamla>/);
   assert.match(daily, /<sendEmail>false<\/sendEmail>/);
   assert.match(daily, /<dijbekero>false<\/dijbekero>/);
@@ -225,7 +226,7 @@ test('SUPPORT_EMAIL drives the invoice note and reply address, with a working fa
   const custom = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SUPPORT_EMAIL: 'segitseg@ovitervezo.hu' });
   assert.match(custom, /Ügyfélszolgálat: segitseg@ovitervezo\.hu/);
   assert.match(custom, /<emailReplyto>segitseg@ovitervezo\.hu<\/emailReplyto>/);
-  assert.equal(invoiceService.supportEmail({}), 'info@csb-vill.com');
+  assert.equal(invoiceService.supportEmail({}), 'info@ovitervezo.hu');
 });
 
 test('Stripe checkout names match the invoice software line items', async () => {
@@ -983,4 +984,70 @@ test('POST /api/feedback validates HMAC signature, rating, comment and sends ema
   } finally {
     server.close();
   }
+});
+
+const SHARED = require('../services/siteConstants');
+const ROOT = require('node:path').join(__dirname, '..');
+
+test('one shared source defines the public support e-mail and Turnstile site key', () => {
+  assert.equal(SHARED.SUPPORT_EMAIL, 'info@ovitervezo.hu');
+  assert.equal(SHARED.TURNSTILE_SITE_KEY, '0x4AAAAAAGFSc8Zzow6VmxQ9');
+  assert.equal(invoiceService.supportEmail({}), SHARED.SUPPORT_EMAIL);
+  assert.equal(mailService.adminEmail({}), SHARED.SUPPORT_EMAIL);
+});
+
+test('no file still carries the old customer-service address', () => {
+  const fs = require('node:fs');
+  for (const file of ['index.html', 'tervezo.html', 'site.js', 'server.js', 'services/invoiceService.js', 'services/mailService.js', 'config.js']) {
+    assert.doesNotMatch(fs.readFileSync(require('node:path').join(ROOT, file), 'utf8'), /csb-vill\.com/, file);
+  }
+});
+
+test('static footers and site.js fallback use the shared support e-mail', () => {
+  const fs = require('node:fs');
+  for (const file of ['index.html', 'tervezo.html']) {
+    assert.match(fs.readFileSync(require('node:path').join(ROOT, file), 'utf8'), /<a id="footerEmail" href="mailto:info@ovitervezo\.hu">info@ovitervezo\.hu<\/a>/, file);
+  }
+  const site = fs.readFileSync(require('node:path').join(ROOT, 'site.js'), 'utf8');
+  assert.match(site, new RegExp(`const DEFAULT_SUPPORT_EMAIL = '${SHARED.SUPPORT_EMAIL}';`));
+  assert.doesNotMatch(site, /OVITERVEZO_CONFIG/);
+});
+
+test('every config source emits the same turnstile key and support e-mail under APP_CONFIG only', async () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const evalConfig = (code) => { const sandbox = { window: {} }; vm.runInNewContext(code, sandbox); return sandbox.window; };
+  for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely'], ['scripts/build-pages.js', 'dist-pages']]) {
+    execFileSync('node', [script], { cwd: ROOT });
+    const code = fs.readFileSync(path.join(ROOT, dir, 'config.js'), 'utf8');
+    assert.doesNotMatch(code, /OVITERVEZO_CONFIG/);
+    const cfg = evalConfig(code).APP_CONFIG;
+    assert.equal(cfg.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY, script);
+    assert.equal(cfg.company.email, SHARED.SUPPORT_EMAIL, script);
+  }
+  const local = evalConfig(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'));
+  assert.equal(local.APP_CONFIG.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY);
+  assert.equal(local.APP_CONFIG.company.email, SHARED.SUPPORT_EMAIL);
+  assert.equal(local.OVITERVEZO_CONFIG, undefined);
+
+  const { start } = require('../server');
+  const server = start(0);
+  try {
+    await new Promise((resolve) => server.once('listening', resolve));
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/config.js`);
+    const served = evalConfig(await res.text());
+    assert.equal(served.APP_CONFIG.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY);
+    assert.equal(served.APP_CONFIG.company.email, SHARED.SUPPORT_EMAIL);
+    assert.equal(served.OVITERVEZO_CONFIG, undefined);
+  } finally {
+    server.close();
+  }
+});
+
+test('the planner reads the Turnstile key only from APP_CONFIG', () => {
+  const html = readPage('tervezo.html');
+  assert.doesNotMatch(html, /OVITERVEZO_CONFIG/);
+  assert.doesNotMatch(html, /0x4AAAAAAGFSc8Zzow6VmxQ9/);
 });

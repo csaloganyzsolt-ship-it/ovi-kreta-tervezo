@@ -569,7 +569,7 @@
           </div>
           <div class="footer-col">
             <h3>Tárhely és kapcsolat</h3>
-            <span>Ügyfélszolgálat: <a id="footerEmail" href="mailto:info@csb-vill.com">info@csb-vill.com</a></span>
+            <span>Ügyfélszolgálat: <a id="footerEmail" href="mailto:info@ovitervezo.hu">info@ovitervezo.hu</a></span>
             <span>Tárhelyszolgáltató: Nethely Kft., 1115 Budapest, Halmi utca 29.</span>
             <a href="mailto:info@nethely.hu">info@nethely.hu</a>
             <div class="trust-badges">
@@ -625,13 +625,6 @@
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
-      window.OVITERVEZO_CONFIG = Object.assign(
-        {
-          turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9'
-        },
-        window.OVITERVEZO_CONFIG || {},
-        window.APP_CONFIG || {}
-      );
       const steps = Array.from(document.querySelectorAll('.step-panel'));
       const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
       const nextBtn = document.getElementById('nextBtn');
@@ -2012,7 +2005,7 @@
       let currentTurnstileToken = '';
 
       function getTurnstileSiteKey() {
-        return String(window.OVITERVEZO_CONFIG?.turnstileSiteKey || window.APP_CONFIG?.turnstileSiteKey || '0x4AAAAAAGFSc8Zzow6VmxQ9').trim();
+        return String(window.APP_CONFIG?.turnstileSiteKey || '').trim();
       }
 
       function initTurnstile() {

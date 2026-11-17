@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PRODUCTS } = require('./stripeService');
 
-const DEFAULT_SUPPORT_EMAIL = 'info@csb-vill.com';
+const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL } = require('./siteConstants');
 
 function supportEmail(env = process.env) {
   return String(env.SUPPORT_EMAIL || '').trim() || DEFAULT_SUPPORT_EMAIL;

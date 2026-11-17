@@ -1,4 +1,6 @@
 // Mindkét oldal közös része: téma, jogi tájékoztatók (modal) és a lábléc cégadatai.
+// Böngészős tartalék, ha a config.js nem ad e-mailt; a services/siteConstants.js értékével egyeznie kell (teszt védi).
+const DEFAULT_SUPPORT_EMAIL = 'info@ovitervezo.hu';
 const LEGAL_TEXTS = {
   terms: ['Általános Szerződési Feltételek (ÁSZF)', `
 <h3>1. A Szolgáltató adatai</h3>
@@ -7,7 +9,7 @@ const LEGAL_TEXTS = {
 <li>Székhely: 9153 Öttevény, Arany János utca 10.</li>
 <li>Cégjegyzékszám: 08 09 031727 (Győri Törvényszék Cégbírósága)</li>
 <li>Adószám: 27891788-2-08</li>
-<li>Ügyfélszolgálati e-mail: info@csb-vill.com</li>
+<li>Ügyfélszolgálati e-mail: {{SUPPORT_EMAIL}}</li>
 <li>Tárhelyszolgáltató: Nethely Kft. (1115 Budapest, Halmi utca 29., e-mail: info@nethely.hu)</li>
 </ul>
 <h3>2. A szolgáltatás jellege</h3>
@@ -28,12 +30,12 @@ const LEGAL_TEXTS = {
 <p>Az OviTervező weboldal felülete, forráskódja, grafikai elemei és adatbázisai a Szolgáltató kizárólagos szellemi tulajdonát képezik. A megvásárolt tervezetek tekintetében a Szolgáltató nem kizárólagos, határozatlan idejű felhasználási jogot biztosít a vásárlónak saját, illetve intézményi pedagógiai munkájához (szabadon módosítható, kinyomtatható, beilleszthető az óvodai naplóba). A megvásárolt anyagok és a szoftver viszonteladása, nyilvános kereskedelmi terjesztése vagy tömeges továbbértékesítése szigorúan tilos.</p>
 <h3>6. Szavatosság és felelősségkorlátozás</h3>
 <ul>
-<li>A Szolgáltató a szoftver technikai működéséért és a dokumentumok (.docx, .pdf) letölthetőségéért felel. Hibás teljesítés (pl. kézbesítetlen e-mail, sérült fájl) esetén a Felhasználó az info@csb-vill.com címen kérheti az anyag díjmentes újraküldését vagy javítását. A fogyasztót a Polgári Törvénykönyv szerinti kellékszavatossági jogok megilletik: kijavítást vagy kicserélést kérhet, ennek teljesíthetetlensége esetén árleszállítást, illetve a szerződéstől való elállást.</li>
+<li>A Szolgáltató a szoftver technikai működéséért és a dokumentumok (.docx, .pdf) letölthetőségéért felel. Hibás teljesítés (pl. kézbesítetlen e-mail, sérült fájl) esetén a Felhasználó az {{SUPPORT_EMAIL}} címen kérheti az anyag díjmentes újraküldését vagy javítását. A fogyasztót a Polgári Törvénykönyv szerinti kellékszavatossági jogok megilletik: kijavítást vagy kicserélést kérhet, ennek teljesíthetetlensége esetén árleszállítást, illetve a szerződéstől való elállást.</li>
 <li>A Szolgáltató nem vállal felelősséget a generált pedagógiai tartalom maradéktalan szakmai tévedésmentességéért, intézményi ellenőrzéseken való megfelelőségéért vagy az internetszolgáltatásból eredő külső kiesésekért. Ez a korlátozás a fogyasztó jogszabályból eredő jogait nem érinti.</li>
 </ul>
 <h3>7. Panaszkezelés és jogérvényesítés</h3>
 <ul>
-<li>Panaszaival a Felhasználó az info@csb-vill.com e-mail címen élhet. A Szolgáltató a beérkezett panaszokat 30 napon belül érdemben kivizsgálja és megválaszolja.</li>
+<li>Panaszaival a Felhasználó az {{SUPPORT_EMAIL}} e-mail címen élhet. A Szolgáltató a beérkezett panaszokat 30 napon belül érdemben kivizsgálja és megválaszolja.</li>
 <li>Fogyasztói jogvita esetén a Felhasználó jogosult a lakóhelye vagy a Szolgáltató székhelye szerinti Békéltető Testülethez fordulni: Győr-Moson-Sopron Vármegyei Békéltető Testület, 9021 Győr, Szent István út 10/a., e-mail: bekelteto.testulet@gymsmkik.hu</li>
 <li>Az Európai Unió online vitarendezési platformja: <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">ec.europa.eu/consumers/odr</a></li>
 </ul>`],
@@ -44,7 +46,7 @@ const LEGAL_TEXTS = {
 <li>Székhely: 9153 Öttevény, Arany János utca 10.</li>
 <li>Cégjegyzékszám: 08 09 031727 (Győri Törvényszék Cégbírósága)</li>
 <li>Adószám: 27891788-2-08</li>
-<li>Kapcsolattartási e-mail: info@csb-vill.com</li>
+<li>Kapcsolattartási e-mail: {{SUPPORT_EMAIL}}</li>
 </ul>
 <h3>2. A kezelt adatok köre, célja és jogalapja</h3>
 <p><strong>a) Számlázási és kapcsolattartási adatok</strong></p>
@@ -77,7 +79,7 @@ const LEGAL_TEXTS = {
 <li>Cloudflare, Inc. (USA) – Turnstile robotvédelmi szolgáltatás: az űrlap visszaélés elleni védelme a böngésző és az IP-cím technikai adatainak kiértékelésével.</li>
 </ol>
 <h3>5. Az érintettek jogai</h3>
-<p>Kérheted az Adatkezelőtől a rád vonatkozó személyes adatokhoz való hozzáférést, azok helyesbítését, törlését (kivéve a számviteli törvény által kötelezően előírt 8 éves számlaadatokat), illetve az adatkezelés korlátozását. Kérelmet az info@csb-vill.com címre küldhetsz.</p>
+<p>Kérheted az Adatkezelőtől a rád vonatkozó személyes adatokhoz való hozzáférést, azok helyesbítését, törlését (kivéve a számviteli törvény által kötelezően előírt 8 éves számlaadatokat), illetve az adatkezelés korlátozását. Kérelmet az {{SUPPORT_EMAIL}} címre küldhetsz.</p>
 <h3>6. Jogorvoslati lehetőségek</h3>
 <p>Ha megítélésed szerint személyes adataid kezelése sérti a hatályos adatvédelmi jogszabályokat, panasszal fordulhatsz a felügyeleti hatósághoz:</p>
 <ul>
@@ -111,7 +113,7 @@ const LEGAL_TEXTS = {
 <li>Kérjük, fizetéskor ügyelj a számlázási adatok és az e-mail cím pontos megadására, mert a számla kiállítása teljesen automatizált.</li>
 </ul>
 <h3>4. Kérdés, számlamódosítás, segítségnyújtás</h3>
-<p>Ha a fizetéssel vagy a kiállított számlával kapcsolatban kérdésed van, fordulj az ügyfélszolgálatunkhoz: info@csb-vill.com</p>`]
+<p>Ha a fizetéssel vagy a kiállított számlával kapcsolatban kérdésed van, fordulj az ügyfélszolgálatunkhoz: {{SUPPORT_EMAIL}}</p>`]
 };
 
 function applyTheme(theme, persist = true) {
@@ -137,8 +139,8 @@ function closeModals() { document.querySelectorAll('.modal-backdrop.open').forEa
 function openLegalModal(key) {
   const [title, items] = LEGAL_TEXTS[key];
   document.getElementById('legalModalTitle').textContent = title;
-  const contact = window.APP_CONFIG?.company?.email || 'info@csb-vill.com';
-  document.getElementById('legalModalBody').innerHTML = items.split('info@csb-vill.com').join(siteEscapeHtml(contact));
+  const contact = window.APP_CONFIG?.company?.email || DEFAULT_SUPPORT_EMAIL;
+  document.getElementById('legalModalBody').innerHTML = items.split('{{SUPPORT_EMAIL}}').join(siteEscapeHtml(contact));
   openModal('legalModal');
 }
 
@@ -157,7 +159,7 @@ function initSite() {
   fill('footerTaxId', company.taxId || '27891788-2-08');
   fill('footerRegNo', company.regNo || '08 09 031727');
   fill('footerAddress', company.address || '9153 Öttevény, Arany János utca 10.');
-  const email = company.email || 'info@csb-vill.com';
+  const email = company.email || DEFAULT_SUPPORT_EMAIL;
   const mail = document.getElementById('footerEmail');
   if (mail) { mail.textContent = email; mail.href = `mailto:${email}`; }
   document.addEventListener('click', (event) => {
@@ -207,13 +209,6 @@ function getLockedMeta(result) {
 }
 
 if (typeof window !== 'undefined') {
-  window.OVITERVEZO_CONFIG = Object.assign(
-    {
-      turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9'
-    },
-    window.OVITERVEZO_CONFIG || {},
-    window.APP_CONFIG || {}
-  );
   window.formatExtentSummary = formatExtentSummary;
   window.getLockedMeta = getLockedMeta;
 }
