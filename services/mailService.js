@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { supportEmail, storageDir } = require('./invoiceService');
-const { SUPPORT_EMAIL } = require('./siteConstants');
+const { SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
+const { stripeSecretKey } = require('./stripeService');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
 const LOGO_CID = 'ovitervezo-logo';
@@ -77,16 +78,12 @@ function createTransport(env, deps) {
 }
 
 function companyLines(env) {
-  return {
-    name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
-    address: env.COMPANY_ADDRESS || '9153 Öttevény, Arany János utca 10.',
-    taxId: env.COMPANY_TAX_ID || '27891788-2-08',
-    regNo: env.COMPANY_REG_NO || '08 09 031727'
-  };
+  const { name, address, taxId, regLabel, regNo } = getBillingProfile(env);
+  return { name, address, taxId, regLabel, regNo };
 }
 
 function feedbackSecret(env = process.env) {
-  return String(env.FEEDBACK_SECRET || env.STRIPE_SECRET_KEY || 'ovitervezo-feedback-key').trim();
+  return String(env.FEEDBACK_SECRET || stripeSecretKey(env) || 'ovitervezo-feedback-key').trim();
 }
 
 function createFeedbackSignature(email, env = process.env) {
@@ -121,7 +118,7 @@ function buildEmailContent({ planLabel, withInvoice, test, title, orderNumber, t
     : 'a tervezet Word (.docx) és PDF formátumban is';
   const invoiceText = withInvoice ? ' Az e-számlát is mellékeltük PDF-ben.' : '';
   const testText = test ? 'Ez egy TESZT levél: fizetés és számla nélkül érkezett.\n\n' : '';
-  const legalText = `${c.name} | Székhely: ${c.address} | Adószám: ${c.taxId} | Cégjegyzékszám: ${c.regNo}`;
+  const legalText = `${c.name} | Székhely: ${c.address} | Adószám: ${c.taxId} | ${c.regLabel}: ${c.regNo}`;
 
   let feedbackBlock = '';
   let textFeedbackBlock = '';
@@ -196,7 +193,7 @@ ${orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendel
 ${feedbackBlock}
 </td></tr>
 <tr><td style="background:#f6f7f7;padding:18px 28px;border-top:1px solid #e6eae8;font-size:12px;line-height:1.6;color:#7a8480;">
-<strong>Kibocsátó:</strong> ${c.name}, székhely: ${c.address}, adószám: ${c.taxId}, cégjegyzékszám: ${c.regNo}.<br>
+<strong>Kibocsátó:</strong> ${c.name}, székhely: ${c.address}, adószám: ${c.taxId}, ${c.regLabel}: ${c.regNo}.<br>
 <a href="${site}" style="color:#7a8480;">Adatkezelési tájékoztató</a> · <a href="${site}" style="color:#7a8480;">ÁSZF</a> – ${site}<br>
 Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
 </td></tr>

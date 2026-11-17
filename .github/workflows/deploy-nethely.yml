@@ -32,6 +32,7 @@ jobs:
       - name: Build static package for Nethely
         env:
           GOOGLE_SITE_VERIFICATION: ${{ secrets.GOOGLE_SITE_VERIFICATION }}
+          BILLING_PROFILE: ${{ vars.BILLING_PROFILE }}
         run: node scripts/build-nethely.js
 
       - name: Sync dist-nethely to Nethely over FTP

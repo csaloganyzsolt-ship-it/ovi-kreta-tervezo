@@ -42,7 +42,7 @@ test('live checkout sends HUF minor units and metadata to Stripe', async () => {
 test('invoice XML escapes input and splits VAT', () => {
   const xml = invoiceService.buildInvoiceXml(
     { plan: 'daily', orderId: 'cs_1', customer: { name: 'A & <B>', email: 'a@b.hu', zip: '1111', city: 'Bp', address: 'Fő u. 1' } },
-    { SZAMLAZZ_KEY: 'key', SZAMLAZZ_AFA: '27' }
+    { SZAMLAZZ_KEY: 'key', SZAMLAZZ_VAT_RATE: '27' }
   );
   assert.match(xml, /A &amp; &lt;B&gt;/);
   assert.match(xml, /<bruttoErtek>390<\/bruttoErtek>/);
@@ -127,7 +127,7 @@ test('paywall shows a teaser with the unlock button and blocks exports until unl
 test('footer shows the operator and legal links open modals', async (t) => {
   const window = await loadLockedApp(t);
   const document = window.document;
-  assert.match(document.getElementById('siteFooter').textContent, /CSB-Villamosság Kft\./);
+  assert.match(document.getElementById('siteFooter').textContent, /Csalogány Zsolt egyéni vállalkozó/);
   document.querySelector('[data-legal="terms"]').click();
   assert.ok(document.getElementById('legalModal').classList.contains('open'));
 });
@@ -154,14 +154,14 @@ test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a profo
 test('footer and legal modals use the real company data without placeholders', async (t) => {
   const window = await loadLockedApp(t);
   const footer = window.document.getElementById('siteFooter').textContent;
-  assert.match(footer, /27891788-2-08/);
-  assert.match(footer, /08 09 031727/);
+  assert.match(footer, /68274568-1-28/);
+  assert.match(footer, /EV nyilvántartási szám: 51507048/);
   assert.match(footer, /Öttevény/);
   assert.doesNotMatch(window.document.body.innerHTML, /kitöltendő/);
   window.document.querySelector('[data-legal="privacy"]').click();
   assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
   const expected = {
-    terms: [/Nethely Kft\./, /Győri Törvényszék Cégbírósága/, /kellékszavatossági/, /nem váltják ki a pedagógus szakmai felelősségét/, /nincs|nem terheli meg/i, /bekelteto\.testulet@gymsmkik\.hu/],
+    terms: [/Nethely Kft\./, /Alanyi adómentes/, /kellékszavatossági/, /nem váltják ki a pedagógus szakmai felelősségét/, /nincs|nem terheli meg/i, /bekelteto\.testulet@gymsmkik\.hu/],
     privacy: [/Render Services/, /Google Ireland/, /GYERMEKEK SZEMÉLYES ADATAIT/, /Stripe Payments Europe/, /NAIH/, /8 évig/],
     billing: [/nincs havidíj/, /KBOSS\.hu Kft\./, /PCI-DSS/]
   };
@@ -423,12 +423,11 @@ test('generation disables the button, shows progress text, scrolls to the loader
   assert.equal(button.textContent, 'Tervezet elkészítése');
 });
 
-test('invoice prefix defaults to OVITE, comes from SZAMLAZZ_PREFIX and can be disabled with an empty value', () => {
+test('invoice prefix is omitted by default and only set from SZAMLAZZ_INVOICE_PREFIX', () => {
   const base = { orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } };
-  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /<szamlaszamElotag>OVITE<\/szamlaszamElotag>/);
-  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'ABC' }), /<szamlaszamElotag>ABC<\/szamlaszamElotag>/);
-  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLA_PREFIX: 'OLD' }), /<szamlaszamElotag>OLD<\/szamlaszamElotag>/);
-  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: '' }), /szamlaszamElotag/);
+  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /szamlaszamElotag/);
+  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'OVITE' }), /szamlaszamElotag/);
+  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_INVOICE_PREFIX: 'ABC' }), /<szamlaszamElotag>ABC<\/szamlaszamElotag>/);
 });
 
 test('invoice shows a short friendly order number instead of the Stripe session id', () => {
@@ -628,7 +627,8 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
   assert.match(titled.text, /Tervezet témája: Az <őszi> erdő/);
   assert.match(daily.html, /\.docx/);
   assert.match(daily.html, /PDF/);
-  assert.match(daily.html, /27891788-2-08/);
+  assert.match(daily.html, /68274568-1-28/);
+  assert.match(daily.html, /EV nyilvántartási szám: 51507048/);
   assert.match(daily.html, /automatikus rendszerüzenet/);
   assert.match(daily.text, /Adatkezelési tájékoztató és ÁSZF/);
   const test = buildEmailContent({ planLabel: 'heti csomag', withInvoice: false, test: true }, {});

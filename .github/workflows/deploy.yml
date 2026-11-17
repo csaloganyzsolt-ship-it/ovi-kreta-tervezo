@@ -30,6 +30,8 @@ jobs:
           node-version: 20
 
       - name: Build staging package (paywall off, test e-mail delivery on)
+        env:
+          BILLING_PROFILE: ${{ vars.BILLING_PROFILE }}
         run: node scripts/build-pages.js
 
       - name: Upload site artifact

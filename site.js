@@ -1,14 +1,24 @@
 // Mindkét oldal közös része: téma, jogi tájékoztatók (modal) és a lábléc cégadatai.
 // Böngészős tartalék, ha a config.js nem ad e-mailt; a services/siteConstants.js értékével egyeznie kell (teszt védi).
 const DEFAULT_SUPPORT_EMAIL = 'info@ovitervezo.hu';
+// Böngészős tartalék az egyéni vállalkozói profilra, ha a config.js nem ad cégadatot (a services/siteConstants.js ev profiljával egyeznie kell, teszt védi).
+const DEFAULT_COMPANY = {
+  name: 'Csalogány Zsolt egyéni vállalkozó',
+  taxId: '68274568-1-28',
+  regLabel: 'EV nyilvántartási szám',
+  regNo: '51507048',
+  court: '',
+  address: '9153 Öttevény, Kossuth Lajos utca 26.',
+  vatNote: 'Alanyi adómentes (AAM) értékesítés, az árak 0 Ft ÁFÁ-t tartalmaznak.'
+};
 const LEGAL_TEXTS = {
   terms: ['Általános Szerződési Feltételek (ÁSZF)', `
 <h3>1. A Szolgáltató adatai</h3>
 <ul>
-<li>Szolgáltató neve: CSB-Villamosság Kft.</li>
-<li>Székhely: 9153 Öttevény, Arany János utca 10.</li>
-<li>Cégjegyzékszám: 08 09 031727 (Győri Törvényszék Cégbírósága)</li>
-<li>Adószám: 27891788-2-08</li>
+<li>Szolgáltató neve: {{COMPANY_NAME}}</li>
+<li>Székhely: {{COMPANY_ADDRESS}}</li>
+<li>{{COMPANY_REG}}</li>
+<li>Adószám: {{COMPANY_TAX_ID}}</li>
 <li>Ügyfélszolgálati e-mail: {{SUPPORT_EMAIL}}</li>
 <li>Tárhelyszolgáltató: Nethely Kft. (1115 Budapest, Halmi utca 29., e-mail: info@nethely.hu)</li>
 </ul>
@@ -20,7 +30,7 @@ const LEGAL_TEXTS = {
 <li>1 db Napi tervezet: 390 Ft (bruttó)</li>
 <li>1 db Heti komplex csomag (heti keretterv + 5 napi részletes tervezet): 890 Ft (bruttó)</li>
 </ul>
-<p>Az árak magyar forintban (HUF) értendők, és tartalmazzák a 27%-os általános forgalmi adót (ÁFA).</p>
+<p>{{VAT_NOTE}}</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
 <p>A fizetés a Stripe nemzetközi, biztonságos, PCI-DSS minősítésű felületén történik bankkártyával. A Szolgáltató bankkártyaadatokat nem kezel és nem tárol.</p>
 <h3>4. Teljesítés és az elállási jog kizárása</h3>
@@ -42,10 +52,10 @@ const LEGAL_TEXTS = {
   privacy: ['Adatkezelési Tájékoztató (GDPR)', `
 <h3>1. Az Adatkezelő adatai</h3>
 <ul>
-<li>Adatkezelő: CSB-Villamosság Kft.</li>
-<li>Székhely: 9153 Öttevény, Arany János utca 10.</li>
-<li>Cégjegyzékszám: 08 09 031727 (Győri Törvényszék Cégbírósága)</li>
-<li>Adószám: 27891788-2-08</li>
+<li>Adatkezelő: {{COMPANY_NAME}}</li>
+<li>Székhely: {{COMPANY_ADDRESS}}</li>
+<li>{{COMPANY_REG}}</li>
+<li>Adószám: {{COMPANY_TAX_ID}}</li>
 <li>Kapcsolattartási e-mail: {{SUPPORT_EMAIL}}</li>
 </ul>
 <h3>2. A kezelt adatok köre, célja és jogalapja</h3>
@@ -67,7 +77,7 @@ const LEGAL_TEXTS = {
 <li>A helyi beállítások (pl. világos/sötét mód, az űrlap ideiglenes állapota) a böngésző saját helyi tárhelyén (localStorage) tárolódnak, ezekhez az Adatkezelő szervere nem fér hozzá.</li>
 </ul>
 <h3>3. Bankkártyás fizetés</h3>
-<p>A bankkártyás fizetést a Stripe nemzetközi szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a CSB-Villamosság Kft. és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
+<p>A bankkártyás fizetést a Stripe nemzetközi szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a {{COMPANY_NAME}} és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
 <h3>4. Címzettek és adatfeldolgozók köre</h3>
 <p>Az adatkezelés során az Adatkezelő az alábbi technológiai partnereket veszi igénybe adatfeldolgozóként:</p>
 <ol>
@@ -97,7 +107,7 @@ const LEGAL_TEXTS = {
 <ul>
 <li>A fizetéshez nincs szükség külön regisztrációra vagy fióknyitásra.</li>
 <li>A kártyaadatok (kártyaszám, lejárati dátum, CVC/CVV kód) megadása közvetlenül a Stripe védett szerverein történik.</li>
-<li>Az OviTervező weboldal és a CSB-Villamosság Kft. a bankkártyaadatokat nem látja, nem naplózza és nem tárolja.</li>
+<li>Az OviTervező weboldal és a {{COMPANY_NAME}} a bankkártyaadatokat nem látja, nem naplózza és nem tárolja.</li>
 </ul>
 <h3>2. Csomagok és díjszabás</h3>
 <ul>
@@ -107,7 +117,7 @@ const LEGAL_TEXTS = {
 <p>Minden vásárlás egyszeri díjfizetést jelent. Az OviTervezőnél nincs havidíj, nincs előfizetés és nincs automatikus megújuló terhelés. Pontosan és kizárólag azt az összeget vonjuk le, amelyet az adott tervezet kiválasztásakor jóváhagysz.</p>
 <h3>3. Számlázás és bizonylatkiállítás</h3>
 <ul>
-<li>A számlát a CSB-Villamosság Kft. állítja ki a jogszabályoknak megfelelően a Számlázz.hu (KBOSS.hu Kft.) rendszerén keresztül.</li>
+<li>A számlát a {{COMPANY_NAME}} állítja ki a jogszabályoknak megfelelően a Számlázz.hu (KBOSS.hu Kft.) rendszerén keresztül.</li>
 <li>A fizetés jóváhagyását követően a rendszer azonnal kiállítja az elektronikus számlát (e-számlát).</li>
 <li>Az e-számla PDF formátumban automatikusan megérkezik a vásárláskor megadott e-mail címedre, a megrendelt tervezet Word és PDF fájljaival együtt.</li>
 <li>Kérjük, fizetéskor ügyelj a számlázási adatok és az e-mail cím pontos megadására, mert a számla kiállítása teljesen automatizált.</li>
@@ -136,11 +146,28 @@ function siteEscapeHtml(value) {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModals() { document.querySelectorAll('.modal-backdrop.open').forEach((m) => m.classList.remove('open')); }
 
+// A config.js company objektuma az igazságforrás; hiányzó mezőkre az egyéni vállalkozói tartalék lép.
+function getCompany() {
+  const configured = window.APP_CONFIG?.company || {};
+  const company = { ...DEFAULT_COMPANY, email: DEFAULT_SUPPORT_EMAIL };
+  for (const [key, value] of Object.entries(configured)) if (typeof value === 'string') company[key] = value;
+  return company;
+}
+
 function openLegalModal(key) {
   const [title, items] = LEGAL_TEXTS[key];
   document.getElementById('legalModalTitle').textContent = title;
-  const contact = window.APP_CONFIG?.company?.email || DEFAULT_SUPPORT_EMAIL;
-  document.getElementById('legalModalBody').innerHTML = items.split('{{SUPPORT_EMAIL}}').join(siteEscapeHtml(contact));
+  const company = getCompany();
+  const reg = `${company.regLabel}: ${company.regNo}${company.court ? ` (${company.court})` : ''}`;
+  const values = {
+    SUPPORT_EMAIL: company.email,
+    COMPANY_NAME: company.name,
+    COMPANY_ADDRESS: company.address,
+    COMPANY_TAX_ID: company.taxId,
+    COMPANY_REG: reg,
+    VAT_NOTE: company.vatNote
+  };
+  document.getElementById('legalModalBody').innerHTML = items.replace(/\{\{([A-Z_]+)\}\}/g, (_m, key) => siteEscapeHtml(values[key] ?? ''));
   openModal('legalModal');
 }
 
@@ -153,13 +180,17 @@ function initSite() {
   const toggle = document.getElementById('themeToggle');
   if (toggle) toggle.addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
-  const company = window.APP_CONFIG?.company || {};
+  const company = getCompany();
   const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-  fill('footerCompanyName', company.name || 'CSB-Villamosság Kft.');
-  fill('footerTaxId', company.taxId || '27891788-2-08');
-  fill('footerRegNo', company.regNo || '08 09 031727');
-  fill('footerAddress', company.address || '9153 Öttevény, Arany János utca 10.');
-  const email = company.email || DEFAULT_SUPPORT_EMAIL;
+  fill('footerCompanyName', company.name);
+  fill('footerTaxId', company.taxId);
+  fill('footerRegLabel', company.regLabel);
+  fill('footerRegNo', company.regNo);
+  fill('footerAddress', company.address);
+  fill('footerCourt', company.court);
+  const courtRow = document.getElementById('footerCourtRow');
+  if (courtRow) courtRow.hidden = !company.court;
+  const email = company.email;
   const mail = document.getElementById('footerEmail');
   if (mail) { mail.textContent = email; mail.href = `mailto:${email}`; }
   document.addEventListener('click', (event) => {

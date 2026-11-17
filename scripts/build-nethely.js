@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS, SEO_FILES } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-nethely');
@@ -45,7 +45,7 @@ for (const file of [...SEO_FILES, ...SITE_ASSETS]) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 for (const page of PAGES) {
-  fs.writeFileSync(path.join(out, page), addVersion(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8')), version));
+  fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8'))), version));
 }
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
@@ -55,7 +55,7 @@ const config = {
   apiBaseUrl,
   paywallEnabled: true,
   turnstileSiteKey: TURNSTILE_SITE_KEY,
-  company: { email: SUPPORT_EMAIL, stripeTestMode: testMode },
+  company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: testMode },
 };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 

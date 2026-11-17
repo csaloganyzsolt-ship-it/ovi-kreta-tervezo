@@ -7,7 +7,8 @@ const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY } = require('./services/siteConstants');
+const stripeService = require('./services/stripeService');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany } = require('./services/siteConstants');
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 
 const app = express();
@@ -191,12 +192,9 @@ app.get('/config.js', (_req, res) => {
     stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY,
     company: {
-      name: env.COMPANY_NAME || 'CSB-Villamosság Kft.',
-      taxId: env.COMPANY_TAX_ID || '27891788-2-08',
-      regNo: env.COMPANY_REG_NO || '08 09 031727',
-      address: env.COMPANY_ADDRESS || '9153 Öttevény, Arany János utca 10.',
+      ...publicCompany(env),
       email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL,
-      stripeTestMode: String(env.STRIPE_SECRET_KEY || '').startsWith('sk_test_')
+      stripeTestMode: stripeService.isTestMode(env)
     }
   };
   res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};`);

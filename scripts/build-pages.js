@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, PAGES, SITE_ASSETS, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-pages');
@@ -16,13 +16,13 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 // A staging oldal nem indexelhető, ezért nem kap Search Console igazolást.
 for (const page of PAGES) {
-  fs.writeFileSync(path.join(out, page), addVersion(fs.readFileSync(path.join(root, page), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', ''), version));
+  fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(fs.readFileSync(path.join(root, page), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', '')), version));
 }
 for (const file of SITE_ASSETS) fs.copyFileSync(path.join(root, file), path.join(out, file));
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }
-const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, turnstileSiteKey: TURNSTILE_SITE_KEY, company: { email: SUPPORT_EMAIL, stripeTestMode: false } };
+const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, turnstileSiteKey: TURNSTILE_SITE_KEY, company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: false } };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 // A teszt oldal ne kerüljön indexelésre, hogy ne versenyezzen az éles oldallal.
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nDisallow: /\n');

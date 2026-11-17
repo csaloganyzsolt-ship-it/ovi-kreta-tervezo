@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PRODUCTS } = require('./stripeService');
 
-const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL } = require('./siteConstants');
+const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
 
 function supportEmail(env = process.env) {
   return String(env.SUPPORT_EMAIL || '').trim() || DEFAULT_SUPPORT_EMAIL;
@@ -39,10 +39,20 @@ function today(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
-// Alapérték OVITE; a régi SZAMLA_PREFIX név is működik. Explicit üres SZAMLAZZ_PREFIX kikapcsolja az előtagot.
+// Alapértelmezetten nincs előtag: a Számlázz.hu alapértelmezett számlatömbje használatos.
 function invoicePrefix(env = process.env) {
-  const raw = env.SZAMLAZZ_PREFIX ?? env.SZAMLA_PREFIX;
-  return raw === undefined ? 'OVITE' : String(raw).trim();
+  return String(env.SZAMLAZZ_INVOICE_PREFIX ?? getBillingProfile(env).invoicePrefix).trim();
+}
+
+// ÁFA-kulcs: a profilé (AAM vagy 27), SZAMLAZZ_VAT_RATE felülírhatja.
+function vatRate(env = process.env) {
+  return String(env.SZAMLAZZ_VAT_RATE || getBillingProfile(env).vatRate).trim();
+}
+
+// Profilfüggő Agent kulcs; a közös SZAMLAZZ_API_KEY (és a régi SZAMLAZZ_KEY) tartalék.
+function szamlazzApiKey(env = process.env) {
+  const specific = getBillingProfile(env).type === 'kft' ? env.SZAMLAZZ_API_KEY_KFT : env.SZAMLAZZ_API_KEY_EV;
+  return String(specific || env.SZAMLAZZ_API_KEY || env.SZAMLAZZ_KEY || '').trim();
 }
 
 // Vevőbarát rendelésszám: OVI-ÉÉHHNN-<a Stripe azonosító utolsó 6 karaktere>. A teljes azonosító a Stripe-ban és a naplóban marad.
@@ -55,13 +65,13 @@ function orderNumber(orderId, created = new Date()) {
 function buildInvoiceXml({ customer, plan, orderId, created }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
-  const vatKey = String(env.SZAMLAZZ_AFA || '27').trim();
+  const vatKey = vatRate(env);
   const { net, vat } = splitGross(product.amountHuf, vatKey);
   const day = today(date);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
-    <szamlaagentkulcs>${escapeXml(env.SZAMLAZZ_KEY)}</szamlaagentkulcs>
+    <szamlaagentkulcs>${escapeXml(szamlazzApiKey(env))}</szamlaagentkulcs>
     <eszamla>true</eszamla>
     <szamlaLetoltes>true</szamlaLetoltes>
     <valaszVerzio>1</valaszVerzio>
@@ -156,11 +166,11 @@ async function issueInvoice(order, deps = {}) {
   const issued = readStore(env);
   if (issued[order.orderId]) return { duplicate: true, invoiceNumber: issued[order.orderId] };
 
-  if (!String(env.SZAMLAZZ_KEY || '').trim()) {
+  if (!szamlazzApiKey(env)) {
     if (env.NODE_ENV === 'production') {
-      throw new Error('A SZAMLAZZ_KEY nincs beállítva, a számla nem állítható ki.');
+      throw new Error('A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_EV / SZAMLAZZ_API_KEY_KFT / SZAMLAZZ_API_KEY), a számla nem állítható ki.');
     }
-    console.warn(`[Számlázz.hu mock] Számla nem készült (nincs SZAMLAZZ_KEY): ${order.orderId} → ${order.customer.email}`);
+    console.warn(`[Számlázz.hu mock] Számla nem készült (nincs Agent kulcs): ${order.orderId} → ${order.customer.email}`);
     return { mock: true };
   }
 
@@ -185,4 +195,4 @@ async function issueInvoice(order, deps = {}) {
   return { mock: false, sandbox: isSandbox(env), invoiceNumber };
 }
 
-module.exports = { orderNumber, invoicePrefix, storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { orderNumber, invoicePrefix, vatRate, szamlazzApiKey, storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };

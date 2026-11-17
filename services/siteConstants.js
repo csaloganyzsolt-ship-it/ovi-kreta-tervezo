@@ -26,7 +26,55 @@ const CONTENT_SECURITY_POLICY = [
   "frame-ancestors 'none'"
 ].join('; ');
 
+// Két előre definiált vállalkozói profil; a BILLING_PROFILE=kft kapcsol át, minden más érték (és az üres) az egyéni vállalkozót adja.
+const BILLING_PROFILES = Object.freeze({
+  ev: Object.freeze({
+    type: 'ev',
+    name: 'Csalogány Zsolt egyéni vállalkozó',
+    taxId: '68274568-1-28',
+    regLabel: 'EV nyilvántartási szám',
+    regNo: '51507048',
+    court: '',
+    address: '9153 Öttevény, Kossuth Lajos utca 26.',
+    vatRate: 'AAM',
+    vatNote: 'Alanyi adómentes (AAM) értékesítés, az árak 0 Ft ÁFÁ-t tartalmaznak.',
+    invoicePrefix: ''
+  }),
+  kft: Object.freeze({
+    type: 'kft',
+    name: 'CSB-Villamosság Kft.',
+    taxId: '27891788-2-08',
+    regLabel: 'Cégjegyzékszám',
+    regNo: '08 09 031727',
+    court: 'Győri Törvényszék Cégbírósága',
+    address: '9153 Öttevény, Arany János utca 10.',
+    vatRate: '27',
+    vatNote: 'Az árak magyar forintban (HUF) értendők, és tartalmazzák a 27%-os általános forgalmi adót (ÁFA).',
+    invoicePrefix: ''
+  })
+});
+
+function getBillingProfile(env = process.env) {
+  return BILLING_PROFILES[env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev'];
+}
+
+// A frontendnek átadott (nem titkos) cégadatok; a build scriptek és a /config.js is ezt használja.
+function publicCompany(env = process.env) {
+  const { type, name, taxId, regLabel, regNo, court, address, vatNote } = getBillingProfile(env);
+  return { type, name, taxId, regLabel, regNo, court, address, vatNote };
+}
+
+// A statikus HTML az ev profil nevét tartalmazza (JSON-LD, lábléc tartalék); kft profilnál a build ezt cseréli.
+function applyCompanyToHtml(html, env = process.env) {
+  const active = getBillingProfile(env);
+  return active.type === 'ev' ? html : html.split(BILLING_PROFILES.ev.name).join(active.name);
+}
+
 module.exports = {
+  applyCompanyToHtml,
+  BILLING_PROFILES,
+  getBillingProfile,
+  publicCompany,
   CONTENT_SECURITY_POLICY,
   PAGES,
   SITE_ASSETS,

@@ -1,5 +1,7 @@
 'use strict';
 
+const { getBillingProfile } = require('./siteConstants');
+
 // Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
 const PRODUCTS = Object.freeze({
   daily: Object.freeze({ key: 'daily', name: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
@@ -29,13 +31,26 @@ class PaymentError extends Error {
   }
 }
 
+// Profilfüggő kulcsok: BILLING_PROFILE szerint a *_EV / *_KFT változat, ennek hiányában a közös név.
+function profileSuffix(env) {
+  return getBillingProfile(env).type === 'kft' ? 'KFT' : 'EV';
+}
+
+function stripeSecretKey(env = process.env) {
+  return String(env[`STRIPE_SECRET_KEY_${profileSuffix(env)}`] || env.STRIPE_SECRET_KEY || '').trim();
+}
+
+function stripeWebhookSecret(env = process.env) {
+  return String(env[`STRIPE_WEBHOOK_SECRET_${profileSuffix(env)}`] || env.STRIPE_WEBHOOK_SECRET || '').trim();
+}
+
 function isLive(env = process.env) {
-  return Boolean(String(env.STRIPE_SECRET_KEY || '').trim());
+  return Boolean(stripeSecretKey(env));
 }
 
 // sk_test_ kulccsal a Stripe tesztmódban fut: nincs valódi terhelés.
 function isTestMode(env = process.env) {
-  return String(env.STRIPE_SECRET_KEY || '').trim().startsWith('sk_test_');
+  return stripeSecretKey(env).startsWith('sk_test_');
 }
 
 function isProduction(env = process.env) {
@@ -80,7 +95,7 @@ let cachedKey = '';
 
 function getClient(env = process.env, deps = {}) {
   if (deps.client) return deps.client;
-  const key = String(env.STRIPE_SECRET_KEY || '').trim();
+  const key = stripeSecretKey(env);
   if (!cachedClient || cachedKey !== key) {
     const Stripe = require('stripe');
     cachedClient = new Stripe(key);
@@ -154,7 +169,7 @@ async function retrieveCheckoutSession(sessionId, deps = {}) {
 
 function constructWebhookEvent(rawBody, signature, deps = {}) {
   const env = deps.env || process.env;
-  const secret = String(env.STRIPE_WEBHOOK_SECRET || '').trim();
+  const secret = stripeWebhookSecret(env);
   if (!isLive(env) || !secret) {
     throw new PaymentError('A Stripe webhook nincs beállítva (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET).', 503);
   }
@@ -166,7 +181,7 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
 }
 
 module.exports = {
-  PRODUCTS, PaymentError, MOCK_PREFIX, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
+  PRODUCTS, PaymentError, MOCK_PREFIX, stripeSecretKey, stripeWebhookSecret, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
   createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent,
   mockSessions, pruneMockSessions, MAX_MOCK_SESSIONS
 };
