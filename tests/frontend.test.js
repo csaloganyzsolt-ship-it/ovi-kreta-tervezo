@@ -528,38 +528,94 @@ test('planner page keeps the legal footer and checkout withdrawal note', async (
   assert.ok(doc.getElementById('consentTerms'));
 });
 
-test('load previous plan button toggles history panel and restores full plan to form', async (t) => {
+test('history panel displays detailed items, distinguishes paid vs draft, supports attach, load, download and delete', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
   const loadBtn = doc.getElementById('loadPreviousBtn');
   const panel = doc.getElementById('historyPanel');
   assert.ok(loadBtn);
   assert.ok(panel);
-  assert.equal(panel.classList.contains('open'), false);
 
+  // Toggle open
   loadBtn.click();
   assert.equal(panel.classList.contains('open'), true);
 
-  const savedPlan = makePayload({
-    theme: 'Mese és bábozás',
-    group: 'Középső csoport',
-    kindergartenName: 'Kerekerdő Óvoda',
-    focusAreas: ['Verselés, mesélés', 'Mozgás'],
-    weeklyAreaAssignments: { 'Verselés, mesélés': 'Hétfő', 'Mozgás': 'Kedd' }
+  // Create a draft item (generated, not paid)
+  const draftPayload = makePayload({
+    theme: 'Őszi falevelek',
+    duration: 'Napi',
+    kindergartenName: 'Minta Óvoda',
+    focusAreas: ['Mozgás']
   });
-  window.savePlanToHistory(savedPlan);
-  window.renderHistoryPanel();
+  window.savePlanToHistory(draftPayload, 'gen_draft1', false, null);
 
-  const historyItems = doc.querySelectorAll('.history-item');
-  assert.ok(historyItems.length >= 1);
+  // Create a paid item (with full planData)
+  const paidPayload = makePayload({
+    theme: 'Erdei állatok',
+    duration: 'Heti',
+    kindergartenName: 'Erdőszéli Óvoda',
+    focusAreas: ['Verselés, mesélés']
+  });
+  const mockPlan = { ...makePlan(5), request: paidPayload, generationId: 'gen_paid1' };
+  window.savePlanToHistory(paidPayload, 'gen_paid1', true, mockPlan);
 
-  historyItems[0].click();
+  // Check rendering
+  const cards = doc.querySelectorAll('.history-item-card');
+  assert.equal(cards.length, 2);
+
+  // The paid card (top item)
+  const paidCard = cards[0];
+  assert.match(paidCard.querySelector('.history-item-title').textContent, /Erdei állatok/);
+  assert.equal(paidCard.querySelector('.history-item-type').textContent, 'Heti');
+  assert.ok(paidCard.querySelector('.history-badge-paid'));
+  assert.equal(paidCard.querySelector('.history-badge-paid').textContent, 'Fizetve');
+  assert.ok(paidCard.querySelector('.btn-history-download'), 'Paid card must have download button');
+
+  // The draft card
+  const draftCard = cards[1];
+  assert.match(draftCard.querySelector('.history-item-title').textContent, /Őszi falevelek/);
+  assert.equal(draftCard.querySelector('.history-item-type').textContent, 'Napi');
+  assert.ok(draftCard.querySelector('.history-badge-draft'));
+  assert.equal(draftCard.querySelector('.history-badge-draft').textContent, 'Csak előnézet (piszkozat)');
+  assert.equal(draftCard.querySelector('.btn-history-download'), null, 'Draft card must NOT have download button');
+
+  // Test "Beállítások betöltése" on draft card
+  draftCard.querySelector('.btn-history-load').click();
+  assert.equal(doc.querySelector('input[data-field="theme"]').value, 'Őszi falevelek');
+  assert.equal(doc.querySelector('input[data-field="kindergarten-name"]').value, 'Minta Óvoda');
   assert.equal(panel.classList.contains('open'), false);
-  assert.equal(doc.querySelector('input[data-field="theme"]').value, 'Mese és bábozás');
-  assert.equal(doc.querySelector('select[data-field="group"]').value, 'Középső csoport');
-  assert.equal(doc.querySelector('input[data-field="kindergarten-name"]').value, 'Kerekerdő Óvoda');
-  assert.equal(doc.querySelector('input[data-focus-area="Verselés, mesélés"]').checked, true);
-  assert.equal(doc.querySelector('input[data-focus-area="Mozgás"]').checked, true);
+
+  // Test "Előzményként csatol" on paid card
+  loadBtn.click();
+  assert.equal(panel.classList.contains('open'), true);
+  const banner = doc.getElementById('attachedPlanBanner');
+  assert.equal(banner.hidden, true);
+
+  cards[0].querySelector('.btn-history-attach').click();
+  assert.equal(banner.hidden, false);
+  assert.match(doc.getElementById('attachedPlanText').textContent, /Csatolt előzmény: Erdei állatok \(Heti/);
+  assert.match(doc.getElementById('attachedPlanText').textContent, /az új tervezet épít rá, és elkerüli az ismétlődéseket/);
+
+  // Verify that payload gets previousPlanContext
+  const payloadWithContext = window.buildGenerationPayload();
+  assert.match(payloadWithContext.previousPlanContext, /Erdei állatok/);
+
+  // Remove attached predecessor
+  doc.getElementById('attachedPlanRemoveBtn').click();
+  assert.equal(banner.hidden, true);
+  assert.equal(window.buildGenerationPayload().previousPlanContext, '');
+
+  // Test "Letöltés" on paid card
+  loadBtn.click();
+  cards[0].querySelector('.btn-history-download').click();
+  assert.equal(window.lastResult.theme, mockPlan.theme);
+  assert.equal(window.isPlanLocked(), false);
+
+  // Test "Törlés" on history item
+  loadBtn.click();
+  assert.equal(doc.querySelectorAll('.history-item-card').length, 2);
+  cards[1].querySelector('.btn-history-delete').click();
+  assert.equal(doc.querySelectorAll('.history-item-card').length, 1);
 });
 
 test('weekly day picker toggles days, keeps at least one and feeds payload and summary', async (t) => {

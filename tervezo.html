@@ -58,6 +58,14 @@
               <button class="btn" id="restoreLastBtn" type="button">Visszatöltés</button>
             </div>
 
+            <div class="attached-plan-banner" id="attachedPlanBanner" hidden>
+              <div class="attached-plan-content">
+                <span class="attached-plan-badge">Csatolt előzmény</span>
+                <span class="attached-plan-text" id="attachedPlanText"></span>
+              </div>
+              <button type="button" class="attached-plan-remove" id="attachedPlanRemoveBtn" aria-label="Előzmény eltávolítása">×</button>
+            </div>
+
             <div class="field-grid">
               <div class="field full" style="margin-bottom: 4px;">
                 <button id="clearDraftBtn" class="btn secondary" type="button" title="Minden beírt adat és mentett piszkozat törlése">Beírt adatok törlése (Új tervezet indítása)</button>
@@ -455,6 +463,7 @@
             </div>
           </div>
 
+          <div id="turnstileContainer" class="turnstile-container" hidden></div>
           <div class="footer-actions">
             <button class="btn secondary" id="backBtn" type="button">Vissza</button>
             <button class="btn primary" id="nextBtn" type="button">Következő lépés</button>
@@ -1607,6 +1616,7 @@
         }
         validateGeneratedPlan(data);
         lastResult = data;
+        window.lastResult = lastResult;
         syncActivitiesControl();
         const request = data.request || buildGenerationPayload();
         const list = getDocumentList(data);
@@ -1788,6 +1798,9 @@
         updateWizardProgress();
         backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
         nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
+        if (currentStep === 3) {
+          initTurnstile();
+        }
         renderPreview();
         updateExportLock();
         persistDraftState();
@@ -1946,6 +1959,235 @@
         updateSummary();
       }
 
+      let attachedPreviousPlan = null;
+
+      function formatHistoryDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return String(dateStr);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const h = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${y}. ${m}. ${day}. ${h}:${min}`;
+      }
+
+      function setAttachedPreviousPlan(item) {
+        if (!item) return;
+        attachedPreviousPlan = {
+          id: item.id || item.generationId,
+          generationId: item.generationId,
+          theme: item.theme || item.payload?.theme || 'Cím nélküli tervezet',
+          duration: item.duration || item.payload?.duration || 'Napi',
+          date: formatHistoryDate(item.savedAt),
+          payload: item.payload || item
+        };
+        const banner = document.getElementById('attachedPlanBanner');
+        const textEl = document.getElementById('attachedPlanText');
+        if (banner && textEl) {
+          textEl.textContent = `Csatolt előzmény: ${attachedPreviousPlan.theme} (${attachedPreviousPlan.duration}, ${attachedPreviousPlan.date}) – az új tervezet épít rá, és elkerüli az ismétlődéseket.`;
+          banner.hidden = false;
+        }
+        historyPanel?.classList.remove('open');
+      }
+
+      function clearAttachedPreviousPlan() {
+        attachedPreviousPlan = null;
+        const banner = document.getElementById('attachedPlanBanner');
+        if (banner) banner.hidden = true;
+      }
+
+      function formatPreviousPlanContext(attached) {
+        if (!attached) return '';
+        const p = attached.payload || {};
+        const parts = [
+          `Téma: ${attached.theme}`,
+          `Típus: ${attached.duration}`,
+          attached.date ? `Dátum: ${attached.date}` : '',
+          p.focusAreas?.length ? `Nevelési terület: ${p.focusAreas.join(', ')}` : '',
+          p.selectedGoals?.length ? `Célok: ${p.selectedGoals.join(', ')}` : '',
+          p.availableTools ? `Eszközök: ${p.availableTools}` : ''
+        ].filter(Boolean);
+        return parts.join(' • ');
+      }
+
+      let turnstileWidgetId = null;
+      let currentTurnstileToken = '';
+
+      function getTurnstileSiteKey() {
+        return String(window.OVITERVEZO_CONFIG?.turnstileSiteKey || window.APP_CONFIG?.turnstileSiteKey || '').trim();
+      }
+
+      function initTurnstile() {
+        const container = document.getElementById('turnstileContainer');
+        if (!container) return;
+        const siteKey = getTurnstileSiteKey();
+        if (!siteKey) {
+          container.hidden = true;
+          return;
+        }
+        container.hidden = false;
+
+        if (!window.turnstile) {
+          if (!document.getElementById('turnstileScript')) {
+            const script = document.createElement('script');
+            script.id = 'turnstileScript';
+            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+            script.async = true;
+            script.defer = true;
+            script.onload = () => {
+              renderTurnstileWidget(siteKey);
+            };
+            document.head.appendChild(script);
+          }
+        } else {
+          renderTurnstileWidget(siteKey);
+        }
+      }
+
+      function renderTurnstileWidget(siteKey) {
+        const container = document.getElementById('turnstileContainer');
+        if (!container || !window.turnstile || turnstileWidgetId !== null) return;
+        try {
+          turnstileWidgetId = window.turnstile.render('#turnstileContainer', {
+            sitekey: siteKey,
+            theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+            callback: (token) => {
+              currentTurnstileToken = token;
+            },
+            'expired-callback': () => {
+              currentTurnstileToken = '';
+            },
+            'error-callback': () => {
+              currentTurnstileToken = '';
+            }
+          });
+        } catch (err) {
+          console.warn('Turnstile render warning:', err);
+        }
+      }
+
+      function restorePlanSettings(plan) {
+        if (!plan || typeof plan !== 'object') return;
+        if (plan.theme) {
+          const themeInput = document.querySelector('input[data-field="theme"]');
+          if (themeInput) themeInput.value = plan.theme;
+        }
+        if (plan.group) {
+          const groupSelect = document.querySelector('select[data-field="group"]');
+          if (groupSelect) groupSelect.value = plan.group;
+        }
+        if (plan.tevekenysegForma) {
+          const formaSelect = document.querySelector('select[data-field="tevekenyseg-forma"]');
+          if (formaSelect) formaSelect.value = plan.tevekenysegForma;
+        }
+        if (plan.kindergartenName) {
+          const input = document.querySelector('input[data-field="kindergarten-name"]');
+          if (input) input.value = plan.kindergartenName;
+        }
+        if (plan.kindergartenProfile) {
+          const input = document.querySelector('input[data-field="kindergarten-profile"]');
+          if (input) input.value = plan.kindergartenProfile;
+        }
+        if (plan.teacherName) {
+          const input = document.querySelector('input[data-field="teacher-name"]');
+          if (input) input.value = plan.teacherName;
+        }
+        if (plan.groupName) {
+          const input = document.querySelector('input[data-field="group-name"]');
+          if (input) input.value = plan.groupName;
+        }
+        if (plan.customNote) {
+          const input = document.querySelector('textarea[data-field="custom-note"]');
+          if (input) input.value = plan.customNote;
+        }
+        const groupNoteVal = plan.customNotes?.groupNote ?? plan.groupNote;
+        if (groupNoteVal !== undefined) {
+          const input = document.querySelector('textarea[data-field="group-note"]');
+          if (input) input.value = groupNoteVal;
+        }
+        const reqTextVal = plan.customNotes?.requiredText ?? plan.requiredText;
+        if (reqTextVal !== undefined) {
+          const input = document.querySelector('textarea[data-field="required-text"]');
+          if (input) input.value = reqTextVal;
+        }
+        const toolsVal = plan.availableTools || [plan.customNotes?.ideaNote, plan.ideaNote].filter(Boolean).join('; ');
+        if (toolsVal) {
+          const input = document.querySelector('textarea[data-field="available-tools"]');
+          if (input) input.value = toolsVal;
+        }
+        const customReqVal = plan.customNotes?.customRequest ?? plan.customRequest;
+        if (customReqVal !== undefined) {
+          const input = document.querySelector('textarea[data-field="custom-request"]');
+          if (input) input.value = customReqVal;
+        }
+        if (plan.childCount !== undefined && plan.childCount !== null) {
+          const countInput = document.querySelector('input[data-field="child-count"]');
+          if (countInput) countInput.value = plan.childCount;
+        }
+        if (plan.energyLevel) setChoice('energy', plan.energyLevel, ENERGY_DEFAULT);
+        if (plan.detail) setChoice('detail', plan.detail, 'detailed');
+        if (plan.hasPreschoolers !== undefined) {
+          const pres = document.querySelector('input[data-field="has-preschoolers"]');
+          if (pres) pres.checked = Boolean(plan.hasPreschoolers);
+        }
+        if (plan.blacklist) {
+          const bl = document.querySelector('input[data-field="blacklist"]');
+          if (bl) bl.value = plan.blacklist;
+        }
+        if (plan.elozmeny) {
+          const el = document.querySelector('textarea[data-field="elozmeny"]');
+          if (el) el.value = plan.elozmeny;
+        }
+
+        const areas = Array.isArray(plan.focusAreas) ? plan.focusAreas : [];
+        document.querySelectorAll('input[data-focus-area]').forEach((cb) => {
+          cb.checked = areas.includes(cb.dataset.focusArea);
+        });
+
+        if (plan.weeklyAreaAssignments && typeof plan.weeklyAreaAssignments === 'object') {
+          Object.entries(plan.weeklyAreaAssignments).forEach(([area, day]) => {
+            const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
+            if (select) select.value = day || 'any';
+          });
+        } else if (plan.weeklyFocusAreas && typeof plan.weeklyFocusAreas === 'object') {
+          Object.entries(plan.weeklyFocusAreas).forEach(([day, dayAreas]) => {
+            (Array.isArray(dayAreas) ? dayAreas : [dayAreas]).forEach((area) => {
+              const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
+              if (select) select.value = day;
+            });
+          });
+        }
+
+        const sniList = Array.isArray(plan.specialNeeds) ? plan.specialNeeds : (Array.isArray(plan.customNotes?.specialNeeds) ? plan.customNotes.specialNeeds : []);
+        document.querySelectorAll('[data-sni-label]').forEach((cb) => {
+          cb.checked = sniList.includes(cb.dataset.sniLabel.trim());
+        });
+
+        const goals = Array.isArray(plan.selectedGoals) ? plan.selectedGoals : [];
+        document.querySelectorAll('.chip:not([data-theme-option])').forEach((chip) => {
+          chip.classList.toggle('active', goals.includes(chip.textContent.trim()));
+        });
+
+        const duration = plan.duration || 'Napi';
+        document.querySelectorAll('.segment[data-group="duration"]').forEach((segment) => {
+          segment.classList.toggle('active', segment.dataset.value === duration);
+        });
+        if (Array.isArray(plan.selectedDays)) setSelectedDays(plan.selectedDays);
+
+        updateDateInputsForDuration();
+        const dateInput = document.querySelector(duration === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
+        if (dateInput && plan.dateValue) dateInput.value = plan.dateValue;
+
+        updateWeeklyDailyBreakdownVisibility();
+        updateFocusAreaDayRows();
+        syncAdvancedSettingsOpenState();
+        saveProfileToStorage();
+        updateSummary();
+        persistDraftState();
+      }
+
       function loadHistoryFromStorage() {
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || '[]');
@@ -1956,151 +2198,165 @@
         }
       }
 
-      function savePlanToHistory(payload) {
+      function savePlanToHistory(payload, generationId = '', paid = false, planData = null) {
+        if (!payload || typeof payload !== 'object') return;
         const plans = loadHistoryFromStorage();
-        const sanitized = { ...payload, savedAt: new Date().toISOString() };
-        const nextPlans = [sanitized, ...plans].slice(0, 10);
-        localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(nextPlans));
+        const id = generationId || `hist_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        const theme = String(payload.theme || payload.heti_keretterv?.tema || 'Cím nélküli tervezet').trim();
+        const duration = payload.duration === 'Heti' ? 'Heti' : 'Napi';
+
+        const existingIndex = plans.findIndex((p) => (generationId && (p.generationId === generationId || p.id === generationId)) || (p.id && p.id === id));
+        const savedAt = existingIndex >= 0 && plans[existingIndex].savedAt ? plans[existingIndex].savedAt : new Date().toISOString();
+        const status = paid ? 'paid' : (existingIndex >= 0 && plans[existingIndex].status === 'paid' ? 'paid' : 'draft');
+        const finalPaid = status === 'paid';
+        const finalPlanData = finalPaid ? (planData || (existingIndex >= 0 ? plans[existingIndex].planData : null)) : null;
+
+        const newEntry = {
+          id,
+          generationId: generationId || id,
+          theme,
+          duration,
+          savedAt,
+          status,
+          paid: finalPaid,
+          payload,
+          planData: finalPlanData
+        };
+
+        if (existingIndex >= 0) {
+          plans[existingIndex] = newEntry;
+        } else {
+          plans.unshift(newEntry);
+        }
+
+        const limited = plans.slice(0, 15);
+        try {
+          localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(limited));
+        } catch (err) {
+          console.warn('History save warning:', err);
+        }
+        renderHistoryPanel();
+      }
+
+      function deletePlanFromHistory(id) {
+        const plans = loadHistoryFromStorage().filter((p) => p.id !== id && p.generationId !== id);
+        try {
+          localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(plans));
+        } catch (err) {
+          console.warn('History delete warning:', err);
+        }
+        if (attachedPreviousPlan && (attachedPreviousPlan.id === id || attachedPreviousPlan.generationId === id)) {
+          clearAttachedPreviousPlan();
+        }
+        renderHistoryPanel();
+      }
+
+      function markPlanAsPaidInHistory(generationId, planData) {
+        if (!generationId) return;
+        const plans = loadHistoryFromStorage();
+        let updated = false;
+        for (let i = 0; i < plans.length; i++) {
+          if (plans[i].generationId === generationId || plans[i].id === generationId) {
+            plans[i].status = 'paid';
+            plans[i].paid = true;
+            plans[i].planData = planData;
+            updated = true;
+            break;
+          }
+        }
+        if (!updated && planData) {
+          savePlanToHistory(planData.request || buildGenerationPayload(), generationId, true, planData);
+          return;
+        }
+        try {
+          localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(plans));
+        } catch (err) {
+          console.warn('History update warning:', err);
+        }
+        renderHistoryPanel();
       }
 
       function renderHistoryPanel() {
         const history = loadHistoryFromStorage();
-        const historyButtons = Array.from(document.querySelectorAll('.history-item'));
-        historyButtons.forEach((button) => button.remove());
+        if (!historyPanel) return;
+        historyPanel.innerHTML = '';
 
         if (history.length === 0) {
           historyPanel.innerHTML = '<div class="history-item" style="pointer-events:none; opacity:0.7;">Még nincs mentett terv.</div>';
           return;
         }
 
-        history.forEach((plan) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'history-item';
-          button.dataset.theme = plan.theme || 'Téma';
-          button.dataset.text = plan.customNote || 'Korábbi terv';
-          button.textContent = `${plan.theme || 'Téma'} – mentett terv`;
-          button.addEventListener('click', () => {
-            if (plan.theme) {
-              const themeInput = document.querySelector('input[data-field="theme"]');
-              if (themeInput) themeInput.value = plan.theme;
-            }
-            if (plan.group) {
-              const groupSelect = document.querySelector('select[data-field="group"]');
-              if (groupSelect) groupSelect.value = plan.group;
-            }
-            if (plan.tevekenysegForma) {
-              const formaSelect = document.querySelector('select[data-field="tevekenyseg-forma"]');
-              if (formaSelect) formaSelect.value = plan.tevekenysegForma;
-            }
-            if (plan.kindergartenName) {
-              const input = document.querySelector('input[data-field="kindergarten-name"]');
-              if (input) input.value = plan.kindergartenName;
-            }
-            if (plan.kindergartenProfile) {
-              const input = document.querySelector('input[data-field="kindergarten-profile"]');
-              if (input) input.value = plan.kindergartenProfile;
-            }
-            if (plan.teacherName) {
-              const input = document.querySelector('input[data-field="teacher-name"]');
-              if (input) input.value = plan.teacherName;
-            }
-            if (plan.groupName) {
-              const input = document.querySelector('input[data-field="group-name"]');
-              if (input) input.value = plan.groupName;
-            }
-            if (plan.customNote) {
-              const input = document.querySelector('textarea[data-field="custom-note"]');
-              if (input) input.value = plan.customNote;
-            }
-            const groupNoteVal = plan.customNotes?.groupNote ?? plan.groupNote;
-            if (groupNoteVal !== undefined) {
-              const input = document.querySelector('textarea[data-field="group-note"]');
-              if (input) input.value = groupNoteVal;
-            }
-            const reqTextVal = plan.customNotes?.requiredText ?? plan.requiredText;
-            if (reqTextVal !== undefined) {
-              const input = document.querySelector('textarea[data-field="required-text"]');
-              if (input) input.value = reqTextVal;
-            }
-            const toolsVal = plan.availableTools || [plan.customNotes?.ideaNote, plan.ideaNote].filter(Boolean).join('; ');
-            if (toolsVal) {
-              const input = document.querySelector('textarea[data-field="available-tools"]');
-              if (input) input.value = toolsVal;
-            }
-            const customReqVal = plan.customNotes?.customRequest ?? plan.customRequest;
-            if (customReqVal !== undefined) {
-              const input = document.querySelector('textarea[data-field="custom-request"]');
-              if (input) input.value = customReqVal;
-            }
-            if (plan.childCount !== undefined && plan.childCount !== null) {
-              const countInput = document.querySelector('input[data-field="child-count"]');
-              if (countInput) countInput.value = plan.childCount;
-            }
-            if (plan.energyLevel) setChoice('energy', plan.energyLevel, ENERGY_DEFAULT);
-            if (plan.detail) setChoice('detail', plan.detail, 'detailed');
-            if (plan.hasPreschoolers !== undefined) {
-              const pres = document.querySelector('input[data-field="has-preschoolers"]');
-              if (pres) pres.checked = Boolean(plan.hasPreschoolers);
-            }
-            if (plan.blacklist) {
-              const bl = document.querySelector('input[data-field="blacklist"]');
-              if (bl) bl.value = plan.blacklist;
-            }
-            if (plan.elozmeny) {
-              const el = document.querySelector('textarea[data-field="elozmeny"]');
-              if (el) el.value = plan.elozmeny;
-            }
+        history.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'history-item-card';
+          card.dataset.historyId = item.id || item.generationId;
 
-            const areas = Array.isArray(plan.focusAreas) ? plan.focusAreas : [];
-            document.querySelectorAll('input[data-focus-area]').forEach((cb) => {
-              cb.checked = areas.includes(cb.dataset.focusArea);
-            });
+          const isPaid = item.status === 'paid' || item.paid === true;
+          const durationLabel = item.duration === 'Heti' ? 'Heti' : 'Napi';
+          const themeTitle = item.theme || item.payload?.theme || 'Cím nélküli tervezet';
+          const dateFormatted = formatHistoryDate(item.savedAt);
 
-            if (plan.weeklyAreaAssignments && typeof plan.weeklyAreaAssignments === 'object') {
-              Object.entries(plan.weeklyAreaAssignments).forEach(([area, day]) => {
-                const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
-                if (select) select.value = day || 'any';
-              });
-            } else if (plan.weeklyFocusAreas && typeof plan.weeklyFocusAreas === 'object') {
-              Object.entries(plan.weeklyFocusAreas).forEach(([day, dayAreas]) => {
-                (Array.isArray(dayAreas) ? dayAreas : [dayAreas]).forEach((area) => {
-                  const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
-                  if (select) select.value = day;
-                });
-              });
-            }
+          card.innerHTML = `
+            <div class="history-item-header">
+              <div class="history-item-title-row">
+                <strong class="history-item-title">${escapeHtml(themeTitle)}</strong>
+                <span class="history-item-type">${escapeHtml(durationLabel)}</span>
+              </div>
+              <div class="history-item-meta">
+                <span class="history-item-date">${escapeHtml(dateFormatted)}</span>
+                ${isPaid
+                  ? '<span class="history-badge history-badge-paid">Fizetve</span>'
+                  : '<span class="history-badge history-badge-draft">Csak előnézet (piszkozat)</span>'}
+              </div>
+            </div>
+            <div class="history-item-actions">
+              <button type="button" class="btn-history btn-history-load" data-action="load">Beállítások betöltése</button>
+              <button type="button" class="btn-history btn-history-attach" data-action="attach">Előzményként csatol</button>
+              ${isPaid && item.planData
+                ? '<button type="button" class="btn-history btn-history-download" data-action="download">Letöltés</button>'
+                : ''}
+              <button type="button" class="btn-history btn-history-delete" data-action="delete" title="Törlés">Törlés</button>
+            </div>
+          `;
 
-            const sniList = Array.isArray(plan.specialNeeds) ? plan.specialNeeds : (Array.isArray(plan.customNotes?.specialNeeds) ? plan.customNotes.specialNeeds : []);
-            document.querySelectorAll('[data-sni-label]').forEach((cb) => {
-              cb.checked = sniList.includes(cb.dataset.sniLabel.trim());
-            });
-
-            const goals = Array.isArray(plan.selectedGoals) ? plan.selectedGoals : [];
-            document.querySelectorAll('.chip:not([data-theme-option])').forEach((chip) => {
-              chip.classList.toggle('active', goals.includes(chip.textContent.trim()));
-            });
-
-            const duration = plan.duration || 'Napi';
-            document.querySelectorAll('.segment[data-group="duration"]').forEach((segment) => {
-              segment.classList.toggle('active', segment.dataset.value === duration);
-            });
-            if (Array.isArray(plan.selectedDays)) setSelectedDays(plan.selectedDays);
-
-            updateDateInputsForDuration();
-            const dateInput = document.querySelector(duration === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
-            if (dateInput && plan.dateValue) dateInput.value = plan.dateValue;
-
-            updateWeeklyDailyBreakdownVisibility();
-            updateFocusAreaDayRows();
-            syncAdvancedSettingsOpenState();
-            saveProfileToStorage();
-            updateSummary();
-            persistDraftState();
+          card.querySelector('.btn-history-load')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            restorePlanSettings(item.payload || item);
             historyPanel.classList.remove('open');
           });
 
-          historyPanel.appendChild(button);
+          card.querySelector('.btn-history-attach')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setAttachedPreviousPlan(item);
+          });
+
+          card.querySelector('.btn-history-download')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (item.planData) {
+              const genId = item.generationId || item.id;
+              unlockGeneration(genId);
+              lastResult = { ...item.planData, request: item.payload || item.planData.request, generationId: genId };
+              window.lastResult = lastResult;
+              try {
+                localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
+              } catch (_err) {}
+              previewReady = true;
+              currentStep = steps.length - 1;
+              renderStep();
+              renderResultDocument(lastResult);
+              renderPreview();
+              updateExportLock();
+              historyPanel.classList.remove('open');
+              document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+
+          card.querySelector('.btn-history-delete')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deletePlanFromHistory(item.id || item.generationId);
+          });
+
+          historyPanel.appendChild(card);
         });
       }
 
@@ -2600,7 +2856,9 @@
           focusAreas,
           weeklyFocusAreas,
           weeklyAreaAssignments,
+          previousPlanContext: attachedPreviousPlan ? formatPreviousPlanContext(attachedPreviousPlan) : '',
           contact_website: document.getElementById('contact_website')?.value || '',
+          turnstileToken: currentTurnstileToken || '',
           customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
           customNotes: getCustomNotes(),
           detailLevel: getDetailLevel(),
@@ -2728,7 +2986,7 @@
             if (previewEl) previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }, 150);
           try {
-            savePlanToHistory(payload);
+            savePlanToHistory(payload, generatedResult.generationId, false, null);
             renderHistoryPanel();
           } catch (storageError) {
             console.warn('A sikeres terv előzményként nem menthető:', storageError);
@@ -2738,6 +2996,10 @@
           const message = error?.message || 'A generálás hiba miatt nem tudott lefutni.';
           showGenerationError(message === LIMIT_MESSAGE ? message : `Generálási hiba: ${message}`);
         } finally {
+          if (window.turnstile && turnstileWidgetId !== null) {
+            try { window.turnstile.reset(turnstileWidgetId); } catch (_e) {}
+            currentTurnstileToken = '';
+          }
           stopLoader();
           refreshRestoreBanner();
           nextBtn.disabled = false;
@@ -3080,6 +3342,9 @@
             try {
               localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
             } catch (_e) {}
+            markPlanAsPaidInHistory(pending, data.planData);
+          } else if (lastResult) {
+            markPlanAsPaidInHistory(pending, lastResult);
           }
           if (lastResult) {
             currentStep = steps.length - 1;
@@ -3208,6 +3473,7 @@
         });
         document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
         document.getElementById('downloadInvoiceBtn').addEventListener('click', downloadInvoice);
+        document.getElementById('attachedPlanRemoveBtn')?.addEventListener('click', clearAttachedPreviousPlan);
         loadPreviousBtn?.addEventListener('click', (e) => {
           e.stopPropagation();
           historyPanel?.classList.toggle('open');

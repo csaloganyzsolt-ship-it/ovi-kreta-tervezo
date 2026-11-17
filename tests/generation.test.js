@@ -514,3 +514,66 @@ test('verifyTurnstileToken allows request if TURNSTILE_SECRET_KEY is not set and
   assert.match(sentBody, /secret=my-cf-secret/);
   assert.match(sentBody, /response=valid-token/);
 });
+
+test('getClientIp prioritizes headers correctly (cf-connecting-ip > x-forwarded-for first IP > req.ip > socket)', () => {
+  const { getClientIp } = require('../server');
+
+  // cf-connecting-ip priority
+  assert.equal(getClientIp({
+    headers: {
+      'cf-connecting-ip': '203.0.113.195',
+      'x-forwarded-for': '198.51.100.10, 10.0.0.1'
+    },
+    ip: '10.0.0.1',
+    socket: { remoteAddress: '10.0.0.1' }
+  }), '203.0.113.195');
+
+  // x-forwarded-for first IP extraction
+  assert.equal(getClientIp({
+    headers: {
+      'x-forwarded-for': ' 198.51.100.42 , 10.0.0.2, 172.16.0.1'
+    },
+    ip: '10.0.0.2',
+    socket: { remoteAddress: '10.0.0.2' }
+  }), '198.51.100.42');
+
+  // req.ip fallback
+  assert.equal(getClientIp({
+    headers: {},
+    ip: '192.0.2.1',
+    socket: { remoteAddress: '10.0.0.3' }
+  }), '192.0.2.1');
+
+  // socket fallback
+  assert.equal(getClientIp({
+    headers: {},
+    socket: { remoteAddress: '192.0.2.2' }
+  }), '192.0.2.2');
+
+  // fallback unknown
+  assert.equal(getClientIp(null), 'unknown');
+  assert.equal(getClientIp({}), 'unknown');
+});
+
+test('previousPlanContext enters the prompt and instructs avoiding repetitions', () => {
+  const { buildPrompt } = require('../server');
+  const contextText = 'Csatolt előzmény: Falevelek gyűjtése (Napi, 2026. 11. 10. 09:00). Célok: megfigyelés. Eszközök: nagyító.';
+  const payload = makePayload({
+    previousPlanContext: contextText
+  });
+  const prompt = buildPrompt(payload);
+
+  assert.match(prompt, /PEDAGÓGIAI ELŐZMÉNY ÉS ISMÉTLŐDÉSEK ELKERÜLÉSE/);
+  assert.match(prompt, /Falevelek gyűjtése/);
+  assert.match(prompt, /SZIGORÚAN KERÜLD a fenti előzményben szereplő konkrét mesék, versek, mondókák/);
+
+  // Weekly prompt check as well
+  const weeklyPayload = makePayload({
+    duration: 'Heti',
+    includeDailyBreakdown: true,
+    previousPlanContext: contextText
+  });
+  const weeklyPrompt = buildPrompt(weeklyPayload);
+  assert.match(weeklyPrompt, /PEDAGÓGIAI ELŐZMÉNY ÉS ISMÉTLŐDÉSEK ELKERÜLÉSE/);
+  assert.match(weeklyPrompt, /Falevelek gyűjtése/);
+});
