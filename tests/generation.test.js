@@ -597,3 +597,37 @@ test('previousPlanContext enters the prompt and instructs avoiding repetitions',
   assert.match(weeklyPrompt, /PEDAGÓGIAI ELŐZMÉNY ÉS ISMÉTLŐDÉSEK ELKERÜLÉSE/);
   assert.match(weeklyPrompt, /Falevelek gyűjtése/);
 });
+
+function weeklyPrompt(overrides) {
+  return buildPrompt(makePayload({
+    duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true,
+    selectedDays: ['Hétfő', 'Kedd', 'Szerda'],
+    focusAreas: ['Mozgás', 'Verselés, mesélés', 'Rajzolás'],
+    ...overrides
+  }));
+}
+
+test('weekly focus areas assigned to a day are not repeated in the general distribution list', () => {
+  const prompt = weeklyPrompt({ weeklyFocusAreas: { 'Hétfő': ['Mozgás'] } });
+  assert.match(prompt, /- Hétfő: Mozgás/);
+  const rest = prompt.match(/A többi napra a kiválasztott további területeket \(([^)]*)\)/);
+  assert.ok(rest, 'the remaining-areas sentence is missing');
+  assert.equal(rest[1], 'Verselés, mesélés, Rajzolás');
+});
+
+test('weekly focus rule omits the remaining-areas sentence when every area is assigned', () => {
+  const prompt = weeklyPrompt({
+    focusAreas: ['Mozgás', 'Rajzolás'],
+    weeklyFocusAreas: { 'Hétfő': ['Mozgás'], 'Kedd': ['Rajzolás'] }
+  });
+  assert.match(prompt, /- Kedd: Rajzolás/);
+  assert.doesNotMatch(prompt, /A többi napra/);
+});
+
+test('an area assigned only to an unselected day stays in the general list', () => {
+  const prompt = weeklyPrompt({
+    focusAreas: ['Mozgás', 'Rajzolás'],
+    weeklyFocusAreas: { 'Hétfő': ['Mozgás'], 'Péntek': ['Rajzolás'] }
+  });
+  assert.match(prompt, /A többi napra a kiválasztott további területeket \(Rajzolás\)/);
+});

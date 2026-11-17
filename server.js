@@ -234,15 +234,22 @@ function isWeeklyBreakdown(payload = {}) {
 
 function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays, focusAreas = []) {
   const specificLines = [];
+  const assignedAreas = [];
+  const assignedTexts = [];
   if (weeklyFocusAreas && typeof weeklyFocusAreas === 'object') {
     selectedDays.forEach((day) => {
       const raw = weeklyFocusAreas[day];
       const areas = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw.trim() : '');
-      if (areas) specificLines.push(`- ${day}: ${areas}`);
+      if (!areas) return;
+      specificLines.push(`- ${day}: ${areas}`);
+      if (Array.isArray(raw)) assignedAreas.push(...raw);
+      else assignedTexts.push(areas);
     });
   }
 
-  const generalAreas = Array.isArray(focusAreas) ? focusAreas.filter(Boolean) : [];
+  // Egy konkrét naphoz rendelt terület nem kerülhet az általános elosztási listába is.
+  const isAssigned = (area) => assignedAreas.includes(area) || assignedTexts.some((text) => text.includes(area));
+  const generalAreas = Array.isArray(focusAreas) ? focusAreas.filter((area) => area && !isAssigned(area)) : [];
 
   if (specificLines.length > 0) {
     return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${specificLines.join('\n')}\nKötelező szabály: az egyes napok (napok tömb elemei) tevékenységformája, céljai és a kidolgozás táblázatának feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' mezőben pontosan ezeknek a területeknek kell szerepelniük az adott napoknál.${generalAreas.length ? ` A többi napra a kiválasztott további területeket (${generalAreas.join(', ')}) kiegyensúlyozottan oszd el.` : ''}`;
