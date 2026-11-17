@@ -277,3 +277,113 @@ test('site.js carries no hard-coded company data besides the ev fallback that mi
 test('ertekeles.html loads the shared site script for the company-aware legal texts', () => {
   assert.match(fs.readFileSync(path.join(ROOT, 'ertekeles.html'), 'utf8'), /<script src="site\.js"><\/script>/);
 });
+
+const ALL_KEYS = {
+  STRIPE_PUBLISHABLE_KEY_EV: 'pk_ev', STRIPE_SECRET_KEY_EV: 'sk_ev', STRIPE_WEBHOOK_SECRET_EV: 'wh_ev', SZAMLAZZ_API_KEY_EV: 'sz_ev',
+  STRIPE_PUBLISHABLE_KEY_KFT: 'pk_kft', STRIPE_SECRET_KEY_KFT: 'sk_kft', STRIPE_WEBHOOK_SECRET_KFT: 'wh_kft', SZAMLAZZ_API_KEY_KFT: 'sz_kft'
+};
+
+test('each profile reads only its own keys when both sets are present', () => {
+  for (const [profile, suffix] of [['ev', 'ev'], ['kft', 'kft']]) {
+    const env = { ...ALL_KEYS, BILLING_PROFILE: profile };
+    assert.equal(stripeService.stripePublishableKey(env), `pk_${suffix}`);
+    assert.equal(stripeService.stripeSecretKey(env), `sk_${suffix}`);
+    assert.equal(stripeService.stripeWebhookSecret(env), `wh_${suffix}`);
+    assert.equal(invoiceService.szamlazzApiKey(env), `sz_${suffix}`);
+  }
+});
+
+test('a missing profile key never falls back to the other profile key', () => {
+  const onlyKft = Object.fromEntries(Object.entries(ALL_KEYS).filter(([key]) => key.endsWith('_KFT')));
+  const onlyEv = Object.fromEntries(Object.entries(ALL_KEYS).filter(([key]) => key.endsWith('_EV')));
+  for (const [env, active] of [[{ ...onlyKft }, 'ev'], [{ ...onlyEv, BILLING_PROFILE: 'kft' }, 'kft']]) {
+    const effective = { ...env, BILLING_PROFILE: active === 'kft' ? 'kft' : undefined };
+    assert.equal(stripeService.stripePublishableKey(effective), '');
+    assert.equal(stripeService.stripeSecretKey(effective), '');
+    assert.equal(stripeService.stripeWebhookSecret(effective), '');
+    assert.equal(invoiceService.szamlazzApiKey(effective), '');
+    assert.equal(stripeService.isLive(effective), false);
+  }
+});
+
+test('the shared keys are the only fallback, including the publishable key', () => {
+  const shared = { STRIPE_PUBLISHABLE_KEY: 'pk_shared', STRIPE_SECRET_KEY: 'sk_shared', STRIPE_WEBHOOK_SECRET: 'wh_shared', SZAMLAZZ_API_KEY: 'sz_shared' };
+  for (const profile of ['ev', 'kft']) {
+    const env = { ...shared, BILLING_PROFILE: profile };
+    assert.equal(stripeService.stripePublishableKey(env), 'pk_shared');
+    assert.equal(stripeService.stripeSecretKey(env), 'sk_shared');
+    assert.equal(stripeService.stripeWebhookSecret(env), 'wh_shared');
+    assert.equal(invoiceService.szamlazzApiKey(env), 'sz_shared');
+  }
+});
+
+test('a missing key in production gives a clear error naming the active profile and never uses the other key', async () => {
+  const env = { NODE_ENV: 'production', STRIPE_SECRET_KEY_KFT: 'sk_live_kft', SZAMLAZZ_API_KEY_KFT: 'sz_kft' };
+  await assert.rejects(
+    stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env }),
+    (error) => error.status === 503 && /STRIPE_SECRET_KEY_EV/.test(error.message) && /aktív profil: ev/.test(error.message)
+  );
+  assert.throws(() => stripeService.constructWebhookEvent('{}', 'sig', { env }), /STRIPE_WEBHOOK_SECRET_EV.*aktív profil: ev/);
+  await assert.rejects(
+    invoiceService.issueInvoice({ orderId: 'cs_x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env: { ...env, INVOICE_STORE_PATH: path.join(require('node:os').tmpdir(), `inv-${Date.now()}.json`) }, fetch: async () => { throw new Error('nem hívható'); } }),
+    /SZAMLAZZ_API_KEY_EV.*aktív profil: ev/
+  );
+});
+
+test('/config.js publishes the publishable key of the active profile only', async (t) => {
+  const { app } = require('../server');
+  const saved = { ...process.env };
+  t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
+  Object.assign(process.env, ALL_KEYS);
+  const instance = app.listen(0, '127.0.0.1');
+  await once(instance, 'listening');
+  t.after(() => new Promise((resolve) => instance.close(resolve)));
+  const read = async () => evalConfig(await (await fetch(`http://127.0.0.1:${instance.address().port}/config.js`)).text());
+  delete process.env.BILLING_PROFILE;
+  assert.equal((await read()).stripePublishableKey, 'pk_ev');
+  process.env.BILLING_PROFILE = 'kft';
+  assert.equal((await read()).stripePublishableKey, 'pk_kft');
+});
+
+test('/health reports the active billing profile with booleans only and never leaks a secret', async (t) => {
+  const { app } = require('../server');
+  const saved = { ...process.env };
+  t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
+  for (const key of Object.keys(process.env)) if (/^(STRIPE_|SZAMLAZZ_|BILLING_PROFILE)/.test(key)) delete process.env[key];
+  const instance = app.listen(0, '127.0.0.1');
+  await once(instance, 'listening');
+  t.after(() => new Promise((resolve) => instance.close(resolve)));
+  const health = async () => {
+    const response = await fetch(`http://127.0.0.1:${instance.address().port}/health`);
+    const text = await response.text();
+    return { body: JSON.parse(text), text };
+  };
+
+  let { body } = await health();
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.billing, {
+    profile: 'ev',
+    companyName: 'Csalogány Zsolt egyéni vállalkozó',
+    vatRate: 'AAM',
+    hasInvoicePrefix: false,
+    keys: { stripePublishable: false, stripeSecret: false, stripeWebhook: false, szamlazzApiKey: false }
+  });
+
+  Object.assign(process.env, ALL_KEYS, { BILLING_PROFILE: 'ev', SZAMLAZZ_INVOICE_PREFIX: 'ABC' });
+  let result = await health();
+  assert.deepEqual(result.body.billing.keys, { stripePublishable: true, stripeSecret: true, stripeWebhook: true, szamlazzApiKey: true });
+  assert.equal(result.body.billing.hasInvoicePrefix, true);
+  for (const secret of Object.values(ALL_KEYS)) assert.equal(result.text.includes(secret), false, secret);
+
+  process.env.BILLING_PROFILE = 'kft';
+  delete process.env.SZAMLAZZ_API_KEY_KFT;
+  delete process.env.SZAMLAZZ_INVOICE_PREFIX;
+  result = await health();
+  assert.equal(result.body.billing.profile, 'kft');
+  assert.equal(result.body.billing.companyName, 'CSB-Villamosság Kft.');
+  assert.equal(result.body.billing.vatRate, '27');
+  assert.equal(result.body.billing.hasInvoicePrefix, false);
+  assert.deepEqual(result.body.billing.keys, { stripePublishable: true, stripeSecret: true, stripeWebhook: true, szamlazzApiKey: false });
+  for (const secret of Object.values(ALL_KEYS)) assert.equal(result.text.includes(secret), false, secret);
+  for (const value of Object.values(result.body.billing.keys)) assert.equal(typeof value, 'boolean');
+});

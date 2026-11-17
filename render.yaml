@@ -9,17 +9,23 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
       - key: BILLING_PROFILE
         value: ev
       - key: STRIPE_SECRET_KEY_EV
         sync: false
       - key: STRIPE_WEBHOOK_SECRET_EV
         sync: false
+      - key: STRIPE_PUBLISHABLE_KEY_EV
+        sync: false
       - key: SZAMLAZZ_API_KEY_EV
+        sync: false
+      - key: STRIPE_SECRET_KEY_KFT
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET_KFT
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY_KFT
+        sync: false
+      - key: SZAMLAZZ_API_KEY_KFT
         sync: false
       - key: SMTP_HOST
         sync: false
@@ -29,8 +35,6 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: https://ovitervezo.hu
-      - key: STRIPE_PUBLISHABLE_KEY
-        sync: false
       - key: BASE_URL
         value: https://ovitervezo.hu
       - key: NODE_ENV

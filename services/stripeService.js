@@ -44,6 +44,15 @@ function stripeWebhookSecret(env = process.env) {
   return String(env[`STRIPE_WEBHOOK_SECRET_${profileSuffix(env)}`] || env.STRIPE_WEBHOOK_SECRET || '').trim();
 }
 
+function stripePublishableKey(env = process.env) {
+  return String(env[`STRIPE_PUBLISHABLE_KEY_${profileSuffix(env)}`] || env.STRIPE_PUBLISHABLE_KEY || '').trim();
+}
+
+// Hibaüzenethez: pontosan melyik változót kell megadni az aktív profilhoz.
+function keyName(base, env) {
+  return `${base}_${profileSuffix(env)} (vagy a közös ${base})`;
+}
+
 function isLive(env = process.env) {
   return Boolean(stripeSecretKey(env));
 }
@@ -60,7 +69,7 @@ function isProduction(env = process.env) {
 // Kulcs nélkül fejlesztői (mock) mód van; élesben ez tiltott, hogy soha ne tűnjön sikeresnek egy ki nem fizetett rendelés.
 function assertPaymentsAvailable(env = process.env) {
   if (!isLive(env) && isProduction(env)) {
-    throw new PaymentError('A fizetés jelenleg nem érhető el: a STRIPE_SECRET_KEY nincs beállítva.', 503);
+    throw new PaymentError(`A fizetés jelenleg nem érhető el: a(z) ${keyName('STRIPE_SECRET_KEY', env)} nincs beállítva (aktív profil: ${getBillingProfile(env).type}).`, 503);
   }
 }
 
@@ -171,7 +180,7 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
   const env = deps.env || process.env;
   const secret = stripeWebhookSecret(env);
   if (!isLive(env) || !secret) {
-    throw new PaymentError('A Stripe webhook nincs beállítva (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET).', 503);
+    throw new PaymentError(`A Stripe webhook nincs beállítva (${keyName('STRIPE_SECRET_KEY', env)} / ${keyName('STRIPE_WEBHOOK_SECRET', env)}, aktív profil: ${getBillingProfile(env).type}).`, 503);
   }
   try {
     return getClient(env, deps).webhooks.constructEvent(rawBody, signature, secret);
@@ -181,7 +190,7 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
 }
 
 module.exports = {
-  PRODUCTS, PaymentError, MOCK_PREFIX, stripeSecretKey, stripeWebhookSecret, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
+  PRODUCTS, PaymentError, MOCK_PREFIX, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
   createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent,
   mockSessions, pruneMockSessions, MAX_MOCK_SESSIONS
 };

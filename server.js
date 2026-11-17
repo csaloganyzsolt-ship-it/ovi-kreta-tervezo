@@ -8,7 +8,8 @@ const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = r
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany } = require('./services/siteConstants');
+const invoiceService = require('./services/invoiceService');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 
 const app = express();
@@ -189,7 +190,7 @@ app.get('/config.js', (_req, res) => {
   const config = {
     apiBaseUrl: 'same-origin',
     paywallEnabled: env.PAYWALL_ENABLED === 'true',
-    stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
+    stripePublishableKey: stripeService.stripePublishableKey(env),
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY,
     company: {
       ...publicCompany(env),
@@ -200,12 +201,30 @@ app.get('/config.js', (_req, res) => {
   res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};`);
 });
 
+// Csak logikai értékeket ad: titkos kulcs vagy annak töredéke sosem kerül a válaszba.
+function billingStatus(env = process.env) {
+  const profile = getBillingProfile(env);
+  return {
+    profile: profile.type,
+    companyName: profile.name,
+    vatRate: invoiceService.vatRate(env),
+    hasInvoicePrefix: invoiceService.invoicePrefix(env) !== '',
+    keys: {
+      stripePublishable: Boolean(stripeService.stripePublishableKey(env)),
+      stripeSecret: Boolean(stripeService.stripeSecretKey(env)),
+      stripeWebhook: Boolean(stripeService.stripeWebhookSecret(env)),
+      szamlazzApiKey: Boolean(invoiceService.szamlazzApiKey(env))
+    }
+  };
+}
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     port: PORT,
     model: FAST_MODEL,
-    message: 'Backend is running.'
+    message: 'Backend is running.',
+    billing: billingStatus(process.env)
   });
 });
 
@@ -844,4 +863,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP };
+module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

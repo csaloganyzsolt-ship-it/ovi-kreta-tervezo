@@ -168,7 +168,7 @@ async function issueInvoice(order, deps = {}) {
 
   if (!szamlazzApiKey(env)) {
     if (env.NODE_ENV === 'production') {
-      throw new Error('A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_EV / SZAMLAZZ_API_KEY_KFT / SZAMLAZZ_API_KEY), a számla nem állítható ki.');
+      throw new Error(`A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_${getBillingProfile(env).type === 'kft' ? 'KFT' : 'EV'} vagy a közös SZAMLAZZ_API_KEY; aktív profil: ${getBillingProfile(env).type}), a számla nem állítható ki.`);
     }
     console.warn(`[Számlázz.hu mock] Számla nem készült (nincs Agent kulcs): ${order.orderId} → ${order.customer.email}`);
     return { mock: true };
