@@ -1,0 +1,80 @@
+{
+  "duration": "Heti",
+  "includeDailyBreakdown": true,
+  "selectedDays": [
+    "Hétfő",
+    "Kedd",
+    "Szerda",
+    "Csütörtök",
+    "Péntek"
+  ],
+  "weeklyProgressionType": "area_focused",
+  "fridayClosingType": "Dramatikus közös játék",
+  "availableTools": "Nagyító.",
+  "blacklist": "Ne legyen gyurma.",
+  "requestedModel": "gemini-3.1-pro-preview",
+  "planMode": "weekly",
+  "theme": "Őszi erdő",
+  "group": "Vegyes csoport",
+  "kindergartenName": "Golden Óvoda",
+  "kindergartenProfile": "Zöld Óvoda",
+  "teacherName": "Golden Pedagógus",
+  "groupName": "Katica csoport",
+  "dateValue": "2026-W45",
+  "tevekenysegForma": "Mikrocsoportos / egyéni fejlesztés",
+  "elozmeny": "Korábbi udvari játék.",
+  "childCount": 22,
+  "energyLevel": "Átlagos",
+  "hasPreschoolers": true,
+  "focusAreas": [
+    "Verselés, mesélés",
+    "Ének, zene, népi játék, tánc"
+  ],
+  "weeklyFocusAreas": {
+    "Hétfő": [
+      "Verselés, mesélés"
+    ],
+    "Szerda": [
+      "Ének, zene, népi játék, tánc"
+    ]
+  },
+  "weeklyAreaAssignments": {
+    "Verselés, mesélés": "Hétfő",
+    "Ének, zene, népi játék, tánc": "Szerda"
+  },
+  "previousPlanContext": "",
+  "contact_website": "",
+  "turnstileToken": "",
+  "customNote": "Egyéni kiegészítés.",
+  "customNotes": {
+    "primary": "Egyéni kiegészítés.",
+    "groupNote": "Csoportkérés.",
+    "requiredText": "Saját mondóka.",
+    "customRequest": "Csendes lezárás.",
+    "specialNeeds": [
+      "Figyelemzavar / hiperaktivitás"
+    ]
+  },
+  "detailLevel": 68,
+  "detail": "detailed",
+  "outputMode": "Szakmai tervezet",
+  "selectedGoals": [
+    "finommotorika fejlesztése",
+    "szociális kompetenciák erősítése",
+    "figyelem tartósítása",
+    "differenciált feladatok",
+    "megfigyelés fejlesztése",
+    "ritmusérzék fejlesztése",
+    "Padlórobotok (Bee-Bot, Andy, Edison)"
+  ],
+  "specialNeeds": [
+    "Figyelemzavar / hiperaktivitás"
+  ],
+  "showLiteratureAtBottom": true,
+  "iktEnabled": true,
+  "iktTools": [
+    "Padlórobotok (Bee-Bot, Andy, Edison)"
+  ],
+  "iktCustomApp": "Saját fejlesztő játék",
+  "iktSummary": "Padlórobotok (Bee-Bot, Andy, Edison); Saját fejlesztő játék"
+}
