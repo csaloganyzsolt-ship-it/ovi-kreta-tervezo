@@ -411,17 +411,35 @@ test('weekly extras and daily focus area allocation follow the duration selectio
   const doc = window.document;
   assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, true);
   assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, false);
-  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, true);
+  assert.equal(doc.querySelector('#weeklyFocusAreaPanel'), null);
+
+  const verseBox = doc.querySelector('input[data-focus-area="Verselés, mesélés"]');
+  const verseCard = verseBox.closest('.focus-area-card');
+  const verseDayRow = verseCard.querySelector('.focus-area-day-row');
+  assert.equal(verseDayRow.hidden, true);
+
+  verseBox.click();
+  assert.equal(verseDayRow.hidden, true);
 
   window.setDurationSelection('Heti');
   assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, false);
-  assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, true);
-  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, false);
+  assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, false);
   assert.ok(doc.querySelector('#advancedSettings #fridayClosingType'));
 
-  // Multi-area combined option test for Monday
-  const mondaySelect = doc.querySelector('select[data-weekly-focus-day="Hétfő"]');
-  mondaySelect.value = 'Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka';
+  assert.equal(verseDayRow.hidden, false);
+  const verseSelect = verseCard.querySelector('.focus-area-day-select');
+  assert.equal(verseSelect.value, 'any');
+
+  verseSelect.value = 'Hétfő';
+  verseSelect.dispatchEvent(new window.Event('change'));
+
+  const rajzBox = doc.querySelector('input[data-focus-area="Rajzolás, festés, mintázás, kézi munka"]');
+  rajzBox.click();
+  const rajzCard = rajzBox.closest('.focus-area-card');
+  const rajzSelect = rajzCard.querySelector('.focus-area-day-select');
+  rajzSelect.value = 'Hétfő';
+  rajzSelect.dispatchEvent(new window.Event('change'));
+
   const weeklyPayload = window.buildGenerationPayload();
   assert.deepEqual([...weeklyPayload.weeklyFocusAreas['Hétfő']], ['Verselés, mesélés', 'Rajzolás, festés, mintázás, kézi munka']);
 
@@ -432,7 +450,7 @@ test('weekly extras and daily focus area allocation follow the duration selectio
 
   window.setDurationSelection('Napi');
   assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, false);
-  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, true);
+  assert.equal(verseDayRow.hidden, true);
 });
 
 test('generated plan survives a reload and is removed only by the clean-slate action', async (t) => {
@@ -508,6 +526,40 @@ test('planner page keeps the legal footer and checkout withdrawal note', async (
   assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
   assert.ok(doc.getElementById('consentDigital'));
   assert.ok(doc.getElementById('consentTerms'));
+});
+
+test('load previous plan button toggles history panel and restores full plan to form', async (t) => {
+  const window = await loadApp(t);
+  const doc = window.document;
+  const loadBtn = doc.getElementById('loadPreviousBtn');
+  const panel = doc.getElementById('historyPanel');
+  assert.ok(loadBtn);
+  assert.ok(panel);
+  assert.equal(panel.classList.contains('open'), false);
+
+  loadBtn.click();
+  assert.equal(panel.classList.contains('open'), true);
+
+  const savedPlan = makePayload({
+    theme: 'Mese és bábozás',
+    group: 'Középső csoport',
+    kindergartenName: 'Kerekerdő Óvoda',
+    focusAreas: ['Verselés, mesélés', 'Mozgás'],
+    weeklyAreaAssignments: { 'Verselés, mesélés': 'Hétfő', 'Mozgás': 'Kedd' }
+  });
+  window.savePlanToHistory(savedPlan);
+  window.renderHistoryPanel();
+
+  const historyItems = doc.querySelectorAll('.history-item');
+  assert.ok(historyItems.length >= 1);
+
+  historyItems[0].click();
+  assert.equal(panel.classList.contains('open'), false);
+  assert.equal(doc.querySelector('input[data-field="theme"]').value, 'Mese és bábozás');
+  assert.equal(doc.querySelector('select[data-field="group"]').value, 'Középső csoport');
+  assert.equal(doc.querySelector('input[data-field="kindergarten-name"]').value, 'Kerekerdő Óvoda');
+  assert.equal(doc.querySelector('input[data-focus-area="Verselés, mesélés"]').checked, true);
+  assert.equal(doc.querySelector('input[data-focus-area="Mozgás"]').checked, true);
 });
 
 test('weekly day picker toggles days, keeps at least one and feeds payload and summary', async (t) => {

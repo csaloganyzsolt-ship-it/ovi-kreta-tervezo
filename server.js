@@ -230,15 +230,27 @@ function isWeeklyBreakdown(payload = {}) {
   return payload.duration === 'Heti' && payload.includeDailyBreakdown === true;
 }
 
-function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays) {
-  if (!weeklyFocusAreas || typeof weeklyFocusAreas !== 'object') return '';
-  const lines = selectedDays.map((day) => {
-    const raw = weeklyFocusAreas[day];
-    const areas = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw.trim() : '');
-    return areas ? `- ${day}: ${areas}` : null;
-  }).filter(Boolean);
-  if (!lines.length) return '';
-  return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${lines.join('\n')}\nKötelező szabály: az egyes napok (napok tömb elemei) tevékenységformája, céljai és a kidolgozás táblázatának feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' mezőben pontosan ezeknek a területeknek kell szerepelniük az adott napoknál.`;
+function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays, focusAreas = []) {
+  const specificLines = [];
+  if (weeklyFocusAreas && typeof weeklyFocusAreas === 'object') {
+    selectedDays.forEach((day) => {
+      const raw = weeklyFocusAreas[day];
+      const areas = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw.trim() : '');
+      if (areas) specificLines.push(`- ${day}: ${areas}`);
+    });
+  }
+
+  const generalAreas = Array.isArray(focusAreas) ? focusAreas.filter(Boolean) : [];
+
+  if (specificLines.length > 0) {
+    return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${specificLines.join('\n')}\nKötelező szabály: az egyes napok (napok tömb elemei) tevékenységformája, céljai és a kidolgozás táblázatának feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' mezőben pontosan ezeknek a területeknek kell szerepelniük az adott napoknál.${generalAreas.length ? ` A többi napra a kiválasztott további területeket (${generalAreas.join(', ')}) kiegyensúlyozottan oszd el.` : ''}`;
+  }
+
+  if (generalAreas.length > 0) {
+    return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nA pedagógus a következő nevelési területeket jelölte meg általános heti elosztásra: ${generalAreas.join(', ')}. Ezeket a területeket a hét kiválasztott ${selectedDays.length} napjára (${selectedDays.join(', ')}) kiegyensúlyozottan, szervesen egymásra építve oszd el! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' oszlopban minden naphoz rendelj hozzá egy-egy területet.`;
+  }
+
+  return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nMivel a pedagógus nem jelölt ki konkrét területeket, a fő óvodai nevelési területeket (külső világ tevékeny megismerése, verselés-mesélés, ének-zene, rajzolás-festés-mintázás-kézimunka, mozgás) a hét kiválasztott napjaira szakmailag kiegyensúlyozottan, a heti témához illeszkedve oszd el! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' oszlopban minden naphoz rendelj hozzá egy-egy odaillő területet.`;
 }
 
 function buildWeeklyPrompt(settings, detail, extraRules = '') {
@@ -261,7 +273,7 @@ ${buildBlacklistRule(settings.blacklist)}
 ${buildKindergartenProfileRule(settings.kindergartenProfile)}
 ${buildIktRule(settings)}
 ${buildMathematicsRule(settings.focusAreas)}
-${buildWeeklyFocusAreasRule(settings.weeklyFocusAreas, settings.selectedDays)}
+${buildWeeklyFocusAreasRule(settings.weeklyFocusAreas, settings.selectedDays, settings.focusAreas)}
 ${extraRules}
 Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
 
@@ -548,15 +560,41 @@ async function callGemini(prompt, { model = FAST_MODEL, maxOutputTokens = 12288,
   return text;
 }
 
-// IP-alapú napi limit; csak a sikeres generálások számítanak, így a hibás próbálkozás nem fogyasztja el a keretet.
+// IP-alapú óránkénti limit: maximum 5 generálás óránként IP-címenként
 const generateLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  limit: () => Number(process.env.GENERATE_RATE_LIMIT) || 3,
+  windowMs: 60 * 60 * 1000,
+  limit: () => Number(process.env.GENERATE_RATE_LIMIT) || 5,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skipFailedRequests: true,
-  handler: (_req, res) => res.status(429).json({ success: false, error: 'Napi generálási limit túllépve.' })
+  handler: (_req, res) => res.status(429).json({ success: false, error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' })
 });
+
+const activeGenerationsByIp = new Set();
+
+async function verifyTurnstileToken(token, ip, env = process.env) {
+  const secretKey = String(env.TURNSTILE_SECRET_KEY || '').trim();
+  if (!secretKey) return true;
+  if (!token || typeof token !== 'string') return false;
+
+  try {
+    const formData = new URLSearchParams();
+    formData.append('secret', secretKey);
+    formData.append('response', token.trim());
+    if (ip && ip !== 'unknown') formData.append('remoteip', ip);
+
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const outcome = await res.json();
+    return outcome.success === true;
+  } catch (error) {
+    console.error('Turnstile verification error:', error);
+    return false;
+  }
+}
 
 function shouldLockPlan(payload = {}, env = process.env) {
   if (payload.preview === false || payload.unlocked === true) return false;
@@ -569,11 +607,37 @@ function newServerGenerationId() {
 }
 
 app.post('/api/generate', generateLimiter, async (req, res) => {
-  const payload = req.body || {};
+  const clientIp = String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown');
+  if (activeGenerationsByIp.has(clientIp)) {
+    return res.status(429).json({
+      success: false,
+      error: 'Már folyamatban van egy tervezet generálása erről az IP-címről. Kérjük, várd meg a befejezést!'
+    });
+  }
+  activeGenerationsByIp.add(clientIp);
+
   try {
+    const payload = req.body || {};
     if (typeof payload !== 'object' || Array.isArray(payload)) {
       throw generationError('A generálási beállításoknak JSON objektumnak kell lenniük.', 400);
     }
+    // Rejtett Honeypot csapdamező ellenőrzése
+    if (payload.contact_website || payload.website || payload.honeypot) {
+      return res.status(400).json({
+        success: false,
+        error: 'Érvénytelen kérés. Kérjük, hagyd üresen a biztonsági mezőt!'
+      });
+    }
+
+    // Cloudflare Turnstile token ellenőrzése (opcionális, csak ha TURNSTILE_SECRET_KEY be van állítva)
+    const turnstileValid = await verifyTurnstileToken(payload.turnstileToken, clientIp, process.env);
+    if (!turnstileValid) {
+      return res.status(403).json({
+        success: false,
+        error: 'A botvédelem (Turnstile) ellenőrzése sikertelen volt. Kérjük, próbáld újra!'
+      });
+    }
+
     const model = resolveModel(payload);
     const prompt = buildPrompt(payload);
     const rawText = await callGemini(prompt, {
@@ -610,6 +674,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       error: 'A generálás sikertelen volt.',
       details: reason
     });
+  } finally {
+    activeGenerationsByIp.delete(clientIp);
   }
 });
 
@@ -665,4 +731,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan };
+module.exports = { generateLimiter, activeGenerationsByIp, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan };

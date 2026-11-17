@@ -434,11 +434,83 @@ test('POST /api/generate answers 429 after the per-IP daily limit', async () => 
     assert.equal((await post()).status, 200);
     const blocked = await post();
     assert.equal(blocked.status, 429);
-    assert.deepEqual(await blocked.json(), { success: false, error: 'Napi generálási limit túllépve.' });
+    assert.deepEqual(await blocked.json(), { success: false, error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' });
     global.fetch = realFetch;
   } finally {
     process.env.GENERATE_RATE_LIMIT = previous;
     if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original;
     server.close();
   }
+});
+
+test('POST /api/generate rejects concurrent requests from the same IP with 429', async () => {
+  const { activeGenerationsByIp } = require('../server');
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}/api/generate`;
+
+  // Simulate an ongoing generation for 127.0.0.1
+  activeGenerationsByIp.add('127.0.0.1');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makePayload({ preview: false }))
+    });
+    assert.equal(res.status, 429);
+    const data = await res.json();
+    assert.equal(data.success, false);
+    assert.match(data.error, /Már folyamatban van egy tervezet generálása/);
+  } finally {
+    activeGenerationsByIp.delete('127.0.0.1');
+    server.close();
+  }
+});
+
+test('POST /api/generate rejects honeypot field submission with 400 immediately', async () => {
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}/api/generate`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makePayload({ contact_website: 'https://spam-bot.example' }))
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.success, false);
+    assert.match(data.error, /biztonsági mező/);
+  } finally {
+    server.close();
+  }
+});
+
+test('verifyTurnstileToken allows request if TURNSTILE_SECRET_KEY is not set and validates when set', async (t) => {
+  const { verifyTurnstileToken } = require('../server');
+  // When no key is configured, it always returns true
+  assert.equal(await verifyTurnstileToken('any-token', '1.2.3.4', {}), true);
+  assert.equal(await verifyTurnstileToken(undefined, '1.2.3.4', {}), true);
+
+  // When key is configured but token is missing, returns false
+  assert.equal(await verifyTurnstileToken('', '1.2.3.4', { TURNSTILE_SECRET_KEY: 'test-secret' }), false);
+  assert.equal(await verifyTurnstileToken(null, '1.2.3.4', { TURNSTILE_SECRET_KEY: 'test-secret' }), false);
+
+  // When key is configured, verifies with Cloudflare endpoint
+  const realFetch = global.fetch;
+  let sentBody = '';
+  global.fetch = async (url, init) => {
+    if (String(url).includes('challenges.cloudflare.com')) {
+      sentBody = String(init.body);
+      return Response.json({ success: true });
+    }
+    return realFetch(url, init);
+  };
+  t.after(() => { global.fetch = realFetch; });
+
+  const valid = await verifyTurnstileToken('valid-token', '1.2.3.4', { TURNSTILE_SECRET_KEY: 'my-cf-secret' });
+  assert.equal(valid, true);
+  assert.match(sentBody, /secret=my-cf-secret/);
+  assert.match(sentBody, /response=valid-token/);
 });

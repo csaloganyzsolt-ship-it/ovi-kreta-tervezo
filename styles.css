@@ -439,6 +439,70 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  .focus-area-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .focus-area-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .focus-area-card:has(input[type="checkbox"]:checked) {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  }
+  .focus-area-card .check-item {
+    padding: 0;
+    min-height: unset;
+    border: none;
+    background: transparent;
+  }
+  .focus-area-day-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    animation: focusDayRowIn 0.2s ease-out;
+  }
+  .focus-area-day-row[hidden] {
+    display: none !important;
+  }
+  .focus-area-day-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .focus-area-day-select {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.88rem;
+    cursor: pointer;
+  }
+  @keyframes focusDayRowIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (max-width: 640px) {
+    .focus-area-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .weekly-focus-grid {
     display: grid;
     gap: 10px;
