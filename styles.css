@@ -205,7 +205,6 @@
   .brand-mark { width: 42px; height: 42px; flex: none; }
   .brand-text { font-size: 22px; font-weight: 500; color: var(--text); }
   .brand-text strong { font-weight: 800; color: #2f946f; }
-  :root[data-theme="dark"] .brand-text strong { color: #7fd8b4; }
 
   .app {
     margin-top: 24px;
@@ -651,7 +650,7 @@
   .test-deliver-row[hidden] { display: none; }
   .test-deliver-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .test-deliver-controls input { flex: 1 1 220px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; }
-  @media print { .test-deliver-row { display: none !important; } }
+
   .panel.preview[hidden] { display: none !important; }
   .preview-hidden {
     opacity: 0.8;
@@ -1109,12 +1108,6 @@
     border: 1px solid #7bc594;
   }
 
-  :root[data-theme="dark"] .history-badge-paid {
-    background: #1d3626;
-    color: #98dfab;
-    border-color: #2f6b43;
-  }
-
   .history-badge-draft {
     background: var(--soft);
     color: var(--muted);
@@ -1154,12 +1147,6 @@
     border-color: #c0e3d0;
   }
 
-  :root[data-theme="dark"] .btn-history-load {
-    background: #1c3327;
-    color: #9fd8c0;
-    border-color: #2e5942;
-  }
-
   .btn-history-download {
     background: var(--primary);
     color: #ffffff;
@@ -1197,10 +1184,6 @@
     border-radius: 14px;
     background: linear-gradient(135deg, rgba(63, 174, 132, 0.14), rgba(255, 255, 255, 0.95));
     box-shadow: 0 4px 14px rgba(47, 148, 111, 0.08);
-  }
-
-  :root[data-theme="dark"] .attached-plan-banner {
-    background: linear-gradient(135deg, rgba(63, 174, 132, 0.18), rgba(32, 44, 39, 0.95));
   }
 
   .attached-plan-banner[hidden] {
@@ -1333,73 +1316,6 @@
 
     .btn {
       width: 100%;
-    }
-  }
-
-  @media print {
-    @page {
-      size: A4 portrait;
-      margin: 12mm;
-    }
-
-    body {
-      background: #fff;
-      padding: 0;
-    }
-
-    .topbar,
-    .wizard,
-    .content,
-    .preview-empty,
-    .preview-header,
-    .main-form-layout,
-    .document-tabs,
-    #generationErrorBanner,
-    .export-settings-panel,
-    .download-row,
-    .footer-actions,
-    .btn,
-    .chip,
-    .history-panel,
-    #loadPreviousBtn,
-    .quick-actions {
-      display: none !important;
-    }
-
-    .page {
-      width: 100%;
-      max-width: none;
-      padding: 0;
-      margin: 0;
-      background: #fff;
-    }
-
-    .app {
-      display: block;
-      width: 100%;
-      max-width: none;
-      margin: 0 !important;
-      grid-template-columns: none;
-    }
-
-    .panel.preview,
-    .preview-box,
-    .document-shell,
-    .document-sheet {
-      display: block !important;
-      width: 100% !important;
-      max-width: none !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      border: none !important;
-      box-shadow: none !important;
-      background: #fff !important;
-    }
-
-    .document-sheet {
-      min-height: 0;
-      page-break-inside: auto;
-      break-inside: auto;
     }
   }
 
@@ -1608,16 +1524,6 @@
   .a4-page { break-after: page; page-break-after: always; }
   .a4-page:last-child { break-after: auto; page-break-after: auto; }
 
-  @media print {
-    .a4-page {
-      min-height: 0 !important;
-      box-shadow: none !important;
-      margin: 0 !important;
-      overflow: hidden;
-    }
-    #resultDocument { display: block !important; }
-  }
-
   /* ===== Fizetési kapu, modálisok, lábléc ===== */
   .paywall-gate { position: relative; margin-top: 14px; padding: 22px 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--soft); text-align: center; break-inside: avoid; }
   .paywall-gate p { margin: 8px 0 14px; color: var(--muted); }
@@ -1670,15 +1576,7 @@
     color: #ffffff;
     transform: translateY(-1px);
   }
-  :root[data-theme="dark"] .landing-secondary-cta {
-    background: var(--card);
-    border-color: var(--primary);
-    color: #9fd8c0;
-  }
-  :root[data-theme="dark"] .landing-secondary-cta:hover, :root[data-theme="dark"] .landing-secondary-cta:focus-visible {
-    background: var(--primary);
-    color: #ffffff;
-  }
+
   .landing-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .landing-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 20px; padding: 20px; text-align: center; }
   .landing-card .step-num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: #d8f0e3; color: #1f5f52; font-weight: 700; margin-bottom: 8px; }
@@ -1687,49 +1585,45 @@
   .landing-card .price { font-size: 28px; font-weight: 700; color: #2f946f; margin: 4px 0; }
   .landing h2 { margin: 0; text-align: center; font-size: 22px; color: #1f5f52; }
   .landing-note { text-align: center; font-size: 13px; color: var(--muted, #5b6b64); margin: 0; }
-  :root[data-theme="dark"] .landing-hero { background: linear-gradient(135deg, #24382f, #1f2b26); border-color: #38564a; color: #e6f2ec; }
-  :root[data-theme="dark"] .landing-hero h1, :root[data-theme="dark"] .landing h2, :root[data-theme="dark"] .landing-card h3 { color: #9fd8c0; }
-  :root[data-theme="dark"] .landing-card { border-color: #38564a; }
+
   @media (max-width: 768px) { .landing-steps { grid-template-columns: 1fr; } .landing-hero { padding: 28px 18px; } }
   .footer-note { font-size: 12px; opacity: .8; }
   .unlock-cta { min-height: 48px; padding: 12px 22px; border: 0; border-radius: 14px; background: var(--primary-dark); color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
   .unlock-cta[hidden], .unlocked-badge[hidden] { display: none; }
   .preview-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
   .unlocked-badge { padding: 10px 16px; border-radius: 14px; background: #dff0e3; color: #1f6b32; font-weight: 700; }
-  html[data-theme="dark"] .unlocked-badge { background: #22382a; color: #a8dcb5; }
+
   .preview-actionbar .lock-note { flex-basis: 100%; margin: 0; }
-  @media print { .preview-actionbar, .unlock-cta { display: none !important; } }
+
   .lock-note { margin-left: 6px; color: var(--muted); font-size: 13px; }
   .modal-error { color: #c0392b; font-size: 14px; margin-top: 8px; }
   .seo-content { max-width: 1280px; margin: 28px auto 0; padding: 0 18px; color: var(--muted); line-height: 1.65; }
   .seo-content h2 { font-size: 22px; margin: 26px 0 12px; text-align: center; color: #1f5f52; }
   .seo-content .benefit-grid { margin-bottom: 8px; }
   .seo-content .benefit-grid .landing-card { text-align: left; }
-  :root[data-theme="dark"] .seo-content h2 { color: #9fd8c0; }
+
   .seo-content .seo-cards { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   .seo-content .seo-cards li { padding: 12px 14px; border: 1px solid #cfe8da; border-radius: 20px; background: var(--panel); text-align: center; color: var(--text); }
-  :root[data-theme="dark"] .seo-content .seo-cards li { border-color: #38564a; }
 
   /* Visszajelzések és vélemények szekció */
   .reviews-summary-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 20px; padding: 22px 20px; text-align: center; max-width: 520px; margin: 16px auto 24px; box-shadow: 0 4px 20px rgba(31, 95, 82, 0.05); }
-  :root[data-theme="dark"] .reviews-summary-card { border-color: #38564a; box-shadow: none; }
+
   .reviews-summary-score { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
   .reviews-rating-number { font-size: 36px; font-weight: 800; color: #1f5f52; line-height: 1; }
-  :root[data-theme="dark"] .reviews-rating-number { color: #9fd8c0; }
+
   .reviews-stars { display: inline-flex; align-items: center; gap: 3px; color: #f59e0b; }
   .star-icon { width: 17px; height: 17px; fill: #f59e0b; display: inline-block; flex-shrink: 0; }
   .reviews-summary-score .star-icon { width: 22px; height: 22px; }
   .reviews-summary-sub { margin: 8px 0 10px; font-size: 15px; font-weight: 600; color: var(--muted); }
   .reviews-verified-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 999px; background: var(--soft); border: 1px solid var(--border); color: #2f946f; font-weight: 600; font-size: 13px; }
   .reviews-verified-badge .verified-check { width: 16px; height: 16px; flex-shrink: 0; fill: currentColor; }
-  :root[data-theme="dark"] .reviews-verified-badge { color: #5ec79e; }
 
   .reviews-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0 32px; }
   @media (max-width: 900px) { .reviews-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 600px) { .reviews-grid { grid-template-columns: 1fr; } }
 
   .review-card { background: var(--panel); border: 1px solid #cfe8da; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; text-align: left; box-shadow: 0 4px 18px rgba(31, 95, 82, 0.04); }
-  :root[data-theme="dark"] .review-card { border-color: #38564a; box-shadow: none; }
+
   .review-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
   .review-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; letter-spacing: .02em; }
   .avatar-1 { background: #d8f0e3; color: #1f5f52; }
@@ -1738,12 +1632,7 @@
   .avatar-4 { background: #d4f0f0; color: #175357; }
   .avatar-5 { background: #e5f0dc; color: #355325; }
   .avatar-6 { background: #daf2e8; color: #1c5946; }
-  :root[data-theme="dark"] .avatar-1 { background: #254236; color: #a6ecc9; }
-  :root[data-theme="dark"] .avatar-2 { background: #20413b; color: #9be9db; }
-  :root[data-theme="dark"] .avatar-3 { background: #2b3e24; color: #c6e8b5; }
-  :root[data-theme="dark"] .avatar-4 { background: #203d3f; color: #9ee3e3; }
-  :root[data-theme="dark"] .avatar-5 { background: #2e3d23; color: #cae9b4; }
-  :root[data-theme="dark"] .avatar-6 { background: #224335; color: #a1edc8; }
+
   .review-meta { display: flex; flex-direction: column; min-width: 0; }
   .review-name { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
   .review-role-date { font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
@@ -1776,7 +1665,6 @@
     .panel.preview, #previewContent { min-width: 0; max-width: 100%; }
     .document-shell { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
-  @media print { .paywall-gate, .site-footer, .modal-backdrop { display: none !important; } }
 
 .restore-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--primary); border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .restore-banner[hidden] { display: none; }
@@ -1810,9 +1698,6 @@
   fill: transparent;
   stroke: #cbd5e1;
 }
-:root[data-theme="dark"] .interactive-star-group .star-btn.empty svg path {
-  stroke: #4b5563;
-}
 
 /* ===== Fizetés előtti tükör-struktúra és terjedelem-jelző sáv (emoji nélkül) ===== */
 .locked-mirror-text {
@@ -1842,11 +1727,6 @@
   box-shadow: 0 4px 14px rgba(47, 148, 111, 0.08);
   break-inside: avoid;
   page-break-inside: avoid;
-}
-
-:root[data-theme="dark"] .locked-boundary-card {
-  background: linear-gradient(135deg, rgba(63, 174, 132, 0.16), rgba(32, 44, 39, 0.96));
-  border-color: var(--primary);
 }
 
 .locked-boundary-badge {
@@ -1911,23 +1791,11 @@
   flex-shrink: 0;
 }
 
-:root[data-theme="dark"] .locked-floating-badge {
-  background: rgba(63, 174, 132, 0.25);
-  color: #9fd8c0;
-}
-
 .locked-floating-text {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text);
   line-height: 1.4;
-}
-
-@media print {
-  .locked-floating-bar,
-  .locked-boundary-card {
-    display: none !important;
-  }
 }
 
 /* ===== Mintatervezet modál (főoldal) ===== */
@@ -1974,11 +1842,6 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-:root[data-theme="dark"] .sample-modal-badge {
-  background: rgba(63, 174, 132, 0.25);
-  color: #9fd8c0;
 }
 
 .sample-modal-scroll {
@@ -2134,3 +1997,145 @@
   }
 }
 
+/* ===== Sötét mód: komponens-felülírások ===== */
+  :root[data-theme="dark"] .brand-text strong { color: #7fd8b4; }
+:root[data-theme="dark"] .history-badge-paid {
+    background: #1d3626;
+    color: #98dfab;
+    border-color: #2f6b43;
+  }
+:root[data-theme="dark"] .btn-history-load {
+    background: #1c3327;
+    color: #9fd8c0;
+    border-color: #2e5942;
+  }
+:root[data-theme="dark"] .attached-plan-banner {
+    background: linear-gradient(135deg, rgba(63, 174, 132, 0.18), rgba(32, 44, 39, 0.95));
+  }
+:root[data-theme="dark"] .landing-secondary-cta {
+    background: var(--card);
+    border-color: var(--primary);
+    color: #9fd8c0;
+  }
+:root[data-theme="dark"] .landing-secondary-cta:hover, :root[data-theme="dark"] .landing-secondary-cta:focus-visible {
+    background: var(--primary);
+    color: #ffffff;
+  }
+  :root[data-theme="dark"] .landing-hero { background: linear-gradient(135deg, #24382f, #1f2b26); border-color: #38564a; color: #e6f2ec; }
+  :root[data-theme="dark"] .landing-hero h1, :root[data-theme="dark"] .landing h2, :root[data-theme="dark"] .landing-card h3 { color: #9fd8c0; }
+  :root[data-theme="dark"] .landing-card { border-color: #38564a; }
+  html[data-theme="dark"] .unlocked-badge { background: #22382a; color: #a8dcb5; }
+  :root[data-theme="dark"] .seo-content h2 { color: #9fd8c0; }
+  :root[data-theme="dark"] .seo-content .seo-cards li { border-color: #38564a; }
+  :root[data-theme="dark"] .reviews-summary-card { border-color: #38564a; box-shadow: none; }
+  :root[data-theme="dark"] .reviews-rating-number { color: #9fd8c0; }
+  :root[data-theme="dark"] .reviews-verified-badge { color: #5ec79e; }
+  :root[data-theme="dark"] .review-card { border-color: #38564a; box-shadow: none; }
+  :root[data-theme="dark"] .avatar-1 { background: #254236; color: #a6ecc9; }
+  :root[data-theme="dark"] .avatar-2 { background: #20413b; color: #9be9db; }
+  :root[data-theme="dark"] .avatar-3 { background: #2b3e24; color: #c6e8b5; }
+  :root[data-theme="dark"] .avatar-4 { background: #203d3f; color: #9ee3e3; }
+  :root[data-theme="dark"] .avatar-5 { background: #2e3d23; color: #cae9b4; }
+  :root[data-theme="dark"] .avatar-6 { background: #224335; color: #a1edc8; }
+:root[data-theme="dark"] .interactive-star-group .star-btn.empty svg path {
+  stroke: #4b5563;
+}
+:root[data-theme="dark"] .locked-boundary-card {
+  background: linear-gradient(135deg, rgba(63, 174, 132, 0.16), rgba(32, 44, 39, 0.96));
+  border-color: var(--primary);
+}
+:root[data-theme="dark"] .locked-floating-badge {
+  background: rgba(63, 174, 132, 0.25);
+  color: #9fd8c0;
+}
+:root[data-theme="dark"] .sample-modal-badge {
+  background: rgba(63, 174, 132, 0.25);
+  color: #9fd8c0;
+}
+
+/* ===== Nyomtatás (egyetlen blokk, az eredeti kaszkád-sorrendben) ===== */
+@media print {
+    .test-deliver-row { display: none !important; }
+
+    @page {
+      size: A4 portrait;
+      margin: 12mm;
+    }
+
+    body {
+      background: #fff;
+      padding: 0;
+    }
+
+    .topbar,
+    .wizard,
+    .content,
+    .preview-empty,
+    .preview-header,
+    .main-form-layout,
+    .document-tabs,
+    #generationErrorBanner,
+    .export-settings-panel,
+    .download-row,
+    .footer-actions,
+    .btn,
+    .chip,
+    .history-panel,
+    #loadPreviousBtn,
+    .quick-actions {
+      display: none !important;
+    }
+
+    .page {
+      width: 100%;
+      max-width: none;
+      padding: 0;
+      margin: 0;
+      background: #fff;
+    }
+
+    .app {
+      display: block;
+      width: 100%;
+      max-width: none;
+      margin: 0 !important;
+      grid-template-columns: none;
+    }
+
+    .panel.preview,
+    .preview-box,
+    .document-shell,
+    .document-sheet {
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+
+    .document-sheet {
+      min-height: 0;
+      page-break-inside: auto;
+      break-inside: auto;
+    }
+
+    .a4-page {
+      min-height: 0 !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      overflow: hidden;
+    }
+    #resultDocument { display: block !important; }
+
+    .preview-actionbar, .unlock-cta { display: none !important; }
+
+    .paywall-gate, .site-footer, .modal-backdrop { display: none !important; }
+
+    .locked-floating-bar,
+    .locked-boundary-card {
+      display: none !important;
+    }
+}
