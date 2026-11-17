@@ -340,6 +340,43 @@ test('kindergarten profile and IKT digital rules reach both prompts', () => {
     focusAreas: ['A külső világ tevékeny megismerése', 'Verselés, mesélés']
   });
   assert.doesNotMatch(buildPrompt(noMathPayload), /MATEMATIKAI TARTALMÚ TEVÉKENYSÉG KÖVETELMÉNYE/);
+
+  const weeklyFocusPayload = makePayload({
+    duration: 'Heti',
+    planMode: 'weekly',
+    includeDailyBreakdown: true,
+    weeklyFocusAreas: {
+      'Hétfő': ['Verselés, mesélés'],
+      'Kedd': ['Mozgás']
+    }
+  });
+  const promptWeeklyFocus = buildPrompt(weeklyFocusPayload);
+  assert.match(promptWeeklyFocus, /SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS/);
+  assert.match(promptWeeklyFocus, /Hétfő: Verselés, mesélés/);
+  assert.match(promptWeeklyFocus, /Kedd: Mozgás/);
+  assert.match(promptWeeklyFocus, /Csoportos tevékenység \/ Tevékenység/);
+
+  const parsedWithNewHeader = {
+    is_weekly: true,
+    summary: 's',
+    heti_keretterv: {
+      tema: 'T', heti_fo_cel: 'c', nevelesi_feladatok: 'n', didaktikai_feladatok: 'd',
+      teruletek_heti_eloszlasa: [
+        { nap: 'Hétfő', fo_terulet: 'Verselés', csoportos_tevekenyseg: 'Csoportos mese' },
+        { nap: 'Kedd', fo_terulet: 'Mozgás', csoportos_tevekenyseg: 'Csoportos torna' },
+        { nap: 'Szerda', fo_terulet: 'Ének', csoportos_tevekenyseg: 'Dal' },
+        { nap: 'Csütörtök', fo_terulet: 'Matematika', csoportos_tevekenyseg: 'Számolás' },
+        { nap: 'Péntek', fo_terulet: 'Rajz', csoportos_tevekenyseg: 'Festés' }
+      ],
+      eszkozok: ['papír'], felhasznalt_irodalom: ''
+    },
+    napok: ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'].map((nap_neve) => ({
+      nap_neve, tevekenyseg_forma: 'játék', napi_cel: 'cél', kidolgozas_tablazat: [{ ido: '10 p', tevekenyseg_menete: ['x'], modszerek_megjegyzesek: 'm' }]
+    }))
+  };
+  const normalizedWeekly = normalizeResponse(JSON.stringify(parsedWithNewHeader), makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true }));
+  assert.equal(normalizedWeekly.heti_keretterv.teruletek_heti_eloszlasa[0].csoportos_tevekenyseg, 'Csoportos mese');
+  assert.equal(normalizedWeekly.heti_keretterv.teruletek_heti_eloszlasa[0].mikrocsoportos_tevekenyseg, 'Csoportos mese');
 });
 
 test('POST /api/generate answers 429 after the per-IP daily limit', async () => {

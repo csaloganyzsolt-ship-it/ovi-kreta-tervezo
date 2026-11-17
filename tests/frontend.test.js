@@ -46,6 +46,7 @@ test('all rows and methods render, with escaped activity paragraphs instead of f
   assert.ok(document.querySelector('#resultDocument').textContent.includes(plan.nevelesi_feladatok));
   assert.ok(document.querySelector('#resultDocument').textContent.includes(plan.didaktikai_feladatok));
   assert.ok(document.querySelector('#resultDocument').textContent.includes(plan.kepessegfejlesztes));
+  assert.ok(document.querySelector('#resultDocument').textContent.includes('Nevelési terület'));
 });
 
 test('all form settings, including group characteristics and focus areas, enter the request', async (t) => {
@@ -276,11 +277,28 @@ function weeklyResult(window) {
     summary: 'Heti projekt',
     heti_keretterv: {
       tema: 'Erdő', heti_fo_cel: 'Cél', nevelesi_feladatok: 'N', didaktikai_feladatok: 'D',
-      teruletek_heti_eloszlasa: days.map((nap) => ({ nap, fo_terulet: 'T', mikrocsoportos_tevekenyseg: 'M' })),
+      teruletek_heti_eloszlasa: [
+        { nap: 'Hétfő', fo_terulet: 'Verselés, mesélés', csoportos_tevekenyseg: 'Mese' },
+        { nap: 'Kedd', fo_terulet: 'Mozgás', csoportos_tevekenyseg: 'Torna' },
+        { nap: 'Szerda', fo_terulet: 'Ének, zene, népi játék, tánc', csoportos_tevekenyseg: 'Ének' },
+        { nap: 'Csütörtök', fo_terulet: 'A külső világ tevékeny megismerése – matematikai tartalommal', csoportos_tevekenyseg: 'Számlálás' },
+        { nap: 'Péntek', fo_terulet: 'Rajzolás, festés, mintázás, kézi munka', csoportos_tevekenyseg: 'Festés' }
+      ],
       eszkozok: ['levél'], felhasznalt_irodalom: ''
     },
     napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'Mese és vers', napi_cel: 'C', kidolgozas_tablazat: [row] })),
-    request: makePayload({ duration: 'Heti', planMode: 'weekly' })
+    request: makePayload({
+      duration: 'Heti',
+      planMode: 'weekly',
+      dateValue: '2026-W35',
+      weeklyFocusAreas: {
+        'Hétfő': ['Verselés, mesélés'],
+        'Kedd': ['Mozgás'],
+        'Szerda': ['Ének, zene, népi játék, tánc'],
+        'Csütörtök': ['A külső világ tevékeny megismerése – matematikai tartalommal'],
+        'Péntek': ['Rajzolás, festés, mintázás, kézi munka']
+      }
+    })
   };
 }
 
@@ -293,10 +311,12 @@ test('weekly plan renders as six tabbed documents with per-document settings', a
   assert.equal(doc.querySelector('#documentTabs').hidden, false);
   assert.equal(doc.querySelector('#downloadZipBtn').hidden, false);
   assert.equal(doc.querySelectorAll('#resultDocument .official-table').length, 1);
-  assert.match(doc.querySelector('#resultDocument').textContent, /Területek heti eloszlása/);
+  assert.match(doc.querySelector('#resultDocument').textContent, /Területek heti elosztása/);
+  assert.match(doc.querySelector('#resultDocument').textContent, /Csoportos tevékenység \/ Tevékenység/);
 
   tabs[1].click();
   assert.match(doc.querySelector('#resultDocument').textContent, /Napi tervezet – Hétfő/);
+  assert.match(doc.querySelector('#resultDocument').textContent, /Nevelési terület/);
   assert.equal(doc.querySelectorAll('.document-day-sheet .official-table tbody tr').length, 1);
 
   const orientation = doc.querySelector('[data-export="orientation"]');
@@ -310,7 +330,7 @@ test('weekly plan renders as six tabbed documents with per-document settings', a
   assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'landscape');
 
   const files = window.getDocumentList(weeklyResult(window)).map((item) => item.fileBase);
-  assert.equal(files.slice(0, 3).join('|'), '00_Heti_Keretterv|01_Hetfo_Mese_es_vers|02_Kedd_Mese_es_vers');
+  assert.equal(files.slice(0, 3).join('|'), '00_heti-keretterv_2026-08-24|01_hetfo-verseles-meseles_2026-08-24|02_kedd-mozgas_2026-08-25');
 
   const draft = window.collectDraftState();
   assert.equal(draft.docSettings['nap-0'].orientation, 'landscape');
@@ -386,13 +406,33 @@ test('theme toggle switches and persists the dark mode', async (t) => {
   assert.equal(window.localStorage.getItem('oviKretaTheme'), 'light');
 });
 
-test('weekly extras live in the advanced settings and follow the duration selection', async (t) => {
+test('weekly extras and daily focus area allocation follow the duration selection', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
   assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, true);
+  assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, false);
+  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, true);
+
   window.setDurationSelection('Heti');
   assert.equal(doc.querySelector('#weeklyAdvancedBlock').hidden, false);
+  assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, true);
+  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, false);
   assert.ok(doc.querySelector('#advancedSettings #fridayClosingType'));
+
+  // Multi-area combined option test for Monday
+  const mondaySelect = doc.querySelector('select[data-weekly-focus-day="Hétfő"]');
+  mondaySelect.value = 'Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka';
+  const weeklyPayload = window.buildGenerationPayload();
+  assert.deepEqual([...weeklyPayload.weeklyFocusAreas['Hétfő']], ['Verselés, mesélés', 'Rajzolás, festés, mintázás, kézi munka']);
+
+  const customWeeklyMock = weeklyResult(window);
+  customWeeklyMock.request.weeklyFocusAreas['Hétfő'] = ['Verselés, mesélés', 'Mozgás'];
+  const files = window.getDocumentList(customWeeklyMock).map((item) => item.fileBase);
+  assert.equal(files[1], '01_hetfo-verseles-meseles-mozgas_2026-08-24');
+
+  window.setDurationSelection('Napi');
+  assert.equal(doc.querySelector('#dailyFocusAreaField').hidden, false);
+  assert.equal(doc.querySelector('#weeklyFocusAreaPanel').hidden, true);
 });
 
 test('generated plan survives a reload and is removed only by the clean-slate action', async (t) => {

@@ -122,7 +122,7 @@
                 </select>
               </div>
 
-              <div class="field full">
+              <div class="field full" id="dailyFocusAreaField">
                 <label>Melyik nevelési területek lesznek fókuszban?</label>
                 <div class="check-grid">
                   <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
@@ -131,6 +131,82 @@
                   <label class="check-item"><input type="checkbox" data-focus-area="Mozgás" /> Mozgás</label>
                   <label class="check-item"><input type="checkbox" data-focus-area="A külső világ tevékeny megismerése" /> A külső világ tevékeny megismerése</label>
                   <label class="check-item"><input type="checkbox" data-focus-area="A külső világ tevékeny megismerése – matematikai tartalommal" /> A külső világ tevékeny megismerése – matematikai tartalommal</label>
+                </div>
+              </div>
+
+              <div class="field full" id="weeklyFocusAreaPanel" hidden>
+                <label>Melyik nevelési területek lesznek fókuszban az egyes napokon?</label>
+                <div class="weekly-focus-grid">
+                  <div class="weekly-focus-row" data-weekly-focus-row="Hétfő">
+                    <span class="weekly-focus-day-label">Hétfő:</span>
+                    <select class="weekly-focus-select" data-weekly-focus-day="Hétfő">
+                      <option value="A külső világ tevékeny megismerése" selected>A külső világ tevékeny megismerése</option>
+                      <option value="Verselés, mesélés">Verselés, mesélés</option>
+                      <option value="Ének, zene, népi játék, tánc">Ének, zene, népi játék, tánc</option>
+                      <option value="A külső világ tevékeny megismerése – matematikai tartalommal">A külső világ tevékeny megismerése – matematikai tartalommal</option>
+                      <option value="Rajzolás, festés, mintázás, kézi munka">Rajzolás, festés, mintázás, kézi munka</option>
+                      <option value="Mozgás">Mozgás</option>
+                      <option value="Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka">Verselés, mesélés + Rajzolás, festés</option>
+                      <option value="Ének, zene, népi játék, tánc + Mozgás">Ének, zene + Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése + matematikai tartalommal">Külső világ + Matematika</option>
+                    </select>
+                  </div>
+                  <div class="weekly-focus-row" data-weekly-focus-row="Kedd">
+                    <span class="weekly-focus-day-label">Kedd:</span>
+                    <select class="weekly-focus-select" data-weekly-focus-day="Kedd">
+                      <option value="Verselés, mesélés" selected>Verselés, mesélés</option>
+                      <option value="A külső világ tevékeny megismerése">A külső világ tevékeny megismerése</option>
+                      <option value="Ének, zene, népi játék, tánc">Ének, zene, népi játék, tánc</option>
+                      <option value="A külső világ tevékeny megismerése – matematikai tartalommal">A külső világ tevékeny megismerése – matematikai tartalommal</option>
+                      <option value="Rajzolás, festés, mintázás, kézi munka">Rajzolás, festés, mintázás, kézi munka</option>
+                      <option value="Mozgás">Mozgás</option>
+                      <option value="Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka">Verselés, mesélés + Rajzolás, festés</option>
+                      <option value="Ének, zene, népi játék, tánc + Mozgás">Ének, zene + Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése + matematikai tartalommal">Külső világ + Matematika</option>
+                    </select>
+                  </div>
+                  <div class="weekly-focus-row" data-weekly-focus-row="Szerda">
+                    <span class="weekly-focus-day-label">Szerda:</span>
+                    <select class="weekly-focus-select" data-weekly-focus-day="Szerda">
+                      <option value="Ének, zene, népi játék, tánc" selected>Ének, zene, népi játék, tánc</option>
+                      <option value="A külső világ tevékeny megismerése">A külső világ tevékeny megismerése</option>
+                      <option value="Verselés, mesélés">Verselés, mesélés</option>
+                      <option value="A külső világ tevékeny megismerése – matematikai tartalommal">A külső világ tevékeny megismerése – matematikai tartalommal</option>
+                      <option value="Rajzolás, festés, mintázás, kézi munka">Rajzolás, festés, mintázás, kézi munka</option>
+                      <option value="Mozgás">Mozgás</option>
+                      <option value="Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka">Verselés, mesélés + Rajzolás, festés</option>
+                      <option value="Ének, zene, népi játék, tánc + Mozgás">Ének, zene + Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése + matematikai tartalommal">Külső világ + Matematika</option>
+                    </select>
+                  </div>
+                  <div class="weekly-focus-row" data-weekly-focus-row="Csütörtök">
+                    <span class="weekly-focus-day-label">Csütörtök:</span>
+                    <select class="weekly-focus-select" data-weekly-focus-day="Csütörtök">
+                      <option value="A külső világ tevékeny megismerése – matematikai tartalommal" selected>A külső világ tevékeny megismerése – matematikai tartalommal</option>
+                      <option value="A külső világ tevékeny megismerése">A külső világ tevékeny megismerése</option>
+                      <option value="Verselés, mesélés">Verselés, mesélés</option>
+                      <option value="Ének, zene, népi játék, tánc">Ének, zene, népi játék, tánc</option>
+                      <option value="Rajzolás, festés, mintázás, kézi munka">Rajzolás, festés, mintázás, kézi munka</option>
+                      <option value="Mozgás">Mozgás</option>
+                      <option value="Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka">Verselés, mesélés + Rajzolás, festés</option>
+                      <option value="Ének, zene, népi játék, tánc + Mozgás">Ének, zene + Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése + matematikai tartalommal">Külső világ + Matematika</option>
+                    </select>
+                  </div>
+                  <div class="weekly-focus-row" data-weekly-focus-row="Péntek">
+                    <span class="weekly-focus-day-label">Péntek:</span>
+                    <select class="weekly-focus-select" data-weekly-focus-day="Péntek">
+                      <option value="Rajzolás, festés, mintázás, kézi munka" selected>Rajzolás, festés, mintázás, kézi munka</option>
+                      <option value="Mozgás">Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése">A külső világ tevékeny megismerése</option>
+                      <option value="Verselés, mesélés">Verselés, mesélés</option>
+                      <option value="Ének, zene, népi játék, tánc">Ének, zene, népi játék, tánc</option>
+                      <option value="A külső világ tevékeny megismerése – matematikai tartalommal">A külső világ tevékeny megismerése – matematikai tartalommal</option>
+                      <option value="Verselés, mesélés + Rajzolás, festés, mintázás, kézi munka">Verselés, mesélés + Rajzolás, festés</option>
+                      <option value="Ének, zene, népi játék, tánc + Mozgás">Ének, zene + Mozgás</option>
+                      <option value="A külső világ tevékeny megismerése + matematikai tartalommal">Külső világ + Matematika</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -679,12 +755,28 @@
       }
 
       function updateWeeklyDailyBreakdownVisibility() {
-        const panel = document.getElementById('weeklySettingsPanel');
-        if (!panel) return;
         const isWeekly = getSelectedDuration() === 'Heti';
-        panel.hidden = !isWeekly;
+        const panel = document.getElementById('weeklySettingsPanel');
+        if (panel) panel.hidden = !isWeekly;
         const advancedBlock = document.getElementById('weeklyAdvancedBlock');
         if (advancedBlock) advancedBlock.hidden = !isWeekly;
+        const dailyFocusField = document.getElementById('dailyFocusAreaField');
+        if (dailyFocusField) dailyFocusField.hidden = isWeekly;
+        const weeklyFocusPanel = document.getElementById('weeklyFocusAreaPanel');
+        if (weeklyFocusPanel) weeklyFocusPanel.hidden = !isWeekly;
+      }
+
+      function getWeeklyFocusAreas() {
+        const result = {};
+        const days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
+        days.forEach((day) => {
+          const select = document.querySelector(`select[data-weekly-focus-day="${day}"]`);
+          const val = select ? select.value.trim() : '';
+          if (val) {
+            result[day] = val.includes(' + ') ? val.split(' + ').map((s) => s.trim()) : [val];
+          }
+        });
+        return result;
       }
 
       const ENERGY_DEFAULT = 'Átlagos';
@@ -778,7 +870,9 @@
             `Korcsoport: ${payload.group}`,
             `Téma: ${payload.theme || none}`,
             `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
-            `Nevelési területek: ${payload.focusAreas.join(', ') || 'Nincs kiválasztva'}`,
+            `Nevelési területek: ${isWeekly && payload.selectedDays && payload.selectedDays.length
+              ? payload.selectedDays.map((d) => `${d}: ${(payload.weeklyFocusAreas?.[d] || []).join(' + ') || 'Nincs'}`).join(' • ')
+              : (payload.focusAreas.join(', ') || 'Nincs kiválasztva')}`,
             `Óvoda: ${payload.kindergartenName || none}`,
             `Óvoda arculata: ${payload.kindergartenProfile || none}`,
             `Óvodapedagógus: ${payload.teacherName || none}`,
@@ -863,6 +957,7 @@
       }
 
       function getAutoSaveKey(element) {
+        if (element?.dataset?.weeklyFocusDay) return `weeklyFocus:${element.dataset.weeklyFocusDay}`;
         if (element?.dataset?.field) return `field:${element.dataset.field}`;
         if (element?.dataset?.exportSection) return `export:${element.dataset.exportSection}`;
         if (element?.id) return `id:${element.id}`;
@@ -884,6 +979,7 @@
           energy: getChoice('energy', ENERGY_DEFAULT),
           detail: getChoice('detail', 'detailed'),
           selectedGoals,
+          weeklyFocusAreas: getWeeklyFocusAreas(),
           docSettings,
           fields: {}
         };
@@ -949,6 +1045,16 @@
         setSelectedDays(draft.selectedDays);
         setChoice('energy', draft.energy, ENERGY_DEFAULT);
         setChoice('detail', draft.detail, 'detailed');
+        if (draft.weeklyFocusAreas && typeof draft.weeklyFocusAreas === 'object') {
+          Object.entries(draft.weeklyFocusAreas).forEach(([day, val]) => {
+            const select = document.querySelector(`select[data-weekly-focus-day="${day}"]`);
+            if (select) {
+              const strVal = Array.isArray(val) ? val.join(' + ') : String(val);
+              const found = Array.from(select.options).find((o) => o.value === strVal || (Array.isArray(val) && val.includes(o.value)));
+              if (found) select.value = found.value;
+            }
+          });
+        }
         updateDateInputsForDuration();
         updateWeeklyDailyBreakdownVisibility();
         syncAdvancedSettingsOpenState();
@@ -1059,7 +1165,76 @@
       }
 
       const DOC_DEFAULTS = { orientation: 'portrait', margin: 'comfortable' };
+      const WEEKDAY_ORDER = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
       const WEEKDAY_FILE_NAMES = { 'Hétfő': 'Hetfo', 'Kedd': 'Kedd', 'Szerda': 'Szerda', 'Csütörtök': 'Csutortok', 'Péntek': 'Pentek' };
+      const WEEKDAY_SLUGS = {
+        'Hétfő': 'hetfo',
+        'Kedd': 'kedd',
+        'Szerda': 'szerda',
+        'Csütörtök': 'csutortok',
+        'Péntek': 'pentek'
+      };
+
+      const AREA_SLUG_MAP = {
+        'verseles, meseles': 'verseles-meseles',
+        'verseles': 'verseles-meseles',
+        'meseles': 'verseles-meseles',
+        'enek, zene, nepi jatek, tanc': 'enek-zene',
+        'enek, zene, enekes jatek': 'enek-zene',
+        'enek, zene': 'enek-zene',
+        'rajzolas, festes, mintazas, kezi munka': 'rajzolas-festes',
+        'rajzolas, mintazas, kezimunka': 'rajzolas-festes',
+        'mozgas': 'mozgas',
+        'a kulso vilag tevekeny megismerese': 'kulso-vilag',
+        'kulso vilag tevekeny megismerese': 'kulso-vilag',
+        'a kulso vilag tevekeny megismerese – matematikai tartalommal': 'matematika',
+        'a kulso vilag tevekeny megismerese - matematikai tartalommal': 'matematika',
+        'matematika': 'matematika'
+      };
+
+      function slugifyAreaName(area) {
+        if (!area) return '';
+        const normalized = String(area).trim().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (AREA_SLUG_MAP[normalized]) return AREA_SLUG_MAP[normalized];
+        if (area.includes('+')) {
+          return area.split('+').map((part) => slugifyAreaName(part.trim())).filter(Boolean).join('-');
+        }
+        return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+      }
+
+      function getMondayDateForWeek(dateValue) {
+        const val = String(dateValue || '').trim();
+        const weekMatch = val.match(/^(\d{4})-W(\d{1,2})$/i);
+        if (weekMatch) {
+          const year = parseInt(weekMatch[1], 10);
+          const week = parseInt(weekMatch[2], 10);
+          const jan4 = new Date(Date.UTC(year, 0, 4));
+          const jan4Day = jan4.getUTCDay() || 7;
+          const week1Mon = new Date(Date.UTC(year, 0, 4 - (jan4Day - 1)));
+          return new Date(week1Mon.getTime() + (week - 1) * 7 * 86400000);
+        }
+        const dateMatch = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          const y = parseInt(dateMatch[1], 10);
+          const m = parseInt(dateMatch[2], 10);
+          const d = parseInt(dateMatch[3], 10);
+          const dt = new Date(Date.UTC(y, m - 1, d));
+          const dow = dt.getUTCDay() || 7;
+          return new Date(dt.getTime() - (dow - 1) * 86400000);
+        }
+        const now = new Date();
+        const dow = now.getDay() || 7;
+        return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - (dow - 1)));
+      }
+
+      function getCalendarDateForDay(mondayDate, dayName) {
+        const offset = WEEKDAY_ORDER.indexOf(dayName);
+        const dayOffset = offset >= 0 ? offset : 0;
+        const dayDate = new Date(mondayDate.getTime() + dayOffset * 86400000);
+        return dayDate.toISOString().slice(0, 10);
+      }
+
       let activeDocId = null;
       let docSettings = {};
 
@@ -1072,16 +1247,41 @@
 
       function getDocumentList(result = lastResult) {
         if (result?.is_weekly === true && Array.isArray(result.napok)) {
+          const req = result.request || lastResult?.request || (typeof buildGenerationPayload === 'function' ? buildGenerationPayload() : {});
+          const mondayDate = getMondayDateForWeek(req.dateValue);
+          const mondayDateStr = mondayDate.toISOString().slice(0, 10);
+          const frame = result.heti_keretterv || {};
+          const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
+
           return [
-            { id: 'keret', label: 'Heti Keretterv', fileBase: '00_Heti_Keretterv', kind: 'frame' },
+            { id: 'keret', label: 'Heti Keretterv', fileBase: `00_heti-keretterv_${mondayDateStr}`, kind: 'frame' },
             ...result.napok.map((day, index) => {
-              const name = day.nap_neve || `Nap_${index + 1}`;
-              const dayPart = WEEKDAY_FILE_NAMES[name] || asciiSlug(name) || `Nap_${index + 1}`;
-              const formPart = asciiSlug(day.tevekenyseg_forma);
+              const dayName = day.nap_neve || `Nap_${index + 1}`;
+              const daySlug = WEEKDAY_SLUGS[dayName] || asciiSlug(dayName).toLowerCase() || `nap-${index + 1}`;
+              const dayCalDate = getCalendarDateForDay(mondayDate, dayName);
+
+              let areasForDay = [];
+              if (req.weeklyFocusAreas && req.weeklyFocusAreas[dayName]) {
+                areasForDay = Array.isArray(req.weeklyFocusAreas[dayName])
+                  ? req.weeklyFocusAreas[dayName]
+                  : [req.weeklyFocusAreas[dayName]];
+              } else {
+                const gridRow = grid.find((r) => r && r.nap === dayName);
+                if (gridRow?.fo_terulet) {
+                  areasForDay = [gridRow.fo_terulet];
+                } else if (day.tevekenyseg_forma) {
+                  areasForDay = [day.tevekenyseg_forma];
+                }
+              }
+
+              const areaSlugParts = areasForDay.map(slugifyAreaName).filter(Boolean);
+              const areaSlug = areaSlugParts.length ? areaSlugParts.join('-') : 'tervezet';
+              const fileIndex = String(index + 1).padStart(2, '0');
+
               return {
                 id: `nap-${index}`,
-                label: name,
-                fileBase: `${String(index + 1).padStart(2, '0')}_${dayPart}${formPart ? `_${formPart}` : ''}`,
+                label: dayName,
+                fileBase: `${fileIndex}_${daySlug}-${areaSlug}_${dayCalDate}`,
                 kind: 'day',
                 index
               };
@@ -1207,11 +1407,27 @@
           ];
           if (docId !== 'keret') {
             const day = result.napok[Number(docId.replace('nap-', ''))] || {};
+            const dayName = day.nap_neve || '';
+            let dayAreaText = '';
+            if (request.weeklyFocusAreas && request.weeklyFocusAreas[dayName]) {
+              const raw = request.weeklyFocusAreas[dayName];
+              dayAreaText = Array.isArray(raw) ? raw.join(', ') : String(raw);
+            }
+            if (!dayAreaText && frame.teruletek_heti_eloszlasa) {
+              const gridRow = frame.teruletek_heti_eloszlasa.find((r) => r && r.nap === dayName);
+              if (gridRow?.fo_terulet) dayAreaText = gridRow.fo_terulet;
+            }
             return `
               <div class="doc-header">
                 <h2>Napi tervezet – ${escapeHtml(day.nap_neve || '')}</h2>
               </div>
-              ${buildMetaBlock([...baseMeta, ['Téma', frame.tema || '—'], ['Forma', day.tevekenyseg_forma || '—'], ['Napi cél', day.napi_cel || '—']])}
+              ${buildMetaBlock([
+                ...baseMeta,
+                ['Nevelési terület', dayAreaText || '—'],
+                ['Téma', frame.tema || '—'],
+                ['Forma', day.tevekenyseg_forma || '—'],
+                ['Napi cél', day.napi_cel || '—']
+              ])}
               ${settings.activities !== false ? `
                 <div class="doc-section document-day-sheet">
                   <h3>A tevékenység/foglalkozás kidolgozása</h3>
@@ -1241,16 +1457,16 @@
                 <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
               </div>` : ''}
             <div class="doc-section doc-table-section">
-              <h3>Területek heti eloszlása</h3>
+              <h3>Területek heti elosztása</h3>
               <table class="official-table">
                 <colgroup>${gridWidths.map((width) => `<col style="width: ${width}%;" />`).join('')}</colgroup>
-                <thead><tr><th>Nap</th><th>Fő terület</th><th>Mikrocsoportos tevékenység</th></tr></thead>
+                <thead><tr><th>Nap</th><th>Fő terület</th><th>Csoportos tevékenység / Tevékenység</th></tr></thead>
                 <tbody>
                   ${grid.map((row) => `
                     <tr>
                       <td>${formatTableCell(row.nap)}</td>
                       <td>${formatTableCell(row.fo_terulet)}</td>
-                      <td>${formatTableCell(row.mikrocsoportos_tevekenyseg)}</td>
+                      <td>${formatTableCell(row.csoportos_tevekenyseg || row.mikrocsoportos_tevekenyseg)}</td>
                     </tr>`).join('')}
                 </tbody>
               </table>
@@ -1266,10 +1482,14 @@
         const title = request.outputMode === 'Szülői tájékoztató'
           ? 'Szülői tájékoztató'
           : request.planMode === 'weekly' ? 'Heti tervezet' : 'Napi tervezet';
+        const focusAreasText = Array.isArray(request.focusAreas) && request.focusAreas.length > 0
+          ? request.focusAreas.join(', ')
+          : '—';
         const metaRows = [
           ['Óvoda', request.kindergartenName || '—'],
           ['Óvodapedagógus', request.teacherName || '—'],
           ['Csoport', request.groupName || request.group || '—'],
+          ['Nevelési terület', focusAreasText],
           ['Forma', result.tevekenyseg_forma],
           ['Előzmény', result.elozmeny],
           ['Téma', result.tema],
@@ -1611,6 +1831,11 @@
 
           if (field.matches('[data-field="kindergarten-profile"]')) {
             field.value = '';
+            return;
+          }
+
+          if (field.matches('[data-weekly-focus-day]')) {
+            field.selectedIndex = 0;
             return;
           }
 
@@ -2171,6 +2396,12 @@
       function buildGenerationPayload() {
         const activeDurationButton = document.querySelector('.segment.active[data-group="duration"]');
         const selectedDuration = (activeDurationButton?.dataset?.value || activeDurationButton?.textContent || '').trim() || getSelectedDuration() || 'Napi';
+        const isWeekly = selectedDuration === 'Heti';
+        const weeklyFocusAreas = isWeekly ? getWeeklyFocusAreas() : {};
+        const dailyFocusAreas = Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea);
+        const focusAreas = isWeekly
+          ? [...new Set(Object.values(weeklyFocusAreas).flat())]
+          : dailyFocusAreas;
         const iktEnabled = getIktEnabled();
         const iktTools = getSelectedIktTools();
         const iktCustomApp = getIktCustomApp();
@@ -2202,7 +2433,8 @@
             ? Number(document.querySelector('[data-field="child-count"]').value) : null,
           energyLevel: getChoice('energy', ENERGY_DEFAULT),
           hasPreschoolers: document.querySelector('[data-field="has-preschoolers"]')?.checked ?? false,
-          focusAreas: Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea),
+          focusAreas,
+          weeklyFocusAreas,
           customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
           customNotes: getCustomNotes(),
           detailLevel: getDetailLevel(),

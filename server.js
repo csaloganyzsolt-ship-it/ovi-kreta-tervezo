@@ -229,6 +229,17 @@ function isWeeklyBreakdown(payload = {}) {
   return payload.duration === 'Heti' && payload.includeDailyBreakdown === true;
 }
 
+function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays) {
+  if (!weeklyFocusAreas || typeof weeklyFocusAreas !== 'object') return '';
+  const lines = selectedDays.map((day) => {
+    const raw = weeklyFocusAreas[day];
+    const areas = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw.trim() : '');
+    return areas ? `- ${day}: ${areas}` : null;
+  }).filter(Boolean);
+  if (!lines.length) return '';
+  return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${lines.join('\n')}\nKötelező szabály: az egyes napok (napok tömb elemei) tevékenységformája, céljai és a kidolgozás táblázatának feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' mezőben pontosan ezeknek a területeknek kell szerepelniük az adott napoknál.`;
+}
+
 function buildWeeklyPrompt(settings, detail, extraRules = '') {
   const days = settings.selectedDays;
   const dayCount = days.length;
@@ -249,6 +260,7 @@ ${buildBlacklistRule(settings.blacklist)}
 ${buildKindergartenProfileRule(settings.kindergartenProfile)}
 ${buildIktRule(settings)}
 ${buildMathematicsRule(settings.focusAreas)}
+${buildWeeklyFocusAreasRule(settings.weeklyFocusAreas, settings.selectedDays)}
 ${extraRules}
 Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
 
@@ -268,7 +280,7 @@ Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerk
     "nevelesi_feladatok": "string",
     "didaktikai_feladatok": "string",
     "teruletek_heti_eloszlasa": [
-      { "nap": "Hétfő", "fo_terulet": "string", "mikrocsoportos_tevekenyseg": "string" }
+      { "nap": "Hétfő", "fo_terulet": "string", "csoportos_tevekenyseg": "string (Csoportos tevékenység / Tevékenység)" }
     ],
     "eszkozok": ["string"],
     "felhasznalt_irodalom": "string"
@@ -319,6 +331,7 @@ function buildPrompt(payload = {}) {
     energyLevel: payload.energyLevel ?? 'Átlagos',
     hasPreschoolers: Boolean(payload.hasPreschoolers),
     focusAreas: normalizeArray(payload.focusAreas),
+    weeklyFocusAreas: payload.weeklyFocusAreas && typeof payload.weeklyFocusAreas === 'object' ? payload.weeklyFocusAreas : {},
     selectedGoals: normalizeArray(payload.selectedGoals),
     specialNeeds: [...new Set([...normalizeArray(payload.specialNeeds), ...normalizeArray(customNotes.specialNeeds)])],
     customNote: payload.customNote || '',
@@ -404,10 +417,15 @@ function normalizeWeeklyResponse(parsed, payload) {
     teruletek_heti_eloszlasa: grid.map((row, index) => {
       const field = `heti_keretterv.teruletek_heti_eloszlasa[${index}]`;
       if (!row || typeof row !== 'object') throw generationError(`Hibás sor a Gemini válaszában: ${field}.`);
+      const act = readText(
+        row.csoportos_tevekenyseg ?? row.mikrocsoportos_tevekenyseg ?? row.tevekenyseg,
+        `${field}.csoportos_tevekenyseg`
+      );
       return {
         nap: readText(row.nap, `${field}.nap`),
         fo_terulet: readText(row.fo_terulet, `${field}.fo_terulet`),
-        mikrocsoportos_tevekenyseg: readText(row.mikrocsoportos_tevekenyseg, `${field}.mikrocsoportos_tevekenyseg`)
+        csoportos_tevekenyseg: act,
+        mikrocsoportos_tevekenyseg: act
       };
     }),
     eszkozok: readStringArray(frame.eszkozok, 'heti_keretterv.eszkozok'),
