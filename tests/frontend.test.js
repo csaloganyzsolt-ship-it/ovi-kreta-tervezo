@@ -160,7 +160,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   document.querySelector('#iktEnabled').checked = true;
   document.querySelector('#iktToolsPicker [data-ikt-tool]').click();
   document.querySelector('#iktCustomApp').value = 'Saját fejlesztő játék';
-  document.querySelector('.mode-pill[data-mode="Szülői tájékoztató"]').click();
+  assert.equal(document.querySelector('.mode-pill'), null);
   const daily = window.buildGenerationPayload();
   assert.equal(daily.dateValue, '2026-11-03');
   assert.equal(daily.tevekenysegForma, values['tevekenyseg-forma']);
@@ -179,7 +179,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.iktEnabled, true);
   assert.ok(daily.iktTools.length >= 1);
   assert.equal(daily.iktCustomApp, 'Saját fejlesztő játék');
-  assert.equal(daily.outputMode, 'Szülői tájékoztató');
+  assert.equal(daily.outputMode, 'Szakmai tervezet');
   window.setDurationSelection('Heti');
   document.querySelector('[data-field="week-value"]').value = '2026-W45';
   const weekly = window.buildGenerationPayload();

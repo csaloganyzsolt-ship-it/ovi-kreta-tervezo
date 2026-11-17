@@ -453,14 +453,6 @@
                 <span class="tag">Szakmai tervezet formázása</span>
               </div>
             </div>
-
-            <div class="add-card">
-              <label>Választható kimeneti forma</label>
-              <div class="output-mode" style="margin-top: 12px;">
-                <button class="mode-pill active" type="button" data-mode="Szakmai tervezet">Szakmai tervezet</button>
-                <button class="mode-pill" type="button" data-mode="Szülői tájékoztató">Szülői tájékoztató</button>
-              </div>
-            </div>
           </div>
 
           <div id="turnstileContainer" class="turnstile-container" hidden></div>
@@ -1028,11 +1020,10 @@
         if (element?.dataset?.field) return `field:${element.dataset.field}`;
         if (element?.dataset?.exportSection) return `export:${element.dataset.exportSection}`;
         if (element?.id) return `id:${element.id}`;
-        if (element?.dataset?.mode) return `mode:${element.dataset.mode}`;
         if (element?.dataset?.value && element.matches('.segment')) return `segment:${element.dataset.value}`;
         if (element?.dataset?.value && element.matches('.chip')) return `chip:${element.textContent.trim()}`;
         const labelText = element?.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() || element?.closest('.check-item')?.textContent?.replace(/\s+/g, ' ').trim() || element?.name || '';
-        return labelText ? `label:${labelText}` : `index:${Array.from(document.querySelectorAll('input, textarea, select, .chip, .segment, .mode-pill')).indexOf(element)}`;
+        return labelText ? `label:${labelText}` : `index:${Array.from(document.querySelectorAll('input, textarea, select, .chip, .segment')).indexOf(element)}`;
       }
 
       function collectDraftState() {
@@ -1061,7 +1052,7 @@
           }
         });
 
-        document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
+        document.querySelectorAll('.chip, .segment').forEach((button) => {
           const key = getAutoSaveKey(button);
           draft.fields[key] = button.classList.contains('active');
         });
@@ -1073,7 +1064,7 @@
         if (!draft || typeof draft !== 'object') return;
 
         const map = new Map();
-        document.querySelectorAll('input, textarea, select, .chip, .segment, .mode-pill').forEach((element) => {
+        document.querySelectorAll('input, textarea, select, .chip, .segment').forEach((element) => {
           map.set(getAutoSaveKey(element), element);
         });
 
@@ -1089,7 +1080,7 @@
           const element = map.get(key);
           if (!element) return;
 
-          if (element.matches('.chip, .segment, .mode-pill')) {
+          if (element.matches('.chip, .segment')) {
             element.classList.toggle('active', Boolean(value));
             return;
           }
@@ -1467,18 +1458,11 @@
           </div>`;
       }
 
-      // A korábban mentett tervek régi kimeneti formáját is átírjuk.
-      function displayOutputMode(mode) {
-        const value = String(mode || '').trim();
-        return value === 'Szakmai tervezet' ? value : 'Szakmai tervezet';
-      }
-
       function buildDocumentHtml(result, request, docId) {
         const { settings } = getExportSettings();
         const { orientation } = getDocSettings(docId);
         const showMethods = settings.differentiation !== false;
         const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
-        const outputMode = escapeHtml(displayOutputMode(request.outputMode));
         const locked = isPlanLocked(result);
 
         if (result.is_weekly === true && Array.isArray(result.napok)) {
@@ -1564,9 +1548,7 @@
         }
 
         const summary = result.summary || [result.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
-        const title = request.outputMode === 'Szülői tájékoztató'
-          ? 'Szülői tájékoztató'
-          : request.planMode === 'weekly' ? 'Heti tervezet' : 'Napi tervezet';
+        const title = request.planMode === 'weekly' ? 'Heti tervezet' : 'Napi tervezet';
         const focusAreasText = Array.isArray(request.focusAreas) && request.focusAreas.length > 0
           ? request.focusAreas.join(', ')
           : '—';
@@ -1937,14 +1919,12 @@
         setSelectedDays(ALL_WEEKDAYS);
         setChoice('energy', ENERGY_DEFAULT);
         setChoice('detail', 'detailed');
-        document.querySelectorAll('.chip, .segment, .mode-pill').forEach((button) => {
+        document.querySelectorAll('.chip, .segment').forEach((button) => {
           if (button.matches('.segment[data-group="energy"], .segment[data-group="detail"]')) return;
           if (button.matches('.segment[data-group="duration"]')) {
             button.classList.toggle('active', button.dataset.value === 'Napi');
           } else if (button.matches('.chip')) {
             button.classList.remove('active');
-          } else if (button.matches('.mode-pill')) {
-            button.classList.toggle('active', button.dataset.mode === 'Szakmai tervezet');
           }
         });
 
@@ -2482,15 +2462,6 @@
         });
       });
 
-      document.querySelectorAll('.mode-pill').forEach((pill) => {
-        pill.addEventListener('click', () => {
-          document.querySelectorAll('.mode-pill').forEach((item) => item.classList.remove('active'));
-          pill.classList.add('active');
-          persistDraftState();
-          updateSummary();
-        });
-      });
-
       document.querySelectorAll('[data-export-section], [data-export="margin"], [data-export="orientation"]').forEach((control) => {
         control.addEventListener('change', () => {
           if (control.matches('[data-export="margin"], [data-export="orientation"]')) {
@@ -2870,7 +2841,7 @@
           customNotes: getCustomNotes(),
           detailLevel: getDetailLevel(),
           detail: getChoice('detail', 'detailed'),
-          outputMode: document.querySelector('.mode-pill.active')?.dataset.mode || 'Szakmai tervezet',
+          outputMode: 'Szakmai tervezet',
           selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
           specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
           showLiteratureAtBottom: document.querySelector('input[data-field="show-literature"]')?.checked || false,

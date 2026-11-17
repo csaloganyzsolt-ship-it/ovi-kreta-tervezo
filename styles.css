@@ -53,11 +53,9 @@
   html[data-theme="dark"] .setting-option,
   html[data-theme="dark"] .setting-row select,
   html[data-theme="dark"] .download-btn,
-  html[data-theme="dark"] .history-panel,
-  html[data-theme="dark"] .mode-pill { background: var(--card); color: var(--text); }
+  html[data-theme="dark"] .history-panel { background: var(--card); color: var(--text); }
   html[data-theme="dark"] .chip { background: var(--soft); color: var(--muted); }
   html[data-theme="dark"] .chip.active { color: #fff; }
-  html[data-theme="dark"] .mode-pill.active { color: #fff; background: var(--primary); }
   html[data-theme="dark"] .btn.secondary { background: var(--soft); color: var(--text); }
   html[data-theme="dark"] .slider { background: #3d544a; }
   html[data-theme="dark"] .inline-box,
@@ -1418,27 +1416,6 @@
     color: var(--text);
   }
 
-  .output-mode {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .mode-pill {
-    border: 1px solid var(--border);
-    background: white;
-    border-radius: 999px;
-    padding: 8px 12px;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-
-  .mode-pill.active {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
   @media (max-width: 1100px) {
     .main-form-layout {
       grid-template-columns: 1fr;
@@ -1523,7 +1500,6 @@
     .download-row,
     .footer-actions,
     .btn,
-    .mode-pill,
     .chip,
     .history-panel,
     #loadPreviousBtn,
@@ -1648,7 +1624,7 @@
     .toggle-row { min-height: 56px; }
 
     .segment { min-height: 48px; font-size: 1rem; }
-    .chip, .mode-pill, .doc-tab { min-height: 44px; font-size: 1rem; cursor: pointer; }
+    .chip, .doc-tab { min-height: 44px; font-size: 1rem; cursor: pointer; }
 
     .btn { min-height: 52px; font-size: 1rem; padding: 14px 24px; }
     .btn.secondary {
