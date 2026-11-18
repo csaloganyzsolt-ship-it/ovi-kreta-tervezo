@@ -163,12 +163,20 @@ function openCheckoutModal() {
   document.getElementById('checkoutEmail').focus();
 }
 
-// A fizetés gombjai (Stripe és Barion) csak az ÁSZF és az Adatvédelmi tájékoztató elfogadása után kattinthatók.
+const CHECKOUT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// A fizetés gombjai (Stripe és Barion) csak akkor kattinthatók, ha mindkét nyilatkozat be van pipálva és az e-mail cím érvényes.
+function checkoutFormReady() {
+  return Boolean(document.getElementById('consentTerms')?.checked)
+    && Boolean(document.getElementById('consentDigital')?.checked)
+    && CHECKOUT_EMAIL_PATTERN.test(String(document.getElementById('checkoutEmail')?.value || '').trim());
+}
+
 function syncCheckoutButtons() {
-  const accepted = Boolean(document.getElementById('consentTerms')?.checked);
+  const ready = checkoutFormReady();
   for (const id of ['checkoutSubmit', 'checkoutBarion']) {
     const button = document.getElementById(id);
-    if (button) button.disabled = !accepted;
+    if (button) button.disabled = !ready;
   }
 }
 
@@ -176,7 +184,7 @@ function syncCheckoutButtons() {
 function readCheckoutForm() {
   const errorEl = document.getElementById('checkoutError');
   const email = document.getElementById('checkoutEmail').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return null; }
+  if (!CHECKOUT_EMAIL_PATTERN.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return null; }
   if (!document.getElementById('consentTerms').checked) {
     errorEl.textContent = 'A fizetéshez el kell fogadnod az ÁSZF-et és az Adatvédelmi tájékoztatót.';
     return null;
@@ -189,26 +197,12 @@ function readCheckoutForm() {
   return { email };
 }
 
-// A Barion backend a következő lépésben készül: a végpont egyelőre 501-et és érthető üzenetet ad, amit kulturáltan megjelenítünk.
-async function startBarionCheckout() {
-  const form = readCheckoutForm();
-  if (!form) return;
-  const errorEl = document.getElementById('checkoutError');
-  const button = document.getElementById('checkoutBarion');
-  button.disabled = true;
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
-    });
-    const data = await response.json().catch(() => ({}));
-    errorEl.textContent = data.error || data.warning || `A Barion fizetés most nem érhető el (HTTP ${response.status}).`;
-  } catch (error) {
-    errorEl.textContent = `A Barion fizetés most nem érhető el: ${error.message}`;
-  } finally {
-    syncCheckoutButtons();
-  }
+const BARION_SOON_MESSAGE = 'A Barion fizetés hamarosan indul! Kérjük, addig használd a Stripe bankkártyás fizetést.';
+
+// A Barion backend a következő lépésben készül; addig kulturált figyelmeztetés jelenik meg, hálózati hívás nélkül.
+function startBarionCheckout() {
+  if (!readCheckoutForm()) return;
+  document.getElementById('checkoutError').textContent = BARION_SOON_MESSAGE;
 }
 
 async function submitCheckout(event) {

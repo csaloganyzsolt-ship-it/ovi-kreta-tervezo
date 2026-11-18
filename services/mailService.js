@@ -62,8 +62,27 @@ function sanitizeAttachments(files) {
   });
 }
 
+// NODE_ENV=test alatt soha nem megy ki valódi levél: a küldés csak sikert szimulál, és a mockOutbox-ba jegyzi (csak címzett, tárgy, csatolmány-nevek).
+const mockOutbox = [];
+
+function isMailMocked(env = process.env) {
+  return env.NODE_ENV === 'test';
+}
+
+function createMockTransport() {
+  return {
+    mock: true,
+    async sendMail(message) {
+      const to = Array.isArray(message.to) ? message.to.join(', ') : String(message.to || '');
+      mockOutbox.push({ to, subject: String(message.subject || ''), attachments: (message.attachments || []).map((file) => file.filename) });
+      return { messageId: `<mock-${mockOutbox.length}@ovitervezo.test>`, accepted: [to], rejected: [], response: '250 mock: NODE_ENV=test, nem ment ki valódi e-mail', mock: true };
+    }
+  };
+}
+
 function createTransport(env, deps) {
   if (deps.transport) return deps.transport;
+  if (isMailMocked(env)) return createMockTransport();
   const nodemailer = require('nodemailer');
   const port = Number(env.SMTP_PORT || 587);
   return nodemailer.createTransport({
@@ -334,6 +353,8 @@ async function sendTestDeliveryEmail({ to, plan, attachments, title, planMode },
 }
 
 module.exports = {
+  isMailMocked,
+  mockOutbox,
   adminEmail,
   sendAdminNotification,
   buildEmailContent,

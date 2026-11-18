@@ -227,8 +227,9 @@ const fill = (window, { terms = true, digital = true, email = 'vevo@example.com'
   const { document } = window;
   document.getElementById('checkoutEmail').value = email;
   document.getElementById('consentTerms').checked = terms;
-  document.getElementById('consentTerms').dispatchEvent(new window.Event('change', { bubbles: true }));
   document.getElementById('consentDigital').checked = digital;
+  for (const id of ['consentTerms', 'consentDigital']) document.getElementById(id).dispatchEvent(new window.Event('change', { bubbles: true }));
+  document.getElementById('checkoutEmail').dispatchEvent(new window.Event('input', { bubbles: true }));
 };
 
 test('the payment form has the mandatory consent above both payment buttons and the buttons stay disabled until it is ticked', async (t) => {
@@ -251,12 +252,42 @@ test('the payment form has the mandatory consent above both payment buttons and 
   const position = (node) => Array.from(document.getElementById('checkoutForm').querySelectorAll('*')).indexOf(node);
   assert.ok(position(consent) < position(stripe) && position(consent) < position(barion), 'a jelölőnégyzet a gombok fölött van');
 
-  fill(window, { terms: true });
+  fill(window);
   assert.equal(stripe.disabled, false);
   assert.equal(barion.disabled, false);
   fill(window, { terms: false });
   assert.equal(stripe.disabled, true);
   assert.equal(barion.disabled, true);
+});
+
+test('both payment buttons need both declarations and a valid billing e-mail, each one on its own', async (t) => {
+  const window = await loadPlanner(t);
+  const { document } = window;
+  window.renderResultDocument(standardResult());
+  window.openCheckoutModal();
+  const digital = document.getElementById('consentDigital').closest('label').textContent.replace(/\s+/g, ' ').trim();
+  assert.equal(digital, 'Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.');
+  const state = () => ['checkoutSubmit', 'checkoutBarion'].map((id) => document.getElementById(id).disabled);
+
+  assert.deepEqual(state(), [true, true], 'induláskor mindkettő letiltva');
+  for (const broken of [{ terms: false }, { digital: false }, { terms: false, digital: false }, { email: '' }, { email: 'nem-email' }, { email: 'valaki@' }, { email: 'a@b' }, { email: 'a b@example.com' }]) {
+    fill(window, broken);
+    assert.deepEqual(state(), [true, true], `letiltva: ${JSON.stringify(broken)}`);
+  }
+  fill(window, { email: '  vevo@example.com  ' });
+  assert.deepEqual(state(), [false, false], 'minden megvan: mindkettő kattintható');
+
+  // Gépelés közben is frissül: az e-mail törlése azonnal letiltja a gombokat.
+  const email = document.getElementById('checkoutEmail');
+  email.value = '';
+  email.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.deepEqual(state(), [true, true]);
+  email.value = 'vevo@example.com';
+  email.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.deepEqual(state(), [false, false]);
+  document.getElementById('consentDigital').checked = false;
+  document.getElementById('consentDigital').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.deepEqual(state(), [true, true]);
 });
 
 test('the Barion button sits next to the Stripe button with the required label', async (t) => {
@@ -282,53 +313,47 @@ test('a Stripe checkout without the consent is refused even if the form is submi
   assert.match(window.document.getElementById('checkoutError').textContent, /ÁSZF/);
 });
 
-test('clicking the Barion button calls /api/checkout-barion and shows the 501 warning in the form instead of failing', async (t) => {
+test('clicking the Barion button only shows the frontend warning, without any network request or redirect', async (t) => {
   const window = await loadPlanner(t);
   window.renderResultDocument(academicResult());
   window.openCheckoutModal();
-  const calls = [];
-  window.fetch = async (url, options) => {
-    calls.push({ url: String(url), body: JSON.parse(options.body) });
-    return Response.json({ success: false, code: 'BARION_NOT_IMPLEMENTED', error: 'A Barion fizetés hamarosan indul!' }, { status: 501 });
-  };
+  let calls = 0;
+  window.fetch = async () => { calls += 1; return Response.json({ success: true }); };
+  const alerts = [];
+  window.alert = (message) => alerts.push(message);
   fill(window);
   const barion = window.document.getElementById('checkoutBarion');
   barion.click();
   await new Promise((resolve) => setTimeout(resolve, 30));
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, 'http://localhost:8000/api/checkout-barion');
-  assert.deepEqual({ plan: calls[0].body.plan, planMode: calls[0].body.planMode, email: calls[0].body.email, generationId: calls[0].body.generationId },
-    { plan: 'academic_daily', planMode: 'academic', email: 'vevo@example.com', generationId: 'gen_ui_academic' });
+  assert.equal(calls, 0, 'nincs hálózati hívás');
+  assert.deepEqual(alerts, [], 'nem böngészős alert, hanem az űrlapon belüli figyelmeztetés');
   const error = window.document.getElementById('checkoutError');
-  assert.equal(error.textContent, 'A Barion fizetés hamarosan indul!');
+  assert.equal(error.textContent, 'A Barion fizetés hamarosan indul! Kérjük, addig használd a Stripe bankkártyás fizetést.');
   assert.equal(error.getAttribute('role'), 'alert');
   assert.equal(window.location.href, 'http://localhost:8000/', 'nincs átirányítás');
-  assert.equal(barion.disabled, false, 'a gomb a hiba után újra használható');
+  assert.equal(barion.disabled, false, 'a gomb a figyelmeztetés után is használható');
+  assert.equal(window.document.getElementById('checkoutSubmit').disabled, false, 'a Stripe fizetés érintetlen');
 });
 
-test('the Barion button validates the form first and survives a network error with a readable message', async (t) => {
+test('a disabled Barion button does nothing, and a forced Barion call with a broken form is refused before any message', async (t) => {
   const window = await loadPlanner(t);
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
   let calls = 0;
-  window.fetch = async () => { calls += 1; throw new TypeError('Network unavailable'); };
+  window.fetch = async () => { calls += 1; return Response.json({ success: true }); };
   const error = window.document.getElementById('checkoutError');
   const barion = window.document.getElementById('checkoutBarion');
 
-  fill(window, { email: 'nem-email' });
+  fill(window, { email: 'nem-email', digital: false });
   barion.click();
-  assert.match(error.textContent, /érvényes e-mail/);
+  assert.equal(error.textContent, '', 'letiltott gombra a kattintás semmit sem csinál');
+  window.startBarionCheckout();
+  assert.match(error.textContent, /érvényes e-mail/, 'szkriptből hívva is ellenőriz');
   fill(window, { digital: false });
-  barion.click();
+  window.startBarionCheckout();
   assert.match(error.textContent, /mindkét nyilatkozat/);
   assert.equal(calls, 0);
-
-  fill(window);
-  barion.click();
-  await new Promise((resolve) => setTimeout(resolve, 30));
-  assert.equal(calls, 1);
-  assert.match(error.textContent, /A Barion fizetés most nem érhető el: Network unavailable/);
 });
 
 test('the Stripe checkout sends the plan and plan mode of the document, and the payment buttons show the right price', async (t) => {

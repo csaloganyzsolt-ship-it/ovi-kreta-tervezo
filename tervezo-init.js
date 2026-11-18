@@ -89,7 +89,9 @@ function initFooterAndModals() {
     if (event.target.closest('.unlock-cta')) openCheckoutModal();
   });
   document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
-  document.getElementById('consentTerms').addEventListener('change', syncCheckoutButtons);
+  for (const [id, eventName] of [['consentTerms', 'change'], ['consentDigital', 'change'], ['checkoutEmail', 'input'], ['checkoutEmail', 'change']]) {
+    document.getElementById(id).addEventListener(eventName, syncCheckoutButtons);
+  }
   document.getElementById('checkoutBarion').addEventListener('click', startBarionCheckout);
   syncCheckoutButtons();
   document.getElementById('downloadInvoiceBtn').addEventListener('click', downloadInvoice);

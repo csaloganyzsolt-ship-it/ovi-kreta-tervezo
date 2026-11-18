@@ -1,3 +1,5 @@
+// Tesztek alatt a levélküldés mindig mockolt (services/mailService.js), akkor is, ha az .env-ben van SMTP-beállítás.
+process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 process.env.GENERATE_RATE_LIMIT = process.env.GENERATE_RATE_LIMIT || '1000';
 process.env.DAILY_GENERATION_CAP = process.env.DAILY_GENERATION_CAP || '100000';
 
