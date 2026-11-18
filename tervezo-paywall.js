@@ -173,26 +173,39 @@ function openCheckoutModal() {
 
 const CHECKOUT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-// A fizetés gombjai (Stripe és Barion) csak akkor kattinthatók, ha mindkét nyilatkozat be van pipálva és az e-mail cím érvényes.
+const BILLING_ZIP_PATTERN = /^[0-9A-Za-z][0-9A-Za-z -]{2,9}$/;
+
+// A Barion-fizetés csak akkor kattintható, ha mindkét nyilatkozat be van pipálva, az e-mail cím érvényes és a számlázási mezők ki vannak töltve.
 function checkoutFormReady() {
   return Boolean(document.getElementById('consentTerms')?.checked)
     && Boolean(document.getElementById('consentDigital')?.checked)
-    && CHECKOUT_EMAIL_PATTERN.test(String(document.getElementById('checkoutEmail')?.value || '').trim());
+    && CHECKOUT_EMAIL_PATTERN.test(String(document.getElementById('checkoutEmail')?.value || '').trim())
+    && Boolean(readBilling());
 }
 
 function syncCheckoutButtons() {
-  const ready = checkoutFormReady();
-  for (const id of ['checkoutSubmit', 'checkoutBarion']) {
-    const button = document.getElementById(id);
-    if (button) button.disabled = !ready;
-  }
+  const button = document.getElementById('checkoutBarion');
+  if (button) button.disabled = !checkoutFormReady();
 }
 
-// Közös ellenőrzés mindkét fizetési módhoz; hibánál kiírja az okot és null-t ad.
-function readCheckoutForm() {
+// A Számlázz.hu számlához kötelező vevői adatok; hiányos vagy túl rövid érték esetén null.
+function readBilling() {
+  const value = (id) => String(document.getElementById(id)?.value || '').replace(/\s+/g, ' ').trim();
+  const billing = { name: value('billingName'), zip: value('billingZip'), city: value('billingCity'), address: value('billingAddress') };
+  if (billing.name.length < 2 || !BILLING_ZIP_PATTERN.test(billing.zip) || billing.city.length < 2 || billing.address.length < 3) return null;
+  return billing;
+}
+
+// Közös ellenőrzés a fizetéshez és a kuponhoz; hibánál kiírja az okot és null-t ad. A számlázási adat csak a fizetésnél kötelező.
+function readCheckoutForm({ billing = false } = {}) {
   const errorEl = document.getElementById('checkoutError');
   const email = document.getElementById('checkoutEmail').value.trim();
   if (!CHECKOUT_EMAIL_PATTERN.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return null; }
+  const billingData = billing ? readBilling() : null;
+  if (billing && !billingData) {
+    errorEl.textContent = 'Add meg a számlázási nevet, az irányítószámot, a települést és az utcát, házszámot.';
+    return null;
+  }
   if (!document.getElementById('consentTerms').checked) {
     errorEl.textContent = 'A fizetéshez el kell fogadnod az ÁSZF-et és az Adatvédelmi tájékoztatót.';
     return null;
@@ -202,7 +215,7 @@ function readCheckoutForm() {
     return null;
   }
   errorEl.textContent = '';
-  return { email };
+  return { email, billing: billingData };
 }
 
 function redirectTo(url) {
@@ -214,16 +227,15 @@ const PENDING_BARION_KEY = 'oviKretaPendingBarion';
 
 // Barion fizetés: a szerver elindítja a Payment/Start hívást, a felhasználó a kapott GatewayUrl-re megy; a visszatérést a handleCheckoutReturn kezeli.
 async function startBarionCheckout() {
-  const form = readCheckoutForm();
+  const form = readCheckoutForm({ billing: true });
   if (!form) return;
   const errorEl = document.getElementById('checkoutError');
   document.getElementById('checkoutBarion').disabled = true;
-  document.getElementById('checkoutSubmit').disabled = true;
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
@@ -267,32 +279,6 @@ async function applyCouponCode() {
     statusEl.textContent = `A kupon nem érvényesíthető: ${error.message}`;
   } finally {
     button.disabled = false;
-  }
-}
-
-async function submitCheckout(event) {
-  event.preventDefault();
-  const errorEl = document.getElementById('checkoutError');
-  const form = readCheckoutForm();
-  if (!form) return;
-  const { email } = form;
-  const submit = document.getElementById('checkoutSubmit');
-  submit.disabled = true;
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email, generationId: lastResult.generationId, title: planTitle() }),
-    });
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
-    localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
-    if (data.mock) errorEl.textContent = data.message;
-    redirectTo(data.url);
-  } catch (error) {
-    errorEl.textContent = `A fizetés nem indítható: ${error.message}`;
-  } finally {
-    syncCheckoutButtons();
   }
 }
 

@@ -86,13 +86,15 @@ function initFooterAndModals() {
   document.addEventListener('click', (event) => {
     if (event.target.closest('.unlock-cta')) openCheckoutModal();
   });
-  document.getElementById('checkoutForm').addEventListener('submit', submitCheckout);
-  for (const [id, eventName] of [['consentTerms', 'change'], ['consentDigital', 'change'], ['checkoutEmail', 'input'], ['checkoutEmail', 'change']]) {
+  // Az űrlap sosem töltődik újra: egyetlen fizetési út van, a Barion gomb.
+  document.getElementById('checkoutForm').addEventListener('submit', (event) => event.preventDefault());
+  for (const [id, eventName] of [['consentTerms', 'change'], ['consentDigital', 'change'], ['checkoutEmail', 'input'], ['checkoutEmail', 'change'],
+    ['billingName', 'input'], ['billingZip', 'input'], ['billingCity', 'input'], ['billingAddress', 'input']]) {
     document.getElementById(id).addEventListener(eventName, syncCheckoutButtons);
   }
   document.getElementById('checkoutBarion').addEventListener('click', startBarionCheckout);
   document.getElementById('couponApply').addEventListener('click', applyCouponCode);
-  // Enterre a kuponkód érvényesül, nem indul el a Stripe-fizetés.
+  // Enterre a kuponkód érvényesül, nem indul el a fizetés.
   document.getElementById('couponCode').addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();

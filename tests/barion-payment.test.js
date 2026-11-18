@@ -35,7 +35,7 @@ function setEnv(t, values) {
 // Barion + Számlázz.hu csapda: minden külső hívás ide fut be, valódi hálózat nélkül.
 function stubExternal(t, { start, state, invoice } = {}) {
   const realFetch = global.fetch;
-  const calls = { start: [], state: [], invoice: 0, invoiceXml: [] };
+  const calls = { start: [], state: [], invoice: 0, invoiceXml: [], sheets: [] };
   global.fetch = async (url, options = {}) => {
     const target = new URL(url);
     if (/^api(\.test)?\.barion\.com$/.test(target.hostname)) {
@@ -58,6 +58,10 @@ function stubExternal(t, { start, state, invoice } = {}) {
       if (invoice) return invoice();
       return new Response(Buffer.from('%PDF-1.4 barion teszt'), { status: 200, headers: { szlahu_szamlaszam: 'OVITE-2026-77' } });
     }
+    if (target.hostname === 'script.google.com') {
+      calls.sheets.push(JSON.parse(options.body));
+      return new Response('ok', { status: 200 });
+    }
     return realFetch(url, options);
   };
   t.after(() => { global.fetch = realFetch; });
@@ -71,6 +75,7 @@ function barionEnv(t, extra = {}) {
     BARION_POS_KEY_EV: POS_KEY, BARION_POS_KEY: undefined, BARION_TEST_MODE: 'true', BARION_PAYEE_EMAIL: 'bolt@ovitervezo.hu',
     FRONTEND_URL: 'https://ovitervezo.hu', BACKEND_URL: 'https://api.ovitervezo.test', BILLING_PROFILE: undefined,
     SZAMLAZZ_API_KEY_EV: 'agent-key', SZAMLAZZ_API_KEY: undefined, SZAMLAZZ_KEY: undefined, INVOICE_STORE_PATH: path.join(dir, 'invoiced-sessions.json'),
+    SMTP_HOST: undefined, GOOGLE_SHEETS_WEBHOOK_URL: undefined, ADMIN_NOTIFICATION_EMAIL: undefined,
     ...extra
   });
   return dir;
@@ -78,8 +83,10 @@ function barionEnv(t, extra = {}) {
 
 const succeeded = (total, sessionId, extra = {}) => ({ PaymentId: PAYMENT_ID, PaymentRequestId: sessionId, Status: 'Succeeded', Total: total, Currency: 'HUF', Errors: [], ...extra });
 
+const BILLING = { name: 'Minta Óvoda & Társa Kft.', zip: '9021', city: 'Győr', address: 'Fő utca 12/B.' };
+
 async function startBarion(base, body = {}) {
-  const response = await post(base, '/api/checkout-barion', { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', generationId: 'gen_barion_std', title: 'Őszi erdő', ...body });
+  const response = await post(base, '/api/checkout-barion', { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing: BILLING, generationId: 'gen_barion_std', title: 'Őszi erdő', ...body });
   return { response, data: await response.json() };
 }
 
@@ -125,6 +132,17 @@ test('checkout-barion starts a Barion payment with the stored plan mode price, t
 
   const stored = barionService.getRecord(data.sessionId);
   assert.deepEqual({ paymentId: stored.paymentId, generationId: stored.generationId, paid: stored.paid, amountHuf: stored.amountHuf }, { paymentId: PAYMENT_ID, generationId: 'gen_barion_std', paid: false, amountHuf: 390 });
+  assert.deepEqual(stored.billing, BILLING, 'a számlázási adatok a documentId mellett tárolódnak');
+  assert.equal(JSON.stringify(body).includes('Minta Óvoda'), false, 'a számlázási adat nem megy a Barionnak');
+});
+
+test('checkout-barion trims and sanitizes the billing fields before storing them', async (t) => {
+  barionEnv(t);
+  seedPlans();
+  stubExternal(t);
+  const base = await listen(t);
+  const { data } = await startBarion(base, { billing: { name: '  Minta   <b>Kft</b>\n', zip: ' 9021 ', city: '  Győr ', address: 'Fő u. 1.\t', extra: 'x' } });
+  assert.deepEqual(barionService.getRecord(data.sessionId).billing, { name: 'Minta b Kft /b', zip: '9021', city: 'Győr', address: 'Fő u. 1.' });
 });
 
 test('checkout-barion charges 690 Ft for an academic plan from the stored plan, whatever the client claims, and 890 Ft for the weekly package', async (t) => {
@@ -169,6 +187,10 @@ test('checkout-barion refuses bad input, a missing key, Barion errors and a fore
   for (const [label, override, status, pattern] of [
     ['bad plan', { plan: 'monthly' }, 400, /Ismeretlen csomag/],
     ['bad e-mail', { email: 'nem-email' }, 400, /e-mail/],
+    ['no billing', { billing: undefined }, 400, /számlázási adatok hiányosak: számlázási név, irányítószám, település, utca, házszám/],
+    ['partial billing', { billing: { ...BILLING, city: ' ', address: '' } }, 400, /hiányosak: település, utca, házszám/],
+    ['bad zip', { billing: { ...BILLING, zip: '12' } }, 400, /számlázási adatok érvénytelenek/],
+    ['billing is not an object', { billing: 'Minta Kft.' }, 400, /hiányosak/],
     ['no document', { generationId: undefined }, 404, /már nem érhető el/],
     ['unknown document', { generationId: 'gen_nincs_ilyen' }, 404, /már nem érhető el/]
   ]) {
@@ -208,7 +230,7 @@ async function paidSession(t, base, state, seed = {}) {
   return data;
 }
 
-test('the webhook asks Barion for the state, unlocks the document, issues the Barion invoice once and sends no e-mail', async (t) => {
+test('the webhook asks Barion for the state, unlocks the document, issues the Barion invoice once with the stored billing data and sends no customer e-mail', async (t) => {
   barionEnv(t);
   const holder = {};
   const calls = stubExternal(t, { state: () => holder.current() });
@@ -233,6 +255,10 @@ test('the webhook asks Barion for the state, unlocks the document, issues the Ba
   assert.match(xml, /<afakulcs>AAM<\/afakulcs>/);
   assert.match(xml, /<bruttoErtek>390<\/bruttoErtek>/);
   assert.match(xml, /<email>vevo@example\.com<\/email>/);
+  assert.match(xml, /<nev>Minta Óvoda &amp; Társa Kft\.<\/nev>/);
+  assert.match(xml, /<irsz>9021<\/irsz>/);
+  assert.match(xml, /<telepules>Győr<\/telepules>/);
+  assert.match(xml, /<cim>Fő utca 12\/B\.<\/cim>/);
   assert.equal(mailService.mockOutbox.length, 0, 'a webhook nem küld levelet');
 
   // Idempotencia: ismételt és egyidejű visszahívás sem állít ki második számlát.
@@ -255,6 +281,95 @@ test('concurrent first callbacks still issue exactly one invoice', async (t) => 
   const responses = await Promise.all([1, 2, 3].map(() => fetch(`${base}/api/webhook/barion?paymentId=${PAYMENT_ID}`)));
   for (const response of responses) assert.equal(response.status, 200);
   assert.equal(calls.invoice, 1);
+});
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+test('the first successful Barion payment sends the admin notification and the Google Sheets row, exactly once, with the real billing data', async (t) => {
+  barionEnv(t, { SMTP_HOST: 'smtp.invalid.example', ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu', GOOGLE_SHEETS_WEBHOOK_URL: 'https://script.google.com/macros/s/x/exec' });
+  const holder = {};
+  const calls = stubExternal(t, { state: () => holder.current() });
+  const base = await listen(t);
+  const session = await paidSession(t, base, holder);
+  mailService.mockOutbox.length = 0;
+
+  assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 200);
+  await settle();
+  assert.equal(mailService.mockOutbox.length, 1, 'csak a rendszergazdai \u00e9rtes\u00edt\u0151, a v\u00e1s\u00e1rl\u00f3nak nem megy lev\u00e9l');
+  assert.equal(mailService.mockOutbox[0].to, 'admin@ovitervezo.hu');
+  assert.match(mailService.mockOutbox[0].subject, /^OviTervez\u0151 \u2013 \u00faj fizet\u00e9s Barionnal: OVI-\d{6}-/);
+  assert.deepEqual(mailService.mockOutbox[0].attachments, [`${mailService.mockOutbox[0].subject.split(': ')[1]}.pdf`], 'a sz\u00e1mla PDF a levelen');
+
+  assert.equal(calls.sheets.length, 1);
+  const row = calls.sheets[0];
+  assert.deepEqual({ nev: row.vevo_neve, email: row.vevo_email, cim: row.szamlazasi_cim, csomag: row.csomag, tema: row.tervezet_temaja, osszeg: row.fizetett_osszeg_huf, szamla: row.szamlaszam, id: row.stripe_session_id },
+    { nev: BILLING.name, email: 'vevo@example.com', cim: '9021, Gy\u0151r, F\u0151 utca 12/B.', csomag: 'Napi tervezet', tema: '\u0150szi erd\u0151', osszeg: 390, szamla: 'OVITE-2026-77', id: session.sessionId });
+  assert.ok(row.invoice_pdf_base64, 'a sz\u00e1mla PDF a Drive-ba megy');
+
+  // Ism\u00e9telt visszah\u00edv\u00e1s \u00e9s a visszat\u00e9r\u0151 oldal lek\u00e9rdez\u00e9se nem k\u00fcld \u00fajabb \u00e9rtes\u00edt\u00e9st.
+  await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
+  await fetch(`${base}/api/checkout-session/${session.sessionId}`);
+  await settle();
+  assert.equal(mailService.mockOutbox.length, 1);
+  assert.equal(calls.sheets.length, 1);
+});
+
+test('no admin notification or sheet row for pending or mismatching payments, and a failed invoice notifies only after the retry succeeds', async (t) => {
+  barionEnv(t, { SMTP_HOST: 'smtp.invalid.example', GOOGLE_SHEETS_WEBHOOK_URL: 'https://script.google.com/macros/s/x/exec' });
+  const holder = {};
+  let invoiceFails = true;
+  const calls = stubExternal(t, {
+    state: () => holder.current(),
+    invoice: () => (invoiceFails ? new Response('', { status: 200, headers: { szlahu_error: 'Hiba', szlahu_error_code: '3' } }) : new Response(Buffer.from('%PDF-1.4 ok'), { status: 200, headers: { szlahu_szamlaszam: 'OVITE-2026-80' } }))
+  });
+  const base = await listen(t);
+  const session = await paidSession(t, base, holder);
+  mailService.mockOutbox.length = 0;
+
+  holder.current = () => ({ PaymentId: PAYMENT_ID, PaymentRequestId: session.sessionId, Status: 'Started', Total: 390, Currency: 'HUF', Errors: [] });
+  await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
+  holder.current = () => succeeded(1, session.sessionId);
+  await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
+  holder.current = () => succeeded(390, session.sessionId);
+  assert.ok((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status >= 500);
+  await settle();
+  assert.equal(mailService.mockOutbox.length, 0);
+  assert.equal(calls.sheets.length, 0);
+
+  invoiceFails = false;
+  assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 200);
+  await settle();
+  assert.equal(mailService.mockOutbox.length, 1);
+  assert.equal(calls.sheets.length, 1);
+});
+
+test('a failing Google Sheets webhook or admin mail never breaks the Barion callback', async (t) => {
+  barionEnv(t, { SMTP_HOST: 'smtp.invalid.example', GOOGLE_SHEETS_WEBHOOK_URL: 'https://script.google.com/macros/s/x/exec' });
+  const holder = {};
+  const realFetch = global.fetch;
+  stubExternal(t, { state: () => holder.current() });
+  const stubbed = global.fetch;
+  global.fetch = async (url, options) => (new URL(url).hostname === 'script.google.com' ? Promise.reject(new Error('Sheets le\u00e1llt')) : stubbed(url, options));
+  t.after(() => { global.fetch = realFetch; });
+  const base = await listen(t);
+  const session = await paidSession(t, base, holder);
+  const hook = await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
+  assert.equal(hook.status, 200);
+  assert.equal(barionService.getRecord(session.sessionId).invoiceNumber, 'OVITE-2026-77');
+});
+
+test('without SMTP the Barion callback still succeeds and sends no mail, and in NODE_ENV=test no real mail leaves', async (t) => {
+  barionEnv(t, { SMTP_HOST: undefined, GOOGLE_SHEETS_WEBHOOK_URL: undefined });
+  const holder = {};
+  const calls = stubExternal(t, { state: () => holder.current() });
+  const base = await listen(t);
+  await paidSession(t, base, holder);
+  mailService.mockOutbox.length = 0;
+  assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 200);
+  await settle();
+  assert.equal(mailService.mockOutbox.length, 0);
+  assert.equal(calls.sheets.length, 0);
+  assert.equal(process.env.NODE_ENV, 'test');
 });
 
 test('the return-page status endpoint reports pending, failed and paid payments and returns the unlocked plan only when paid', async (t) => {

@@ -234,16 +234,16 @@ function adminEmail(env = process.env) {
 }
 
 // Külön értesítő a webhookból: a számla a rendszergazdához akkor is eljut, ha a vevő böngészője nem indítja a kézbesítést.
-async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumber, invoicePdf, title }, deps = {}) {
+async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumber, invoicePdf, title, paymentMethod }, deps = {}) {
   const env = deps.env || process.env;
   if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
   const support = supportEmail(env);
-  const lines = [`Új sikeres fizetés.`, `Rendelésszám: ${orderNumber || '-'}`, `Számlaszám: ${invoiceNumber || '-'}`, `Csomag: ${planLabelOf(plan)}`, `Vevő: ${customer?.name || '-'} <${customer?.email || '-'}>`, `Téma: ${title || '-'}`];
+  const lines = [`Új sikeres fizetés${paymentMethod ? ` (${paymentMethod})` : ''}.`, `Rendelésszám: ${orderNumber || '-'}`, `Számlaszám: ${invoiceNumber || '-'}`, `Csomag: ${planLabelOf(plan)}`, `Vevő: ${customer?.name || '-'} <${customer?.email || '-'}>`, `Téma: ${title || '-'}`];
   const transport = createTransport(env, deps);
   await transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to: adminEmail(env),
-    subject: `OviTervező – új fizetés: ${orderNumber || ''}`.trim(),
+    subject: `OviTervező – új fizetés${paymentMethod === 'Barion' ? ' Barionnal' : ''}: ${orderNumber || ''}`.trim(),
     text: lines.join('\n'),
     attachments: Buffer.isBuffer(invoicePdf) && invoicePdf.length ? [{ filename: `${orderNumber || 'szamla'}.pdf`, content: invoicePdf, contentType: 'application/pdf' }] : []
   });

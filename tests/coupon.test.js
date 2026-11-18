@@ -213,7 +213,7 @@ const fillCheckout = (window, { email = 'vevo@example.com', consent = true } = {
 const CTA_IDS = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockFloatingBtn'];
 const ctaVisible = (window) => CTA_IDS.map((id) => !window.document.getElementById(id).hidden);
 
-test('the checkout form has a coupon field with an Érvényesítés button above both payment buttons', async (t) => {
+test('the checkout form has a coupon field with an Érvényesítés button above the payment button, below the billing fields', async (t) => {
   const window = await loadPlanner(t);
   const { document } = window;
   const form = Array.from(document.getElementById('checkoutForm').querySelectorAll('*'));
@@ -221,9 +221,9 @@ test('the checkout form has a coupon field with an Érvényesítés button above
   const input = document.getElementById('couponCode');
   assert.equal(input.type, 'text');
   assert.equal(document.getElementById('couponApply').textContent.trim(), 'Érvényesítés');
-  assert.equal(document.getElementById('couponApply').type, 'button', 'nem küldi el a Stripe-űrlapot');
+  assert.equal(document.getElementById('couponApply').type, 'button', 'nem küldi el a fizetési űrlapot');
   assert.equal(document.querySelector('label[for="couponCode"]').textContent.trim(), 'Kuponkód');
-  assert.ok(index('couponCode') < index('checkoutSubmit') && index('couponApply') < index('checkoutBarion'));
+  assert.ok(index('billingAddress') < index('couponCode') && index('couponCode') < index('checkoutBarion') && index('couponApply') < index('checkoutBarion'));
 });
 
 test('a valid coupon unlocks the plan, hides the invoice button, closes the form and delivers the files by e-mail', async (t) => {
@@ -293,7 +293,7 @@ test('an invalid coupon shows a message in the form and keeps the plan locked', 
   assert.equal(apply.disabled, false, 'a gomb újra használható');
 });
 
-test('Enter in the coupon field applies the coupon and never starts the Stripe checkout', async (t) => {
+test('Enter in the coupon field applies the coupon and never starts the payment', async (t) => {
   const window = await loadPlanner(t);
   const { document } = window;
   showLockedPreview(window);

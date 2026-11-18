@@ -624,6 +624,20 @@
           <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
+          <label for="billingName"><strong>Számlázási név</strong> <span class="field-hint">(cégnév vagy magánszemély neve)</span></label>
+          <input id="billingName" class="billing-input" type="text" autocomplete="name" maxlength="120" placeholder="Minta Kft. / Minta Mária" required />
+          <div class="billing-row">
+            <div class="billing-zip">
+              <label for="billingZip"><strong>Irányítószám</strong></label>
+              <input id="billingZip" class="billing-input" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="10" placeholder="9021" required />
+            </div>
+            <div class="billing-city">
+              <label for="billingCity"><strong>Település</strong></label>
+              <input id="billingCity" class="billing-input" type="text" autocomplete="address-level2" maxlength="80" placeholder="Győr" required />
+            </div>
+          </div>
+          <label for="billingAddress"><strong>Utca, házszám</strong></label>
+          <input id="billingAddress" class="billing-input" type="text" autocomplete="street-address" maxlength="120" placeholder="Fő utca 1." required />
           <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elolvastam és elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
           <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
           <div class="coupon-row">
@@ -636,7 +650,6 @@
           </div>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <div class="modal-actions">
-            <button type="submit" class="primary" id="checkoutSubmit" disabled>Tovább a fizetéshez</button>
             <button type="button" class="barion-btn" id="checkoutBarion" disabled>Fizetés Barionnal (Bankkártya)</button>
             <button type="button" data-close-modal>Mégse</button>
           </div>

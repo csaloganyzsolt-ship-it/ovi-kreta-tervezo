@@ -5,6 +5,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const stripeService = require('./stripeService');
 const invoiceService = require('./invoiceService');
+const mailService = require('./mailService');
+const sheetsService = require('./sheetsService');
 const { PaymentError } = stripeService;
 
 const API_HOSTS = { test: 'https://api.test.barion.com', live: 'https://api.barion.com' };
@@ -83,6 +85,27 @@ function saveRecord(record, env) {
   writeStore(env, store);
 }
 
+// ---------- Számlázási adatok ----------
+
+const BILLING_ZIP_PATTERN = /^[0-9A-Za-z][0-9A-Za-z -]{2,9}$/;
+
+function cleanText(value, max) {
+  return String(value ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+// A Számlázz.hu számlához kötelező vevői adatok; a Barion nem ad számlázási címet, ezért a kliens küldi. Hiány esetén 400.
+function parseBilling(input) {
+  const raw = input && typeof input === 'object' ? input : {};
+  const billing = { name: cleanText(raw.name, 120), zip: cleanText(raw.zip, 10), city: cleanText(raw.city, 80), address: cleanText(raw.address, 120) };
+  const missing = [['name', 'számlázási név'], ['zip', 'irányítószám'], ['city', 'település'], ['address', 'utca, házszám']]
+    .filter(([key]) => !billing[key]).map(([, label]) => label);
+  if (missing.length) throw new PaymentError(`A számlázási adatok hiányosak: ${missing.join(', ')}.`, 400);
+  if (billing.name.length < 2 || billing.city.length < 2 || billing.address.length < 3 || !BILLING_ZIP_PATTERN.test(billing.zip)) {
+    throw new PaymentError('A számlázási adatok érvénytelenek: ellenőrizd a nevet, az irányítószámot, a települést és az utcát, házszámot.', 400);
+  }
+  return billing;
+}
+
 // ---------- Barion API ----------
 
 function requireKey(env) {
@@ -114,10 +137,11 @@ async function callBarion(url, options, deps) {
 }
 
 // A Barion Payment/Start hívása: az összeg a mentett csomagból, a documentId az OrderNumber mezőben utazik.
-async function startPayment({ plan, planMode, email, generationId, title, req }, deps = {}) {
+async function startPayment({ plan, planMode, email, billing, generationId, title, req }, deps = {}) {
   const env = deps.env || process.env;
   const product = stripeService.parsePlan(plan, planMode);
   const payer = stripeService.parseEmail(email);
+  const customer = parseBilling(billing);
   const key = requireKey(env);
   const documentId = String(generationId || '').slice(0, 100);
   const sessionId = `${SESSION_PREFIX}${crypto.randomBytes(12).toString('hex')}`;
@@ -156,7 +180,7 @@ async function startPayment({ plan, planMode, email, generationId, title, req },
   }
 
   saveRecord({
-    sessionId, paymentId: payload.PaymentId, generationId: documentId, email: payer, plan: product.key, planMode: product.planMode,
+    sessionId, paymentId: payload.PaymentId, generationId: documentId, email: payer, billing: customer, plan: product.key, planMode: product.planMode,
     amountHuf: product.amountHuf, title: body.Transactions[0].Comment, status: payload.Status || 'Prepared', paid: false, unlocked: false,
     createdAt: Date.now()
   }, env);
@@ -195,17 +219,39 @@ async function settleRecord(record, deps) {
   latest.unlocked = true;
   saveRecord(latest, env);
   if (!latest.invoiceNumber) {
+    const billing = latest.billing || {};
     const result = await (deps.issueInvoice || invoiceService.issueInvoice)({
       orderId: latest.sessionId,
       created: Math.floor(latest.createdAt / 1000),
       plan: latest.plan,
       paymentMethod: 'Barion',
-      customer: { name: '', email: latest.email, zip: '', city: '', address: '' }
+      customer: { name: billing.name || '', email: latest.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
     }, { env, fetch: deps.fetch });
     latest.invoiceNumber = result.invoiceNumber || (result.mock ? 'mock' : 'duplicate');
     saveRecord(latest, env);
+    if (!result.duplicate && !result.mock) notifyPurchase(latest, result.invoiceNumber, deps);
   }
   return latest;
+}
+
+// Mint a Stripe webhooknál: rendszergazdai levél és Google Táblázat-sor, nem várjuk meg; a hibájuk nem érinti a fizetést. A levél némítása (NODE_ENV=test) a mailService-ben él.
+function notifyPurchase(record, invoiceNumber, deps) {
+  const env = deps.env || process.env;
+  const billing = record.billing || {};
+  const customer = { name: billing.name || '', email: record.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' };
+  const created = Math.floor(record.createdAt / 1000);
+  const invoicePdf = invoiceService.getInvoicePdf(record.sessionId, env);
+  const session = { id: record.sessionId, created, metadata: { plan: record.plan, title: record.title } };
+  sheetsService.recordPurchase({ session, invoiceNumber, invoicePdf, customer }, { env, fetch: deps.sheetsFetch }).catch(() => {});
+  mailService.sendAdminNotification({
+    customer: { name: customer.name, email: customer.email },
+    plan: record.plan,
+    title: record.title,
+    orderNumber: invoiceService.orderNumber(record.sessionId, new Date(created * 1000)),
+    invoiceNumber,
+    invoicePdf,
+    paymentMethod: 'Barion'
+  }, { env }).catch((error) => console.error('[mail] Rendszergazdai értesítő sikertelen:', error.message));
 }
 
 // Lekérdezi a Barion aktuális állapotát és (siker esetén, egyszer) lezárja a fizetést: feloldás + számla.
@@ -258,5 +304,5 @@ async function handleCallback(paymentId, deps = {}) {
 
 module.exports = {
   SESSION_PREFIX, GATEWAY_PATTERN, posKey, isTestMode, apiBase, payeeEmail, isSessionId, callbackUrl, storeFile,
-  getRecord, findByPaymentId, startPayment, fetchPaymentState, refreshPayment, retrieveSession, handleCallback
+  getRecord, findByPaymentId, parseBilling, startPayment, fetchPaymentState, refreshPayment, retrieveSession, handleCallback
 };

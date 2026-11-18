@@ -208,16 +208,19 @@ const thematicResult = (payload = makeThematicPayload()) => ({
 });
 const standardResult = (overrides = {}) => ({ ...makePlan(3), request: makePayload(overrides), generationId: 'gen_ui_standard' });
 
-const fill = (window, { terms = true, digital = true, email = 'vevo@example.com' } = {}) => {
+const BILLING_FIELDS = { billingName: 'Minta Kft.', billingZip: '9021', billingCity: 'Győr', billingAddress: 'Fő utca 1.' };
+
+const fill = (window, { terms = true, digital = true, email = 'vevo@example.com', billing = {} } = {}) => {
   const { document } = window;
   document.getElementById('checkoutEmail').value = email;
   document.getElementById('consentTerms').checked = terms;
   document.getElementById('consentDigital').checked = digital;
+  for (const [id, value] of Object.entries({ ...BILLING_FIELDS, ...billing })) document.getElementById(id).value = value;
   for (const id of ['consentTerms', 'consentDigital']) document.getElementById(id).dispatchEvent(new window.Event('change', { bubbles: true }));
-  document.getElementById('checkoutEmail').dispatchEvent(new window.Event('input', { bubbles: true }));
+  for (const id of ['checkoutEmail', ...Object.keys(BILLING_FIELDS)]) document.getElementById(id).dispatchEvent(new window.Event('input', { bubbles: true }));
 };
 
-test('the payment form has the mandatory consent above both payment buttons and the buttons stay disabled until it is ticked', async (t) => {
+test('the payment form has the mandatory consent above the payment button and the button stays disabled until it is ticked', async (t) => {
   const window = await loadPlanner(t);
   const { document } = window;
   window.renderResultDocument(standardResult());
@@ -229,73 +232,94 @@ test('the payment form has the mandatory consent above both payment buttons and 
   assert.equal(label.querySelector('a[data-legal="terms"]').textContent, 'ÁSZF');
   assert.equal(label.querySelector('a[data-legal="privacy"]').textContent, 'Adatvédelmi tájékoztatót');
 
-  const stripe = document.getElementById('checkoutSubmit');
   const barion = document.getElementById('checkoutBarion');
   assert.equal(consent.checked, false);
-  assert.equal(stripe.disabled, true);
   assert.equal(barion.disabled, true);
   const position = (node) => Array.from(document.getElementById('checkoutForm').querySelectorAll('*')).indexOf(node);
-  assert.ok(position(consent) < position(stripe) && position(consent) < position(barion), 'a jelölőnégyzet a gombok fölött van');
+  assert.ok(position(consent) < position(barion), 'a jelölőnégyzet a gomb fölött van');
 
   fill(window);
-  assert.equal(stripe.disabled, false);
   assert.equal(barion.disabled, false);
   fill(window, { terms: false });
-  assert.equal(stripe.disabled, true);
   assert.equal(barion.disabled, true);
 });
 
-test('both payment buttons need both declarations and a valid billing e-mail, each one on its own', async (t) => {
+test('the payment button needs both declarations, a valid billing e-mail and all three billing fields', async (t) => {
   const window = await loadPlanner(t);
   const { document } = window;
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
   const digital = document.getElementById('consentDigital').closest('label').textContent.replace(/\s+/g, ' ').trim();
   assert.equal(digital, 'Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.');
-  const state = () => ['checkoutSubmit', 'checkoutBarion'].map((id) => document.getElementById(id).disabled);
+  const state = () => document.getElementById('checkoutBarion').disabled;
 
-  assert.deepEqual(state(), [true, true], 'induláskor mindkettő letiltva');
-  for (const broken of [{ terms: false }, { digital: false }, { terms: false, digital: false }, { email: '' }, { email: 'nem-email' }, { email: 'valaki@' }, { email: 'a@b' }, { email: 'a b@example.com' }]) {
+  assert.equal(state(), true, 'induláskor letiltva');
+  for (const broken of [{ terms: false }, { digital: false }, { terms: false, digital: false }, { email: '' }, { email: 'nem-email' }, { email: 'valaki@' }, { email: 'a@b' }, { email: 'a b@example.com' },
+    { billing: { billingName: '' } }, { billing: { billingName: '   ' } }, { billing: { billingName: 'M' } }, { billing: { billingZip: '' } }, { billing: { billingZip: '90' } },
+    { billing: { billingZip: '90 21 ?!' } }, { billing: { billingCity: '' } }, { billing: { billingAddress: '' } }, { billing: { billingAddress: ' a ' } }]) {
     fill(window, broken);
-    assert.deepEqual(state(), [true, true], `letiltva: ${JSON.stringify(broken)}`);
+    assert.equal(state(), true, `letiltva: ${JSON.stringify(broken)}`);
   }
-  fill(window, { email: '  vevo@example.com  ' });
-  assert.deepEqual(state(), [false, false], 'minden megvan: mindkettő kattintható');
+  fill(window, { email: '  vevo@example.com  ', billing: { billingName: '  Minta Mária ' } });
+  assert.equal(state(), false, 'minden megvan: kattintható');
 
-  // Gépelés közben is frissül: az e-mail törlése azonnal letiltja a gombokat.
-  const email = document.getElementById('checkoutEmail');
-  email.value = '';
-  email.dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.deepEqual(state(), [true, true]);
-  email.value = 'vevo@example.com';
-  email.dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.deepEqual(state(), [false, false]);
+  // Gépelés közben is frissül: bármelyik mező törlése azonnal letiltja a gombot.
+  for (const id of ['checkoutEmail', 'billingName', 'billingZip', 'billingCity', 'billingAddress']) {
+    const field = document.getElementById(id);
+    const original = field.value;
+    field.value = '';
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(state(), true, `${id} törölve`);
+    field.value = original;
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(state(), false, `${id} visszaírva`);
+  }
   document.getElementById('consentDigital').checked = false;
   document.getElementById('consentDigital').dispatchEvent(new window.Event('change', { bubbles: true }));
-  assert.deepEqual(state(), [true, true]);
+  assert.equal(state(), true);
 });
 
-test('the Barion button sits next to the Stripe button with the required label', async (t) => {
+test('the billing fields sit under the e-mail field and above the consents and the coupon, with zip and city on one row', async (t) => {
+  const window = await loadPlanner(t);
+  const { document } = window;
+  const nodes = Array.from(document.getElementById('checkoutForm').querySelectorAll('*'));
+  const position = (id) => nodes.indexOf(document.getElementById(id));
+  const order = ['checkoutEmail', 'billingName', 'billingZip', 'billingCity', 'billingAddress', 'consentTerms', 'consentDigital', 'couponCode', 'checkoutBarion'].map(position);
+  assert.ok(order.every((index, i) => index > -1 && (i === 0 || index > order[i - 1])), `sorrend: ${order}`);
+  assert.equal(document.getElementById('billingZip').closest('.billing-row'), document.getElementById('billingCity').closest('.billing-row'));
+  assert.notEqual(document.getElementById('billingZip').closest('.billing-row'), null);
+  for (const [id, label] of [['billingName', 'Számlázási név'], ['billingZip', 'Irányítószám'], ['billingCity', 'Település'], ['billingAddress', 'Utca, házszám']]) {
+    assert.equal(document.querySelector(`label[for="${id}"] strong`).textContent, label);
+    assert.equal(document.getElementById(id).required, true, `${id}: kötelező`);
+  }
+});
+
+test('the Stripe button is gone: the only payment button is the Barion one, next to Mégse', async (t) => {
   const window = await loadPlanner(t);
   const { document } = window;
   const barion = document.getElementById('checkoutBarion');
   assert.equal(barion.textContent.trim(), 'Fizetés Barionnal (Bankkártya)');
   assert.equal(barion.type, 'button');
-  assert.equal(barion.parentElement, document.getElementById('checkoutSubmit').parentElement);
-  assert.equal(document.getElementById('checkoutSubmit').type, 'submit');
+  assert.equal(document.getElementById('checkoutSubmit'), null);
+  const form = document.getElementById('checkoutForm');
+  assert.equal(form.querySelector('button[type="submit"]'), null, 'nincs elküldő gomb az űrlapon');
+  assert.doesNotMatch(form.textContent, /Tovább a fizetéshez/);
+  assert.deepEqual(Array.from(barion.parentElement.querySelectorAll('button')).map((button) => button.textContent.trim()), ['Fizetés Barionnal (Bankkártya)', 'Mégse']);
+  assert.equal(document.getElementById('couponApply').textContent.trim(), 'Érvényesítés');
 });
 
-test('a Stripe checkout without the consent is refused even if the form is submitted by script', async (t) => {
+test('submitting the payment form never reloads the page or starts anything', async (t) => {
   const window = await loadPlanner(t);
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
   const calls = [];
   window.fetch = async (url) => { calls.push(String(url)); return Response.json({ success: true }); };
-  fill(window, { terms: false });
-  window.document.getElementById('checkoutForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  fill(window);
+  const event = new window.Event('submit', { cancelable: true });
+  window.document.getElementById('checkoutForm').dispatchEvent(event);
   await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(event.defaultPrevented, true);
   assert.equal(calls.length, 0);
-  assert.match(window.document.getElementById('checkoutError').textContent, /ÁSZF/);
 });
 
 // ---------- Barion gomb: indítás és átirányítás ----------
@@ -325,6 +349,7 @@ test('clicking the Barion button starts the payment and sends the user to the Ga
   assert.equal(calls[0].url, 'http://localhost:8000/api/checkout-barion');
   assert.deepEqual({ plan: calls[0].body.plan, planMode: calls[0].body.planMode, email: calls[0].body.email, generationId: calls[0].body.generationId },
     { plan: 'academic_daily', planMode: 'academic', email: 'vevo@example.com', generationId: 'gen_ui_academic' });
+  assert.deepEqual(calls[0].body.billing, { name: 'Minta Kft.', zip: '9021', city: 'Győr', address: 'Fő utca 1.' });
   assert.deepEqual(redirects, ['https://secure.test.barion.com/Pay?id=pay123']);
   assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), 'barion_0123456789abcdef01234567');
   assert.equal(window.localStorage.getItem('oviKretaPendingCheckout'), 'gen_ui_academic');
@@ -373,10 +398,13 @@ test('a disabled Barion button does nothing, and a forced Barion call with a bro
   fill(window, { digital: false });
   window.startBarionCheckout();
   assert.match(error.textContent, /mindkét nyilatkozat/);
+  fill(window, { billing: { billingCity: '' } });
+  window.startBarionCheckout();
+  assert.match(error.textContent, /számlázási nevet, az irányítószámot, a települést/, 'hiányos számlázási adatnál is megáll');
   assert.equal(calls, 0);
 });
 
-test('the Stripe checkout sends the plan and plan mode of the document, and the payment buttons show the right price', async (t) => {
+test('the Barion checkout sends the plan and plan mode of the document, and the summary and unlock buttons show the right price', async (t) => {
   const window = await loadPlanner(t);
   const cases = [
     [standardResult({ duration: 'Napi' }), 'daily', 'standard', 'Napi tervezet – 390 Ft'],
@@ -394,9 +422,10 @@ test('the Stripe checkout sends the plan and plan mode of the document, and the 
     assert.match(window.document.getElementById('unlockBtn')?.textContent || window.document.querySelector('.unlock-cta').textContent, new RegExp(`${price} Ft`), `${plan}: feloldó gomb`);
 
     let body;
-    window.fetch = async (_url, options) => { body = JSON.parse(options.body); return Response.json({ success: true, mock: true, message: 'mock', url: 'http://localhost:8000/?x=1' }); };
+    window.redirectTo = () => {};
+    window.fetch = async (_url, options) => { body = JSON.parse(options.body); return Response.json({ success: true, gatewayUrl: 'https://secure.test.barion.com/Pay?id=x', sessionId: 'barion_0123456789abcdef01234567' }); };
     fill(window);
-    window.document.getElementById('checkoutForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+    window.document.getElementById('checkoutBarion').click();
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(body.plan, plan);
     assert.equal(body.planMode, planMode);
