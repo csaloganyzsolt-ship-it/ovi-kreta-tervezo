@@ -390,6 +390,9 @@ function renderResultDocument(data = lastResult) {
 }
 
 // A dokumentumot valódi A4 lapokra (.a4-page) tördeli; a hosszú táblázatokat sorok mentén osztja, fejléc-ismétléssel.
+// Ennél kisebb szabad hely alatt (a lap magasságának hányada) a táblázat nem kezdődik megosztott lapon.
+const MIN_SLICE_SHARE = 0.2;
+
 function paginateDocument(host) {
   const orientation = host.dataset.orientation === 'landscape' ? 'landscape' : 'portrait';
   const marginMm = MARGIN_MM[host.dataset.margin] || MARGIN_MM.comfortable;
@@ -423,6 +426,26 @@ function paginateDocument(host) {
   const overflows = () => body.offsetHeight > capacity + 1;
   const newPage = () => { body = makePage(); };
 
+  // Hosszú, táblázat nélküli szakasz (pl. pedagógiai keretrendszer): bekezdések mentén több lapra oszlik, címsor nem marad egyedül.
+  const placeFlowBlock = (original) => {
+    let block = original;
+    const shared = body.children.length > 1;
+    const backup = shared ? block.cloneNode(true) : null;
+    let tail = splitFlowBlock(block, overflows);
+    if (shared && overflows()) {
+      block.remove();
+      newPage();
+      body.appendChild(backup);
+      block = backup;
+      tail = splitFlowBlock(block, overflows);
+    }
+    while (tail) {
+      newPage();
+      body.appendChild(tail);
+      tail = overflows() ? splitFlowBlock(tail, overflows) : null;
+    }
+  };
+
   blocks.forEach((block) => {
     body.appendChild(block);
     if (!overflows()) return;
@@ -432,7 +455,8 @@ function paginateDocument(host) {
     // Az oktatási célú táblázatok egyetlen lapnál magasabb sora a cellák bekezdései mentén tovább osztható.
     const splittable = Boolean(table?.classList.contains('academic-table'));
     if (!rows.length || (rows.length < 2 && !splittable)) {
-      if (body.children.length > 1) {
+      if (block.classList.contains('academic-flow')) placeFlowBlock(block);
+      else if (body.children.length > 1) {
         newPage();
         body.appendChild(block);
       }
@@ -464,10 +488,34 @@ function paginateDocument(host) {
         pending = tail;
       }
     };
+    // Megosztott lapon az első adatsor-szelet a fejléc alatt indul; ha ez a legkisebb szelettel sem fér el, a fejléc is új lapra kerül.
+    const startOnSharedPage = (row) => {
+      const backup = current.cloneNode(true);
+      const tail = splitTallRow(row, overflows);
+      if (!overflows()) {
+        if (tail) {
+          openContinuation();
+          currentBody.appendChild(tail);
+          splitOversizedRow(tail);
+        }
+        return;
+      }
+      body.removeChild(current);
+      newPage();
+      body.appendChild(backup);
+      current = backup;
+      currentBody = backup.querySelector('.official-table').tBodies[0];
+      splitOversizedRow(currentBody.rows[0]);
+    };
     rows.forEach((row) => {
       currentBody.appendChild(row);
       if (!overflows()) return;
       if (currentBody.rows.length === 1) {
+        const roomAbove = capacity - (body.offsetHeight - current.offsetHeight);
+        if (splittable && body.children.length > 1 && roomAbove >= capacity * MIN_SLICE_SHARE) {
+          startOnSharedPage(row);
+          return;
+        }
         if (body.children.length > 1) {
           newPage();
           body.appendChild(current);

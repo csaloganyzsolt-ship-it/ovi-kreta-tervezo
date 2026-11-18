@@ -601,10 +601,11 @@ test('the standard DOCX keeps its unshaded, non-italic tables', async (t) => {
   assert.match(pageSize(xml), /w:w="11906"/);
 });
 
-function stubPdfLibrary(window) {
+function stubPdfLibrary(window, { fakeLayout = false } = {}) {
   const calls = { options: [], pages: [], addPage: [], images: 0 };
   // A jsdom nem számol elrendezést; a PDF-export nulla méretű elemet elutasít.
-  for (const property of ['offsetHeight', 'offsetWidth']) Object.defineProperty(window.HTMLElement.prototype, property, { configurable: true, get: () => 100 });
+  if (fakeLayout) installFakeLayout(window);
+  else for (const property of ['offsetHeight', 'offsetWidth']) Object.defineProperty(window.HTMLElement.prototype, property, { configurable: true, get: () => 100 });
   window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
   window.html2pdf = () => {
     const chain = {
@@ -684,7 +685,8 @@ test('splitTallRow moves trailing blocks of the tallest column into a continuati
 // A jsdom nem számol elrendezést, ezért egy egyszerű blokkmagasság-modellel (1 bekezdés = 10 egység) fut a valódi tördelő.
 function installFakeLayout(window) {
   const height = (element) => {
-    if (['P', 'H2', 'H3', 'TH'].includes(element.tagName)) return 10;
+    if (element.dataset?.h) return Number(element.dataset.h);
+    if (['P', 'H2', 'H3', 'TH'].includes(element.tagName) || element.classList.contains('meta-row')) return 10;
     if (element.tagName === 'TR') return Math.max(0, ...Array.from(element.cells).map(height));
     return Array.from(element.children).reduce((sum, child) => sum + height(child), 0);
   };
@@ -698,6 +700,7 @@ function installFakeLayout(window) {
       return top;
     }
   });
+  return height;
 }
 
 test('an oversized thematic matrix row is split over several landscape pages with the header repeated and no content lost', async (t) => {
@@ -739,4 +742,263 @@ test('an oversized daily table row is split the same way, while the standard sin
   window.renderResultDocument({ ...plan, request: makePayload(), generationId: 'gen_standard' });
   const standardHost = window.document.querySelector('#resultDocument');
   assert.equal(standardHost.querySelectorAll('table').length, 1, 'a szabvány táblázat sora változatlanul egyben marad');
+});
+
+// ---------- GitHub Pages (fizetőfal nélküli) kiszolgálás ----------
+
+async function withPaywall(t, value) {
+  const saved = process.env.PAYWALL_ENABLED;
+  if (value === undefined) delete process.env.PAYWALL_ENABLED;
+  else process.env.PAYWALL_ENABLED = value;
+  t.after(() => { if (saved === undefined) delete process.env.PAYWALL_ENABLED; else process.env.PAYWALL_ENABLED = saved; });
+}
+
+const generateFrom = async (base, origin, payload) => {
+  const response = await fetch(`${base}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
+    body: JSON.stringify(payload)
+  });
+  return { response, data: await response.json() };
+};
+
+const GITHUB_PAGES = 'https://csaloganyzsolt-ship-it.github.io';
+
+test('with the paywall on, an academic request from GitHub Pages gets the real unlocked plan, while ovitervezo.hu gets the locked preview', async (t) => {
+  await withPaywall(t, 'true');
+  const secret = 'aranyhörcsög';
+  const thematicResponse = makeThematicResponse();
+  thematicResponse.hetek[0].teruletek.kulso_vilag = [`Megfigyelés: ${secret} simogatása.`];
+  const dailyResponse = makeAcademicResponse();
+  dailyResponse.kidolgozas_tablazat[2].tevekenyseg_menete = [`A pedagógus bemutatja az ${secret} játékot.`];
+  const base = await listen(t);
+
+  for (const [label, payload, response, read] of [
+    ['thematic', makeThematicPayload(), thematicResponse, (data) => data.hetek[0].teruletek.kulso_vilag.join(' ')],
+    ['daily', makeAcademicPayload(), dailyResponse, (data) => data.kidolgozas_tablazat[2].tevekenyseg_menete.join(' ')]
+  ]) {
+    stubGemini(t, JSON.stringify(response));
+    const free = await generateFrom(base, GITHUB_PAGES, payload);
+    assert.equal(free.response.status, 200, label);
+    assert.equal(free.data.locked_meta, undefined, `${label}: GitHub Pages nem kap zárolt előnézetet`);
+    assert.ok(read(free.data).includes(secret), `${label}: valódi tartalom`);
+    assert.doesNotMatch(JSON.stringify(free.data), /lorem|ipsum|dolor/i, `${label}: nincs tükörszöveg`);
+
+    const locked = await generateFrom(base, 'https://ovitervezo.hu', payload);
+    assert.equal(locked.data.locked_meta.is_locked, true, `${label}: ovitervezo.hu zárolt`);
+    assert.equal(JSON.stringify(locked.data).includes(secret), false, `${label}: nem szivárog a valódi szöveg`);
+    assert.match(JSON.stringify(locked.data), /lorem|ipsum|dolor|veniam|tempor|aliqua/i);
+
+    const anonymous = await generateFrom(base, '', payload);
+    assert.equal(anonymous.data.locked_meta.is_locked, true, `${label}: origin nélkül is zárolt`);
+    const trailingSlash = await generateFrom(base, `${GITHUB_PAGES}/`, payload);
+    assert.equal(trailingSlash.data.locked_meta, undefined);
+    const lookalike = await generateFrom(base, `${GITHUB_PAGES}.evil.example`, payload);
+    assert.equal(lookalike.data.locked_meta.is_locked, true, `${label}: hasonló nevű origin nem kap zárolásmentes kiszolgálást`);
+  }
+});
+
+test('without the paywall every origin gets the full plan, and the standard mode follows the same rule', async (t) => {
+  await withPaywall(t, undefined);
+  const base = await listen(t);
+  stubGemini(t, JSON.stringify(makeThematicResponse()));
+  const open = await generateFrom(base, 'https://ovitervezo.hu', makeThematicPayload());
+  assert.equal(open.data.locked_meta, undefined);
+  assert.equal(open.data.hetek[0].teruletek.kulso_vilag[0], makeThematicResponse().hetek[0].teruletek.kulso_vilag[0]);
+
+  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }, GITHUB_PAGES), false);
+  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'true' }, GITHUB_PAGES), false);
+  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }, 'https://ovitervezo.hu'), true);
+  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }), true);
+  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'false' }, 'https://ovitervezo.hu'), false);
+  assert.equal(server.shouldLockPlan({ preview: false }, { PAYWALL_ENABLED: 'true' }, 'https://ovitervezo.hu'), false);
+  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'false' }, 'https://ovitervezo.hu'), true);
+});
+
+test('after payment the full real thematic plan is returned from the server for the web view and the exports', async (t) => {
+  await withPaywall(t, 'true');
+  const savedEnv = { ...process.env };
+  for (const key of Object.keys(process.env)) if (/^(STRIPE_|NODE_ENV)/.test(key)) delete process.env[key];
+  t.after(() => { for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key]; Object.assign(process.env, savedEnv); });
+  const secret = 'gesztenyebábú';
+  const response = makeThematicResponse();
+  response.hetek[0].keretrendszer.modszerek = [`${secret} módszer`];
+  stubGemini(t, JSON.stringify(response));
+  const base = await listen(t);
+  const locked = await generateFrom(base, 'https://ovitervezo.hu', makeThematicPayload());
+  assert.equal(locked.data.locked_meta.is_locked, true);
+  assert.equal(JSON.stringify(locked.data).includes(secret), false);
+
+  const checkout = await (await fetch(`${base}/api/create-checkout-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu', generationId: locked.data.generationId })
+  })).json();
+  assert.equal(checkout.mock, true);
+  const verified = await (await fetch(`${base}/api/checkout-session/${checkout.id}`)).json();
+  assert.equal(verified.paid, true);
+  assert.equal(verified.planData.is_thematic, true);
+  assert.equal(verified.planData.locked_meta, undefined);
+  assert.equal(verified.planData.hetek[0].keretrendszer.modszerek[0], `${secret} módszer`);
+});
+
+// ---------- A heti tematikus terv pedagógiai blokkjai: web, DOCX, PDF ----------
+
+const FRAME_HEADINGS = ['Cél, - feladatrendszer:', 'Kiemelt fejlesztési terület:', 'Módszerek, eszközök:'];
+const FRAME_LABELS = ['Célok:', 'Feladatok:', 'Módszerek:', 'Eszközök:'];
+const inOrder = (haystack, needles) => needles.every((needle, index) => haystack.includes(needle) && (index === 0 || haystack.indexOf(needle) > haystack.indexOf(needles[index - 1])));
+
+test('the thematic plan shows the pedagogical frame below the matrix and before the bibliography in the web view, DOCX and PDF', async (t) => {
+  const window = await loadApp(t);
+  const calls = stubPdfLibrary(window, { fakeLayout: true });
+  window.renderResultDocument(thematic());
+
+  const sequence = [...FRAME_HEADINGS, 'Felhasznált irodalom:'];
+  const web = text(window.document.querySelector('#resultDocument'));
+  assert.ok(inOrder(web, ['Tevékenységi területek', ...sequence]), 'web: a keretrendszer a mátrix után, az irodalom előtt');
+  const frame = text(window.document.querySelector('.academic-frame'));
+  for (const label of [...FRAME_LABELS, ...academicPlan.AREA_COLUMNS.map((area) => `${area.label}:`)]) assert.ok(frame.includes(label), label);
+  assert.match(frame, /Célok:\s*• Az őszi természeti jelenségek megismerése\./);
+  assert.match(frame, /Módszerek:\s*megfigyelés; játék\s*Eszközök:\s*falevelek; zsírkréta/);
+
+  const xml = await docxXml(window);
+  const plain = xml.replace(/<[^>]+>/g, '');
+  assert.ok(inOrder(plain, ['Tevékenységi területek', ...sequence]), 'DOCX: sorrend');
+  for (const label of FRAME_LABELS) assert.ok(plain.includes(label), `DOCX: ${label}`);
+  for (const area of academicPlan.AREA_COLUMNS) assert.ok(plain.includes(`${area.label}:`), `DOCX: ${area.label}:`);
+  assert.ok(plain.includes('Az őszi természeti jelenségek megismerése.'));
+
+  await window.renderPdfBlob('main');
+  const pdf = new JSDOM(`<body>${calls.pages.join('')}</body>`).window.document.body.textContent.replace(/\s+/g, ' ');
+  assert.ok(inOrder(pdf, ['Tevékenységi területek', ...sequence]), 'PDF: sorrend');
+  for (const label of FRAME_LABELS) assert.ok(pdf.includes(label), `PDF: ${label}`);
+  for (const area of academicPlan.AREA_COLUMNS) assert.ok(pdf.includes(`${area.label}:`), `PDF: ${area.label}:`);
+});
+
+// ---------- PDF-tördelés: árva fejléc, üres lap, felesleges oldaltörés ----------
+
+const pageDocuments = (calls) => calls.pages.map((page) => new JSDOM(`<body>${page}</body>`).window.document);
+
+function bigThematic() {
+  const response = makeThematicResponse();
+  const items = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix} ${index + 1}`);
+  response.hetek[0].teruletek.kulso_vilag = items('Megfigyelés', 34);
+  response.hetek[0].teruletek.mozgas = items('Mozgásos játék', 22);
+  response.hetek[0].keretrendszer.celok = items('Cél', 14);
+  response.hetek[0].keretrendszer.feladatok = items('Feladat', 14);
+  response.hetek[0].keretrendszer.modszerek = items('módszer', 6);
+  return response;
+}
+
+test('the PDF of a long thematic plan has no blank page, no data-less table header and the matrix starts right below the meta table', async (t) => {
+  const window = await loadApp(t);
+  const calls = stubPdfLibrary(window, { fakeLayout: true });
+  window.renderResultDocument(thematic(bigThematic()));
+  await window.renderPdfBlob('main');
+  const documents = pageDocuments(calls);
+  assert.ok(documents.length >= 4, `hosszú terv: ${documents.length} lap`);
+
+  documents.forEach((document, index) => {
+    assert.ok(document.body.textContent.trim().length > 0, `${index + 1}. lap üres`);
+    assert.ok(document.body.querySelector('.a4-page-body, p, h2, h3, table') !== null);
+    for (const table of document.querySelectorAll('table')) {
+      const dataRows = Array.from(table.tBodies[0]?.rows || []).filter((row) => row.textContent.trim());
+      assert.ok(dataRows.length >= 1, `${index + 1}. lap: adat nélküli (árva) táblázatfejléc`);
+      assert.equal(table.querySelectorAll('thead th').length, 7, `${index + 1}. lap: teljes fejléc`);
+    }
+    const blocks = Array.from(document.body.children);
+    assert.notEqual(blocks.at(-1)?.tagName, 'H3', `${index + 1}. lap: címsor a lap alján`);
+  });
+
+  const first = documents[0];
+  assert.ok(first.querySelector('.doc-meta-block'));
+  assert.ok(first.querySelector('table.thematic-table'), 'nincs felesleges oldaltörés a metaadat-tábla után');
+  assert.ok(first.querySelector('table.thematic-table tbody tr').textContent.includes('Megfigyelés 1'));
+
+  const all = documents.map((document) => document.body.textContent).join(' ');
+  for (let index = 1; index <= 34; index += 1) assert.match(all, new RegExp(`Megfigyelés ${index}(?!\\d)`));
+  for (let index = 1; index <= 14; index += 1) assert.match(all, new RegExp(`Feladat ${index}(?!\\d)`));
+  assert.ok(documents.at(-1).body.textContent.includes('Felhasznált irodalom:'));
+});
+
+test('no preview or export page ever exceeds the page height, even when the frame section is longer than a page', async (t) => {
+  const window = await loadApp(t);
+  const height = installFakeLayout(window);
+  window.renderResultDocument(thematic(bigThematic()));
+  const pages = Array.from(window.document.querySelectorAll('#resultDocument .a4-page-body'));
+  const capacity = 210 - 24;
+  assert.ok(pages.length >= 4);
+  pages.forEach((body, index) => assert.ok(height(body) <= capacity, `${index + 1}. lap magassága ${height(body)} > ${capacity}`));
+  const frames = Array.from(window.document.querySelectorAll('#resultDocument .academic-frame'));
+  assert.ok(frames.length >= 2, 'a hosszú keretrendszer több lapra oszlik');
+  const merged = frames.map(text).join(' ');
+  for (const heading of FRAME_HEADINGS) assert.ok(merged.includes(heading), heading);
+  for (let index = 1; index <= 14; index += 1) assert.match(merged, new RegExp(`Cél ${index}(?!\\d)`));
+  assert.match(merged, /Eszközök:\s*falevelek; zsírkréta/);
+});
+
+test('a table header is moved to the next page together with its data when not even the smallest row slice fits below it', async (t) => {
+  const window = await loadApp(t);
+  installFakeLayout(window);
+  const { document } = window;
+  const host = document.createElement('div');
+  host.className = 'document-sheet a4-host';
+  host.dataset.orientation = 'landscape';
+  host.dataset.margin = 'comfortable';
+  document.body.appendChild(host);
+  host.innerHTML = `
+    <div class="doc-section"><p data-h="140">Kitöltő blokk</p></div>
+    <div class="doc-section doc-table-section"><h3>1. hét</h3>
+      <table class="official-table academic-table thematic-table"><thead><tr><th>A</th><th>B</th></tr></thead>
+        <tbody><tr><td><p data-h="50">a1</p><p>a2</p></td><td><p data-h="50">b1</p></td></tr></tbody></table></div>`;
+  window.paginateDocument(host);
+  const pages = Array.from(host.querySelectorAll('.a4-page'));
+  assert.equal(pages.length, 2);
+  assert.equal(pages[0].querySelector('table'), null, 'a fejléc nem marad adat nélkül az első lapon');
+  const table = pages[1].querySelector('table');
+  assert.ok(table.querySelector('thead'));
+  assert.deepEqual(Array.from(table.tBodies[0].rows[0].cells).map(text), ['a1a2', 'b1']);
+});
+
+test('a table starts on the shared page when a slice fits below its header, and the rest continues with a repeated header', async (t) => {
+  const window = await loadApp(t);
+  installFakeLayout(window);
+  const { document } = window;
+  const host = document.createElement('div');
+  host.className = 'document-sheet a4-host';
+  host.dataset.orientation = 'landscape';
+  host.dataset.margin = 'comfortable';
+  document.body.appendChild(host);
+  const cell = (prefix, count) => `<td>${Array.from({ length: count }, (_, i) => `<p>${prefix}${i + 1}</p>`).join('')}</td>`;
+  host.innerHTML = `
+    <div class="doc-section"><p data-h="60">Kitöltő blokk</p></div>
+    <div class="doc-section doc-table-section"><h3>1. hét</h3>
+      <table class="official-table academic-table thematic-table"><thead><tr><th>A</th><th>B</th></tr></thead>
+        <tbody><tr>${cell('a', 30)}${cell('b', 4)}</tr></tbody></table></div>
+    <div class="doc-section academic-flow academic-literature"><h3>Felhasznált irodalom:</h3><p>Egy</p></div>`;
+  window.paginateDocument(host);
+  const pages = Array.from(host.querySelectorAll('.a4-page'));
+  assert.ok(pages.length >= 2);
+  assert.ok(pages[0].querySelector('table tbody tr').textContent.includes('a1'), 'az első adatszelet az első lapon van');
+  for (const page of pages) {
+    const table = page.querySelector('table');
+    if (table) assert.ok(table.tBodies[0].rows[0].textContent.trim(), 'minden táblázatrész adatot tartalmaz');
+  }
+  const joined = text(host);
+  for (let index = 1; index <= 30; index += 1) assert.match(joined, new RegExp(`a${index}(?!\\d)`));
+  assert.match(text(pages.at(-1)), /Felhasznált irodalom:\s*Egy/);
+});
+
+test('splitFlowBlock keeps headings together with their first paragraph and never leaves one at the end of a part', async (t) => {
+  const window = await loadApp(t);
+  const { document } = window;
+  document.body.insertAdjacentHTML('beforeend', '<div id="flow"><h3>H1</h3><p>a</p><p>b</p><h3>H2</h3><p>c</p><p>d</p></div>');
+  const flow = document.querySelector('#flow');
+  const tail = window.splitFlowBlock(flow, () => flow.children.length > 4);
+  assert.deepEqual(Array.from(flow.children).map(text), ['H1', 'a', 'b']);
+  assert.deepEqual(Array.from(tail.children).map(text), ['H2', 'c', 'd']);
+  assert.equal(window.splitFlowBlock(flow, () => false), null);
+  const lone = document.createElement('div');
+  lone.innerHTML = '<h3>H</h3><p>x</p>';
+  assert.equal(window.splitFlowBlock(lone, () => true), null, 'a címsor + első bekezdés együtt marad');
 });

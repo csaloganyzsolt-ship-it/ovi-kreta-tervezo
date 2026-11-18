@@ -638,12 +638,14 @@ function resetDailyGenerations() {
   dailyGenerations.count = 0;
 }
 
-const TURNSTILE_EXEMPT_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
+const FREE_TEST_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
 
-// A GitHub Pages demó nincs felvéve a Turnstile-ba; token nélkül csak innen engedjük át. Az Origin kliensoldali fejléc, ezért ez nem erős hitelesítés.
-function isTurnstileExemptOrigin(origin) {
-  return TURNSTILE_EXEMPT_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
+// A GitHub Pages demó nincs felvéve a Turnstile-ba és nincs fizetőfala: innen token nélkül és zárolás nélkül szolgálunk ki.
+// Az Origin kliensoldali fejléc, ezért ez nem erős hitelesítés (a nem böngészős kliens hamisíthatja).
+function isFreeTestOrigin(origin) {
+  return FREE_TEST_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
 }
+const isTurnstileExemptOrigin = isFreeTestOrigin;
 
 async function verifyTurnstileToken(token, ip, env = process.env) {
   const secretKey = String(env.TURNSTILE_SECRET_KEY || '').trim();
@@ -669,7 +671,8 @@ async function verifyTurnstileToken(token, ip, env = process.env) {
   }
 }
 
-function shouldLockPlan(payload = {}, env = process.env) {
+function shouldLockPlan(payload = {}, env = process.env, origin = '') {
+  if (isFreeTestOrigin(origin)) return false;
   if (payload.preview === false || payload.unlocked === true) return false;
   if (payload.preview === true) return true;
   return String(env.PAYWALL_ENABLED || '').toLowerCase() === 'true';
@@ -752,7 +755,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
           total + row.tevekenyseg_menete.join('\n\n').length + row.modszerek_megjegyzesek.length, 0)
       });
 
-    if (shouldLockPlan(request, process.env)) {
+    if (shouldLockPlan(request, process.env, req.get('origin'))) {
       const mirror = planStore.createMirrorPlan(result);
       mirror.generationId = generationId;
       return res.json({ success: true, ...mirror });
@@ -834,4 +837,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };
+module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, isFreeTestOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

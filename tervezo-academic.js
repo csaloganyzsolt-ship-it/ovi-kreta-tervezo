@@ -62,7 +62,7 @@ function academicLiteratureHtml(text, locked) {
   const lines = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (!lines.length) return '';
   return `
-          <div class="doc-section academic-literature">
+          <div class="doc-section academic-flow academic-literature">
             <h3>Felhasznált irodalom:</h3>
             ${lines.map((line) => `<p${academicClass('lit-item', locked && 'locked-mirror-text')}>${formatRichText(line)}</p>`).join('')}
           </div>`;
@@ -183,7 +183,7 @@ function thematicFrameHtml(week, locked) {
   const inline = (label, values) => `<p${academicClass(locked && 'locked-mirror-text')}><strong>${label}</strong> ${(Array.isArray(values) ? values : []).map((value) => formatRichText(value)).join('; ')}</p>`;
   const focus = frame.kiemelt_fejlesztesi_terulet || {};
   return `
-          <div class="doc-section academic-frame">
+          <div class="doc-section academic-flow academic-frame">
             <h3>Cél, - feladatrendszer:</h3>
             ${list('Célok:', frame.celok)}
             ${list('Feladatok:', frame.feladatok)}
@@ -200,7 +200,7 @@ function thematicNotesHtml(notes, locked) {
   const groups = ACADEMIC_NOTE_GROUPS.filter(([key]) => Array.isArray(notes[key]) && notes[key].length);
   if (!groups.length) return '';
   return `
-          <div class="doc-section academic-frame">
+          <div class="doc-section academic-flow academic-frame">
             <h3>Megjegyzés, egyéb tevékenységek:</h3>
             ${groups.map(([key, label]) => `<p${academicClass(locked && 'locked-mirror-text')}><strong>${label}:</strong> ${notes[key].map((value) => formatRichText(value)).join('; ')}</p>`).join('')}
           </div>`;
@@ -229,6 +229,21 @@ function buildThematicHtml(result, request, { settings, locked }) {
             ${thematicFrameHtml(week, locked)}`).join('') : ''}
           ${showMatrix ? thematicNotesHtml(result.megjegyzes_egyeb_tevekenysegek, locked) : ''}
           ${academicLiteratureHtml(result.felhasznalt_irodalom, locked)}`;
+}
+
+// A lapnál hosszabb, táblázat nélküli szakasz végi bekezdéseit egy folytatás-blokkba teszi (a címsor nem maradhat a rész végén).
+function splitFlowBlock(block, overflows) {
+  const tail = block.cloneNode(false);
+  const minKeep = block.firstElementChild?.tagName === 'H3' ? 2 : 1;
+  let moved = false;
+  while (overflows() && block.children.length > minKeep) {
+    tail.insertBefore(block.lastElementChild, tail.firstChild);
+    moved = true;
+  }
+  while (moved && block.children.length > 1 && block.lastElementChild.tagName === 'H3') {
+    tail.insertBefore(block.lastElementChild, tail.firstChild);
+  }
+  return moved ? tail : null;
 }
 
 function countThematicItems(value) {
