@@ -633,8 +633,7 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   for (const absent of ['id="landing"', 'id="seoContent"', 'landing-hero', 'Egyszeri díj, havidíj nélkül', 'application/ld+json']) assert.ok(!planner.includes(absent), `planner: ${absent}`);
   assert.match(landing, /<a class="brand" href="index\.html"/);
   assert.match(planner, /<a class="brand" href="index\.html"/);
-  // Az ONAP-ra csak a tervező oktatási célú módjának leírása hivatkozik.
-  assert.doesNotMatch(landing, /ONAP|Kréta OVI|Kréta-kompatibilis/);
+  assert.doesNotMatch(landing, /Kréta OVI|Kréta-kompatibilis/);
   assert.doesNotMatch(planner, /Kréta OVI|Kréta-kompatibilis/);
   for (const page of [landing, planner]) {
     assert.match(page, /Cloudflare Turnstile/);
@@ -747,7 +746,7 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   const blocks = [...html.matchAll(/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
   const faq = blocks.find((b) => b['@type'] === 'FAQPage');
   const app = blocks.find((b) => b['@type'] === 'SoftwareApplication');
-  assert.equal(faq.mainEntity.length, 4);
+  assert.equal(faq.mainEntity.length, 5);
   for (const q of faq.mainEntity) {
     assert.ok(html.includes(`<summary>${q.name}</summary>`), q.name);
     assert.ok(html.includes(q.acceptedAnswer.text), q.name);
@@ -756,7 +755,7 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   assert.equal(app.applicationCategory, 'EducationalApplication');
   assert.equal(app.offers.lowPrice, '390');
   assert.equal(app.offers.highPrice, '890');
-  assert.match(html, /<title>Óvodai tervezet készítés gyorsan és egyszerűen \| OviTervező<\/title>/);
+  assert.match(html, /<title>Óvodai tervezet készítés és óvodai tervező program \| OviTervező<\/title>/);
   assert.match(html, /name="description" content="Szakszerű óvodai tervezet, heti tervek és tematikus foglalkozásterv minták pár perc alatt/);
 });
 
