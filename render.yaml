@@ -57,6 +57,14 @@ services:
         sync: false
       - key: COUPON_CODES
         value: TEST100
+      - key: BARION_POS_KEY_EV
+        sync: false
+      - key: BARION_POS_KEY_KFT
+        sync: false
+      - key: BARION_TEST_MODE
+        value: "true"
+      - key: BARION_PAYEE_EMAIL
+        sync: false
       - key: GOOGLE_SHEETS_WEBHOOK_URL
         sync: false
       - key: ADMIN_NOTIFICATION_EMAIL

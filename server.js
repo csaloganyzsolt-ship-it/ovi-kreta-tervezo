@@ -4,7 +4,8 @@ const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { router: paymentRouter, stripeWebhook, deliverPurchase } = require('./routes/payment');
+const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } = require('./routes/payment');
+const { SHIPPED_EXTENSIONS } = require('./scripts/copy-assets');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
@@ -112,6 +113,8 @@ app.use((_req, res, next) => {
 app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
+// A Barion visszahívás query-ben (GET) vagy űrlapként/JSON-ban (POST) hozza a paymentId-t; az állapotot a handler a Barion API-tól kérdezi le.
+app.all('/api/webhook/barion', express.urlencoded({ extended: false, limit: '10kb' }), express.json({ limit: '10kb' }), (req, res, next) => (['GET', 'POST'].includes(req.method) ? barionWebhook(req, res) : next()));
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
@@ -126,6 +129,10 @@ for (const route of ['/', '/index.html']) {
 for (const file of ['tervezo.html', 'ertekeles.html', ...SITE_ASSETS]) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
+
+// Csak képfájlok érhetők el az assets/ alól (a Barion-útmutató PDF-je és a rejtett fájlok nem).
+app.use('/assets', (req, res, next) => (SHIPPED_EXTENSIONS.has(path.extname(req.path).toLowerCase()) ? next() : res.status(404).end()),
+  express.static(path.join(STATIC_ROOT, 'assets'), { dotfiles: 'ignore', index: false, redirect: false }));
 
 for (const file of SEO_FILES) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));

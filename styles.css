@@ -2220,14 +2220,14 @@ a.brand { text-decoration: none; color: inherit; }
 }
 .barion-btn:hover:not([disabled]) { background: var(--soft); }
 .checkout-box .modal-actions button[disabled] { opacity: 0.5; cursor: not-allowed; }
-.barion-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-top: 12px;
-}
-.barion-logo { display: block; max-width: 100%; height: 32px; width: auto; background: #ffffff; border-radius: 6px; }
-.barion-strip-text { font-size: 0.8rem; color: var(--muted); }
-.barion-strip:not(.logo-missing) .barion-strip-text { display: none; }
-.barion-strip.logo-missing .barion-logo { display: none; }
+.barion-strip { margin: 8px 0; padding: 8px; text-align: center; }
+.barion-pic { display: block; }
+.barion-pic-dark { display: none; }
+html[data-theme="dark"] .barion-pic-light { display: none; }
+html[data-theme="dark"] .barion-pic-dark { display: block; }
+/* Hivatalos logósor: eredeti képarány, nincs háttér, keret vagy árnyék; a méret csak arányosan változik. */
+.barion-logo { display: block; width: min(100%, 340px); height: auto; margin: 0 auto; }
+@media (max-width: 640px) { .barion-logo { width: min(100%, 300px); } }
+@media (max-width: 380px) { .barion-logo { width: min(100%, 260px); } }
+/* A fizetési ablakban a sor görgetés nélkül is látszik: az ablak alján marad. */
+.checkout-box .barion-strip { position: sticky; bottom: -26px; margin: 8px 0 -26px; padding-bottom: 34px; background: var(--card); }

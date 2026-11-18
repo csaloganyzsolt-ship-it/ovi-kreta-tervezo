@@ -115,21 +115,6 @@ test('the server takes the plan mode from the stored plan, so an academic plan c
   assert.equal(invalid.status, 400);
 });
 
-// ---------- Barion végpont: egyelőre kulturált 501 ----------
-
-test('POST /api/checkout-barion answers a clear 501 JSON warning and is not a GET route', async (t) => {
-  const base = await listen(t);
-  const response = await post(base, '/api/checkout-barion', { plan: 'daily', planMode: 'academic', email: 'a@b.hu' });
-  assert.equal(response.status, 501);
-  assert.match(response.headers.get('content-type'), /application\/json/);
-  const data = await response.json();
-  assert.equal(data.success, false);
-  assert.equal(data.code, 'BARION_NOT_IMPLEMENTED');
-  assert.equal(data.error, 'A Barion fizetés hamarosan indul!');
-  assert.equal((await fetch(`${base}/api/checkout-barion`)).status, 404);
-  assert.equal((await post(base, '/api/checkout-barion', {})).status, 501, 'üres kérésre is ugyanez');
-});
-
 // ---------- Barion Base Pixel ----------
 
 test('the Barion pixel id comes from BARION_PIXEL_ID with a safe default and can be switched off or fixed by an invalid value', () => {
@@ -189,7 +174,7 @@ test('both pages carry the deferred Barion pixel script in the head, and every c
 
 test('the CSP allows the Barion pixel host for scripts, beacons and the tracking image, and nothing wider', () => {
   const directive = (name) => CONTENT_SECURITY_POLICY.split('; ').find((part) => part.startsWith(`${name} `));
-  for (const name of ['script-src', 'connect-src', 'img-src']) assert.ok(directive(name).includes('https://pixel.barion.com'), name);
+  for (const name of ['script-src', 'connect-src', 'img-src', 'frame-src']) assert.ok(directive(name).includes('https://pixel.barion.com'), name);
   assert.doesNotMatch(CONTENT_SECURITY_POLICY, /\*\.barion\.com|unsafe-eval/);
   assert.ok(fs.readFileSync(path.join(ROOT, '.htaccess'), 'utf8').includes(CONTENT_SECURITY_POLICY));
 });
@@ -313,27 +298,62 @@ test('a Stripe checkout without the consent is refused even if the form is submi
   assert.match(window.document.getElementById('checkoutError').textContent, /ÁSZF/);
 });
 
-test('clicking the Barion button only shows the frontend warning, without any network request or redirect', async (t) => {
+// ---------- Barion gomb: indítás és átirányítás ----------
+
+function stubRedirect(window) {
+  const targets = [];
+  window.redirectTo = (url) => targets.push(url);
+  return targets;
+}
+
+test('clicking the Barion button starts the payment and sends the user to the GatewayUrl', async (t) => {
   const window = await loadPlanner(t);
   window.renderResultDocument(academicResult());
   window.openCheckoutModal();
-  let calls = 0;
-  window.fetch = async () => { calls += 1; return Response.json({ success: true }); };
-  const alerts = [];
-  window.alert = (message) => alerts.push(message);
+  const redirects = stubRedirect(window);
+  const calls = [];
+  window.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: JSON.parse(options.body) });
+    return Response.json({ success: true, paymentId: 'pay123', gatewayUrl: 'https://secure.test.barion.com/Pay?id=pay123', sessionId: 'barion_0123456789abcdef01234567', amountHuf: 690 });
+  };
   fill(window);
   const barion = window.document.getElementById('checkoutBarion');
   barion.click();
   await new Promise((resolve) => setTimeout(resolve, 30));
 
-  assert.equal(calls, 0, 'nincs hálózati hívás');
-  assert.deepEqual(alerts, [], 'nem böngészős alert, hanem az űrlapon belüli figyelmeztetés');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://localhost:8000/api/checkout-barion');
+  assert.deepEqual({ plan: calls[0].body.plan, planMode: calls[0].body.planMode, email: calls[0].body.email, generationId: calls[0].body.generationId },
+    { plan: 'academic_daily', planMode: 'academic', email: 'vevo@example.com', generationId: 'gen_ui_academic' });
+  assert.deepEqual(redirects, ['https://secure.test.barion.com/Pay?id=pay123']);
+  assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), 'barion_0123456789abcdef01234567');
+  assert.equal(window.localStorage.getItem('oviKretaPendingCheckout'), 'gen_ui_academic');
+  assert.equal(window.document.getElementById('checkoutError').textContent, '');
+});
+
+test('the Barion button refuses a foreign gateway address and shows server errors without redirecting', async (t) => {
+  const window = await loadPlanner(t);
+  window.renderResultDocument(standardResult());
+  window.openCheckoutModal();
+  const redirects = stubRedirect(window);
+  const answers = [
+    Response.json({ success: true, paymentId: 'p', gatewayUrl: 'https://secure.barion.com.evil.example/Pay', sessionId: 'barion_0123456789abcdef01234567' }),
+    Response.json({ success: false, error: 'A Barion fizetés indítása sikertelen (ShopIsClosed).' }, { status: 502 })
+  ];
+  window.fetch = async () => answers.shift();
+  fill(window);
   const error = window.document.getElementById('checkoutError');
-  assert.equal(error.textContent, 'A Barion fizetés hamarosan indul! Kérjük, addig használd a Stripe bankkártyás fizetést.');
-  assert.equal(error.getAttribute('role'), 'alert');
-  assert.equal(window.location.href, 'http://localhost:8000/', 'nincs átirányítás');
-  assert.equal(barion.disabled, false, 'a gomb a figyelmeztetés után is használható');
-  assert.equal(window.document.getElementById('checkoutSubmit').disabled, false, 'a Stripe fizetés érintetlen');
+  const barion = window.document.getElementById('checkoutBarion');
+
+  barion.click();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.match(error.textContent, /érvénytelen fizetési címet/);
+  barion.click();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(error.textContent, 'A Barion fizetés nem indítható: A Barion fizetés indítása sikertelen (ShopIsClosed).');
+  assert.deepEqual(redirects, []);
+  assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), null);
+  assert.equal(barion.disabled, false, 'a gomb újra használható');
 });
 
 test('a disabled Barion button does nothing, and a forced Barion call with a broken form is refused before any message', async (t) => {
@@ -392,28 +412,203 @@ test('the front end price table matches the server price table for every product
   assert.deepEqual(Object.keys(labels).sort(), Object.keys(PRODUCTS).sort());
 });
 
-test('the Barion Payment logo strip is in the payment form and in the footer of both pages, with a text fallback instead of a broken image', async (t) => {
-  const window = await loadPlanner(t);
-  const strips = Array.from(window.document.querySelectorAll('[data-barion-strip]'));
-  assert.equal(strips.length, 2);
-  assert.ok(window.document.getElementById('checkoutForm').querySelector('[data-barion-strip]'), 'a fizetési szekcióban');
-  assert.ok(window.document.getElementById('siteFooter').querySelector('[data-barion-strip]'), 'a láblécben');
-  for (const strip of strips) {
-    const img = strip.querySelector('img.barion-logo');
-    assert.equal(img.getAttribute('src'), 'assets/barion-card-strip.png');
-    assert.match(img.alt, /Barion Payment/);
-    assert.match(img.alt, /Visa, Mastercard, Maestro, American Express/);
-    assert.match(strip.querySelector('.barion-strip-text').textContent, /Barion Payment/);
-    assert.equal(strip.classList.contains('logo-missing'), false);
-    img.dispatchEvent(new window.Event('error'));
-    assert.ok(strip.classList.contains('logo-missing'), 'a hiányzó képfájlnál a szöveges megjelölés látszik');
+const BARION_PNG_DIR = path.join(ROOT, 'assets', 'Barion adatok', 'png');
+
+test('the official Barion banner files (light and dark, three sizes) are in the project as real PNGs', () => {
+  for (const mode of ['Light', 'Dark']) {
+    for (const size of ['Small', 'Medium', 'Large']) {
+      const file = path.join(BARION_PNG_DIR, mode, `${size}-nobg-${mode.toLowerCase()}.png`);
+      const data = fs.readFileSync(file);
+      assert.equal(data.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', file);
+      const [width, height] = [data.readUInt32BE(16), data.readUInt32BE(20)];
+      assert.ok(width / height > 5 && width / height < 6, `${file}: eredeti, széles logósor-arány (${width}x${height})`);
+    }
   }
-  const landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  assert.match(landing, /data-barion-strip[\s\S]*?assets\/barion-card-strip\.png/);
+});
+
+test('every Barion strip uses the official light and dark banner in three sizes, with no size attributes that could distort it', () => {
+  const pages = { 'tervezo.html': 2, 'index.html': 1 };
+  for (const [page, expectedStrips] of Object.entries(pages)) {
+    const dom = new JSDOM(fs.readFileSync(path.join(ROOT, page), 'utf8'));
+    const strips = Array.from(dom.window.document.querySelectorAll('[data-barion-strip]'));
+    assert.equal(strips.length, expectedStrips, page);
+    for (const strip of strips) {
+      for (const mode of ['light', 'dark']) {
+        const picture = strip.querySelector(`picture.barion-pic-${mode}`);
+        assert.ok(picture, `${page}: ${mode} változat`);
+        const folder = mode === 'light' ? 'Light' : 'Dark';
+        const sources = Array.from(picture.querySelectorAll('source')).map((source) => [source.getAttribute('media'), source.getAttribute('srcset')]);
+        assert.deepEqual(sources, [
+          ['(max-width: 380px)', `assets/Barion%20adatok/png/${folder}/Small-nobg-${mode}.png`],
+          ['(max-width: 640px)', `assets/Barion%20adatok/png/${folder}/Medium-nobg-${mode}.png`]
+        ], `${page}: kisebb képernyőn kisebb banner`);
+        const img = picture.querySelector('img.barion-logo');
+        assert.equal(img.getAttribute('src'), `assets/Barion%20adatok/png/${folder}/Large-nobg-${mode}.png`);
+        for (const attribute of ['width', 'height', 'style']) assert.equal(img.hasAttribute(attribute), false, `${page}: nincs ${attribute} attribútum`);
+        assert.match(img.getAttribute('alt'), /Barion Payment.*Barion, Mastercard, Visa, Apple Pay, Google Pay/);
+        for (const reference of [img.getAttribute('src'), ...sources.map(([, srcset]) => srcset)]) {
+          assert.ok(fs.existsSync(path.join(ROOT, decodeURI(reference))), `${page}: hiányzó fájl ${reference}`);
+        }
+      }
+    }
+  }
+  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8')).window.document.querySelector('#checkoutForm [data-barion-strip]'), 'a fizetési ablakban');
+  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8')).window.document.querySelector('#siteFooter [data-barion-strip]'), 'a láblécben');
+});
+
+test('the Barion strip CSS keeps the aspect ratio, adds no effects, keeps at least 8px around it and follows the theme', () => {
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
-  assert.match(css, /\.barion-strip\.logo-missing \.barion-logo\s*\{\s*display:\s*none/);
-  const asset = path.join(ROOT, 'assets', 'barion-card-strip.png');
-  if (fs.existsSync(asset)) assert.equal(fs.readFileSync(asset).subarray(0, 4).toString('hex'), '89504e47', 'a feltöltött logó valódi PNG');
+  const rule = (selector) => {
+    const match = css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]()]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
+    assert.ok(match, `hiányzó szabály: ${selector}`);
+    return match[1];
+  };
+  const logo = rule('.barion-logo');
+  assert.match(logo, /height:\s*auto/);
+  assert.match(logo, /width:\s*min\(100%,\s*\d+px\)/, 'arányosan zsugorodik, de nem nyúlik');
+  assert.doesNotMatch(logo, /background|border|box-shadow|filter|opacity|object-fit|max-height|clip|transform|overflow/, 'a logó nem módosítható');
+  const padding = Number(rule('.barion-strip').match(/padding:\s*(\d+)px/)?.[1]);
+  assert.ok(padding >= 8, `legalább 8px padding (${padding}px)`);
+  assert.ok(Number(rule('.barion-strip').match(/margin:\s*(\d+)px/)?.[1]) >= 8, 'legalább 8px távolság a szomszédos elemektől');
+  assert.match(css, /@media \(max-width: 640px\) \{ \.barion-logo \{ width: min\(100%, 300px\); \} \}/);
+  assert.match(css, /@media \(max-width: 380px\) \{ \.barion-logo \{ width: min\(100%, 260px\); \} \}/);
+  assert.match(rule('.barion-pic-dark'), /display:\s*none/);
+  assert.match(css, /html\[data-theme="dark"\] \.barion-pic-light \{ display: none; \}/);
+  assert.match(css, /html\[data-theme="dark"\] \.barion-pic-dark \{ display: block; \}/);
+  assert.match(rule('.checkout-box .barion-strip'), /position:\s*sticky;\s*bottom:\s*-26px/, 'a fizetési ablakban görgetés nélkül is látszik');
+  assert.doesNotMatch(css, /barion-card-strip|logo-missing|barion-strip-text/);
+});
+
+test('the server serves the official banner images but never the Barion guide PDF or hidden files', async (t) => {
+  const base = await listen(t);
+  const image = await fetch(`${base}/assets/Barion%20adatok/png/Light/Large-nobg-light.png`);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('content-type'), 'image/png');
+  assert.equal((await image.arrayBuffer()).byteLength, fs.statSync(path.join(BARION_PNG_DIR, 'Light', 'Large-nobg-light.png')).size);
+  for (const route of ['/assets/Barion%20adatok/Dev%20guide.pdf', '/assets/.DS_Store', '/assets/Barion%20adatok/.DS_Store', '/assets/..%2Fserver.js', '/assets/', '/assets/nincs.png']) {
+    assert.equal((await fetch(`${base}${route}`)).status, 404, route);
+  }
+});
+
+test('both builds copy the banner folders recursively and leave out the PDF and hidden files', () => {
+  const os = require('node:os');
+  const { copyAssets } = require('../scripts/copy-assets');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ovi-assets-'));
+  try {
+    copyAssets(ROOT, out);
+    for (const mode of ['Light', 'Dark']) for (const size of ['Small', 'Medium', 'Large']) {
+      assert.ok(fs.existsSync(path.join(out, 'assets', 'Barion adatok', 'png', mode, `${size}-nobg-${mode.toLowerCase()}.png`)));
+    }
+    const copied = [];
+    const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => (entry.isDirectory() ? walk(path.join(dir, entry.name)) : copied.push(entry.name)));
+    walk(out);
+    assert.ok(copied.every((name) => !name.startsWith('.') && !/\.pdf$/i.test(name)), copied.join(', '));
+    assert.ok(copied.includes('og-preview.png'));
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// ---------- Barion visszatérés: státuszlekérdezés, feloldás, kézbesítés ----------
+
+const SESSION = 'barion_0123456789abcdef01234567';
+
+async function loadReturn(t, { search = `?payment=barion&session_id=${SESSION}`, answers, pendingKey = true }) {
+  const mirror = { ...planStore.createMirrorPlan(makePlan(8)), request: makePayload(), generationId: 'gen_ret1' };
+  const calls = [];
+  const dom = new JSDOM(plannerHtml, {
+    url: `http://localhost:8000/tervezo.html${search}`,
+    runScripts: 'dangerously',
+    beforeParse(window) {
+      window.HTMLElement.prototype.scrollIntoView = () => {};
+      window.scrollTo = () => {};
+      window.APP_CONFIG = { paywallEnabled: true, apiBaseUrl: 'same-origin' };
+      const realTimeout = window.setTimeout.bind(window);
+      window.setTimeout = (fn, ms, ...args) => realTimeout(fn, ms >= 1000 ? 1 : ms, ...args);
+      window.localStorage.setItem('oviKreta_lastGeneration', JSON.stringify({ payload: '{}', result: mirror }));
+      window.localStorage.setItem('oviKretaPendingCheckout', 'gen_ret1');
+      if (pendingKey) window.localStorage.setItem('oviKretaPendingBarion', SESSION);
+      window.fetch = async (url, options = {}) => {
+        window.buildDeliveryFiles = async () => [{ name: 'terv.pdf', base64: 'eA==' }];
+        calls.push({ url: String(url), method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+        return answers(String(url), calls);
+      };
+    }
+  });
+  t.after(() => dom.window.close());
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return { window: dom.window, calls, mirror };
+}
+
+const sessionCalls = (calls) => calls.filter((call) => call.url.includes('/api/checkout-session/'));
+
+test('returning from Barion polls the status until it is paid, then unlocks the document and starts the /api/deliver/ delivery', async (t) => {
+  const full = { ...makePlan(8), request: makePayload(), generationId: 'gen_ret1' };
+  const { window, calls } = await loadReturn(t, {
+    answers: (url, all) => {
+      if (url.includes('/api/checkout-session/')) {
+        return sessionCalls(all).length < 3
+          ? Response.json({ success: true, paid: false, pending: true, status: 'Started', provider: 'barion' })
+          : Response.json({ success: true, paid: true, pending: false, status: 'Succeeded', provider: 'barion', emailEnabled: true, generationId: 'gen_ret1', planData: full });
+      }
+      return Response.json({ success: true, sent: true });
+    }
+  });
+  const { document } = window;
+  assert.equal(sessionCalls(calls).length, 3, 'addig kérdez, amíg a fizetés el nem dől');
+  assert.ok(sessionCalls(calls).every((call) => call.url === `http://localhost:8000/api/checkout-session/${SESSION}`));
+  assert.equal(window.isPlanLocked(), false);
+  assert.equal(document.querySelector('.locked-mirror-text'), null, 'a valódi tartalom látszik');
+  assert.equal(document.getElementById('unlockedBadge').hidden, false);
+  assert.equal(window.currentPaidSessionId(), SESSION);
+  assert.equal(document.getElementById('downloadInvoiceBtn').hidden, false, 'Barion-fizetésnél van számla');
+  const deliver = calls.find((call) => call.url.includes('/api/deliver/'));
+  assert.equal(deliver.url, `http://localhost:8000/api/deliver/${SESSION}`);
+  assert.equal(deliver.method, 'POST');
+  assert.deepEqual(deliver.body.files, [{ name: 'terv.pdf', base64: 'eA==' }]);
+  assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), null);
+  assert.equal(window.localStorage.getItem('oviKretaPendingCheckout'), null);
+  assert.equal(window.location.search, '', 'a visszatérési paraméterek törlődnek');
+});
+
+test('returning from a cancelled or failed Barion payment keeps the document locked and says so', async (t) => {
+  for (const status of ['Canceled', 'Failed', 'Expired']) {
+    const { window, calls } = await loadReturn(t, { answers: () => Response.json({ success: true, paid: false, pending: false, status, provider: 'barion' }) });
+    assert.equal(window.isPlanLocked(), true, status);
+    const banner = window.document.getElementById('generationErrorBanner');
+    assert.match(banner.textContent, /Barion fizetés megszakadt vagy sikertelen/, status);
+    assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), null, status);
+    assert.equal(calls.some((call) => call.url.includes('/api/deliver/')), false, status);
+    assert.equal(sessionCalls(calls).length, 1, `${status}: végleges állapotnál nincs további lekérdezés`);
+  }
+});
+
+test('a Barion payment that stays pending after the polling keeps the lock, the pending marker and an honest message', async (t) => {
+  const { window, calls } = await loadReturn(t, { answers: () => Response.json({ success: true, paid: false, pending: true, status: 'InProgress', provider: 'barion' }) });
+  assert.equal(sessionCalls(calls).length, 20);
+  assert.equal(window.isPlanLocked(), true);
+  assert.match(window.document.getElementById('generationErrorBanner').textContent, /megerősítése még tart/);
+  assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), SESSION, 'a következő betöltéskor újra rákérdez');
+});
+
+test('a pending Barion payment is checked once more on the next page load, silently, and unlocks when it was paid', async (t) => {
+  const full = { ...makePlan(8), request: makePayload(), generationId: 'gen_ret1' };
+  const paid = await loadReturn(t, {
+    search: '',
+    answers: (url) => (url.includes('/api/checkout-session/')
+      ? Response.json({ success: true, paid: true, pending: false, status: 'Succeeded', provider: 'barion', emailEnabled: false, generationId: 'gen_ret1', planData: full })
+      : Response.json({ success: true }))
+  });
+  assert.equal(paid.window.isPlanLocked(), false);
+  assert.equal(paid.window.localStorage.getItem('oviKretaPendingBarion'), null);
+
+  const stillPending = await loadReturn(t, { search: '', answers: () => Response.json({ success: true, paid: false, pending: true, status: 'Started', provider: 'barion' }) });
+  assert.equal(sessionCalls(stillPending.calls).length, 1, 'újratöltéskor egyetlen lekérdezés');
+  assert.equal(stillPending.window.document.getElementById('generationErrorBanner').hidden, true, 'nem zaklat hibaüzenettel');
+  assert.equal(stillPending.window.localStorage.getItem('oviKretaPendingBarion'), SESSION);
+
+  const none = await loadReturn(t, { search: '', pendingKey: false, answers: () => Response.json({}) });
+  assert.equal(none.calls.length, 0, 'függő fizetés nélkül nincs hálózati hívás');
 });
 
 test('the price texts mention the academic price consistently on the landing page, the legal texts and the JSON-LD', () => {

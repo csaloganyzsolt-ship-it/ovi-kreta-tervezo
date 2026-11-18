@@ -8,6 +8,7 @@ const mailService = require('../services/mailService');
 const sheetsService = require('../services/sheetsService');
 const planStore = require('../services/planStore');
 const coupons = require('../services/coupons');
+const barionService = require('../services/barionService');
 
 // A levél sablonját a kliens jelzi; csak az ismert érték fogadható el.
 function requestedPlanMode(req) {
@@ -19,6 +20,15 @@ const couponLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.COUPON_RATE_LIMIT) || 10,
   message: { success: false, error: 'Túl sok kuponkísérlet. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// A Barion-indítás minden hívása külső API-t terhel.
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.PAYMENT_RATE_LIMIT) || 20,
+  message: { success: false, error: 'Túl sok fizetési kísérlet. Kérjük, várj egy percet.' },
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -73,14 +83,44 @@ function applyCoupon(req, res) {
   }
 }
 
-// A Barion fizetés backendje a következő lépésben készül; addig kulturált 501 válasz.
-function checkoutBarion(_req, res) {
-  return res.status(501).json({ success: false, code: 'BARION_NOT_IMPLEMENTED', error: 'A Barion fizetés hamarosan indul!' });
+// Barion fizetés indítása: az összeg a mentett terv módjából jön, a documentId (generationId) az OrderNumber mezőben utazik.
+async function checkoutBarion(req, res) {
+  try {
+    const body = req.body || {};
+    const generationId = String(body.generationId || '').slice(0, 100);
+    if (!generationId || !planStore.hasPlan(generationId)) {
+      return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.' });
+    }
+    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), req });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return sendPaymentError(res, error, 'Barion checkout');
+  }
+}
+
+// Barion visszahívás (IPN): csak a paymentId-t használjuk, az állapotot a Barion API adja. Siker esetén feloldás és számla; fájlt és levelet nem a webhook küld.
+async function barionWebhook(req, res) {
+  const paymentId = String(req.query?.paymentId || req.query?.PaymentId || req.body?.paymentId || req.body?.PaymentId || '').trim();
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(paymentId)) return res.status(400).json({ success: false, error: 'Hiányzó vagy érvénytelen paymentId.' });
+  try {
+    const result = await barionService.handleCallback(paymentId);
+    if (!result.known) return res.json({ received: true, ignored: 'unknown_payment' });
+    return res.json({ received: true, status: result.status, paid: result.paid });
+  } catch (error) {
+    // Nem 2xx válasznál a Barion újrapróbálja a visszahívást.
+    console.error('Barion webhook failed:', error.message);
+    return res.status(error.status || 500).json({ success: false, error: error.message });
+  }
+}
+
+// A munkamenet azonosítója alapján a megfelelő szolgáltatótól kérdez (Barion vagy Stripe); közös alakot ad vissza.
+function retrieveSession(id) {
+  return barionService.isSessionId(id) ? barionService.retrieveSession(id) : stripeService.retrieveCheckoutSession(id);
 }
 
 async function verifyCheckout(req, res) {
   try {
-    const result = await stripeService.retrieveCheckoutSession(req.params.id);
+    const result = await retrieveSession(req.params.id);
     let planData = null;
     if (result.paid && result.generationId) {
       planData = planStore.getPlan(result.generationId);
@@ -99,7 +139,7 @@ async function verifyCheckout(req, res) {
 
 async function downloadInvoice(req, res) {
   try {
-    const session = await stripeService.retrieveCheckoutSession(req.params.id);
+    const session = await retrieveSession(req.params.id);
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
     const pdf = invoiceService.getInvoicePdf(req.params.id);
     if (!pdf) return res.status(404).json({ success: false, error: 'A számla még készül vagy nem érhető el.' });
@@ -116,7 +156,7 @@ async function deliverPurchase(req, res) {
     const id = req.params.id;
     const couponSession = coupons.getSession(id);
     if (couponSession) return await deliverCouponPurchase(req, res, couponSession);
-    const session = await stripeService.retrieveCheckoutSession(id);
+    const session = await retrieveSession(id);
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
     if (session.mock || !mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
     if (mailService.wasSent(id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
@@ -194,9 +234,9 @@ async function stripeWebhook(req, res) {
 
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
-router.post('/checkout-barion', checkoutBarion);
+router.post('/checkout-barion', paymentLimiter, checkoutBarion);
 router.post('/apply-coupon', couponLimiter, applyCoupon);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
 
-module.exports = { router, stripeWebhook, deliverPurchase, applyCoupon };
+module.exports = { router, stripeWebhook, barionWebhook, deliverPurchase, applyCoupon };

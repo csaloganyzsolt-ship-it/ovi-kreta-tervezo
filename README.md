@@ -102,6 +102,7 @@ A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel a
 - **Production (Nethely, ovitervezo.hu):** `node scripts/build-nethely.js` – `paywallEnabled: true`, éles Stripe + számlázás.
 - **Staging (GitHub Pages):** `node scripts/build-pages.js` – ugyanúgy `paywallEnabled: true`; a fizetős tartalom minden eredetre zárolt. Ingyenes teszteléshez a fizetési ablak „Kuponkód" mezője való (`POST /api/apply-coupon`).
 - **Kuponok:** a 100%-os kódokat a `COUPON_CODES` környezeti változó adja (vesszővel elválasztva; beállítás nélkül: `TEST100`; üresen a kuponok kikapcsolva). A kupon megkerüli a Stripe-ot és a Számlázz.hu-t; a levél számla nélkül, a kuponnal feloldott tervezettel megy ki. A végpont IP-nként percenként 10 kísérletre korlátozott.
+- **Barion fizetés:** `POST /api/checkout-barion` (Payment/Start) és `POST /api/webhook/barion` (GetPaymentState → feloldás + Számlázz.hu számla, fájlt és levelet nem küld). Környezeti változók: `BARION_POS_KEY_EV` (vagy `_KFT`, vagy a közös `BARION_POS_KEY`), `BARION_TEST_MODE=true` (teszt API), `BARION_PAYEE_EMAIL` (a Barion-bolt regisztrált e-mail címe; hiányában `SUPPORT_EMAIL`), `BACKEND_URL` (a visszahívás címe; Renderen a `RENDER_EXTERNAL_URL` is jó). A Barion-bolt a teszt környezetben legyen „Open" állapotban.
 - Mindkét deploy a `main` push után fut (`deploy.yml`, `deploy-nethely.yml`).
 - SMTP ellenőrzés: `node scripts/test-email.js sajat@email.hu` (a `.env` SMTP_* változóival).
 

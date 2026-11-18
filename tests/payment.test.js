@@ -722,9 +722,7 @@ test('both builds ship both pages with every local reference resolvable and the 
       assert.ok(refs.length > 0);
       for (const ref of refs) {
         assert.ok(!ref.startsWith('/'), `${dir}/${page}: abszolút útvonal ${ref}`);
-        // A hivatalos Barion-logócsík fájlját a megrendelő tölti fel (assets/barion-card-strip.png); hiányában a szöveges megjelölés látszik.
-        if (ref.split('?')[0] === 'assets/barion-card-strip.png') continue;
-        assert.ok(fs.existsSync(path.join(cwd, dir, ref.split('?')[0])), `${dir}/${page}: hiányzó fájl ${ref}`);
+        assert.ok(fs.existsSync(path.join(cwd, dir, decodeURI(ref.split('?')[0]))), `${dir}/${page}: hiányzó fájl ${ref}`);
       }
       assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
       for (const f of ['styles.css', 'site.js', 'config.js', 'favicon.svg', 'favicon.ico']) assert.match(html, new RegExp(`(?:href|src)="${f.replace('.', '\\.')}\\?v=\\d{12}"`), `${dir}/${page}: ${f} verzió nélkül`);

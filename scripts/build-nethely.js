@@ -7,6 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
+const { copyAssets } = require('./copy-assets');
 const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, barionPixelId, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
@@ -47,9 +48,7 @@ for (const file of [...SEO_FILES, ...SITE_ASSETS]) {
 for (const page of PAGES) {
   fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8'))), version));
 }
-for (const file of fs.readdirSync(path.join(root, 'assets'))) {
-  fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
-}
+copyAssets(root, out);
 
 const config = {
   apiBaseUrl,

@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
+const { copyAssets } = require('./copy-assets');
 const { SUPPORT_EMAIL, barionPixelId, PAGES, SITE_ASSETS, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
@@ -19,9 +20,7 @@ for (const page of PAGES) {
   fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(fs.readFileSync(path.join(root, page), 'utf8').replace('<!--GOOGLE_SITE_VERIFICATION-->', '')), version));
 }
 for (const file of SITE_ASSETS) fs.copyFileSync(path.join(root, file), path.join(out, file));
-for (const file of fs.readdirSync(path.join(root, 'assets'))) {
-  fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
-}
+copyAssets(root, out);
 const config = { apiBaseUrl, paywallEnabled: true, turnstileSiteKey: '', barionPixelId: barionPixelId(), company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: false } };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 // A teszt oldal ne kerüljön indexelésre, hogy ne versenyezzen az éles oldallal.

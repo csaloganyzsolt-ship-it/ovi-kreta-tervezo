@@ -205,12 +205,37 @@ function readCheckoutForm() {
   return { email };
 }
 
-const BARION_SOON_MESSAGE = 'A Barion fizetés hamarosan indul! Kérjük, addig használd a Stripe bankkártyás fizetést.';
+function redirectTo(url) {
+  window.location.assign(url);
+}
 
-// A Barion backend a következő lépésben készül; addig kulturált figyelmeztetés jelenik meg, hálózati hívás nélkül.
-function startBarionCheckout() {
-  if (!readCheckoutForm()) return;
-  document.getElementById('checkoutError').textContent = BARION_SOON_MESSAGE;
+const BARION_GATEWAY_PATTERN = /^https:\/\/secure(\.test)?\.barion\.com\//;
+const PENDING_BARION_KEY = 'oviKretaPendingBarion';
+
+// Barion fizetés: a szerver elindítja a Payment/Start hívást, a felhasználó a kapott GatewayUrl-re megy; a visszatérést a handleCheckoutReturn kezeli.
+async function startBarionCheckout() {
+  const form = readCheckoutForm();
+  if (!form) return;
+  const errorEl = document.getElementById('checkoutError');
+  document.getElementById('checkoutBarion').disabled = true;
+  document.getElementById('checkoutSubmit').disabled = true;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
+    localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
+    localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
+    redirectTo(data.gatewayUrl);
+  } catch (error) {
+    errorEl.textContent = `A Barion fizetés nem indítható: ${error.message}`;
+  } finally {
+    syncCheckoutButtons();
+  }
 }
 
 // 100%-os kupon: a szerver fizetés és számla nélkül feloldja a tervet; innentől ugyanaz a folyamat, mint sikeres fizetés után.
@@ -263,7 +288,7 @@ async function submitCheckout(event) {
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     if (data.mock) errorEl.textContent = data.message;
-    window.location.assign(data.url);
+    redirectTo(data.url);
   } catch (error) {
     errorEl.textContent = `A fizetés nem indítható: ${error.message}`;
   } finally {
@@ -304,9 +329,26 @@ function showUnlockedPlan(generationId, sessionId, planData) {
   }
 }
 
+const RETURN_POLL = { attempts: 20, delayMs: 3000 };
+
+// A Barion visszatéréskor még függőben lehet (a visszahívás késik): addig kérdezzük a státuszt, amíg el nem dől.
+async function fetchSessionState(sessionId, poll) {
+  for (let attempt = 1; ; attempt += 1) {
+    const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (data.paid || !data.pending || !poll || attempt >= RETURN_POLL.attempts) return data;
+    showPurchaseNotice('A Barion fizetés megerősítésére várunk...');
+    await new Promise((resolve) => setTimeout(resolve, RETURN_POLL.delayMs));
+  }
+}
+
 async function handleCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get('session_id') || params.get('checkout_session');
+  const urlSession = params.get('session_id') || params.get('checkout_session');
+  // Ha a Barion-oldalról nem tért vissza a felhasználó, a következő betöltéskor egyszer rákérdezünk a függő fizetésre.
+  const resumed = !urlSession && localStorage.getItem(PENDING_BARION_KEY);
+  const sessionId = urlSession || resumed;
   const cancelled = params.get('payment') === 'cancel' || params.get('checkout') === 'cancelled';
   if (!sessionId && !cancelled) return;
   // A paraméterek törlése után a sima frissítés nem indítja újra a kézbesítést.
@@ -314,14 +356,28 @@ async function handleCheckoutReturn() {
   if (sessionId && !lastResult) restoreLastGeneration();
   if (cancelled) { showGenerationError('A fizetés megszakadt, a tervezet zárolva maradt.'); return; }
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/checkout-session/${encodeURIComponent(sessionId)}`);
-    const data = await response.json();
-    if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
+    const data = await fetchSessionState(sessionId, !resumed);
+    if (!data.paid && data.provider === 'barion') {
+      showPurchaseNotice('');
+      if (data.pending) {
+        if (!resumed) showGenerationError('A Barion fizetés megerősítése még tart. Az oldal újratöltésekor a tervezet automatikusan feloldódik, ha a fizetés sikeres volt.');
+      } else {
+        localStorage.removeItem(PENDING_BARION_KEY);
+        if (!resumed) showGenerationError('A Barion fizetés megszakadt vagy sikertelen volt, a tervezet zárolva maradt.');
+      }
+      return;
+    }
+    if (!data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
     const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId || data.generationId;
     localStorage.removeItem('oviKretaPendingCheckout');
+    localStorage.removeItem(PENDING_BARION_KEY);
+    showPurchaseNotice('');
     showUnlockedPlan(pending, sessionId, data.planData);
     if (data.emailEnabled && lastResult) await deliverPurchaseEmail(sessionId);
   } catch (error) {
+    showPurchaseNotice('');
+    // Az automatikus újrakérdezés egyszeri: hibánál nem zaklatja a felhasználót minden betöltéskor.
+    if (resumed) { localStorage.removeItem(PENDING_BARION_KEY); return; }
     showGenerationError(`A fizetés ellenőrzése sikertelen: ${error.message}`);
   }
 }

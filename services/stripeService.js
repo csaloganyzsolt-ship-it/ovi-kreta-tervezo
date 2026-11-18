@@ -186,7 +186,7 @@ function constructWebhookEvent(rawBody, signature, deps = {}) {
 }
 
 module.exports = {
-  PRODUCTS, PaymentError, MOCK_PREFIX, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
+  PRODUCTS, PaymentError, MOCK_PREFIX, profileSuffix, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, isLive, isTestMode, getBaseUrl, parsePlan, parseEmail, toStripeAmount,
   createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent,
   mockSessions, pruneMockSessions, MAX_MOCK_SESSIONS
 };

@@ -249,18 +249,8 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS };
 }
 
-// A Barion Payment logócsík képe hiányában (vagy betöltési hibánál) a szöveges megjelölés látszik, törött kép nélkül.
-function bindBarionLogoFallback() {
-  document.querySelectorAll('img.barion-logo').forEach((img) => {
-    const markMissing = () => img.closest('[data-barion-strip]')?.classList.add('logo-missing');
-    if (img.complete && img.naturalWidth === 0) markMissing();
-    img.addEventListener('error', markMissing, { once: true });
-  });
-}
-
 function initPage() {
   initSite();
-  bindBarionLogoFallback();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPage);

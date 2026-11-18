@@ -18,7 +18,7 @@ const CONTENT_SECURITY_POLICY = [
   "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com",
-  'frame-src https://challenges.cloudflare.com https://checkout.stripe.com',
+  'frame-src https://challenges.cloudflare.com https://checkout.stripe.com https://pixel.barion.com',
   "img-src 'self' data: blob: https://pixel.barion.com",
   "object-src 'none'",
   "base-uri 'self'",

@@ -3,6 +3,7 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 // A fizetőfalat az egyes tesztek kapcsolják be; a helyi .env értéke nem szivároghat a tesztekbe.
 process.env.PAYWALL_ENABLED = 'false';
 process.env.COUPON_RATE_LIMIT = process.env.COUPON_RATE_LIMIT || '1000';
+process.env.PAYMENT_RATE_LIMIT = process.env.PAYMENT_RATE_LIMIT || '1000';
 process.env.GENERATE_RATE_LIMIT = process.env.GENERATE_RATE_LIMIT || '1000';
 process.env.DAILY_GENERATION_CAP = process.env.DAILY_GENERATION_CAP || '100000';
 

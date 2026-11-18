@@ -62,7 +62,7 @@ function orderNumber(orderId, created = new Date()) {
   return `OVI-${ymd}-${String(orderId || '').slice(-6).toUpperCase()}`;
 }
 
-function buildInvoiceXml({ customer, plan, orderId, created }, env = process.env, date = new Date()) {
+function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
   const vatKey = vatRate(env);
@@ -80,7 +80,7 @@ function buildInvoiceXml({ customer, plan, orderId, created }, env = process.env
     <keltDatum>${day}</keltDatum>
     <teljesitesDatum>${day}</teljesitesDatum>
     <fizetesiHataridoDatum>${day}</fizetesiHataridoDatum>
-    <fizmod>Bankkártya</fizmod>
+    <fizmod>${escapeXml(paymentMethod || 'Bankkártya')}</fizmod>
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
