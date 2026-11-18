@@ -167,17 +167,20 @@ test('footer and legal modals use the real company data without placeholders', a
   assert.match(footer, /Öttevény/);
   assert.doesNotMatch(window.document.body.innerHTML, /kitöltendő/);
   window.document.querySelector('[data-legal="privacy"]').click();
-  assert.match(window.document.getElementById('legalModalBody').textContent, /Stripe/);
+  assert.match(window.document.getElementById('legalModalBody').textContent, /Barion Base Pixel/);
   const expected = {
     terms: [/Nethely Kft\./, /Alanyi adómentes/, /kellékszavatossági/, /nem váltják ki a pedagógus szakmai felelősségét/, /nincs|nem terheli meg/i, /bekelteto\.testulet@gymsmkik\.hu/],
-    privacy: [/Render Services/, /Google Ireland/, /GYERMEKEK SZEMÉLYES ADATAIT/, /Stripe Payments Europe/, /NAIH/, /8 évig/],
-    billing: [/nincs havidíj/, /KBOSS\.hu Kft\./, /PCI-DSS/]
+    privacy: [/Render Services/, /Google Ireland/, /GYERMEKEK SZEMÉLYES ADATAIT/, /Barion Payment Zrt\./, /csalásmegelőzési \(fraud prevention\) célból/, /NAIH/, /8 évig/],
+    billing: [/nincs havidíj/, /KBOSS\.hu Kft\./, /PCI-DSS/, /Barion/]
   };
   for (const [key, patterns] of Object.entries(expected)) {
     window.document.querySelector(`[data-legal="${key}"]`).click();
     const body = window.document.getElementById('legalModalBody').textContent;
     for (const p of patterns) assert.match(body, p, `${key}: ${p}`);
+    assert.doesNotMatch(body, /Stripe/, `${key}: nincs Stripe-utalás`);
   }
+  assert.match(footer, /Barion Payment – biztonságos bankkártyás fizetés/);
+  assert.doesNotMatch(footer, /Stripe/);
 });
 
 test('invoice carries software line items, ovitervezo.hu note and sends an e-invoice', () => {

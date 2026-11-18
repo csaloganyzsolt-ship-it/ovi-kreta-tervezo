@@ -33,7 +33,7 @@ const LEGAL_TEXTS = {
 </ul>
 <p>{{VAT_NOTE}}</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
-<p>A fizetés a Stripe nemzetközi, biztonságos, PCI-DSS minősítésű felületén történik bankkártyával. A Szolgáltató bankkártyaadatokat nem kezel és nem tárol.</p>
+<p>A fizetés a Barion Payment Zrt. biztonságos, PCI-DSS minősítésű felületén történik bankkártyával (vagy Barion-egyenleggel). A Szolgáltató bankkártyaadatokat nem kezel és nem tárol.</p>
 <h3>4. Teljesítés és az elállási jog kizárása</h3>
 <p>A teljesítés a sikeres bankkártyás fizetést követően azonnal megtörténik: a rendszer a tervezetet a böngészőben letölthetővé teszi, valamint ezzel párhuzamosan elektronikus levélben elküldi a Felhasználó által megadott e-mail címre.</p>
 <p>A fogyasztó és a vállalkozás közötti szerződések részletes szabályairól szóló 45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pontja alapján a Felhasználó kifejezetten tudomásul veszi és beleegyezik, hogy nem tárgyi adathordozón nyújtott digitális adattartalom esetén a teljesítés a fizetéssel azonnal megkezdődik, amelynek következtében a Felhasználó a szerződéskötést követően elveszíti a 14 napos indokolás nélküli elállási jogát. A fizetés indításával a Felhasználó ezt a feltételt kifejezetten elfogadja; ezt fizetés előtt külön jelölőnégyzettel is megerősíti.</p>
@@ -76,13 +76,14 @@ const LEGAL_TEXTS = {
 <p><strong>c) Technikai adatok</strong></p>
 <ul>
 <li>A helyi beállítások (pl. világos/sötét mód, az űrlap ideiglenes állapota) a böngésző saját helyi tárhelyén (localStorage) tárolódnak, ezekhez az Adatkezelő szervere nem fér hozzá.</li>
+<li>Az oldal a Barion Base Pixelt használja csalásmegelőzési (fraud prevention) célból, a Barion Payment Zrt. előírásainak megfelelően. A pixel a böngésző és az eszköz technikai adatait (pl. IP-cím, böngészőazonosító) továbbítja a Barion Payment Zrt.-nek, kizárólag a fizetések biztonságos lebonyolítása és a visszaélések kiszűrése érdekében; marketing célra nem használjuk. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési csalások megelőzése.</li>
 </ul>
 <h3>3. Bankkártyás fizetés</h3>
-<p>A bankkártyás fizetést a Stripe nemzetközi szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a {{COMPANY_NAME}} és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
+<p>A bankkártyás fizetést a Barion Payment Zrt. (Magyarország) fizetési szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a {{COMPANY_NAME}} és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
 <h3>4. Címzettek és adatfeldolgozók köre</h3>
 <p>Az adatkezelés során az Adatkezelő az alábbi technológiai partnereket veszi igénybe adatfeldolgozóként:</p>
 <ol>
-<li>Stripe Payments Europe, Ltd. (Írország) – bankkártyás fizetési infrastruktúra.</li>
+<li>Barion Payment Zrt. (Magyarország) – bankkártyás fizetési szolgáltatás és csalásmegelőzés (Barion Base Pixel).</li>
 <li>KBOSS.hu Kft. (Számlázz.hu, Magyarország) – elektronikus számlakiállítás.</li>
 <li>Nethely Kft. (Magyarország) – weboldal domain és DNS kiszolgálás, statikus tárhely.</li>
 <li>Render Services, Inc. (USA / EU) – backend szerverkörnyezet és API futtatás.</li>
@@ -104,10 +105,10 @@ const LEGAL_TEXTS = {
 <p>Jogaidat bírósági úton (a lakóhelyed szerinti törvényszék előtt) is érvényesítheted.</p>`],
   billing: ['Fizetési és Számlázási Tájékoztató', `
 <h3>1. Fizetési mód: biztonságos bankkártyás fizetés</h3>
-<p>A fizetés a Stripe (Stripe Payments Europe Ltd.) titkosított, PCI-DSS Level 1 minősítésű rendszerén keresztül történik.</p>
+<p>A fizetés a Barion Payment Zrt. titkosított, PCI-DSS minősítésű rendszerén keresztül történik.</p>
 <ul>
 <li>A fizetéshez nincs szükség külön regisztrációra vagy fióknyitásra.</li>
-<li>A kártyaadatok (kártyaszám, lejárati dátum, CVC/CVV kód) megadása közvetlenül a Stripe védett szerverein történik.</li>
+<li>A kártyaadatok (kártyaszám, lejárati dátum, CVC/CVV kód) megadása közvetlenül a Barion védett szerverein történik.</li>
 <li>Az OviTervező weboldal és a {{COMPANY_NAME}} a bankkártyaadatokat nem látja, nem naplózza és nem tárolja.</li>
 </ul>
 <h3>2. Csomagok és díjszabás</h3>
