@@ -314,6 +314,7 @@ function renderSummaryChecklist() {
     ['Speciális beállítások', [
       `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
       `Előzmény: ${payload.elozmeny || none}`,
+      `Előző tervezet csatolva: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
       `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
       `IKT / Digitális eszközök: ${payload.iktEnabled ? (payload.iktSummary || 'Igen') : 'Nem'}`,
       `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
@@ -371,7 +372,6 @@ function updateSummary() {
 function getAutoSaveKey(element) {
   if (element?.dataset?.weeklyFocusDay) return `weeklyFocus:${element.dataset.weeklyFocusDay}`;
   if (element?.dataset?.field) return `field:${element.dataset.field}`;
-  if (element?.dataset?.exportSection) return `export:${element.dataset.exportSection}`;
   if (element?.id) return `id:${element.id}`;
   if (element?.dataset?.value && element.matches('.segment')) return `segment:${element.dataset.value}`;
   if (element?.dataset?.value && element.matches('.chip')) return `chip:${element.textContent.trim()}`;
@@ -707,12 +707,14 @@ function setAttachedPreviousPlan(item) {
     banner.hidden = false;
   }
   historyPanel?.classList.remove('open');
+  updateSummary();
 }
 
 function clearAttachedPreviousPlan() {
   attachedPreviousPlan = null;
   const banner = document.getElementById('attachedPlanBanner');
   if (banner) banner.hidden = true;
+  updateSummary();
 }
 
 function formatPreviousPlanContext(attached) {
@@ -1193,7 +1195,6 @@ function buildGenerationPayload() {
     customNotes: getCustomNotes(),
     detailLevel: getDetailLevel(),
     detail: getChoice('detail', 'detailed'),
-    outputMode: 'Szakmai tervezet',
     selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
     specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
     showLiteratureAtBottom: planMode === 'academic' || (document.querySelector('input[data-field="show-literature"]')?.checked || false),

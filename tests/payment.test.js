@@ -105,9 +105,17 @@ async function loadLockedApp(t) {
   return dom.window;
 }
 
+// Generálás után az előnézet kész és látható; csak ekkor jelenhet meg a fizetési felület.
+function markPreviewReady(window) {
+  window.eval('previewReady = true');
+  window.renderPreview();
+  window.updateExportLock();
+}
+
 test('paywall shows a teaser with the unlock button and blocks exports until unlocked', async (t) => {
   const window = await loadLockedApp(t);
   window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g1' });
+  markPreviewReady(window);
   const document = window.document;
   assert.equal(document.querySelectorAll('.official-table tbody tr').length, 8);
   assert.ok(document.querySelector('.locked-mirror-text'));
@@ -388,6 +396,7 @@ test('unlock buttons appear in all places while locked and give way to the Felol
   const ids = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockBtn'];
   assert.ok(ids.every((id) => !document.getElementById(id) || document.getElementById(id).hidden));
   window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'g10' });
+  markPreviewReady(window);
   for (const id of ids) {
     const button = document.getElementById(id);
     assert.ok(button && !button.hidden, id);
@@ -435,7 +444,7 @@ test('invoice shows a short friendly order number instead of the Stripe session 
   assert.match(xml, /<rendelesSzam>OVI-261108-7TTU12<\/rendelesSzam>/);
   assert.doesNotMatch(xml, /cs_live_/);
   const { buildEmailContent } = require('../services/mailService');
-  const mail = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false, orderNumber: 'OVI-261108-7TTU12' }, {});
+  const mail = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, orderNumber: 'OVI-261108-7TTU12' }, {});
   assert.match(mail.html, /OVI-261108-7TTU12/);
   assert.match(mail.text, /Rendelésszám: OVI-261108-7TTU12/);
 });
@@ -444,6 +453,7 @@ test('unlock buttons are hidden on steps 1-3 and shown only on step 4 after gene
   const window = await loadLockedApp(t);
   const document = window.document;
   window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'gs1' });
+  markPreviewReady(window);
   const ids = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn'];
   assert.ok(ids.every((id) => !document.getElementById(id).hidden));
   document.querySelector('.wizard-item[data-step="1"]').click();
@@ -530,96 +540,35 @@ function fakeRes() {
   return res;
 }
 
-test('test delivery endpoint is off by default, origin-bound, rate limited and sends without Stripe', async () => {
-  const payment = require('../routes/payment');
-  const mailService = require('../services/mailService');
-  const original = { send: mailService.sendTestDeliveryEmail, enabled: process.env.TEST_DELIVERY_ENABLED, host: process.env.SMTP_HOST };
-  const sent = [];
-  mailService.sendTestDeliveryEmail = async (args) => { sent.push(args); return {}; };
-  const pdf = { name: 'a.pdf', base64: Buffer.from('x').toString('base64') };
-  const req = (origin, body = { email: 'a@b.hu', files: [pdf], plan: 'daily' }) => ({ headers: { origin }, ip: `ip-${Math.random()}`, body });
-  try {
-    delete process.env.TEST_DELIVERY_ENABLED;
-    process.env.SMTP_HOST = 'smtp.example';
-    let res = fakeRes();
-    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io'), res);
-    assert.equal(res.statusCode, 403);
-
-    process.env.TEST_DELIVERY_ENABLED = 'true';
-    res = fakeRes();
-    await payment.testDeliver(req('https://ovitervezo.hu'), res);
-    assert.equal(res.statusCode, 403);
-
-    res = fakeRes();
-    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io'), res);
-    assert.equal(res.statusCode, 200);
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].to, 'a@b.hu');
-
-    res = fakeRes();
-    await payment.testDeliver(req('https://csaloganyzsolt-ship-it.github.io', { email: 'bad', files: [pdf] }), res);
-    assert.equal(res.statusCode, 400);
-
-    const same = req('https://csaloganyzsolt-ship-it.github.io');
-    let last;
-    for (let i = 0; i < 11; i += 1) { last = fakeRes(); await payment.testDeliver({ ...same }, last); }
-    assert.equal(last.statusCode, 429);
-  } finally {
-    mailService.sendTestDeliveryEmail = original.send;
-    if (original.enabled === undefined) delete process.env.TEST_DELIVERY_ENABLED; else process.env.TEST_DELIVERY_ENABLED = original.enabled;
-    if (original.host === undefined) delete process.env.SMTP_HOST; else process.env.SMTP_HOST = original.host;
-  }
-});
-
-test('staging build has no paywall and shows the test delivery row; production keeps the paywall', () => {
+test('both builds keep the paywall on, so GitHub Pages is paid like production and has no free test delivery', () => {
   const { execFileSync } = require('node:child_process');
   const fs = require('node:fs');
   const path = require('node:path');
   const cwd = path.join(__dirname, '..');
   execFileSync('node', ['scripts/build-pages.js'], { cwd });
   const staging = fs.readFileSync(path.join(cwd, 'dist-pages', 'config.js'), 'utf8');
-  assert.match(staging, /"paywallEnabled": false/);
-  assert.match(staging, /"testDelivery": true/);
+  assert.match(staging, /"paywallEnabled": true/);
+  assert.doesNotMatch(staging, /testDelivery/);
   assert.match(fs.readFileSync(path.join(cwd, 'dist-pages', 'robots.txt'), 'utf8'), /Disallow: \//);
   execFileSync('node', ['scripts/build-nethely.js'], { cwd });
   assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /"paywallEnabled": true/);
   assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /testDelivery/);
-});
-
-test('test delivery row appears only in the staging config after generation', async (t) => {
-  const { JSDOM } = require('jsdom');
-  const fs = require('node:fs');
-  const path = require('node:path');
   const html = readPage('tervezo.html');
-  const load = async (config) => {
-    const dom = new JSDOM(html, { url: 'http://localhost:8000/', pretendToBeVisual: true, runScripts: 'dangerously',
-      beforeParse(window) { window.HTMLElement.prototype.scrollIntoView = () => {}; window.scrollTo = () => {}; window.APP_CONFIG = config; } });
-    t.after(() => dom.window.close());
-    dom.window.document.querySelector('.wizard-item[data-step="3"]').click();
-    return dom.window;
-  };
-  const staging = await load({ paywallEnabled: false, testDelivery: true, apiBaseUrl: 'same-origin' });
-  assert.equal(staging.document.getElementById('testDeliverRow').hidden, true);
-  staging.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'st1' });
-  staging.document.querySelector('.wizard-item[data-step="3"]').click();
-  assert.equal(staging.document.getElementById('testDeliverRow').hidden, false);
-  assert.equal(staging.isPlanLocked(), false);
-  const prod = await load({ paywallEnabled: true, apiBaseUrl: 'same-origin' });
-  prod.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'pr1' });
-  prod.document.querySelector('.wizard-item[data-step="3"]').click();
-  assert.equal(prod.document.getElementById('testDeliverRow').hidden, true);
+  assert.ok(!html.includes('testDeliver'), 'a tesztkézbesítés felülete kivezetve');
+  assert.equal(require('../routes/payment').testDeliver, undefined);
+  assert.equal(require('../server').isFreeTestOrigin, undefined);
 });
 
 test('mail template is warm, lists attachments and carries the legal footer', () => {
   const { buildEmailContent } = require('../services/mailService');
-  const daily = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, {});
+  const daily = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, {});
   assert.match(daily.html, /Kedves Kolléganő!/);
   assert.doesNotMatch(daily.html, /🌱|📚|✨|💚|🌿/);
   assert.match(daily.html, /Új tervezet készítése/);
   assert.match(daily.html, /szabadon szerkeszthető/);
   assert.match(daily.html, /válaszoljon közvetlenül erre a levélre/);
   assert.doesNotMatch(daily.html, /Tervezet témája/);
-  const titled = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: false, test: false, title: 'Az <őszi> erdő' }, {});
+  const titled = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: false, title: 'Az <őszi> erdő' }, {});
   assert.match(titled.html, /Tervezet témája:<\/strong> Az &lt;őszi&gt; erdő/);
   assert.match(titled.text, /Tervezet témája: Az <őszi> erdő/);
   assert.match(daily.html, /\.docx/);
@@ -628,9 +577,9 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
   assert.match(daily.html, /EV nyilvántartási szám: 51507048/);
   assert.match(daily.html, /automatikus rendszerüzenet/);
   assert.match(daily.text, /Adatkezelési tájékoztató és ÁSZF/);
-  const test = buildEmailContent({ planLabel: 'heti csomag', withInvoice: false, test: true }, {});
-  assert.match(test.html, /teszt/);
-  assert.doesNotMatch(test.html, /E-számla/);
+  const noInvoice = buildEmailContent({ planLabel: 'heti csomag', withInvoice: false }, {});
+  assert.doesNotMatch(noInvoice.html, /E-számla/);
+  assert.doesNotMatch(noInvoice.html, /teszt/i);
 });
 
 test('sheets webhook payload has all purchase fields and failures never throw', async () => {
@@ -823,13 +772,13 @@ test('both pages use the OT logo and favicon, and both builds ship the icon file
   assert.equal(fs.readFileSync(path.join(root, 'favicon.ico')).readUInt16LE(2), 1);
 });
 
-test('purchase and test e-mails embed the OT logo as a CID image in the mint brand header', async () => {
+test('purchase e-mails with and without an invoice embed the OT logo as a CID image in the mint brand header', async () => {
   const mailService = require('../services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return { response: 'ok' }; } };
   const base = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }] };
   await mailService.sendPurchaseEmail({ ...base, invoicePdf: Buffer.from('%PDF') }, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
-  await mailService.sendTestDeliveryEmail(base, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
+  await mailService.sendPurchaseEmail(base, { env: { SUPPORT_EMAIL: 's@x.hu' }, transport });
   for (const m of sent) {
     const logo = m.attachments.find((a) => a.cid === 'ovitervezo-logo');
     assert.ok(logo && logo.contentType === 'image/png' && logo.content.subarray(1, 4).toString() === 'PNG');
@@ -885,7 +834,7 @@ test('feedback signature generation and verification with HMAC-SHA256', () => {
 test('purchase e-mail contains discrete 5-star rating bar with HMAC link and zero emojis', () => {
   const mailService = require('../services/mailService');
   const to = 'vasarlo@example.com';
-  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false, to }, {});
+  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to }, {});
   assert.match(mail.html, /Hogy sikerült a tervezet\? Kattints a csillagokra/);
   assert.match(mail.html, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=/);
   assert.match(mail.html, /ertekeles\.html\?rating=1&email=vasarlo%40example\.com&sig=/);

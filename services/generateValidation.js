@@ -114,14 +114,14 @@ function validateGeneratePayload(payload) {
     ['theme', 300], ['group', 100], ['kindergartenName', 200], ['kindergartenProfile', 300],
     ['teacherName', 200], ['studentName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
     ['tevekenysegForma', 300], ['elozmeny', 4000], ['customNote', 4000], ['availableTools', 4000],
-    ['blacklist', 4000], ['iktCustomApp', 300], ['iktSummary', 600], ['detail', 30], ['outputMode', 60]
+    ['blacklist', 4000], ['iktCustomApp', 300], ['iktSummary', 600], ['detail', 30]
   ]) put(key, text(payload[key], key, max));
 
   if (payload.energyLevel !== undefined && payload.energyLevel !== null) {
     if (typeof payload.energyLevel === 'number' && Number.isFinite(payload.energyLevel)) clean.energyLevel = payload.energyLevel;
     else put('energyLevel', text(payload.energyLevel, 'energyLevel', 60));
   }
-  for (const key of ['includeDailyBreakdown', 'hasPreschoolers', 'iktEnabled', 'showLiteratureAtBottom', 'includeLiterature', 'preview', 'unlocked']) {
+  for (const key of ['includeDailyBreakdown', 'hasPreschoolers', 'iktEnabled', 'showLiteratureAtBottom', 'preview']) {
     put(key, bool(payload[key], key));
   }
 

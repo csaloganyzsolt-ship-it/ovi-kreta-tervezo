@@ -527,13 +527,6 @@
 
               <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
-              <div class="test-deliver-row" id="testDeliverRow" hidden>
-                <label for="testDeliverEmail"><strong>Teszt kézbesítés</strong> (fizetés nélkül)</label>
-                <div class="test-deliver-controls">
-                  <input type="email" id="testDeliverEmail" placeholder="sajat@email.hu" autocomplete="email" />
-                  <button id="testDeliverBtn" class="download-btn" type="button">Tervezet elküldése e-mailben</button>
-                </div>
-              </div>
               <div class="download-row">
                 <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>Számla letöltése (PDF)</button>
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
@@ -625,6 +618,14 @@
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
           <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elolvastam és elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
           <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
+          <div class="coupon-row">
+            <label for="couponCode"><strong>Kuponkód</strong></label>
+            <div class="coupon-controls">
+              <input id="couponCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="Kuponkód" />
+              <button type="button" id="couponApply">Érvényesítés</button>
+            </div>
+            <div id="couponStatus" class="modal-note" role="status"></div>
+          </div>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <div class="modal-actions">
             <button type="submit" class="primary" id="checkoutSubmit" disabled>Tovább a fizetéshez</button>

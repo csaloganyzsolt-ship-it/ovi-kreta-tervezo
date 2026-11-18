@@ -1,5 +1,8 @@
 // Tesztek alatt a levélküldés mindig mockolt (services/mailService.js), akkor is, ha az .env-ben van SMTP-beállítás.
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
+// A fizetőfalat az egyes tesztek kapcsolják be; a helyi .env értéke nem szivároghat a tesztekbe.
+process.env.PAYWALL_ENABLED = 'false';
+process.env.COUPON_RATE_LIMIT = process.env.COUPON_RATE_LIMIT || '1000';
 process.env.GENERATE_RATE_LIMIT = process.env.GENERATE_RATE_LIMIT || '1000';
 process.env.DAILY_GENERATION_CAP = process.env.DAILY_GENERATION_CAP || '100000';
 
@@ -32,7 +35,6 @@ function makePayload(overrides = {}) {
       specialNeeds: ['Mozgásfejlődési elmaradás']
     },
     detailLevel: 90,
-    outputMode: 'Szakmai tervezet',
     showLiteratureAtBottom: false,
     ...overrides
   };

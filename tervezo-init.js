@@ -35,8 +35,6 @@ nextBtn.addEventListener('click', () => {
   }
 });
 
-document.getElementById('testDeliverBtn').addEventListener('click', sendTestDelivery);
-
 document.getElementById('confirmRegenYes').addEventListener('click', () => {
   closeModals();
   requestGeneration();
@@ -93,6 +91,13 @@ function initFooterAndModals() {
     document.getElementById(id).addEventListener(eventName, syncCheckoutButtons);
   }
   document.getElementById('checkoutBarion').addEventListener('click', startBarionCheckout);
+  document.getElementById('couponApply').addEventListener('click', applyCouponCode);
+  // Enterre a kuponkód érvényesül, nem indul el a Stripe-fizetés.
+  document.getElementById('couponCode').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    applyCouponCode();
+  });
   syncCheckoutButtons();
   document.getElementById('downloadInvoiceBtn').addEventListener('click', downloadInvoice);
   document.getElementById('attachedPlanRemoveBtn')?.addEventListener('click', clearAttachedPreviousPlan);

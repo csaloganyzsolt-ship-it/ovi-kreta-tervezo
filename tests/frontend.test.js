@@ -80,7 +80,7 @@ test('all form settings, including group characteristics and focus areas, enter 
   assert.equal(payload.customNotes.requiredText, 'Saját levélmondóka.');
   assert.equal(payload.customNotes.customRequest, 'Páros levélválogatás.');
   assert.equal(payload.detailLevel, 30);
-  assert.equal(payload.outputMode, 'Szakmai tervezet');
+  assert.equal('outputMode' in payload, false, 'a kivezetett outputMode nem megy a kérésben');
   assert.equal(payload.availableTools, 'Nagyító.');
   window.setDurationSelection('Heti');
   assert.equal(window.buildGenerationPayload().planKind, 'weekly');
@@ -180,7 +180,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.iktEnabled, true);
   assert.ok(daily.iktTools.length >= 1);
   assert.equal(daily.iktCustomApp, 'Saját fejlesztő játék');
-  assert.equal(daily.outputMode, 'Szakmai tervezet');
+  assert.equal('outputMode' in daily, false);
   window.setDurationSelection('Heti');
   document.querySelector('[data-field="week-value"]').value = '2026-W45';
   const weekly = window.buildGenerationPayload();

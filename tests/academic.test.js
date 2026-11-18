@@ -220,14 +220,14 @@ test('a locked academic preview mirrors the daily table and the thematic matrix 
 
 test('the purchase e-mail names the academic template and only mentions a ZIP when one is attached', () => {
   const env = {};
-  const standard = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, env);
+  const standard = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, env);
   assert.doesNotMatch(standard.text, /Oktatási célú/);
-  const academic = mailService.buildEmailContent({ planLabel: 'heti csomag', withInvoice: true, test: false, hasZip: false, planMode: 'academic' }, env);
+  const academic = mailService.buildEmailContent({ planLabel: 'heti csomag', withInvoice: true, hasZip: false, planMode: 'academic' }, env);
   assert.match(academic.text, /Tervezet típusa: Oktatási célú tervezet/);
   assert.match(academic.html, /Oktatási célú tervezet/);
   assert.doesNotMatch(academic.text, /ZIP/);
   assert.match(academic.html, /Tervezet Word/);
-  const legacyWeekly = mailService.buildEmailContent({ planLabel: 'heti csomag', withInvoice: true, test: false }, env);
+  const legacyWeekly = mailService.buildEmailContent({ planLabel: 'heti csomag', withInvoice: true }, env);
   assert.match(legacyWeekly.text, /ZIP/);
 });
 
@@ -816,7 +816,7 @@ test('an oversized daily table row is split the same way, while the standard sin
   assert.equal(standardHost.querySelectorAll('table').length, 1, 'a szabvány táblázat sora változatlanul egyben marad');
 });
 
-// ---------- GitHub Pages (fizetőfal nélküli) kiszolgálás ----------
+// ---------- Minden eredet fizetős, a GitHub Pages is ----------
 
 async function withPaywall(t, value) {
   const saved = process.env.PAYWALL_ENABLED;
@@ -836,7 +836,7 @@ const generateFrom = async (base, origin, payload) => {
 
 const GITHUB_PAGES = 'https://csaloganyzsolt-ship-it.github.io';
 
-test('with the paywall on, an academic request from GitHub Pages gets the real unlocked plan, while ovitervezo.hu gets the locked preview', async (t) => {
+test('with the paywall on, every origin including GitHub Pages gets the locked preview and no real text leaks', async (t) => {
   await withPaywall(t, 'true');
   const secret = 'aranyhörcsög';
   const thematicResponse = makeThematicResponse();
@@ -850,11 +850,10 @@ test('with the paywall on, an academic request from GitHub Pages gets the real u
     ['daily', makeAcademicPayload(), dailyResponse, (data) => data.kidolgozas_tablazat[2].tevekenyseg_menete.join(' ')]
   ]) {
     stubGemini(t, JSON.stringify(response));
-    const free = await generateFrom(base, GITHUB_PAGES, payload);
-    assert.equal(free.response.status, 200, label);
-    assert.equal(free.data.locked_meta, undefined, `${label}: GitHub Pages nem kap zárolt előnézetet`);
-    assert.ok(read(free.data).includes(secret), `${label}: valódi tartalom`);
-    assert.doesNotMatch(JSON.stringify(free.data), /lorem|ipsum|dolor/i, `${label}: nincs tükörszöveg`);
+    const pages = await generateFrom(base, GITHUB_PAGES, payload);
+    assert.equal(pages.response.status, 200, label);
+    assert.equal(pages.data.locked_meta.is_locked, true, `${label}: a GitHub Pages is zárolt előnézetet kap`);
+    assert.equal(JSON.stringify(pages.data).includes(secret), false, `${label}: GitHub Pagesre sem szivárog a valódi szöveg`);
 
     const locked = await generateFrom(base, 'https://ovitervezo.hu', payload);
     assert.equal(locked.data.locked_meta.is_locked, true, `${label}: ovitervezo.hu zárolt`);
@@ -864,9 +863,14 @@ test('with the paywall on, an academic request from GitHub Pages gets the real u
     const anonymous = await generateFrom(base, '', payload);
     assert.equal(anonymous.data.locked_meta.is_locked, true, `${label}: origin nélkül is zárolt`);
     const trailingSlash = await generateFrom(base, `${GITHUB_PAGES}/`, payload);
-    assert.equal(trailingSlash.data.locked_meta, undefined);
+    assert.equal(trailingSlash.data.locked_meta.is_locked, true);
+    for (const bypass of [{ preview: false }, { unlocked: true }, { preview: false, unlocked: true }]) {
+      const forced = await generateFrom(base, GITHUB_PAGES, { ...payload, ...bypass });
+      assert.equal(forced.data.locked_meta.is_locked, true, `${label}: a kliens nem kapcsolhatja ki a zárolást (${JSON.stringify(bypass)})`);
+      assert.equal(JSON.stringify(forced.data).includes(secret), false);
+    }
     const lookalike = await generateFrom(base, `${GITHUB_PAGES}.evil.example`, payload);
-    assert.equal(lookalike.data.locked_meta.is_locked, true, `${label}: hasonló nevű origin nem kap zárolásmentes kiszolgálást`);
+    assert.equal(lookalike.data.locked_meta.is_locked, true, `${label}: hasonló nevű origin is zárolt`);
   }
 });
 
@@ -878,13 +882,12 @@ test('without the paywall every origin gets the full plan, and the standard mode
   assert.equal(open.data.locked_meta, undefined);
   assert.equal(open.data.hetek[0].teruletek.kulso_vilag[0], makeThematicResponse().hetek[0].teruletek.kulso_vilag[0]);
 
-  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }, GITHUB_PAGES), false);
-  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'true' }, GITHUB_PAGES), false);
-  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }, 'https://ovitervezo.hu'), true);
   assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'true' }), true);
-  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'false' }, 'https://ovitervezo.hu'), false);
-  assert.equal(server.shouldLockPlan({ preview: false }, { PAYWALL_ENABLED: 'true' }, 'https://ovitervezo.hu'), false);
-  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'false' }, 'https://ovitervezo.hu'), true);
+  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'true' }), true);
+  assert.equal(server.shouldLockPlan({}, { PAYWALL_ENABLED: 'false' }), false);
+  assert.equal(server.shouldLockPlan({ preview: false }, { PAYWALL_ENABLED: 'true' }), true, 'a kliens nem oldhatja fel');
+  assert.equal(server.shouldLockPlan({ unlocked: true }, { PAYWALL_ENABLED: 'true' }), true, 'a kliens nem oldhatja fel');
+  assert.equal(server.shouldLockPlan({ preview: true }, { PAYWALL_ENABLED: 'false' }), true);
 });
 
 test('after payment the full real thematic plan is returned from the server for the web view and the exports', async (t) => {

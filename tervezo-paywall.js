@@ -22,6 +22,11 @@ function currentPaidSessionId() {
   return getPaidSessions()[lastResult?.generationId] || null;
 }
 
+// A kuponos feloldásnak nincs számlája.
+function isCouponSession(sessionId) {
+  return String(sessionId || '').startsWith('coupon_');
+}
+
 // Egyszeri fizetés: a feloldás csak az adott generált tervhez (generationId) tartozik, és bármely módosításnál megszűnik.
 function revokeUnlock(generationId) {
   if (!generationId) return;
@@ -109,11 +114,12 @@ function updateExportLock() {
     if (button) button.disabled = locked;
   });
   const invoiceBtn = document.getElementById('downloadInvoiceBtn');
-  if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
-  const testRow = document.getElementById('testDeliverRow');
-  if (testRow) testRow.hidden = !(testDeliveryEnabled() && Boolean(lastResult));
+  const paidSession = currentPaidSessionId();
+  if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && paidSession && !isCouponSession(paidSession));
   const onResultStep = currentStep >= 3 && Boolean(lastResult);
-  const showCta = paywallEnabled() && Boolean(lastResult) && locked && onResultStep;
+  // A fizetési felület csak kész, zárolt előnézetnél él: generálás közben vagy az előnézet nélkül nem jelenhet meg.
+  const showCta = paywallEnabled() && Boolean(lastResult) && locked && onResultStep && previewReady && !generationInFlight
+    && Boolean(document.getElementById('paywallGate'));
   // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
   const justPaid = paywallEnabled() && Boolean(lastResult) && !locked && onResultStep;
   nextBtn.hidden = justPaid && !isFormDirty() && !nextBtn.classList.contains('is-busy');
@@ -153,10 +159,12 @@ function guardLocked() {
 }
 
 function openCheckoutModal() {
+  if (generationInFlight || !lastResult) return;
   const kind = planKind();
   document.getElementById('checkoutSummary').textContent =
     `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
   document.getElementById('checkoutError').textContent = '';
+  document.getElementById('couponStatus').textContent = '';
   syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
   openModal('checkoutModal');
@@ -205,6 +213,38 @@ function startBarionCheckout() {
   document.getElementById('checkoutError').textContent = BARION_SOON_MESSAGE;
 }
 
+// 100%-os kupon: a szerver fizetés és számla nélkül feloldja a tervet; innentől ugyanaz a folyamat, mint sikeres fizetés után.
+async function applyCouponCode() {
+  const statusEl = document.getElementById('couponStatus');
+  const errorEl = document.getElementById('checkoutError');
+  const code = document.getElementById('couponCode').value.trim();
+  if (!code) { statusEl.textContent = 'Add meg a kuponkódot.'; return; }
+  const form = readCheckoutForm();
+  if (!form) return;
+  const button = document.getElementById('couponApply');
+  button.disabled = true;
+  statusEl.textContent = '';
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/apply-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    closeModals();
+    document.getElementById('couponCode').value = '';
+    showUnlockedPlan(lastResult.generationId, data.sessionId, data.planData);
+    showPurchaseNotice('A kupon érvényes: a tervezet feloldva, letölthető.');
+    if (data.emailEnabled && lastResult) await deliverPurchaseEmail(data.sessionId);
+  } catch (error) {
+    errorEl.textContent = '';
+    statusEl.textContent = `A kupon nem érvényesíthető: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function submitCheckout(event) {
   event.preventDefault();
   const errorEl = document.getElementById('checkoutError');
@@ -243,6 +283,27 @@ function unlockGeneration(generationId, sessionId) {
   }
 }
 
+// Sikeres fizetés vagy kupon után: a terv feloldása, a teljes tartalom megjelenítése a webes nézetben.
+function showUnlockedPlan(generationId, sessionId, planData) {
+  if (generationId) unlockGeneration(generationId, sessionId);
+  if (planData) {
+    lastResult = { ...planData, request: lastResult?.request || planData.request, generationId };
+    try {
+      localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
+    } catch (_e) {}
+    markPlanAsPaidInHistory(generationId, planData);
+  } else if (lastResult) {
+    markPlanAsPaidInHistory(generationId, lastResult);
+  }
+  if (lastResult) {
+    currentStep = steps.length - 1;
+    renderStep();
+    renderResultDocument(lastResult);
+    renderPreview();
+    updateExportLock();
+  }
+}
+
 async function handleCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id') || params.get('checkout_session');
@@ -257,24 +318,8 @@ async function handleCheckoutReturn() {
     const data = await response.json();
     if (!response.ok || !data.paid) throw new Error(data.error || 'A fizetés még nem érkezett meg.');
     const pending = localStorage.getItem('oviKretaPendingCheckout') || lastResult?.generationId || data.generationId;
-    if (pending) unlockGeneration(pending, sessionId);
     localStorage.removeItem('oviKretaPendingCheckout');
-    if (data.planData) {
-      lastResult = { ...data.planData, request: lastResult?.request || data.planData.request, generationId: pending };
-      try {
-        localStorage.setItem(STORAGE_KEYS.generatedPlan, JSON.stringify(lastResult));
-      } catch (_e) {}
-      markPlanAsPaidInHistory(pending, data.planData);
-    } else if (lastResult) {
-      markPlanAsPaidInHistory(pending, lastResult);
-    }
-    if (lastResult) {
-      currentStep = steps.length - 1;
-      renderStep();
-      renderResultDocument(lastResult);
-      renderPreview();
-      updateExportLock();
-    }
+    showUnlockedPlan(pending, sessionId, data.planData);
     if (data.emailEnabled && lastResult) await deliverPurchaseEmail(sessionId);
   } catch (error) {
     showGenerationError(`A fizetés ellenőrzése sikertelen: ${error.message}`);
@@ -333,39 +378,6 @@ async function buildDeliveryFiles() {
   return files;
 }
 
-// Staging: ugyanaz a melléklet-előállítás, de fizetés és számla nélkül (csak ha a config testDelivery=true és nincs fizetési kapu).
-function testDeliveryEnabled() { return window.APP_CONFIG?.testDelivery === true && !paywallEnabled(); }
-
-async function sendTestDelivery() {
-  const email = document.getElementById('testDeliverEmail').value.trim();
-  const button = document.getElementById('testDeliverBtn');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { showPurchaseNotice('Adj meg egy érvényes e-mail címet.'); return; }
-  button.disabled = true;
-  const controller = new AbortController();
-  let timer;
-  try {
-    showPurchaseNotice('Fájlok előállítása és küldés...');
-    const files = await buildDeliveryFiles();
-    timer = setTimeout(() => controller.abort(), 20000);
-    const response = await fetch(`${getApiBaseUrl()}/api/test-deliver`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, files, plan: planKind(), planMode: currentPlanMode(), title: planTitle() }),
-      signal: controller.signal,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
-    showPurchaseNotice(`A tesztlevelet elküldtük ide: ${email}`);
-  } catch (error) {
-    showPurchaseNotice('');
-    const reason = error.name === 'AbortError' ? 'a szerver 20 másodpercen belül nem válaszolt' : error.message;
-    showGenerationError(`A tesztlevél kiküldése sikertelen: ${reason}`);
-  } finally {
-    clearTimeout(timer);
-    button.disabled = false;
-  }
-}
-
 async function deliverPurchaseEmail(sessionId) {
   try {
     showPurchaseNotice('A megvásárolt anyagokat e-mailben is elküldjük...');
@@ -379,7 +391,7 @@ async function deliverPurchaseEmail(sessionId) {
       const data = await response.json().catch(() => ({}));
       if (response.status === 409) { await new Promise((resolve) => setTimeout(resolve, 3000)); continue; }
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-      showPurchaseNotice(data.sent ? 'A tervezetet és az e-számlát elküldtük a megadott e-mail címre.' : '');
+      showPurchaseNotice(data.sent ? (isCouponSession(sessionId) ? 'A tervezetet elküldtük a megadott e-mail címre.' : 'A tervezetet és az e-számlát elküldtük a megadott e-mail címre.') : '');
       return;
     }
     throw new Error('A számla még nem készült el.');

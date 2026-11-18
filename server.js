@@ -4,7 +4,7 @@ const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { router: paymentRouter, stripeWebhook, deliverPurchase, testDeliver } = require('./routes/payment');
+const { router: paymentRouter, stripeWebhook, deliverPurchase } = require('./routes/payment');
 const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
@@ -114,7 +114,6 @@ app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), metho
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
-app.post('/api/test-deliver', express.json({ limit: '25mb' }), testDeliver);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', paymentRouter);
 
@@ -365,7 +364,7 @@ function buildPrompt(payload = {}) {
     detailLevel: detail.level,
     outputMode: 'Szakmai tervezet',
     previousPlanContext: normalizeFreeText(payload.previousPlanContext, 3000),
-    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom ?? payload.includeLiterature ?? false)
+    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom)
   };
 
   const extraRules = [settings.group === 'Vegyes csoport' ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');
@@ -481,7 +480,7 @@ function normalizeWeeklyResponse(parsed, payload) {
       : [heti_keretterv.tema, payload.group, payload.duration, payload.dateValue].filter(Boolean).join(' • '),
     heti_keretterv,
     napok,
-    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom ?? payload.includeLiterature ?? false)
+    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom)
   };
 }
 
@@ -501,7 +500,7 @@ function normalizeResponse(rawText, payload = {}) {
   result.eszkozok = readStringArray(parsed.eszkozok, 'eszkozok');
   result.kidolgozas_tablazat = normalizeTable(parsed.kidolgozas_tablazat);
   result.summary = [result.tema, payload.group, payload.duration, payload.dateValue].filter(Boolean).join(' • ');
-  result.showLiteratureAtBottom = Boolean(payload.showLiteratureAtBottom ?? payload.includeLiterature ?? false);
+  result.showLiteratureAtBottom = Boolean(payload.showLiteratureAtBottom);
   return result;
 }
 
@@ -639,14 +638,13 @@ function resetDailyGenerations() {
   dailyGenerations.count = 0;
 }
 
-const FREE_TEST_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
-
-// A GitHub Pages demó nincs felvéve a Turnstile-ba és nincs fizetőfala: innen token nélkül és zárolás nélkül szolgálunk ki.
+// A GitHub Pages demó nincs felvéve a Turnstile-ba, ezért csak a botvédelem alól mentes. Fizetős (zárolt) kiszolgálás minden eredetre ugyanúgy jár.
 // Az Origin kliensoldali fejléc, ezért ez nem erős hitelesítés (a nem böngészős kliens hamisíthatja).
-function isFreeTestOrigin(origin) {
-  return FREE_TEST_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
+const TURNSTILE_EXEMPT_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
+
+function isTurnstileExemptOrigin(origin) {
+  return TURNSTILE_EXEMPT_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
 }
-const isTurnstileExemptOrigin = isFreeTestOrigin;
 
 async function verifyTurnstileToken(token, ip, env = process.env) {
   const secretKey = String(env.TURNSTILE_SECRET_KEY || '').trim();
@@ -672,9 +670,8 @@ async function verifyTurnstileToken(token, ip, env = process.env) {
   }
 }
 
-function shouldLockPlan(payload = {}, env = process.env, origin = '') {
-  if (isFreeTestOrigin(origin)) return false;
-  if (payload.preview === false || payload.unlocked === true) return false;
+// A zárolást csak a szerver konfigurációja (PAYWALL_ENABLED) kapcsolhatja ki; a kliens csak szigorúbbat kérhet (preview: true).
+function shouldLockPlan(payload = {}, env = process.env) {
   if (payload.preview === true) return true;
   return String(env.PAYWALL_ENABLED || '').toLowerCase() === 'true';
 }
@@ -756,7 +753,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
           total + row.tevekenyseg_menete.join('\n\n').length + row.modszerek_megjegyzesek.length, 0)
       });
 
-    if (shouldLockPlan(request, process.env, req.get('origin'))) {
+    if (shouldLockPlan(request, process.env)) {
       const mirror = planStore.createMirrorPlan(result);
       mirror.generationId = generationId;
       return res.json({ success: true, ...mirror });
@@ -838,4 +835,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, isFreeTestOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };
+module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

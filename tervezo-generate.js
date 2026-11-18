@@ -161,6 +161,7 @@ async function generatePlan() {
   }
   revokeUnlock(lastResult?.generationId);
   resetGeneratedResult();
+  updateExportLock();
   generationInFlight = true;
   nextBtn.disabled = true;
   nextBtn.classList.add('is-busy');
@@ -178,7 +179,8 @@ async function generatePlan() {
     const response = await fetch(`${apiBaseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      // Fizetőfalnál a zárolt előnézetet a kliens is kéri; a zárolást a szerver konfigurációja akkor is érvényesíti, ha ez hiányzik.
+      body: JSON.stringify(paywallEnabled() ? { ...payload, preview: true } : payload),
     });
 
     const responseText = await response.text();

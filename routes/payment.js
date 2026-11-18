@@ -1,16 +1,27 @@
 'use strict';
 
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const stripeService = require('../services/stripeService');
 const invoiceService = require('../services/invoiceService');
 const mailService = require('../services/mailService');
 const sheetsService = require('../services/sheetsService');
 const planStore = require('../services/planStore');
+const coupons = require('../services/coupons');
 
 // A levél sablonját a kliens jelzi; csak az ismert érték fogadható el.
 function requestedPlanMode(req) {
   return req.body?.planMode === 'academic' ? 'academic' : 'standard';
 }
+
+// A kódtalálgatás ellen: IP-nként percenként legfeljebb 10 beváltási kísérlet.
+const couponLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.COUPON_RATE_LIMIT) || 10,
+  message: { success: false, error: 'Túl sok kuponkísérlet. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 function sendPaymentError(res, error, context) {
   const status = error.status || 500;
@@ -32,6 +43,33 @@ async function createCheckout(req, res) {
     return res.json({ success: true, ...session });
   } catch (error) {
     return sendPaymentError(res, error, 'Checkout');
+  }
+}
+
+// 100%-os belső kupon: a fizetési szolgáltatót és a számlázást megkerüli, a terv azonnal feloldódik, a kézbesítés (/api/deliver) ugyanúgy fut.
+function applyCoupon(req, res) {
+  try {
+    const body = req.body || {};
+    const email = stripeService.parseEmail(body.email);
+    if (!coupons.isValidCode(body.code)) return res.status(400).json({ success: false, code: 'INVALID_COUPON', error: 'Érvénytelen kuponkód.' });
+    const generationId = String(body.generationId || '').slice(0, 100);
+    const planData = generationId ? planStore.getPlan(generationId) : null;
+    if (!planData) return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren. Készíts újat.' });
+    const planMode = planModeFor(body);
+    const product = stripeService.parsePlan(body.plan, planMode);
+    const session = coupons.redeem({ code: body.code, generationId, email, plan: product.key, planMode });
+    return res.json({
+      success: true,
+      paid: true,
+      coupon: { code: session.code, percent: session.percent },
+      sessionId: session.id,
+      plan: session.plan,
+      generationId,
+      planData,
+      emailEnabled: mailService.isConfigured()
+    });
+  } catch (error) {
+    return sendPaymentError(res, error, 'Coupon');
   }
 }
 
@@ -76,6 +114,8 @@ async function downloadInvoice(req, res) {
 async function deliverPurchase(req, res) {
   try {
     const id = req.params.id;
+    const couponSession = coupons.getSession(id);
+    if (couponSession) return await deliverCouponPurchase(req, res, couponSession);
     const session = await stripeService.retrieveCheckoutSession(id);
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
     if (session.mock || !mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
@@ -92,62 +132,14 @@ async function deliverPurchase(req, res) {
   }
 }
 
-// Staging tesztkézbesítés Stripe nélkül. Csak kifejezett bekapcsolással (TEST_DELIVERY_ENABLED=true) és csak a teszt-eredetekről működik,
-// IP-nként korlátozva, hogy ne lehessen levélszemét-továbbításra használni.
-const TEST_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
-const TEST_LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-const TEST_LIMIT = { windowMs: 60 * 60 * 1000, max: 10 };
-const testHits = new Map();
-const MAX_TEST_HIT_KEYS = 5000;
-
-function pruneTestHits(now = Date.now()) {
-  for (const [ip, hits] of testHits.entries()) {
-    if (!hits.some((t) => now - t < TEST_LIMIT.windowMs)) testHits.delete(ip);
-  }
-}
-
-setInterval(pruneTestHits, TEST_LIMIT.windowMs).unref();
-
-function testDeliveryAllowed(req, env = process.env) {
-  if (String(env.TEST_DELIVERY_ENABLED || '').toLowerCase() !== 'true') return false;
-  const origin = String(req.headers.origin || '');
-  const extra = String(env.TEST_DELIVERY_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
-  return TEST_ORIGINS.includes(origin) || extra.includes(origin) || TEST_LOCAL_ORIGIN.test(origin);
-}
-
-function testRateLimited(ip, now = Date.now()) {
-  const recent = (testHits.get(ip) || []).filter((t) => now - t < TEST_LIMIT.windowMs);
-  if (recent.length >= TEST_LIMIT.max) { testHits.set(ip, recent); return true; }
-  recent.push(now);
-  testHits.delete(ip);
-  testHits.set(ip, recent);
-  if (testHits.size > MAX_TEST_HIT_KEYS) {
-    pruneTestHits(now);
-    while (testHits.size > MAX_TEST_HIT_KEYS) testHits.delete(testHits.keys().next().value);
-  }
-  return false;
-}
-
-async function testDeliver(req, res) {
-  try {
-    console.log(`[test-deliver] Kérés beérkezett (origin: ${req.headers?.origin || '-'}, ip: ${req.ip})`);
-    if (!testDeliveryAllowed(req)) return res.status(403).json({ success: false, error: 'A tesztkézbesítés ezen a környezeten nem engedélyezett.' });
-    if (testRateLimited(req.ip)) return res.status(429).json({ success: false, error: 'Túl sok tesztlevél, próbáld később.' });
-    if (!mailService.isConfigured()) return res.status(503).json({ success: false, error: 'Az SMTP nincs beállítva a szerveren (SMTP_HOST, SMTP_USER, SMTP_PASS).' });
-    const to = String(req.body?.email || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return res.status(400).json({ success: false, error: 'Érvénytelen e-mail cím.' });
-    const allowed = String(process.env.TEST_DELIVERY_RECIPIENTS || '').split(',').map((a) => a.trim().toLowerCase()).filter(Boolean);
-    if (allowed.length && !allowed.includes(to.toLowerCase())) return res.status(403).json({ success: false, error: 'Ez a cím nem szerepel a tesztcímzettek között.' });
-    console.log('[test-deliver] Mellékletek ellenőrzése (DOCX/PDF/ZIP) kezdete');
-    const attachments = mailService.sanitizeAttachments(req.body?.files);
-    console.log(`[test-deliver] Mellékletek kész: ${attachments.map((a) => a.filename).join(', ')}`);
-    await mailService.sendTestDeliveryEmail({ to, plan: req.body?.plan, attachments, title: req.body?.title, planMode: requestedPlanMode(req) });
-    console.log('[test-deliver] Kész, válasz a kliensnek');
-    return res.json({ success: true, sent: true });
-  } catch (error) {
-    console.error('[test-deliver] HIBA:', error.code || '', error.message);
-    return sendPaymentError(res, error, 'Test delivery');
-  }
+// Kuponos kézbesítés: nincs számla, a levél a kuponnal feloldott tervezetet küldi a megadott címre (egyszer).
+async function deliverCouponPurchase(req, res, session) {
+  if (!mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
+  if (mailService.wasSent(session.id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
+  const attachments = mailService.sanitizeAttachments(req.body?.files);
+  await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: session.id.slice(-10).toUpperCase(), attachments, title: req.body?.title, planMode: session.planMode });
+  mailService.markSent(session.id);
+  return res.json({ success: true, sent: true, coupon: true });
 }
 
 // A nyers törzs (express.raw) kell az aláírás ellenőrzéséhez, ezért ezt a server.js az express.json() előtt köti be.
@@ -203,7 +195,8 @@ async function stripeWebhook(req, res) {
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
 router.post('/checkout-barion', checkoutBarion);
+router.post('/apply-coupon', couponLimiter, applyCoupon);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
 
-module.exports = { router, stripeWebhook, deliverPurchase, testDeliver, testDeliveryAllowed, testRateLimited, testHits, pruneTestHits, MAX_TEST_HIT_KEYS };
+module.exports = { router, stripeWebhook, deliverPurchase, applyCoupon };

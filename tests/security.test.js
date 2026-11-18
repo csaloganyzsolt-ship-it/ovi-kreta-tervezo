@@ -111,15 +111,7 @@ test('planStore expires entries on read and by the timed cleanup', (t) => {
   assert.equal(planStore.planCount(), 0);
 });
 
-test('testHits and mockSessions are bounded', () => {
-  paymentRoutes.testHits.clear();
-  for (let i = 0; i < paymentRoutes.MAX_TEST_HIT_KEYS + 50; i += 1) paymentRoutes.testRateLimited(`10.0.${i}`);
-  assert.ok(paymentRoutes.testHits.size <= paymentRoutes.MAX_TEST_HIT_KEYS);
-  paymentRoutes.testHits.clear();
-  paymentRoutes.testRateLimited('1.1.1.1', 1000);
-  paymentRoutes.pruneTestHits(1000 + 2 * 60 * 60 * 1000);
-  assert.equal(paymentRoutes.testHits.size, 0);
-
+test('mockSessions are bounded', () => {
   stripeService.mockSessions.clear();
   for (let i = 0; i < stripeService.MAX_MOCK_SESSIONS + 20; i += 1) {
     stripeService.mockSessions.set(`cs_mock_${i}`, { createdAt: Date.now() });

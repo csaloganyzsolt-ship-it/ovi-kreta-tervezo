@@ -134,11 +134,11 @@ test('checkout uses the profile Stripe client key', async () => {
 });
 
 test('the mail footer shows the active profile registration label', () => {
-  const ev = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, {});
+  const ev = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, {});
   assert.match(ev.html, /Csalogány Zsolt egyéni vállalkozó/);
   assert.match(ev.html, /EV nyilvántartási szám: 51507048/);
   assert.doesNotMatch(ev.html, /CSB-Villamosság|27891788/);
-  const kft = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, test: false }, { BILLING_PROFILE: 'kft' });
+  const kft = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, { BILLING_PROFILE: 'kft' });
   assert.match(kft.html, /CSB-Villamosság Kft\./);
   assert.match(kft.html, /Cégjegyzékszám: 08 09 031727/);
 });

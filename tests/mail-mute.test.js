@@ -28,8 +28,8 @@ test('under NODE_ENV=test every mail function only simulates success and never o
 
   const info = await mail.sendPurchaseEmail(purchase, { env });
   assert.match(info.response, /mock/);
-  const test = await mail.sendTestDeliveryEmail({ to: 'teszt@example.com', plan: 'daily', attachments: [], title: 'T' }, { env });
-  assert.match(test.response, /mock/);
+  const noInvoice = await mail.sendPurchaseEmail({ ...purchase, to: 'teszt@example.com', invoicePdf: undefined }, { env });
+  assert.match(noInvoice.response, /mock/);
   assert.deepEqual(await mail.sendAdminNotification({ customer: { email: 'vevo@example.com' }, plan: 'daily', orderNumber: 'OVITE-1', invoicePdf: Buffer.from('%PDF') }, { env }), { sent: true });
   assert.deepEqual(await mail.sendFeedbackNotification(env, { rating: 5, email: 'vevo@example.com', comment: 'Szuper' }), { sent: true });
 

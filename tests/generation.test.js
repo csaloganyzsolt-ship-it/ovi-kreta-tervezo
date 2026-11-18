@@ -117,7 +117,7 @@ test('the concise pedagogical prompt includes all real settings and every custom
   for (const value of [payload.theme, payload.group, payload.groupName, payload.kindergartenName,
     payload.teacherName, payload.dateValue, payload.tevekenysegForma, payload.elozmeny,
     ...payload.focusAreas, ...payload.selectedGoals, ...payload.specialNeeds,
-    ...Object.values(payload.customNotes).flat(), payload.outputMode]) {
+    ...Object.values(payload.customNotes).flat(), 'Szakmai tervezet']) {
     assert.ok(prompt.includes(value), `Missing prompt setting: ${value}`);
   }
   for (const [key, value] of Object.entries({ childCount: 23, energyLevel: 0,

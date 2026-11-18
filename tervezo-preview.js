@@ -516,6 +516,7 @@ function resetGeneratedResult() {
   previewReady = false;
   resultDocument.replaceChildren();
   renderPreview();
+  updateExportLock();
 }
 
 function showGenerationError(message) {
