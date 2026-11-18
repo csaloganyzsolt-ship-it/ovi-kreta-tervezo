@@ -29,6 +29,7 @@ const LEGAL_TEXTS = {
 <ul>
 <li>1 db Napi tervezet: 390 Ft (bruttó)</li>
 <li>1 db Heti komplex csomag (heti keretterv + 5 napi részletes tervezet): 890 Ft (bruttó)</li>
+<li>1 db Oktatási célú tervezet (napi foglalkozásterv vagy heti tematikus terv): 690 Ft (bruttó)</li>
 </ul>
 <p>{{VAT_NOTE}}</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
@@ -113,6 +114,7 @@ const LEGAL_TEXTS = {
 <ul>
 <li>Napi tervezet: 390 Ft (bruttó)</li>
 <li>Heti komplex csomag (heti keretterv + 5 napi részletes tervezet): 890 Ft (bruttó)</li>
+<li>Oktatási célú tervezet (napi foglalkozásterv vagy heti tematikus terv): 690 Ft (bruttó)</li>
 </ul>
 <p>Minden vásárlás egyszeri díjfizetést jelent. Az OviTervezőnél nincs havidíj, nincs előfizetés és nincs automatikus megújuló terhelés. Pontosan és kizárólag azt az összeget vonjuk le, amelyet az adott tervezet kiválasztásakor jóváhagysz.</p>
 <h3>3. Számlázás és bizonylatkiállítás</h3>
@@ -247,5 +249,19 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS };
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSite);
-else initSite();
+// A Barion Payment logócsík képe hiányában (vagy betöltési hibánál) a szöveges megjelölés látszik, törött kép nélkül.
+function bindBarionLogoFallback() {
+  document.querySelectorAll('img.barion-logo').forEach((img) => {
+    const markMissing = () => img.closest('[data-barion-strip]')?.classList.add('logo-missing');
+    if (img.complete && img.naturalWidth === 0) markMissing();
+    img.addEventListener('error', markMissing, { once: true });
+  });
+}
+
+function initPage() {
+  initSite();
+  bindBarionLogoFallback();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPage);
+else initPage();

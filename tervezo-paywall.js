@@ -3,9 +3,16 @@
 
 // ===== Fizetési kapu (teaser) =====
 // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
-const PAYWALL_PRICES = { daily: 390, weekly: 390, weekly_detailed: 890 };
+// Az oktatási célú (academic) tervezet napi és heti formában is 690 Ft; a szerver (services/pricing.js) a mérvadó, a teszt egyezésüket ellenőrzi.
+const PAYWALL_PRICES = { daily: 390, weekly: 390, weekly_detailed: 890, academic_daily: 690, academic_weekly: 690 };
 
-const PLAN_LABELS = { daily: 'Napi tervezet', weekly: 'Heti alapcsomag', weekly_detailed: 'Heti részletes csomag (keretterv + 5 napi tervezet)' };
+const PLAN_LABELS = {
+  daily: 'Napi tervezet',
+  weekly: 'Heti alapcsomag',
+  weekly_detailed: 'Heti részletes csomag (keretterv + 5 napi tervezet)',
+  academic_daily: 'Oktatási célú napi tervezet',
+  academic_weekly: 'Oktatási célú heti tematikus terv'
+};
 
 function getPaidSessions() {
   try { return JSON.parse(localStorage.getItem('oviKretaPaidSessions') || '{}') || {}; } catch (_e) { return {}; }
@@ -58,7 +65,13 @@ function isPlanLocked(result = lastResult) {
 
 function planKind(result = lastResult) {
   if (result?.is_weekly === true) return 'weekly_detailed';
-  return result?.request?.duration === 'Heti' ? 'weekly' : 'daily';
+  const weekly = result?.is_thematic === true || result?.request?.duration === 'Heti';
+  if (isAcademicResult(result)) return weekly ? 'academic_weekly' : 'academic_daily';
+  return weekly ? 'weekly' : 'daily';
+}
+
+function currentPlanMode(result = lastResult) {
+  return isAcademicResult(result) ? 'academic' : 'standard';
 }
 
 function newGenerationId() {
@@ -144,27 +157,73 @@ function openCheckoutModal() {
   document.getElementById('checkoutSummary').textContent =
     `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
   document.getElementById('checkoutError').textContent = '';
+  syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
   openModal('checkoutModal');
   document.getElementById('checkoutEmail').focus();
 }
 
+// A fizetés gombjai (Stripe és Barion) csak az ÁSZF és az Adatvédelmi tájékoztató elfogadása után kattinthatók.
+function syncCheckoutButtons() {
+  const accepted = Boolean(document.getElementById('consentTerms')?.checked);
+  for (const id of ['checkoutSubmit', 'checkoutBarion']) {
+    const button = document.getElementById(id);
+    if (button) button.disabled = !accepted;
+  }
+}
+
+// Közös ellenőrzés mindkét fizetési módhoz; hibánál kiírja az okot és null-t ad.
+function readCheckoutForm() {
+  const errorEl = document.getElementById('checkoutError');
+  const email = document.getElementById('checkoutEmail').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return null; }
+  if (!document.getElementById('consentTerms').checked) {
+    errorEl.textContent = 'A fizetéshez el kell fogadnod az ÁSZF-et és az Adatvédelmi tájékoztatót.';
+    return null;
+  }
+  if (!document.getElementById('consentDigital').checked) {
+    errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
+    return null;
+  }
+  errorEl.textContent = '';
+  return { email };
+}
+
+// A Barion backend a következő lépésben készül: a végpont egyelőre 501-et és érthető üzenetet ad, amit kulturáltan megjelenítünk.
+async function startBarionCheckout() {
+  const form = readCheckoutForm();
+  if (!form) return;
+  const errorEl = document.getElementById('checkoutError');
+  const button = document.getElementById('checkoutBarion');
+  button.disabled = true;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+    });
+    const data = await response.json().catch(() => ({}));
+    errorEl.textContent = data.error || data.warning || `A Barion fizetés most nem érhető el (HTTP ${response.status}).`;
+  } catch (error) {
+    errorEl.textContent = `A Barion fizetés most nem érhető el: ${error.message}`;
+  } finally {
+    syncCheckoutButtons();
+  }
+}
+
 async function submitCheckout(event) {
   event.preventDefault();
   const errorEl = document.getElementById('checkoutError');
-  const email = document.getElementById('checkoutEmail').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errorEl.textContent = 'Adj meg egy érvényes e-mail címet.'; return; }
-  if (!document.getElementById('consentTerms').checked || !document.getElementById('consentDigital').checked) {
-    errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
-    return;
-  }
+  const form = readCheckoutForm();
+  if (!form) return;
+  const { email } = form;
   const submit = document.getElementById('checkoutSubmit');
   submit.disabled = true;
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKind(), email, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
@@ -174,7 +233,7 @@ async function submitCheckout(event) {
   } catch (error) {
     errorEl.textContent = `A fizetés nem indítható: ${error.message}`;
   } finally {
-    submit.disabled = false;
+    syncCheckoutButtons();
   }
 }
 
@@ -297,7 +356,7 @@ async function sendTestDelivery() {
     const response = await fetch(`${getApiBaseUrl()}/api/test-deliver`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, files, plan: planKind(), title: planTitle() }),
+      body: JSON.stringify({ email, files, plan: planKind(), planMode: currentPlanMode(), title: planTitle() }),
       signal: controller.signal,
     });
     const data = await response.json().catch(() => ({}));
@@ -321,7 +380,7 @@ async function deliverPurchaseEmail(sessionId) {
       const response = await fetch(`${getApiBaseUrl()}/api/deliver/${encodeURIComponent(sessionId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files, title: planTitle() }),
+        body: JSON.stringify({ files, planMode: currentPlanMode(), title: planTitle() }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409) { await new Promise((resolve) => setTimeout(resolve, 3000)); continue; }

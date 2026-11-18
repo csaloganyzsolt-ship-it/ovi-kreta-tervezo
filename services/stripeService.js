@@ -2,12 +2,7 @@
 
 const { getBillingProfile } = require('./siteConstants');
 
-// Egy tervezet ára forintban. A szerver az egyetlen igazságforrás: a böngészőtől csak a csomag kulcsa fogadható el.
-const PRODUCTS = Object.freeze({
-  daily: Object.freeze({ key: 'daily', name: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', invoiceName: 'OviTervező – Online szoftverhasználati díj (1 alkalom)', amountHuf: 390 }),
-  weekly: Object.freeze({ key: 'weekly', name: 'OviTervező – Online szoftverhasználati díj – heti alapcsomag', invoiceName: 'OviTervező – Online szoftverhasználati díj – heti alapcsomag', amountHuf: 390 }),
-  weekly_detailed: Object.freeze({ key: 'weekly_detailed', name: 'OviTervező – Online szoftverhasználati díj – heti részletes csomag', invoiceName: 'OviTervező – Online szoftverhasználati díj – heti részletes csomag', amountHuf: 890 })
-});
+const { PRODUCTS, productFor } = require('./pricing');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MOCK_PREFIX = 'cs_mock_';
@@ -80,9 +75,10 @@ function getBaseUrl(env = process.env) {
   return (configured || fallback).replace(/\/+$/, '');
 }
 
-function parsePlan(value) {
-  const product = PRODUCTS[String(value || '').trim()];
-  if (!product) throw new PaymentError('Ismeretlen csomag. Elfogadott értékek: daily, weekly, weekly_detailed.');
+// A planMode a csomag árát is meghatározza: az oktatási célú (academic) tervezet 690 Ft.
+function parsePlan(value, planMode) {
+  const product = productFor(value, planMode);
+  if (!product) throw new PaymentError(`Ismeretlen csomag. Elfogadott értékek: ${Object.keys(PRODUCTS).join(', ')}.`);
   return product;
 }
 
@@ -113,9 +109,9 @@ function getClient(env = process.env, deps = {}) {
   return cachedClient;
 }
 
-async function createCheckoutSession({ plan, email, generationId, title } = {}, deps = {}) {
+async function createCheckoutSession({ plan, email, generationId, title, planMode } = {}, deps = {}) {
   const env = deps.env || process.env;
-  const product = parsePlan(plan);
+  const product = parsePlan(plan, planMode);
   const customerEmail = parseEmail(email);
   assertPaymentsAvailable(env);
   const baseUrl = getBaseUrl(env);
@@ -147,7 +143,7 @@ async function createCheckoutSession({ plan, email, generationId, title } = {}, 
         product_data: { name: product.invoiceName, description: product.invoiceName }
       }
     }],
-    metadata: { plan: product.key, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
+    metadata: { plan: product.key, planMode: product.planMode, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
     success_url: `${baseUrl}/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/tervezo.html?payment=cancel`
   });

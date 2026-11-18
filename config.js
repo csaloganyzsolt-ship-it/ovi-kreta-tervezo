@@ -5,6 +5,7 @@ window.APP_CONFIG = {
   apiBaseUrl: 'https://ovi-kreta-tervezo-api.onrender.com',
   paywallEnabled: true,
   turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9',
+  barionPixelId: 'BP-U0p5Sp7I1Q-EF',
   company: {
     type: 'ev',
     name: 'Csalogány Zsolt egyéni vállalkozó',

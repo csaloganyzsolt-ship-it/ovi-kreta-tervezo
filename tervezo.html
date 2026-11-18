@@ -14,6 +14,7 @@
     <meta property="og:url" content="https://ovitervezo.hu/tervezo.html" />
     <meta property="og:type" content="website" />
     <script src="theme-init.js"></script>
+    <script src="barion-pixel.js" defer></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="any" />
     <link rel="stylesheet" href="styles.css" />
@@ -575,6 +576,10 @@
               <span class="trust-badge">🔒 Stripe – biztonságos bankkártyás fizetés</span>
               <span class="trust-badge">🧾 Számlázz.hu – automatikus e-számla</span>
             </div>
+            <div class="barion-strip" data-barion-strip>
+              <img class="barion-logo" src="assets/barion-card-strip.png" alt="Barion Payment – biztonságos bankkártyás fizetés: Visa, Mastercard, Maestro, American Express" height="32" />
+              <span class="barion-strip-text">Barion Payment – biztonságos bankkártyás fizetés</span>
+            </div>
           </div>
         </div>
       </footer>
@@ -618,12 +623,17 @@
           <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
-          <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatkezelési Tájékoztatót</a>.</span></label>
+          <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elolvastam és elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
           <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <div class="modal-actions">
-            <button type="submit" class="primary" id="checkoutSubmit">Tovább a fizetéshez</button>
+            <button type="submit" class="primary" id="checkoutSubmit" disabled>Tovább a fizetéshez</button>
+            <button type="button" class="barion-btn" id="checkoutBarion" disabled>Fizetés Barionnal (Bankkártya)</button>
             <button type="button" data-close-modal>Mégse</button>
+          </div>
+          <div class="barion-strip" data-barion-strip>
+            <img class="barion-logo" src="assets/barion-card-strip.png" alt="Barion Payment – biztonságos bankkártyás fizetés: Visa, Mastercard, Maestro, American Express" height="32" />
+            <span class="barion-strip-text">Barion Payment – biztonságos bankkártyás fizetés</span>
           </div>
         </form>
       </div>

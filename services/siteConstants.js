@@ -7,7 +7,7 @@ const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html'];
 const SITE_ASSETS = [
   'styles.css', 'site.js', 'theme-init.js',
   'tervezo-core.js', 'tervezo-academic.js', 'tervezo-form.js', 'tervezo-preview.js', 'tervezo-export.js',
-  'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-init.js',
+  'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-init.js', 'barion-pixel.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
 ];
 const SEO_FILES = ['robots.txt', 'sitemap.xml'];
@@ -15,11 +15,11 @@ const SEO_FILES = ['robots.txt', 'sitemap.xml'];
 // Egyetlen CSP: a server.js Report-Only fejlécként küldi, a .htaccess ezzel azonos szöveget tartalmaz (tesztelt).
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com",
+  "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com",
+  "connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com",
   'frame-src https://challenges.cloudflare.com https://checkout.stripe.com',
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://pixel.barion.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://checkout.stripe.com",
@@ -70,8 +70,18 @@ function applyCompanyToHtml(html, env = process.env) {
   return active.type === 'ev' ? html : html.split(BILLING_PROFILES.ev.name).join(active.name);
 }
 
+// A Barion Pixel azonosítója nyilvános (a böngészőben is látszik). A BARION_PIXEL_ID környezeti változó felülírja, üres értékkel a Pixel kikapcsolható.
+const DEFAULT_BARION_PIXEL_ID = 'BP-U0p5Sp7I1Q-EF';
+
+function barionPixelId(env = process.env) {
+  const configured = env.BARION_PIXEL_ID === undefined ? DEFAULT_BARION_PIXEL_ID : String(env.BARION_PIXEL_ID).trim();
+  return /^BP-[A-Za-z0-9-]{4,60}$/.test(configured) ? configured : '';
+}
+
 module.exports = {
   applyCompanyToHtml,
+  barionPixelId,
+  DEFAULT_BARION_PIXEL_ID,
   BILLING_PROFILES,
   getBillingProfile,
   publicCompany,

@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
-const { SUPPORT_EMAIL, PAGES, SITE_ASSETS, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, barionPixelId, PAGES, SITE_ASSETS, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-pages');
@@ -22,7 +22,7 @@ for (const file of SITE_ASSETS) fs.copyFileSync(path.join(root, file), path.join
 for (const file of fs.readdirSync(path.join(root, 'assets'))) {
   fs.copyFileSync(path.join(root, 'assets', file), path.join(out, 'assets', file));
 }
-const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, turnstileSiteKey: '', company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: false } };
+const config = { apiBaseUrl, paywallEnabled: false, testDelivery: true, turnstileSiteKey: '', barionPixelId: barionPixelId(), company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: false } };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 // A teszt oldal ne kerüljön indexelésre, hogy ne versenyezzen az éles oldallal.
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nDisallow: /\n');

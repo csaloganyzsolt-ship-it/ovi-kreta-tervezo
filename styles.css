@@ -2286,3 +2286,24 @@ a.brand { text-decoration: none; color: inherit; }
   text-indent: -1.4em;
   line-height: 1.5;
 }
+
+/* ===== Barion fizetési gomb és kötelező Barion Payment logócsík ===== */
+.barion-btn {
+  background: #ffffff;
+  color: var(--text);
+  border: 1.5px solid var(--primary);
+  font-weight: 700;
+}
+.barion-btn:hover:not([disabled]) { background: var(--soft); }
+.checkout-box .modal-actions button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.barion-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.barion-logo { display: block; max-width: 100%; height: 32px; width: auto; background: #ffffff; border-radius: 6px; }
+.barion-strip-text { font-size: 0.8rem; color: var(--muted); }
+.barion-strip:not(.logo-missing) .barion-strip-text { display: none; }
+.barion-strip.logo-missing .barion-logo { display: none; }

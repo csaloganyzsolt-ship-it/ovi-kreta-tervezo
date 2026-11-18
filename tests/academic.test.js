@@ -484,13 +484,13 @@ test('the thematic plan is always landscape, every other document portrait, with
   assert.equal(window.eval('PAGE_MARGIN_MM'), 15);
   assert.deepEqual(JSON.parse(JSON.stringify(window.getDocumentList().map((doc) => [doc.id, doc.label, doc.fileBase]))), [['main', 'Tematikus terv', 'tematikus-terv_2026-11-02']]);
   assert.equal(document.querySelector('#documentTabs').hidden, true);
-  assert.equal(window.planKind(), 'weekly');
+  assert.equal(window.planKind(), 'academic_weekly');
 
   window.renderResultDocument(academicDaily());
   assert.equal(window.getDocOrientation(), 'portrait');
   assert.equal(document.querySelector('#resultDocument').dataset.orientation, 'portrait');
   assert.deepEqual(JSON.parse(JSON.stringify(window.getDocumentList().map((doc) => doc.fileBase))), ['foglalkozasi-terv']);
-  assert.equal(window.planKind(), 'daily');
+  assert.equal(window.planKind(), 'academic_daily');
 });
 
 test('the front end labels and groups match the server constants one to one', async (t) => {

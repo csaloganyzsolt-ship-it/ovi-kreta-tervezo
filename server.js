@@ -9,7 +9,7 @@ const mailService = require('./services/mailService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
 const invoiceService = require('./services/invoiceService');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, barionPixelId, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
@@ -140,6 +140,7 @@ app.get('/config.js', (_req, res) => {
     paywallEnabled: env.PAYWALL_ENABLED === 'true',
     stripePublishableKey: stripeService.stripePublishableKey(env),
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY,
+    barionPixelId: barionPixelId(env),
     company: {
       ...publicCompany(env),
       email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL,

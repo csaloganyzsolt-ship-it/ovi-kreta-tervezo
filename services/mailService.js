@@ -209,6 +209,8 @@ function hasZipAttachment(attachments) {
 }
 
 function planLabelOf(plan) {
+  if (String(plan) === 'academic_weekly') return 'oktatási célú heti tematikus terv';
+  if (String(plan) === 'academic_daily') return 'oktatási célú napi tervezet';
   return String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
 }
 

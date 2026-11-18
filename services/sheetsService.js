@@ -34,7 +34,7 @@ function buildPayload({ session, invoiceNumber, customer, invoicePdf }, now = ne
     vevo_neve: customer.name || '',
     vevo_email: customer.email || '',
     szamlazasi_cim: address,
-    csomag: String(plan || '').startsWith('weekly') ? 'Heti csomag' : 'Napi tervezet',
+    csomag: String(plan || '').startsWith('academic_') ? 'Oktatási célú tervezet' : (String(plan || '').startsWith('weekly') ? 'Heti csomag' : 'Napi tervezet'),
     tervezet_temaja: session.metadata?.title || '',
     fizetett_osszeg_huf: product ? product.amountHuf : null,
     stripe_session_id: session.id

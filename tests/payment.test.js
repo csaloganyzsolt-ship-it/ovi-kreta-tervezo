@@ -508,7 +508,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'barion-pixel.js', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
@@ -773,6 +773,8 @@ test('both builds ship both pages with every local reference resolvable and the 
       assert.ok(refs.length > 0);
       for (const ref of refs) {
         assert.ok(!ref.startsWith('/'), `${dir}/${page}: abszolút útvonal ${ref}`);
+        // A hivatalos Barion-logócsík fájlját a megrendelő tölti fel (assets/barion-card-strip.png); hiányában a szöveges megjelölés látszik.
+        if (ref.split('?')[0] === 'assets/barion-card-strip.png') continue;
         assert.ok(fs.existsSync(path.join(cwd, dir, ref.split('?')[0])), `${dir}/${page}: hiányzó fájl ${ref}`);
       }
       assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
@@ -1024,6 +1026,7 @@ test('every config source emits the same turnstile key and support e-mail under 
     assert.doesNotMatch(code, /OVITERVEZO_CONFIG/);
     const cfg = evalConfig(code).APP_CONFIG;
     assert.equal(cfg.turnstileSiteKey, script.includes('pages') ? '' : SHARED.TURNSTILE_SITE_KEY, script);
+    assert.equal(cfg.barionPixelId, 'BP-U0p5Sp7I1Q-EF', `${script}: Barion Pixel azonosító`);
     assert.equal(cfg.company.email, SHARED.SUPPORT_EMAIL, script);
   }
   const local = evalConfig(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'));

@@ -18,13 +18,26 @@ function sendPaymentError(res, error, context) {
   return res.status(status).json({ success: false, error: error.message });
 }
 
+// A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri.
+function planModeFor(body = {}) {
+  const stored = body.generationId ? planStore.getPlan(String(body.generationId)) : null;
+  if (stored) return stored.planMode === 'academic' || stored.is_thematic === true || stored.request?.planMode === 'academic' ? 'academic' : 'standard';
+  return body.planMode === 'academic' ? 'academic' : 'standard';
+}
+
 async function createCheckout(req, res) {
   try {
-    const session = await stripeService.createCheckoutSession(req.body || {});
+    const body = req.body || {};
+    const session = await stripeService.createCheckoutSession({ ...body, planMode: planModeFor(body) });
     return res.json({ success: true, ...session });
   } catch (error) {
     return sendPaymentError(res, error, 'Checkout');
   }
+}
+
+// A Barion fizetés backendje a következő lépésben készül; addig kulturált 501 válasz.
+function checkoutBarion(_req, res) {
+  return res.status(501).json({ success: false, code: 'BARION_NOT_IMPLEMENTED', error: 'A Barion fizetés hamarosan indul!' });
 }
 
 async function verifyCheckout(req, res) {
@@ -189,6 +202,7 @@ async function stripeWebhook(req, res) {
 
 const router = express.Router();
 router.post('/create-checkout-session', createCheckout);
+router.post('/checkout-barion', checkoutBarion);
 router.get('/checkout-session/:id', verifyCheckout);
 router.get('/invoice/:id', downloadInvoice);
 

@@ -79,7 +79,7 @@ Az ellenőrző kártya (`renderSummaryChecklist()`) a fizetés és generálás e
 
 Új beállítási mezőt az összegzésbe is fel kell venni.
 
-Ár: napi tervezet bruttó 390 Ft, heti tervezet (keretterv + a kiválasztott napok) bruttó 890 Ft, a napok számától függetlenül. Az igazságforrás a szerver (`services/stripeService.js`).
+Ár: napi tervezet bruttó 390 Ft, heti tervezet (keretterv + a kiválasztott napok) bruttó 890 Ft, a napok számától függetlenül. Az oktatási célú (academic) tervezet napi és heti formában is bruttó 690 Ft (AAM: nettó = bruttó). Az igazságforrás a szerver (`services/pricing.js`); a Stripe és a későbbi Barion is ezt használja.
 
 A generált dokumentum és az előnézet általános szakmai tervezet; állami vagy külső rendszerek (pl. naplórendszerek) nevére nem hivatkozik.
 
