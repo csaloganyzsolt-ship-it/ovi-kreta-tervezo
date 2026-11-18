@@ -16,24 +16,6 @@ document.querySelectorAll('.segment[data-group="energy"], .segment[data-group="d
   });
 });
 
-document.querySelectorAll('[data-export-section], [data-export="margin"], [data-export="orientation"]').forEach((control) => {
-  control.addEventListener('change', () => {
-    if (control.matches('[data-export="margin"], [data-export="orientation"]')) {
-      const key = currentDocKey();
-      docSettings[key] = {
-        ...getDocSettings(key),
-        [control.dataset.export]: control.value
-      };
-      persistDraftState();
-    }
-    if (lastResult) {
-      renderResultDocument(lastResult);
-    } else {
-      applyExportSettingsToDocument();
-    }
-  });
-});
-
 document.getElementById('documentTabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-doc-id]');
   if (tab) selectDocument(tab.dataset.docId);

@@ -38,22 +38,6 @@ function isFormDirty() {
   return Boolean(lastResult?.request) && JSON.stringify(buildGenerationPayload()) !== JSON.stringify(lastResult.request);
 }
 
-function syncActivitiesControl() {
-  const box = document.querySelector('[data-export-section="activities"]');
-  const note = document.getElementById('activitiesLockNote');
-  if (!box) return;
-  const locked = paywallEnabled() && !(lastResult && !isPlanLocked());
-  if (locked) {
-    box.checked = false;
-    box.disabled = true;
-    box.dataset.paywallLocked = '1';
-  } else {
-    if (box.dataset.paywallLocked === '1') { box.checked = true; delete box.dataset.paywallLocked; }
-    box.disabled = false;
-  }
-  if (note) note.hidden = !locked;
-}
-
 function showPurchaseNotice(message) {
   const el = document.getElementById('purchaseNotice');
   if (!el) return;
@@ -113,7 +97,6 @@ function updateExportLock() {
   });
   const invoiceBtn = document.getElementById('downloadInvoiceBtn');
   if (invoiceBtn) invoiceBtn.hidden = !(paywallEnabled() && lastResult && !locked && currentPaidSessionId());
-  syncActivitiesControl();
   const testRow = document.getElementById('testDeliverRow');
   if (testRow) testRow.hidden = !(testDeliveryEnabled() && Boolean(lastResult));
   const onResultStep = currentStep >= 3 && Boolean(lastResult);

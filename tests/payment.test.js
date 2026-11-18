@@ -283,23 +283,20 @@ test('one combined purchase email carries the plan files and the invoice PDF', a
   assert.equal(mailService.isConfigured({ SMTP_HOST: 'smtp.x' }), true);
 });
 
-test('activities toggle is locked before payment and opens only for the paid plan', async (t) => {
+test('downloads are locked before payment and open only for the paid plan', async (t) => {
   const window = await loadLockedApp(t);
   const document = window.document;
-  const box = document.querySelector('[data-export-section="activities"]');
-  assert.equal(box.disabled, true);
-  assert.equal(box.checked, false);
-  assert.equal(document.getElementById('activitiesLockNote').hidden, false);
+  assert.equal(document.querySelector('[data-export-section]'), null);
 
   window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g1' });
-  assert.equal(box.disabled, true);
+  assert.equal(document.getElementById('downloadPdfBtn').disabled, true);
+  assert.equal(document.getElementById('downloadDocxBtn').disabled, true);
   assert.equal(document.getElementById('downloadInvoiceBtn').hidden, true);
 
   window.unlockGeneration('g1', 'cs_test_paid1');
   window.renderResultDocument(window.lastResult);
-  assert.equal(box.disabled, false);
-  assert.equal(box.checked, true);
-  assert.equal(document.getElementById('activitiesLockNote').hidden, true);
+  assert.equal(document.getElementById('downloadPdfBtn').disabled, false);
+  assert.equal(document.getElementById('downloadDocxBtn').disabled, false);
   assert.equal(document.getElementById('downloadInvoiceBtn').hidden, false);
 });
 
@@ -344,14 +341,14 @@ test('preview container stays hidden until a plan exists and on steps 1-3', asyn
   assert.equal(panel.hidden, true);
 });
 
-test('unrelated export settings do not revoke the unlock', async (t) => {
+test('re-rendering and form edits do not revoke the unlock', async (t) => {
   const window = await loadLockedApp(t);
-  window.renderResultDocument({ ...makePlan(8), request: window.buildGenerationPayload(), generationId: 'g3' });
+  window.renderResultDocument({ ...makePlan(8), request: makePayload(), generationId: 'g3' });
   window.unlockGeneration('g3', 'cs_test_paid3');
   window.renderResultDocument(window.lastResult);
-  const margin = window.document.querySelector('[data-export="margin"]');
-  margin.value = 'compact';
-  margin.dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('[data-field="theme"]').value = 'Másik téma';
+  window.document.querySelector('[data-field="theme"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.renderResultDocument(window.lastResult);
   assert.equal(window.isPlanLocked(), false);
 });
 

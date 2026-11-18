@@ -507,33 +507,6 @@
 
               <div class="document-tabs" id="documentTabs" role="tablist" aria-label="Dokumentumok" hidden></div>
 
-              <div class="export-settings-panel">
-                <h3>Dokumentum beállítások</h3>
-                <p class="field-hint doc-settings-scope" id="docSettingsScope"></p>
-                <div class="export-settings-grid">
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="summary" /> Összefoglaló</label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="goals" /> Célok</label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="activities" /> Tevékenység kidolgozása <span id="activitiesLockNote" class="lock-note" hidden>(Fizetés után elérhető prémium funkció)</span></label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="differentiation" /> Differenciálás</label>
-                  <label class="setting-option"><input type="checkbox" checked data-export-section="materials" /> Eszközök</label>
-                </div>
-                <div class="setting-row">
-                  <label for="pageOrientationSelect">Tájolás</label>
-                  <select id="pageOrientationSelect" data-export="orientation">
-                    <option value="portrait" selected>Álló (Portrait)</option>
-                    <option value="landscape">Fekvő (Landscape)</option>
-                  </select>
-                </div>
-                <div class="setting-row">
-                  <label for="pageMarginSelect">Oldalmargó</label>
-                  <select id="pageMarginSelect" data-export="margin">
-                    <option value="compact">Kompakt</option>
-                    <option value="comfortable" selected>Normál</option>
-                    <option value="spacious">Tágas</option>
-                  </select>
-                </div>
-              </div>
-
               <div class="locked-floating-bar" id="lockedFloatingBar" hidden>
                 <div class="locked-floating-info">
                   <span class="locked-floating-badge">Előnézet</span>
@@ -548,7 +521,7 @@
               </div>
 
               <div class="document-shell">
-                <div class="document-sheet a4-host" id="resultDocument" data-margin="comfortable"></div>
+                <div class="document-sheet a4-host" id="resultDocument"></div>
               </div>
 
               <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
@@ -658,7 +631,8 @@
 
     <script src="config.js"></script>
     <script src="site.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha384-Yv5O+t3uE3hunW8uyrbpPW3iw6/5/Y7HitWJBLgqfMoA36NogMmy+8wWZMpn3HWc" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.23/build/pdfmake.min.js" integrity="sha384-8Fgcdr1c4x0qG8ByTWhXwvf1iBa6tQReFeLNBSkvCN9F+/RZuP1ha8RUydfLSGeG" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.23/build/vfs_fonts.js" integrity="sha384-ZiMMZvHUP692kyJimOQHoH2VdTrbcEwHaQfitnsxsR8tY0ntoRbPxIA6p+9yNNbz" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js" integrity="sha384-4xaIisuLEy2lo2HkB2C4rEf7v8jbTb2kuogX6TkuEt9feTWKBSFSOzsqNNbV+sKh" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
     <script src="tervezo-core.js"></script>

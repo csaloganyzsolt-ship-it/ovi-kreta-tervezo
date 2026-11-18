@@ -393,7 +393,6 @@ function collectDraftState() {
     selectedGoals,
     weeklyFocusAreas: getWeeklyFocusAreas(),
     weeklyAreaAssignments: getWeeklyAreaAssignments(),
-    docSettings,
     fields: {}
   };
 
@@ -477,14 +476,6 @@ function applyDraftState(draft) {
   updateWeeklyDailyBreakdownVisibility();
   updateFocusAreaDayRows();
   syncAdvancedSettingsOpenState();
-  if (draft.docSettings && typeof draft.docSettings === 'object') {
-    docSettings = Object.fromEntries(Object.entries(draft.docSettings).map(([key, value]) => [key, {
-      orientation: value?.orientation === 'landscape' ? 'landscape' : 'portrait',
-      margin: ['compact', 'comfortable', 'spacious'].includes(value?.margin) ? value.margin : 'comfortable'
-    }]));
-  }
-  syncDocControls();
-
   const dateTarget = document.querySelector(getSelectedDuration() === 'Heti' ? 'input[data-field="week-value"]' : 'input[data-field="date-value"]');
   if (dateTarget && draft.dateValue) {
     dateTarget.value = draft.dateValue;
@@ -629,16 +620,6 @@ function clearDraftState() {
       return;
     }
 
-    if (field.matches('[data-export="margin"]')) {
-      field.value = 'comfortable';
-      return;
-    }
-
-    if (field.matches('[data-export="orientation"]')) {
-      field.value = 'portrait';
-      return;
-    }
-
     if (field.matches('[data-field="date-value"], [data-field="week-value"]')) {
       field.value = '';
       return;
@@ -682,7 +663,6 @@ function clearDraftState() {
   localStorage.removeItem(STORAGE_KEYS.generatedPlan);
   lastResult = null;
   previewReady = false;
-  docSettings = {};
   updateDateInputsForDuration();
   updateWeeklyDailyBreakdownVisibility();
   updateFocusAreaDayRows();

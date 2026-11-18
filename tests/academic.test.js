@@ -12,6 +12,7 @@ const academicPlan = require('../services/academicPlan');
 const planStore = require('../services/planStore');
 const mailService = require('../services/mailService');
 const { validateGeneratePayload } = require('../services/generateValidation');
+const { installPdfMake, readPdf } = require('./pdf-helpers');
 
 const html = readPage('tervezo.html');
 
@@ -472,23 +473,22 @@ test('a multi week thematic result also shows the closing notes with all four gr
   for (const label of ['Játékbővítés', 'Anyanyelvi játékok', 'Fejlesztőjáték', 'Kirándulás, séta']) assert.ok(text(notes).includes(label), label);
 });
 
-test('the thematic plan is forced to landscape, locks the orientation control and names its files after the week', async (t) => {
+test('the thematic plan is always landscape, every other document portrait, with one fixed 15 mm margin and the week in the file name', async (t) => {
   const window = await loadApp(t);
   const { document } = window;
-  window.clearDraftState();
-  window.docSettings = { main: { orientation: 'portrait', margin: 'comfortable' } };
   window.renderResultDocument(thematic());
-  assert.equal(window.getDocSettings('main').orientation, 'landscape');
-  assert.equal(document.querySelector('[data-export="orientation"]').value, 'landscape');
-  assert.equal(document.querySelector('[data-export="orientation"]').disabled, true);
+  assert.equal(window.getDocOrientation(), 'landscape');
   assert.equal(document.querySelector('#resultDocument').dataset.orientation, 'landscape');
+  assert.equal(document.querySelector('[data-export="orientation"]'), null, 'nincs tájolásválasztó');
+  assert.equal(document.querySelector('[data-export="margin"]'), null, 'nincs margóválasztó');
+  assert.equal(window.eval('PAGE_MARGIN_MM'), 15);
   assert.deepEqual(JSON.parse(JSON.stringify(window.getDocumentList().map((doc) => [doc.id, doc.label, doc.fileBase]))), [['main', 'Tematikus terv', 'tematikus-terv_2026-11-02']]);
   assert.equal(document.querySelector('#documentTabs').hidden, true);
   assert.equal(window.planKind(), 'weekly');
 
   window.renderResultDocument(academicDaily());
-  assert.equal(document.querySelector('[data-export="orientation"]').disabled, false);
-  assert.equal(window.getDocSettings('main').orientation, 'portrait');
+  assert.equal(window.getDocOrientation(), 'portrait');
+  assert.equal(document.querySelector('#resultDocument').dataset.orientation, 'portrait');
   assert.deepEqual(JSON.parse(JSON.stringify(window.getDocumentList().map((doc) => doc.fileBase))), ['foglalkozasi-terv']);
   assert.equal(window.planKind(), 'daily');
 });
@@ -537,7 +537,7 @@ async function docxXml(window, docId = 'main') {
 
 const pageSize = (xml) => xml.match(/<w:pgSz [^>]*\/>/)[0];
 
-test('the academic daily DOCX is portrait with real tables, shaded repeating header rows, italics and the bibliography', async (t) => {
+test('the academic daily DOCX is portrait with real tables, repeating header rows without any fill, italics and the bibliography', async (t) => {
   const window = await loadApp(t);
   window.renderResultDocument(academicDaily());
   const xml = await docxXml(window);
@@ -550,8 +550,10 @@ test('the academic daily DOCX is portrait with real tables, shaded repeating hea
   assert.equal((process.match(/<w:gridCol /g) || []).length, 3);
   assert.equal((process.match(/<w:tr>/g) || []).length, 5, 'fejlécsor + 4 sor');
   assert.match(process, /<w:tblHeader\/>/);
-  assert.match(process, /w:fill="DCEFE6"/);
-  assert.match(process, /w:color="444444" w:sz="4"/, 'vékony szegély');
+  assert.doesNotMatch(xml, /<w:shd /, 'nincs háttérkitöltés sehol');
+  assert.doesNotMatch(xml, /w:fill=/);
+  assert.match(process, /w:color="000000" w:sz="4"/, 'vékony fekete szegély');
+  assert.equal((xml.match(/<w:pgMar [^>]*\/>/) || [''])[0].match(/w:(top|right|bottom|left)="851"/g)?.length, 4, '15 mm = 851 twip minden oldalon');
   assert.doesNotMatch(process, /<w:cantSplit\/>/);
   assert.match(xml, /<w:i\/>/);
   assert.match(xml, /<w:b\/>/);
@@ -567,9 +569,8 @@ test('the academic daily DOCX is portrait with real tables, shaded repeating hea
   assert.equal(xml.includes('*'), false, 'nem maradhat nyers jelölőkarakter');
 });
 
-test('the thematic DOCX is landscape with a 7 column shaded header and tall rows allowed to break across pages', async (t) => {
+test('the thematic DOCX is landscape with a 7 column unfilled header and tall rows allowed to break across pages', async (t) => {
   const window = await loadApp(t);
-  window.docSettings = { main: { orientation: 'portrait', margin: 'comfortable' } };
   window.renderResultDocument(thematic());
   const xml = await docxXml(window);
   assert.match(pageSize(xml), /w:w="16838"/);
@@ -580,7 +581,8 @@ test('the thematic DOCX is landscape with a 7 column shaded header and tall rows
   assert.ok(matrix, '7 oszlopos mátrix');
   assert.equal((matrix.match(/<w:tr>/g) || []).length, 2, 'fejlécsor + egy heti sor');
   assert.match(matrix, /<w:tblHeader\/>/);
-  assert.equal((matrix.match(/w:fill="DCEFE6"/g) || []).length, 7);
+  assert.doesNotMatch(xml, /<w:shd /);
+  assert.doesNotMatch(xml, /w:fill=/);
   assert.doesNotMatch(matrix, /<w:cantSplit\/>/);
   assert.match(matrix, /<w:sz w:val="16"\/>/);
   for (const phrase of ['Tevékenységi területek', 'Verselés, mesélés', 'Mozgás / Testnevelés', 'Versek:', 'Énekes játék:', 'Zenehallgatás:', 'Weöres Sándor: Falevél (KEE 45.)',
@@ -595,72 +597,142 @@ test('the standard DOCX keeps its unshaded, non-italic tables', async (t) => {
   const { makePlan } = require('./fixtures');
   window.renderResultDocument({ ...makePlan(4), request: makePayload() });
   const xml = await docxXml(window);
-  assert.doesNotMatch(xml, /DCEFE6/);
+  assert.doesNotMatch(xml, /<w:shd |w:fill=/);
   assert.doesNotMatch(xml, /<w:i\/>/);
   assert.match(xml, /<w:cantSplit\/>/);
   assert.match(pageSize(xml), /w:w="11906"/);
 });
 
-function stubPdfLibrary(window, { fakeLayout = false } = {}) {
-  const calls = { options: [], pages: [], addPage: [], images: 0 };
-  // A jsdom nem számol elrendezést; a PDF-export nulla méretű elemet elutasít.
-  if (fakeLayout) installFakeLayout(window);
-  else for (const property of ['offsetHeight', 'offsetWidth']) Object.defineProperty(window.HTMLElement.prototype, property, { configurable: true, get: () => 100 });
-  window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
-  window.html2pdf = () => {
-    const chain = {
-      set(options) { calls.options.push(options); return chain; },
-      from(element) { calls.pages.push(element.innerHTML); return chain; },
-      toPdf() { return chain; },
-      toCanvas() { return chain; },
-      get(name) {
-        if (name === 'pdf') {
-          return Promise.resolve({ internal: { getNumberOfPages: () => 1 }, deletePage() {}, addPage: (...args) => calls.addPage.push(args), addImage() { calls.images += 1; }, output: () => new window.Blob(['%PDF']) });
-        }
-        return Promise.resolve({ toDataURL: () => 'data:image/jpeg;base64,AA' });
-      }
-    };
-    return chain;
-  };
-  return calls;
+// ---------- PDF (pdfmake): közös modell, vektoros szöveg, fix margók ----------
+
+const PDF_MARGIN_PT = 15 * 72 / 25.4;
+
+function assertPdfLayout(pdf, { orientation, label }) {
+  const [width, height] = orientation === 'landscape' ? [841.89, 595.28] : [595.28, 841.89];
+  assert.ok(pdf.pages.length >= 1, `${label}: van oldal`);
+  pdf.pages.forEach((page) => {
+    assert.ok(Math.abs(page.width - width) < 1 && Math.abs(page.height - height) < 1, `${label}: ${page.number}. lap mérete ${page.width}x${page.height}`);
+    assert.ok(page.items.length > 0, `${label}: ${page.number}. lap üres`);
+    assert.equal(page.images, 0, `${label}: ${page.number}. lap képet (raszteres szeletet) tartalmaz`);
+    assert.equal(page.fills, 0, `${label}: ${page.number}. lap kitöltött alakzatot (háttérszínt) tartalmaz`);
+    for (const item of page.items) {
+      assert.ok(item.x >= PDF_MARGIN_PT - 1, `${label}: ${page.number}. lap, bal margó: "${item.str}" x=${item.x.toFixed(1)}`);
+      assert.ok(item.x + item.width <= width - PDF_MARGIN_PT + 1, `${label}: ${page.number}. lap, jobb margó: "${item.str}" vége=${(item.x + item.width).toFixed(1)}`);
+      assert.ok(item.y >= PDF_MARGIN_PT, `${label}: ${page.number}. lap, alsó margó: "${item.str}" y=${item.y.toFixed(1)}`);
+      assert.ok(item.y <= height - PDF_MARGIN_PT, `${label}: ${page.number}. lap, felső margó: "${item.str}" y=${item.y.toFixed(1)}`);
+    }
+  });
 }
 
-test('the PDF export uses portrait pages for the academic daily plan and landscape pages for the thematic plan', async (t) => {
+// Egy táblázatfejléc alatt ugyanazon a lapon adatnak is kell lennie.
+function assertNoOrphanHeader(pdf, headerText, label) {
+  pdf.pages.forEach((page) => {
+    const header = page.items.find((item) => item.str.trim() === headerText);
+    if (!header) return;
+    const below = page.items.filter((item) => item.y < header.y - 6 && item.str.trim() !== headerText);
+    assert.ok(below.length >= 3, `${label}: ${page.number}. lapon a(z) "${headerText}" fejléc adat nélkül marad`);
+  });
+}
+
+test('the PDF is a real vector document: portrait for the academic daily plan, landscape for the thematic plan, fixed margins, real italic and bold fonts', async (t) => {
   const window = await loadApp(t);
-  const calls = stubPdfLibrary(window);
+  const definitions = installPdfMake(window);
 
   window.renderResultDocument(academicDaily());
-  const dailyBlob = await window.renderPdfBlob('main');
-  assert.ok(dailyBlob.size > 0);
-  assert.equal(calls.options.at(-1).jsPDF.orientation, 'portrait');
-  const dailyPage = calls.pages.at(-1);
-  assert.match(dailyPage, /class="official-table academic-table academic-process-table"/);
-  assert.match(dailyPage, /<thead>/);
-  assert.match(dailyPage, /<em>[^<]*Süss fel, nap/);
-  assert.match(dailyPage, /<strong>Motiváció:<\/strong>/);
-  assert.match(dailyPage, /Felhasznált irodalom:/);
-  assert.match(dailyPage, /Foglalkozási\/tevékenységi terv/);
+  const daily = await readPdf(await window.renderPdfBlob('main'));
+  assertPdfLayout(daily, { orientation: 'portrait', label: 'napi terv' });
+  for (const phrase of ['Foglalkozási/tevékenységi terv', 'Őszi falevelek – mondóka és játék', 'Süss fel, nap, fényes nap', 'Motiváció:', 'Hibajavítás', 'Felhasznált irodalom:', 'Óvodai nevelés országos alapprogramja (ONAP)']) {
+    assert.ok(daily.text.includes(phrase.replace(/\s+/g, '')), `napi PDF: ${phrase}`);
+  }
+  for (const font of ['Roboto-Regular', 'Roboto-Italic', 'Roboto-Medium']) assert.ok(daily.raw.includes(font), `beágyazott betűtípus: ${font}`);
+  assert.equal(/\/Subtype\s*\/Image/.test(daily.raw), false, 'nincs beágyazott kép');
+  assert.ok(daily.pages.reduce((sum, page) => sum + page.items.length, 0) > 60, 'valódi, kijelölhető szöveg');
+
+  const definition = definitions.at(-1);
+  assert.equal(definition.pageOrientation, 'portrait');
+  assert.equal(definition.pageSize, 'A4');
+  assert.deepEqual(Array.from(definition.pageMargins).map((value) => Math.round(value * 100) / 100), Array(4).fill(Math.round(PDF_MARGIN_PT * 100) / 100));
 
   window.renderResultDocument(thematic());
-  await window.renderPdfBlob('main');
-  assert.equal(calls.options.at(-1).jsPDF.orientation, 'landscape');
-  assert.equal(calls.options.at(-1).jsPDF.format, 'a4');
-  const matrixPage = calls.pages.at(-1);
-  assert.equal((matrixPage.match(/<th>/g) || []).length, 7);
-  assert.match(matrixPage, /<em>[^<]*Ég a gyertya, ég/);
-  assert.match(matrixPage, /Felhasznált irodalom:/);
-  assert.match(window.makePageElement('<p>x</p>', 'landscape', 12).style.cssText, /width:\s*297mm/);
+  const matrix = await readPdf(await window.renderPdfBlob('main'));
+  assertPdfLayout(matrix, { orientation: 'landscape', label: 'tematikus terv' });
+  assert.equal(definitions.at(-1).pageOrientation, 'landscape');
+  for (const phrase of ['Tematikus terv', 'Tevékenységi területek', 'Verselés, mesélés', 'Weöres Sándor: Falevél (KEE 45.)', 'Ég a gyertya, ég', 'Felhasznált irodalom:']) {
+    assert.ok(matrix.text.includes(phrase.replace(/\s+/g, '')), `tematikus PDF: ${phrase}`);
+  }
+  assertNoOrphanHeader(matrix, 'Tevékenységi területek', 'tematikus terv');
 });
 
-test('the ZIP and the e-mail delivery keep a single PDF and DOCX for the thematic plan', async (t) => {
+test('the PDF definition has white tables with thin black borders, repeating header rows, bold and italic runs and no fill anywhere', async (t) => {
   const window = await loadApp(t);
-  stubPdfLibrary(window);
+  installPdfMake(window);
+  const definitionOf = (result) => { window.renderResultDocument(result); return window.buildPdfDefinition('main'); };
+
+  for (const [label, result] of [['napi', academicDaily()], ['tematikus', thematic()], ['szabványos', { ...require('./fixtures').makePlan(3), request: makePayload(), generationId: 'gen_std' }]]) {
+    const definition = definitionOf(result);
+    const serialized = JSON.stringify(definition);
+    assert.doesNotMatch(serialized, /fillColor|"background"|DCEFE6|E3F2EA|#e6|#f0|#ddd/i, `${label}: nincs kitöltés`);
+    const tables = definition.content.filter((node) => node.table);
+    assert.ok(tables.length >= 2, `${label}: meta- és adattábla`);
+    for (const node of tables) {
+      assert.equal(node.layout.hLineColor(0), '#000000');
+      assert.equal(node.layout.vLineColor(0), '#000000');
+      assert.equal(node.layout.vLineWidth(0), 0.5, 'vékony keret');
+      assert.ok(node.layout.paddingLeft() >= 3.5 && node.layout.paddingTop() >= 2, 'szellős cellamargó');
+    }
+    const dataTables = tables.filter((node) => node.table.headerRows);
+    assert.ok(dataTables.length >= 1, `${label}: ismétlődő fejléc`);
+    for (const node of dataTables) {
+      assert.equal(node.table.headerRows, 1);
+      assert.equal(node.table.keepWithHeaderRows, 1, 'a fejléc nem marad adatsor nélkül');
+      assert.equal(node.table.dontBreakRows, true);
+      const padding = 2 * node.layout.paddingLeft();
+      const outer = node.table.widths.reduce((sum, width) => sum + width + padding + node.layout.vLineWidth(0), 0) + node.layout.vLineWidth(0);
+      const pageWidth = definition.pageOrientation === 'landscape' ? 841.89 : 595.28;
+      assert.ok(outer <= pageWidth - 2 * definition.pageMargins[0] + 0.01, `${label}: a táblázat (${outer.toFixed(1)} pt) belefér a margók közé`);
+    }
+  }
+
+  const daily = definitionOf(academicDaily());
+  const runs = JSON.stringify(daily.content);
+  assert.match(runs, /"text":"Motiváció:","bold":true/);
+  assert.match(runs, /"italics":true/);
+  assert.equal(typeof daily.pageBreakBefore, 'function');
+  assert.equal(daily.pageBreakBefore({ headlineLevel: 1 }, [], []), true, 'címsor nem marad a lap alján');
+  assert.equal(daily.pageBreakBefore({ headlineLevel: 1 }, [{}], []), false);
+});
+
+test('the long thematic matrix is cut into small rows, so pdfmake never drops or clips it', async (t) => {
+  const window = await loadApp(t);
+  installPdfMake(window);
+  window.renderResultDocument(thematic(bigThematic()));
+  const definition = window.buildPdfDefinition('main');
+  const matrix = definition.content.find((node) => node.table && node.table.widths.length === 7);
+  assert.ok(matrix.table.body.length > 3, 'a magas sor több kisebb sorra bomlik');
+  const lines = matrix.layout;
+  let hidden = 0;
+  for (let index = 2; index < matrix.table.body.length; index += 1) if (lines.hLineWidth(index, matrix) === 0) hidden += 1;
+  assert.ok(hidden >= 1, 'az egy sorból származó szeletek között nincs vízszintes vonal');
+  assert.equal(lines.hLineWidth(0, matrix), 0.5);
+  assert.equal(lines.hLineWidth(1, matrix), 0.5, 'a fejléc alatt van vonal');
+  assert.equal(lines.hLineWidth(matrix.table.body.length, matrix), 0.5, 'a táblázat alján van vonal');
+});
+
+test('the ZIP and the e-mail delivery use the same pdfmake document and keep a single PDF and DOCX for the thematic plan', async (t) => {
+  const window = await loadApp(t);
+  installPdfMake(window);
   window.docx = docxLib;
   window.JSZip = JSZip;
-  window.blobToBase64 = async () => 'AA'; // a jsdom FileReader nem olvassa a Node Blobját
   window.renderResultDocument(thematic());
+  const sent = [];
+  window.blobToBase64 = async (blob) => { sent.push(blob); return 'AA'; }; // a jsdom FileReader nem olvassa a Node Blobját
   const files = await window.buildDeliveryFiles();
   assert.deepEqual(JSON.parse(JSON.stringify(files.map((file) => file.name))), ['tematikus-terv_2026-11-02.pdf', 'tematikus-terv_2026-11-02.docx']);
+  const attachment = await readPdf(sent[0]);
+  assertPdfLayout(attachment, { orientation: 'landscape', label: 'e-mail melléklet' });
+  assert.ok(attachment.text.includes('Cél,-feladatrendszer:'));
+  const standalone = await readPdf(await window.renderPdfBlob('main'));
+  assert.equal(attachment.text, standalone.text, 'a letöltött és az e-mailes PDF ugyanaz a dokumentum');
 });
 
 // ---------- Tördelés ----------
@@ -850,7 +922,7 @@ const inOrder = (haystack, needles) => needles.every((needle, index) => haystack
 
 test('the thematic plan shows the pedagogical frame below the matrix and before the bibliography in the web view, DOCX and PDF', async (t) => {
   const window = await loadApp(t);
-  const calls = stubPdfLibrary(window, { fakeLayout: true });
+  installPdfMake(window);
   window.renderResultDocument(thematic());
 
   const sequence = [...FRAME_HEADINGS, 'Felhasznált irodalom:'];
@@ -868,20 +940,21 @@ test('the thematic plan shows the pedagogical frame below the matrix and before 
   for (const area of academicPlan.AREA_COLUMNS) assert.ok(plain.includes(`${area.label}:`), `DOCX: ${area.label}:`);
   assert.ok(plain.includes('Az őszi természeti jelenségek megismerése.'));
 
-  await window.renderPdfBlob('main');
-  const pdf = new JSDOM(`<body>${calls.pages.join('')}</body>`).window.document.body.textContent.replace(/\s+/g, ' ');
-  assert.ok(inOrder(pdf, ['Tevékenységi területek', ...sequence]), 'PDF: sorrend');
-  for (const label of FRAME_LABELS) assert.ok(pdf.includes(label), `PDF: ${label}`);
-  for (const area of academicPlan.AREA_COLUMNS) assert.ok(pdf.includes(`${area.label}:`), `PDF: ${area.label}:`);
+  const pdf = await readPdf(await window.renderPdfBlob('main'));
+  const squash = (value) => value.replace(/\s+/g, '');
+  assert.ok(inOrder(pdf.text, ['Tevékenységiterületek', ...sequence].map(squash)), 'PDF: sorrend');
+  for (const label of FRAME_LABELS) assert.ok(pdf.text.includes(squash(label)), `PDF: ${label}`);
+  for (const area of academicPlan.AREA_COLUMNS) assert.ok(pdf.text.includes(squash(`${area.label}:`)), `PDF: ${area.label}:`);
+  for (const value of ['Az őszi természeti jelenségek megismerése.', 'Megfigyelés, gyűjtés, csoportosítás.', 'Természeti megfigyelések.', 'Egyensúlyérzék.', 'falevelek; zsírkréta']) {
+    assert.ok(pdf.text.includes(squash(value)), `PDF: ${value}`);
+  }
 });
 
-// ---------- PDF-tördelés: árva fejléc, üres lap, felesleges oldaltörés ----------
-
-const pageDocuments = (calls) => calls.pages.map((page) => new JSDOM(`<body>${page}</body>`).window.document);
+// ---------- PDF-tördelés: üres lap, árva fejléc, levágott tartalom ----------
 
 function bigThematic() {
   const response = makeThematicResponse();
-  const items = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix} ${index + 1}`);
+  const items = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix} ${index + 1}: közös megfigyelés, beszélgetés és páros feladat az őszi természeti jelenségekről (KEE ${index + 20}.)`);
   response.hetek[0].teruletek.kulso_vilag = items('Megfigyelés', 34);
   response.hetek[0].teruletek.mozgas = items('Mozgásos játék', 22);
   response.hetek[0].keretrendszer.celok = items('Cél', 14);
@@ -890,35 +963,67 @@ function bigThematic() {
   return response;
 }
 
-test('the PDF of a long thematic plan has no blank page, no data-less table header and the matrix starts right below the meta table', async (t) => {
+test('the PDF of a long thematic plan has no blank page, no data-less table header, no clipped text and the full frame below the matrix', async (t) => {
   const window = await loadApp(t);
-  const calls = stubPdfLibrary(window, { fakeLayout: true });
+  installPdfMake(window);
   window.renderResultDocument(thematic(bigThematic()));
-  await window.renderPdfBlob('main');
-  const documents = pageDocuments(calls);
-  assert.ok(documents.length >= 4, `hosszú terv: ${documents.length} lap`);
+  const pdf = await readPdf(await window.renderPdfBlob('main'));
+  assertPdfLayout(pdf, { orientation: 'landscape', label: 'hosszú tematikus terv' });
+  assert.ok(pdf.pages.length >= 3, `hosszú terv: ${pdf.pages.length} lap`);
+  assertNoOrphanHeader(pdf, 'Tevékenységi területek', 'hosszú tematikus terv');
 
-  documents.forEach((document, index) => {
-    assert.ok(document.body.textContent.trim().length > 0, `${index + 1}. lap üres`);
-    assert.ok(document.body.querySelector('.a4-page-body, p, h2, h3, table') !== null);
-    for (const table of document.querySelectorAll('table')) {
-      const dataRows = Array.from(table.tBodies[0]?.rows || []).filter((row) => row.textContent.trim());
-      assert.ok(dataRows.length >= 1, `${index + 1}. lap: adat nélküli (árva) táblázatfejléc`);
-      assert.equal(table.querySelectorAll('thead th').length, 7, `${index + 1}. lap: teljes fejléc`);
-    }
-    const blocks = Array.from(document.body.children);
-    assert.notEqual(blocks.at(-1)?.tagName, 'H3', `${index + 1}. lap: címsor a lap alján`);
-  });
+  const first = pdf.pages[0];
+  assert.ok(first.compact.includes('Tematikusterv') && first.compact.includes('Tevékenységiterületek'), 'a mátrix az első lapon indul, nincs felesleges oldaltörés a meta-tábla után');
+  assert.ok(first.compact.includes('Megfigyelés1:'), 'az első adatszelet az első lapon van');
 
-  const first = documents[0];
-  assert.ok(first.querySelector('.doc-meta-block'));
-  assert.ok(first.querySelector('table.thematic-table'), 'nincs felesleges oldaltörés a metaadat-tábla után');
-  assert.ok(first.querySelector('table.thematic-table tbody tr').textContent.includes('Megfigyelés 1'));
+  for (let index = 1; index <= 34; index += 1) assert.match(pdf.text, new RegExp(`Megfigyelés${index}:`), `Megfigyelés ${index}`);
+  for (let index = 1; index <= 22; index += 1) assert.match(pdf.text, new RegExp(`Mozgásosjáték${index}:`), `Mozgásos játék ${index}`);
+  for (let index = 1; index <= 14; index += 1) {
+    assert.match(pdf.text, new RegExp(`Cél${index}:`), `Cél ${index}`);
+    assert.match(pdf.text, new RegExp(`Feladat${index}:`), `Feladat ${index}`);
+  }
+  const order = ['Cél,-feladatrendszer:', 'Kiemeltfejlesztésiterület:', 'Módszerek,eszközök:', 'Felhasználtirodalom:'];
+  assert.ok(inOrder(pdf.text, order), 'a keretrendszer teljes és az irodalom előtt van');
+  assert.ok(pdf.pages.at(-1).compact.includes('Óvodainevelésországosalapprogramja(ONAP)'));
+  // Az utolsó lapon van valódi tartalom, vagyis nincs záró üres lap.
+  assert.ok(pdf.pages.at(-1).items.length >= 3);
+});
 
-  const all = documents.map((document) => document.body.textContent).join(' ');
-  for (let index = 1; index <= 34; index += 1) assert.match(all, new RegExp(`Megfigyelés ${index}(?!\\d)`));
-  for (let index = 1; index <= 14; index += 1) assert.match(all, new RegExp(`Feladat ${index}(?!\\d)`));
-  assert.ok(documents.at(-1).body.textContent.includes('Felhasznált irodalom:'));
+test('the PDF header row is never alone at the bottom of a page, whatever precedes the table', async (t) => {
+  const window = await loadApp(t);
+  installPdfMake(window);
+  for (const extra of [0, 3, 7, 12, 18, 24]) {
+    const response = bigThematic();
+    response.hetek[0].teruletek.rajzolas = Array.from({ length: 4 + extra }, (_, index) => `Alkotás ${index + 1}: festés és mintázás őszi levelekkel.`);
+    const payload = makeThematicPayload({ groupName: 'Sokféle hosszú csoportnév '.repeat(extra) });
+    window.renderResultDocument(thematic(response, payload));
+    const pdf = await readPdf(await window.renderPdfBlob('main'));
+    assertPdfLayout(pdf, { orientation: 'landscape', label: `extra=${extra}` });
+    assertNoOrphanHeader(pdf, 'Tevékenységi területek', `extra=${extra}`);
+  }
+});
+
+test('long standard and academic daily PDFs stay inside the margins with a repeating header and without blank pages', async (t) => {
+  const window = await loadApp(t);
+  installPdfMake(window);
+  const { makePlan } = require('./fixtures');
+  const longPlan = makePlan(30);
+  window.renderResultDocument({ ...longPlan, request: makePayload(), generationId: 'gen_long_std' });
+  const standard = await readPdf(await window.renderPdfBlob('main'));
+  assertPdfLayout(standard, { orientation: 'portrait', label: 'szabványos' });
+  assert.ok(standard.pages.length >= 3);
+  assertNoOrphanHeader(standard, 'Idő', 'szabványos');
+  standard.pages.slice(1).forEach((page) => assert.ok(page.items.some((item) => item.str.trim() === 'Idő'), `${page.number}. lapon ismétlődik a fejléc`));
+  for (let index = 1; index <= 30; index += 1) assert.match(standard.text, new RegExp(`${index}\\.lépésként`), `${index}. lépés`);
+
+  const response = makeAcademicResponse();
+  response.kidolgozas_tablazat[2].tevekenyseg_menete = Array.from({ length: 70 }, (_, index) => `Bekezdés ${index + 1}. A pedagógus elmondja a verset, a gyermekek ismétlik.`);
+  window.renderResultDocument(academicDaily(response));
+  const daily = await readPdf(await window.renderPdfBlob('main'));
+  assertPdfLayout(daily, { orientation: 'portrait', label: 'hosszú napi terv' });
+  assertNoOrphanHeader(daily, 'Idő', 'hosszú napi terv');
+  for (let index = 1; index <= 70; index += 1) assert.match(daily.text, new RegExp(`Bekezdés${index}\\.`), `Bekezdés ${index}`);
+  assert.ok(daily.pages.at(-1).compact.includes('Óvodainevelésországosalapprogramja(ONAP)'));
 });
 
 test('no preview or export page ever exceeds the page height, even when the frame section is longer than a page', async (t) => {

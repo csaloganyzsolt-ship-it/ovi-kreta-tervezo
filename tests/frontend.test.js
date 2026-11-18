@@ -207,34 +207,27 @@ test('theme suggestions are not mistakenly sent as selected pedagogical goals', 
   assert.equal(payload.selectedGoals.includes(payload.theme), false);
 });
 
-test('export section toggles and margins affect the actual generated document', async (t) => {
+test('the preview has no margin or section controls and always shows the full fixed A4 document', async (t) => {
   const window = await loadApp(t);
   const document = window.document;
+  for (const selector of ['[data-export-section]', '[data-export="margin"]', '[data-export="orientation"]', '.export-settings-panel', '#pageMarginSelect', '#activitiesLockNote']) {
+    assert.equal(document.querySelector(selector), null, selector);
+  }
   window.fetch = async () => Response.json({ success: true, ...makePlan() });
   await window.generatePlan();
-  const toggle = (name, checked) => {
-    const control = document.querySelector(`[data-export-section="${name}"]`);
-    control.checked = checked;
-    control.dispatchEvent(new window.Event('change'));
-  };
-  toggle('summary', false);
-  assert.equal(document.querySelector('.doc-summary'), null);
-  toggle('goals', false);
-  assert.equal(document.querySelector('#resultDocument').textContent.includes(makePlan().nevelesi_feladatok), false);
-  toggle('materials', false);
-  assert.equal(document.querySelector('#resultDocument').textContent.includes('nagyító'), false);
-  toggle('differentiation', false);
-  assert.equal(document.querySelectorAll('.official-table thead th').length, 2);
-  assert.equal(document.querySelectorAll('.official-table col').length, 2);
-  toggle('activities', false);
-  assert.equal(document.querySelector('.official-table'), null);
-  for (const name of ['summary', 'goals', 'materials', 'differentiation', 'activities']) toggle(name, true);
+  const host = document.querySelector('#resultDocument');
+  assert.ok(host.querySelector('.doc-summary'));
+  assert.ok(host.textContent.includes(makePlan().nevelesi_feladatok));
+  assert.ok(host.textContent.includes('nagyító'));
   assert.equal(document.querySelectorAll('.official-table thead th').length, 3);
+  assert.equal(document.querySelectorAll('.official-table col').length, 3);
   assert.equal(document.querySelectorAll('.official-table tbody tr').length, 5);
-  const margin = document.querySelector('[data-export="margin"]');
-  margin.value = 'spacious';
-  margin.dispatchEvent(new window.Event('change'));
-  assert.equal(document.querySelector('#resultDocument').dataset.margin, 'spacious');
+  assert.equal(host.dataset.margin, undefined);
+  assert.equal(host.dataset.orientation, 'portrait');
+  assert.equal(window.eval('PAGE_MARGIN_MM'), 15);
+  assert.equal(window.getDocOrientation(), 'portrait');
+  const pages = host.querySelectorAll('.a4-page');
+  assert.ok(pages.length >= 1);
 });
 
 test('editing the form cannot relabel a previously generated document as a different plan', async (t) => {
@@ -251,7 +244,7 @@ test('editing the form cannot relabel a previously generated document as a diffe
   assert.equal(document.querySelector('#resultDocument').textContent, before);
 });
 
-test('a clean draft clears the document and restores usable export defaults', async (t) => {
+test('a clean draft clears the document and restores the form defaults', async (t) => {
   const window = await loadApp(t);
   window.fetch = async () => Response.json({ success: true, ...makePlan() });
   await window.generatePlan();
@@ -260,8 +253,6 @@ test('a clean draft clears the document and restores usable export defaults', as
   assert.equal(window.document.querySelector('#previewContent').style.display, 'none');
   assert.equal(window.document.querySelector('.segment.active[data-group="energy"]').dataset.value, 'Átlagos');
   assert.equal(window.document.querySelector('.segment.active[data-group="detail"]').dataset.value, 'detailed');
-  assert.equal(window.document.querySelector('[data-export="margin"]').value, 'comfortable');
-  assert.ok(Array.from(window.document.querySelectorAll('[data-export-section]')).every((control) => control.checked));
 });
 
 test('network errors show a real error without document content', async (t) => {
@@ -304,7 +295,7 @@ function weeklyResult(window) {
   };
 }
 
-test('weekly plan renders as six tabbed documents with per-document settings', async (t) => {
+test('weekly plan renders as six tabbed documents with one fixed portrait layout', async (t) => {
   const window = await loadApp(t);
   const doc = window.document;
   window.renderResultDocument(weeklyResult(window));
@@ -321,23 +312,13 @@ test('weekly plan renders as six tabbed documents with per-document settings', a
   assert.match(doc.querySelector('#resultDocument').textContent, /Nevelési terület/);
   assert.equal(doc.querySelectorAll('.document-day-sheet .official-table tbody tr').length, 1);
 
-  const orientation = doc.querySelector('[data-export="orientation"]');
-  orientation.value = 'landscape';
-  orientation.dispatchEvent(new window.Event('change'));
-  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'landscape');
+  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'portrait');
   doc.querySelectorAll('#documentTabs .doc-tab')[2].click();
   assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'portrait');
-  assert.equal(orientation.value, 'portrait');
-  doc.querySelectorAll('#documentTabs .doc-tab')[1].click();
-  assert.equal(doc.querySelector('#resultDocument').dataset.orientation, 'landscape');
+  assert.match(doc.querySelector('#resultDocument').textContent, /Napi tervezet – Kedd/);
 
   const files = window.getDocumentList(weeklyResult(window)).map((item) => item.fileBase);
   assert.equal(files.slice(0, 3).join('|'), '00_heti-keretterv_2026-08-24|01_hetfo-verseles-meseles_2026-08-24|02_kedd-mozgas_2026-08-25');
-
-  const draft = window.collectDraftState();
-  assert.equal(draft.docSettings['nap-0'].orientation, 'landscape');
-  window.clearDraftState();
-  assert.equal(JSON.stringify(window.getDocSettings('nap-0')), JSON.stringify({ orientation: 'portrait', margin: 'comfortable' }));
 });
 
 test('the summary checklist lists every setting, including the new ones', async (t) => {
@@ -483,14 +464,14 @@ test('generated plan survives a reload and is removed only by the clean-slate ac
   assert.notEqual(doc.querySelector('#previewEmpty').style.display, 'none');
 });
 
-test('preview is built from A4 page containers and the export element is not fixed or hidden', async (t) => {
+test('preview is built from A4 page containers and nothing is rasterised for the export', async (t) => {
   const window = await loadApp(t);
   window.renderResultDocument({ ...makePlan(4), request: makePayload() });
   const doc = window.document;
   assert.ok(doc.querySelectorAll('#resultDocument .a4-page').length >= 1);
   assert.equal(doc.querySelectorAll('#resultDocument .a4-page tbody tr').length, 4);
-  const element = window.makePageElement('<p>x</p>', 'portrait', 12);
-  assert.doesNotMatch(element.style.cssText, /position|z-index|display|visibility/);
+  assert.equal(window.makePageElement, undefined, 'nincs raszteres oldalelem-készítés');
+  assert.equal(window.html2pdf, undefined);
 });
 
 test('DOCX is a native Word document with real tables, not an embedded HTML chunk', async (t) => {

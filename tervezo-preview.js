@@ -1,15 +1,6 @@
 // Dokumentum felépítése, tördelése, dokumentumfülek és a zárolt előnézet.
 // Klasszikus script (nem ES modul): a felső szintű deklarációk közös globális hatókörben élnek.
 
-function getExportSettings() {
-  const settings = {};
-  document.querySelectorAll('[data-export-section]').forEach((checkbox) => {
-    settings[checkbox.dataset.exportSection] = checkbox.checked;
-  });
-  const margin = document.querySelector('[data-export="margin"]')?.value || 'comfortable';
-  return { settings, margin };
-}
-
 function validateGeneratedPlan(result) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw new Error('A szerver nem dokumentumot tartalmazó JSON objektumot adott vissza.');
@@ -56,8 +47,6 @@ function validateGeneratedPlan(result) {
 }
 
 let activeDocId = null;
-
-let docSettings = {};
 
 function getDocumentList(result = lastResult) {
   if (result?.is_weekly === true && Array.isArray(result.napok)) {
@@ -117,38 +106,9 @@ function currentDocKey() {
   return activeDocId || 'main';
 }
 
-function getDocSettings(docId = currentDocKey()) {
-  const settings = { ...DOC_DEFAULTS, ...(docSettings[docId] || {}) };
-  // A 7 oszlopos tematikus mátrix csak fekvő A4-en olvasható.
-  if (lastResult?.is_thematic === true) settings.orientation = 'landscape';
-  return settings;
-}
-
-function applyDocSettingsToElement(element, docId) {
-  if (!element) return;
-  const { orientation, margin } = getDocSettings(docId);
-  element.dataset.margin = margin;
-  element.dataset.orientation = orientation;
-}
-
-function syncDocControls() {
-  const { orientation, margin } = getDocSettings();
-  const marginSelect = document.querySelector('[data-export="margin"]');
-  const orientationSelect = document.querySelector('[data-export="orientation"]');
-  if (marginSelect) marginSelect.value = margin;
-  if (orientationSelect) {
-    orientationSelect.value = orientation;
-    orientationSelect.disabled = lastResult?.is_thematic === true;
-  }
-  const scope = document.getElementById('docSettingsScope');
-  if (scope) {
-    const doc = getDocumentList().find((item) => item.id === currentDocKey());
-    scope.textContent = getDocumentList().length > 1 && doc ? `A beállítások erre a dokumentumra vonatkoznak: ${doc.label}` : '';
-  }
-}
-
-function applyExportSettingsToDocument() {
-  applyDocSettingsToElement(resultDocument, currentDocKey());
+// A 7 oszlopos tematikus mátrix csak fekvő A4-en olvasható; minden más dokumentum álló A4. Egységes 15 mm-es margó (PAGE_MARGIN_MM).
+function getDocOrientation(result = lastResult) {
+  return result?.is_thematic === true ? 'landscape' : 'portrait';
 }
 
 function renderDocumentTabs(list) {
@@ -169,12 +129,12 @@ function selectDocument(docId) {
   persistDraftState();
 }
 
-function renderTableColumns(showMethods, orientation) {
+function renderTableColumns(orientation) {
   const landscape = orientation === 'landscape';
   const time = landscape ? 8 : 10;
   const methods = landscape ? 28 : 32;
-  const middle = showMethods ? 100 - time - methods : 100 - time;
-  return `<colgroup><col style="width: ${time}%;" /><col style="width: ${middle}%;" />${showMethods ? `<col style="width: ${methods}%;" />` : ''}</colgroup>`;
+  const middle = 100 - time - methods;
+  return `<colgroup><col style="width: ${time}%;" /><col style="width: ${middle}%;" /><col style="width: ${methods}%;" /></colgroup>`;
 }
 
 function buildLockedBoundaryCard(result) {
@@ -190,15 +150,15 @@ function buildLockedBoundaryCard(result) {
           </div>`;
 }
 
-function buildActivityTable(rows, showMethods, orientation, locked = false) {
+function buildActivityTable(rows, orientation, locked = false) {
   return `
           <table class="official-table ${locked ? 'locked-mirror-table' : ''}">
-            ${renderTableColumns(showMethods, orientation)}
+            ${renderTableColumns(orientation)}
             <thead>
               <tr>
                 <th>Idő</th>
                 <th>A fejlesztő tevékenység felépítése</th>
-                ${showMethods ? '<th>A fejlesztés módszerei és megjegyzések</th>' : ''}
+                <th>A fejlesztés módszerei és megjegyzések</th>
               </tr>
             </thead>
             <tbody>
@@ -206,7 +166,7 @@ function buildActivityTable(rows, showMethods, orientation, locked = false) {
                 <tr>
                   <td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.ido)}</div></td>
                   <td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.tevekenyseg_menete)}</div></td>
-                  ${showMethods ? `<td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.modszerek_megjegyzesek)}</div></td>` : ''}
+                  <td><div class="${locked ? 'locked-mirror-text' : ''}">${formatTableCell(row.modszerek_megjegyzesek)}</div></td>
                 </tr>`).join('')}
             </tbody>
           </table>`;
@@ -226,14 +186,12 @@ function buildMetaBlock(metaRows) {
 }
 
 function buildDocumentHtml(result, request, docId) {
-  const { settings } = getExportSettings();
-  const { orientation } = getDocSettings(docId);
-  const showMethods = settings.differentiation !== false;
+  const orientation = getDocOrientation(result);
   const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
   const locked = isPlanLocked(result);
 
-  if (result.is_thematic === true) return buildThematicHtml(result, request, { settings, locked });
-  if (result.planMode === 'academic') return buildAcademicDailyHtml(result, request, { settings, showMethods, locked });
+  if (result.is_thematic === true) return buildThematicHtml(result, request, { locked });
+  if (result.planMode === 'academic') return buildAcademicDailyHtml(result, request, { locked });
 
   if (result.is_weekly === true && Array.isArray(result.napok)) {
     const frame = result.heti_keretterv || {};
@@ -266,35 +224,30 @@ function buildDocumentHtml(result, request, docId) {
           ['Forma', day.tevekenyseg_forma || '—'],
           ['Napi cél', day.napi_cel || '—']
         ])}
-              ${(settings.activities !== false || locked) ? `
-                ${locked ? buildLockedBoundaryCard(result) : ''}
-                <div class="doc-section document-day-sheet ${locked ? 'locked-mirror-section' : ''}">
-                  <h3>A tevékenység/foglalkozás kidolgozása</h3>
-                  ${buildActivityTable(day.kidolgozas_tablazat, showMethods, orientation, locked)}
-                </div>` : ''}`;
+              ${locked ? buildLockedBoundaryCard(result) : ''}
+              <div class="doc-section document-day-sheet ${locked ? 'locked-mirror-section' : ''}">
+                <h3>A tevékenység/foglalkozás kidolgozása</h3>
+                ${buildActivityTable(day.kidolgozas_tablazat, orientation, locked)}
+              </div>`;
     }
 
-    const metaRows = [...baseMeta, ['Téma', frame.tema || '—'], ['Heti fő cél', frame.heti_fo_cel || '—']];
-    if (settings.materials !== false) {
-      metaRows.push(['Eszközök', (Array.isArray(frame.eszkozok) ? frame.eszkozok : []).join(', ')]);
-    }
+    const metaRows = [...baseMeta, ['Téma', frame.tema || '—'], ['Heti fő cél', frame.heti_fo_cel || '—'],
+      ['Eszközök', (Array.isArray(frame.eszkozok) ? frame.eszkozok : []).join(', ')]];
     const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
     const gridWidths = orientation === 'landscape' ? [12, 28, 60] : [16, 34, 50];
     return `
             <div class="doc-header">
               <h2>Heti tervezet</h2>
             </div>
-            ${settings.summary !== false ? `
-              <div class="doc-section">
-                <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
-              </div>` : ''}
+            <div class="doc-section">
+              <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
+            </div>
             ${buildMetaBlock(metaRows)}
-            ${settings.goals !== false ? `
-              <div class="doc-section">
-                <h3>Cél- és feladatrendszer</h3>
-                <p><strong>Nevelési feladatok:</strong> ${escapeHtml(frame.nevelesi_feladatok || '')}</p>
-                <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
-              </div>` : ''}
+            <div class="doc-section">
+              <h3>Cél- és feladatrendszer</h3>
+              <p><strong>Nevelési feladatok:</strong> ${escapeHtml(frame.nevelesi_feladatok || '')}</p>
+              <p><strong>Didaktikai feladatok:</strong> ${escapeHtml(frame.didaktikai_feladatok || '')}</p>
+            </div>
             <div class="doc-section doc-table-section">
               <h3>Területek heti elosztása</h3>
               <table class="official-table">
@@ -330,9 +283,9 @@ function buildDocumentHtml(result, request, docId) {
     ['Forma', result.tevekenyseg_forma],
     ['Előzmény', result.elozmeny],
     ['Téma', result.tema],
-    ['Cél', result.cel]
+    ['Cél', result.cel],
+    ['Eszközök', result.eszkozok.join(', ')]
   ];
-  if (settings.materials !== false) metaRows.push(['Eszközök', result.eszkozok.join(', ')]);
   const professionalFields = [
     ['Nevelési feladatok', result.nevelesi_feladatok],
     ['Didaktikai feladatok', result.didaktikai_feladatok],
@@ -344,22 +297,19 @@ function buildDocumentHtml(result, request, docId) {
           <div class="doc-header">
             <h2>${escapeHtml(title)}</h2>
           </div>
-          ${settings.summary !== false ? `
-            <div class="doc-section">
-              <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
-            </div>` : ''}
+          <div class="doc-section">
+            <p class="doc-summary"><strong>Projekt:</strong> ${escapeHtml(summary)}</p>
+          </div>
           ${buildMetaBlock(metaRows)}
-          ${settings.goals !== false ? `
-            <div class="doc-section">
-              <h3>Cél- és feladatrendszer</h3>
-              ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
-            </div>` : ''}
-          ${(settings.activities !== false || locked) ? `
-            ${locked ? buildLockedBoundaryCard(result) : ''}
-            <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
-              <h3>A tevékenység/foglalkozás kidolgozása</h3>
-              ${buildActivityTable(result.kidolgozas_tablazat, showMethods, orientation, locked)}
-            </div>` : ''}
+          <div class="doc-section">
+            <h3>Cél- és feladatrendszer</h3>
+            ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
+          </div>
+          ${locked ? buildLockedBoundaryCard(result) : ''}
+          <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
+            <h3>A tevékenység/foglalkozás kidolgozása</h3>
+            ${buildActivityTable(result.kidolgozas_tablazat, orientation, locked)}
+          </div>
           ${showLiterature && result.felhasznalt_irodalom.trim() ? `
             <div class="doc-section">
               <h3>Felhasznált irodalom</h3>
@@ -376,14 +326,12 @@ function renderResultDocument(data = lastResult) {
   validateGeneratedPlan(data);
   lastResult = data;
   window.lastResult = lastResult;
-  syncActivitiesControl();
   const request = data.request || buildGenerationPayload();
   const list = getDocumentList(data);
   if (!list.some((doc) => doc.id === activeDocId)) activeDocId = list[0].id;
   resultDocument.innerHTML = buildDocumentHtml(data, request, activeDocId);
   renderDocumentTabs(list);
-  syncDocControls();
-  applyExportSettingsToDocument();
+  resultDocument.dataset.orientation = getDocOrientation(data);
   paginateDocument(resultDocument);
   applyPaywall(resultDocument);
   updateExportLock();
@@ -395,7 +343,7 @@ const MIN_SLICE_SHARE = 0.2;
 
 function paginateDocument(host) {
   const orientation = host.dataset.orientation === 'landscape' ? 'landscape' : 'portrait';
-  const marginMm = MARGIN_MM[host.dataset.margin] || MARGIN_MM.comfortable;
+  const marginMm = PAGE_MARGIN_MM;
   const blocks = Array.from(host.children);
 
   const probe = document.createElement('div');

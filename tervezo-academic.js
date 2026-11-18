@@ -68,8 +68,8 @@ function academicLiteratureHtml(text, locked) {
           </div>`;
 }
 
-function academicProcessTable(rows, showMethods, locked) {
-  const widths = showMethods ? [9, 51, 40] : [9, 91];
+function academicProcessTable(rows, locked) {
+  const widths = [9, 51, 40];
   const cell = (value) => `<div${academicClass(locked && 'locked-mirror-text')}>${formatRichCell(value)}</div>`;
   return `
           <table${academicClass('official-table', 'academic-table', 'academic-process-table', locked && 'locked-mirror-table')}>
@@ -78,7 +78,7 @@ function academicProcessTable(rows, showMethods, locked) {
               <tr>
                 <th>Idő</th>
                 <th>A fejlesztő tevékenység felépítése, a foglalkozás menete</th>
-                ${showMethods ? '<th>A fejlesztés módszerei, munkaformák, eszközök, megjegyzések</th>' : ''}
+                <th>A fejlesztés módszerei, munkaformák, eszközök, megjegyzések</th>
               </tr>
             </thead>
             <tbody>
@@ -86,13 +86,13 @@ function academicProcessTable(rows, showMethods, locked) {
                 <tr>
                   <td>${cell(row.ido)}</td>
                   <td>${cell(row.tevekenyseg_menete)}</td>
-                  ${showMethods ? `<td>${cell(row.modszerek_megjegyzesek)}</td>` : ''}
+                  <td>${cell(row.modszerek_megjegyzesek)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>`;
 }
 
-function buildAcademicDailyHtml(result, request, { settings, showMethods, locked }) {
+function buildAcademicDailyHtml(result, request, { locked }) {
   const content = result.tartalom || {};
   const rows = Array.isArray(result.kidolgozas_tablazat) ? result.kidolgozas_tablazat : [];
   const minutes = Number.isFinite(result.ossz_ido_perc)
@@ -114,30 +114,27 @@ function buildAcademicDailyHtml(result, request, { settings, showMethods, locked
     ['A tevékenység előzménye', formatRichText(result.elozmeny || '—')],
     ['A tevékenység tartalma/témája', `<p><strong>${escapeHtml(result.tema)}</strong></p>${contentParts.map(([label, value]) => `<p><strong>${label}:</strong> ${formatRichText(value)}</p>`).join('')}`]
   ];
-  if (settings.goals !== false) {
-    metaRows.push(
-      ['A tevékenység célja', formatRichText(result.cel)],
-      ['A tevékenység feladatai', [
-        ['Nevelési feladatok', result.nevelesi_feladatok],
-        ['Didaktikai feladatok', result.didaktikai_feladatok],
-        ['Képesség- és készségfejlesztés', result.kepessegfejlesztes]
-      ].map(([label, value]) => `<p><strong>${label}:</strong> ${formatRichText(value)}</p>`).join('')]
-    );
-  }
-  metaRows.push(['Alkalmazott módszerek, eljárások', escapeHtml((result.modszerek || []).join(', '))]);
-  if (settings.materials !== false) metaRows.push(['Eszközök', escapeHtml((result.eszkozok || []).join(', '))]);
+  metaRows.push(
+    ['A tevékenység célja', formatRichText(result.cel)],
+    ['A tevékenység feladatai', [
+      ['Nevelési feladatok', result.nevelesi_feladatok],
+      ['Didaktikai feladatok', result.didaktikai_feladatok],
+      ['Képesség- és készségfejlesztés', result.kepessegfejlesztes]
+    ].map(([label, value]) => `<p><strong>${label}:</strong> ${formatRichText(value)}</p>`).join('')],
+    ['Alkalmazott módszerek, eljárások', escapeHtml((result.modszerek || []).join(', '))],
+    ['Eszközök', escapeHtml((result.eszkozok || []).join(', '))]
+  );
 
   return `
           <div class="doc-header">
             <h2>Foglalkozási/tevékenységi terv</h2>
           </div>
           ${buildAcademicMetaBlock(metaRows)}
-          ${(settings.activities !== false || locked) ? `
-            ${locked ? buildLockedBoundaryCard(result) : ''}
-            <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
-              <h3>A tevékenység/foglalkozás kidolgozása</h3>
-              ${academicProcessTable(rows, showMethods, locked)}
-            </div>` : ''}
+          ${locked ? buildLockedBoundaryCard(result) : ''}
+          <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
+            <h3>A tevékenység/foglalkozás kidolgozása</h3>
+            ${academicProcessTable(rows, locked)}
+          </div>
           ${academicLiteratureHtml(result.felhasznalt_irodalom, locked)}`;
 }
 
@@ -206,7 +203,7 @@ function thematicNotesHtml(notes, locked) {
           </div>`;
 }
 
-function buildThematicHtml(result, request, { settings, locked }) {
+function buildThematicHtml(result, request, { locked }) {
   const weeks = Array.isArray(result.hetek) ? result.hetek : [];
   const metaRows = [
     ['Az óvodapedagógus neve', escapeHtml(request.studentName || request.teacherName || '—')],
@@ -214,20 +211,19 @@ function buildThematicHtml(result, request, { settings, locked }) {
     ['Időszak', escapeHtml(weeks[0]?.datum || request.dateValue || '—')],
     ['Fő téma', escapeHtml(result.tema || '—')]
   ];
-  const showMatrix = settings.activities !== false || locked;
   return `
           <div class="doc-header">
             <h2>Tematikus terv</h2>
           </div>
           ${buildAcademicMetaBlock(metaRows)}
-          ${showMatrix && locked ? buildLockedBoundaryCard(result) : ''}
-          ${showMatrix ? weeks.map((week) => `
+          ${locked ? buildLockedBoundaryCard(result) : ''}
+          ${weeks.map((week) => `
             <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
               <h3>${escapeHtml(week.het_szama)}. hét${week.datum ? ` – ${escapeHtml(week.datum)}` : ''}</h3>
               ${thematicMatrixTable(week, locked)}
             </div>
-            ${thematicFrameHtml(week, locked)}`).join('') : ''}
-          ${showMatrix ? thematicNotesHtml(result.megjegyzes_egyeb_tevekenysegek, locked) : ''}
+            ${thematicFrameHtml(week, locked)}`).join('')}
+          ${thematicNotesHtml(result.megjegyzes_egyeb_tevekenysegek, locked)}
           ${academicLiteratureHtml(result.felhasznalt_irodalom, locked)}`;
 }
 

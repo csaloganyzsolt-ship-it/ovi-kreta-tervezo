@@ -101,8 +101,6 @@ function formatRichCell(value) {
   return parts.map((part) => `<p>${formatRichText(part)}</p>`).join('');
 }
 
-const DOC_DEFAULTS = { orientation: 'portrait', margin: 'comfortable' };
-
 const WEEKDAY_ORDER = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
 
 const WEEKDAY_FILE_NAMES = { 'Hétfő': 'Hetfo', 'Kedd': 'Kedd', 'Szerda': 'Szerda', 'Csütörtök': 'Csutortok', 'Péntek': 'Pentek' };

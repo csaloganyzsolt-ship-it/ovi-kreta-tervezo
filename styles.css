@@ -780,19 +780,14 @@
     min-height: 297mm;
     max-width: 100%;
     height: auto;
-    padding: 12mm 14mm;
+    padding: 15mm;
     background: white;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     margin: 0 auto;
     box-sizing: border-box;
     color: #1d2329;
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    transition: padding 0.2s ease;
+    font-family: Arial, Helvetica, sans-serif;
   }
-
-  .document-sheet[data-margin="compact"] { padding: 10mm 12mm; }
-  .document-sheet[data-margin="comfortable"] { padding: 12mm 14mm; }
-  .document-sheet[data-margin="spacious"] { padding: 15mm 16mm; }
 
   /* Az előnézet és az export azonos szövegbeállítást használ, hogy a tördelés mindenhol egyezzen. */
   .document-sheet,
@@ -970,7 +965,7 @@
   }
 
   .document-sheet .doc-section strong {
-    color: #1a2430;
+    color: #000000;
   }
 
   .document-sheet .doc-section p:last-child,
@@ -1507,7 +1502,7 @@
       box-sizing: border-box;
       width: 210mm;
       min-height: 297mm;
-      padding: var(--page-margin, 12mm);
+      padding: 15mm;
       background: #fff;
       color: #1d2329;
       box-shadow: 0 8px 28px rgba(40, 30, 20, 0.22);
@@ -1517,9 +1512,6 @@
     .a4-page-body { display: flow-root; }
 
     .a4-host[data-orientation="landscape"] .a4-page { width: 297mm; min-height: 210mm; }
-    .a4-host[data-margin="compact"] { --page-margin: 10mm; }
-    .a4-host[data-margin="comfortable"] { --page-margin: 12mm; }
-    .a4-host[data-margin="spacious"] { --page-margin: 15mm; }
   }
 
   .a4-page { break-after: page; page-break-after: always; }
@@ -2239,20 +2231,17 @@ a.brand { text-decoration: none; color: inherit; }
   grid-template-columns: 30% 70%;
   gap: 0;
   padding: 0;
-  border: 1px solid #555555;
+  border: 1px solid #000000;
   border-radius: 0;
 }
 .document-sheet .academic-meta .meta-label {
   padding: 6px 10px;
-  background: #e3f2ea;
-  border-right: 1px solid #555555;
-  border-bottom: 1px solid #555555;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
+  border-right: 1px solid #000000;
+  border-bottom: 1px solid #000000;
 }
 .document-sheet .academic-meta .meta-value {
   padding: 6px 10px;
-  border-bottom: 1px solid #555555;
+  border-bottom: 1px solid #000000;
   overflow-wrap: anywhere;
 }
 .document-sheet .academic-meta .meta-row:last-child .meta-label,
@@ -2264,17 +2253,14 @@ a.brand { text-decoration: none; color: inherit; }
 }
 .document-sheet .academic-meta .meta-value p:last-child { margin-bottom: 0; }
 
-.document-sheet .official-table.academic-table { border: 1px solid #555555; }
+.document-sheet .official-table.academic-table { border: 1px solid #000000; }
 .document-sheet .official-table.academic-table th,
 .document-sheet .official-table.academic-table td {
-  border: 1px solid #555555;
+  border: 1px solid #000000;
   padding: 6px 8px;
 }
 .document-sheet .official-table.academic-table th {
-  background: #dcefe6;
-  background-color: #dcefe6;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
+  background: transparent;
 }
 .document-sheet .official-table.academic-table th,
 .document-sheet .official-table.academic-table td { break-inside: auto; page-break-inside: auto; }
