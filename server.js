@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } = require('./routes/payment');
 const { SHIPPED_EXTENSIONS } = require('./scripts/copy-assets');
 const mailService = require('./services/mailService');
+const geminiService = require('./services/geminiService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
 const invoiceService = require('./services/invoiceService');
@@ -511,76 +512,8 @@ function normalizeResponse(rawText, payload = {}) {
   return result;
 }
 
-async function callGemini(prompt, { model = FAST_MODEL, maxOutputTokens = 12288, timeoutMs = 120000, blacklist = '' } = {}) {
-  if (model !== FAST_MODEL) {
-    throw generationError(`Nem támogatott modell: ${model}.`, 400);
-  }
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw generationError('Hiányzik a GEMINI_API_KEY szerverbeállítás.', 503);
-  }
-
-  let response;
-  try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      signal: AbortSignal.timeout(timeoutMs),
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' + (blacklist ? `\n\n${buildBlacklistRule(blacklist)}` : '') }]
-        },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.9,
-          topP: 0.95,
-          maxOutputTokens,
-          responseMimeType: 'application/json'
-        }
-      })
-    });
-  } catch (error) {
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw generationError(`A Gemini kérés ${Math.round(timeoutMs / 1000)} másodpercen belül nem fejeződött be.`, 504);
-    }
-    throw generationError(`A Gemini API nem érhető el: ${error.message}`);
-  }
-
-  const responseText = await response.text();
-  const data = safeParseJson(responseText);
-  if (!response.ok) {
-    const reason = data?.error?.message || response.statusText || 'Ismeretlen API-hiba';
-    throw generationError(`Gemini API (${model}, HTTP ${response.status}): ${reason}`, response.status === 429 ? 429 : 502);
-  }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    throw generationError('A Gemini API HTTP-válasza nem valid JSON.');
-  }
-
-  const candidate = data.candidates?.[0];
-  const finishReason = candidate?.finishReason;
-  const text = (candidate?.content?.parts || [])
-    .filter((part) => !part.thought && typeof part.text === 'string')
-    .map((part) => part.text).join('');
-  console.info('Gemini generation:', {
-    model,
-    finishReason,
-    promptTokens: data.usageMetadata?.promptTokenCount,
-    outputTokens: data.usageMetadata?.candidatesTokenCount,
-    thoughtTokens: data.usageMetadata?.thoughtsTokenCount,
-    outputCharacters: text.length
-  });
-
-  if (finishReason === 'MAX_TOKENS') {
-    throw generationError('A Gemini elérte a kimeneti tokenkeretet (MAX_TOKENS). A válasz nem teljes; nem jelenítünk meg csonka dokumentumot.');
-  }
-  if (finishReason && finishReason !== 'STOP') {
-    throw generationError(`A Gemini megszakította a generálást: ${finishReason}.`);
-  }
-  if (!text.trim()) {
-    throw generationError(`A Gemini nem adott dokumentumot.${data.promptFeedback?.blockReason ? ` Blokkolás: ${data.promptFeedback.blockReason}.` : ''}`);
-  }
-  // Parsing and document validation happen once, in normalizeResponse.
-  return text;
+async function callGemini(prompt, options = {}, deps = {}) {
+  return geminiService.callGemini(prompt, options, deps);
 }
 
 function getClientIp(req) {
@@ -744,6 +677,16 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       });
     } catch (error) {
       releaseDailyGeneration();
+      mailService.sendAdminErrorAlert({
+        operation: 'Tervezet generálás (Gemini)',
+        error,
+        details: {
+          model,
+          clientIp,
+          topic: request?.topic,
+          planMode: request?.planMode
+        }
+      }).catch((alertErr) => console.warn('Admin error alert failed:', alertErr.message));
       throw error;
     }
     const result = normalizeResponse(rawText, request);
@@ -791,7 +734,7 @@ const feedbackLimiter = rateLimit({
 
 app.post('/api/feedback', feedbackLimiter, async (req, res) => {
   try {
-    const { email, sig, rating, name, comment } = req.body || {};
+    const { email, sig, rating, name, comment, documentId } = req.body || {};
     if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
       return res.status(400).json({ success: false, error: 'Érvénytelen vagy hiányzó e-mail cím.' });
     }
@@ -815,7 +758,8 @@ app.post('/api/feedback', feedbackLimiter, async (req, res) => {
       email: email.trim(),
       rating: numRating,
       name: cleanName,
-      comment: cleanComment
+      comment: cleanComment,
+      documentId: typeof documentId === 'string' ? documentId.trim().slice(0, 100) : undefined
     });
 
     return res.json({ success: true, message: 'Köszönjük a visszajelzésed!' });

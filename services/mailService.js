@@ -64,6 +64,7 @@ function sanitizeAttachments(files) {
 
 // NODE_ENV=test alatt soha nem megy ki valódi levél: a küldés csak sikert szimulál, és a mockOutbox-ba jegyzi (csak címzett, tárgy, csatolmány-nevek).
 const mockOutbox = [];
+const mockAlerts = [];
 
 function isMailMocked(env = process.env) {
   return env.NODE_ENV === 'test';
@@ -127,7 +128,7 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, hasZip, planMode }, env) {
+function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, hasZip, planMode, documentId }, env) {
   const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   const c = companyLines(env);
   const support = supportEmail(env);
@@ -144,16 +145,16 @@ function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, has
   let textFeedbackBlock = '';
   if (to) {
     const sig = createFeedbackSignature(to, env);
-    const feedbackUrl = (r) => `${site}/ertekeles.html?rating=${r}&email=${encodeURIComponent(to)}&sig=${sig}`;
-    const starSvg = '<svg width="26" height="26" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;"><path fill="#f59e0b" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
-    const starsHtml = [5, 4, 3, 2, 1].map((r) =>
-      `<a href="${feedbackUrl(r)}" title="${r} csillag" style="display:inline-block;padding:2px 4px;text-decoration:none;">${starSvg}</a>`
+    const docParam = documentId ? `&documentId=${encodeURIComponent(documentId)}` : '';
+    const feedbackUrl = (r) => `${site}/ertekeles.html?rating=${r}&email=${encodeURIComponent(to)}&sig=${sig}${docParam}`;
+    const starsHtml = [1, 2, 3, 4, 5].map((r) =>
+      `<a href="${feedbackUrl(r)}" title="${r} csillag" style="display:inline-block;padding:2px 6px;text-decoration:none;font-size:26px;line-height:1;color:#f59e0b;">⭐</a>`
     ).join('');
 
     feedbackBlock = `
 <div style="margin:22px 0 0;padding:16px 18px;background:#f9fbf9;border:1px solid #d9ebe0;border-radius:14px;text-align:center;">
 <p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#4a5953;font-weight:600;">Hogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:</p>
-<div class="star-rating" style="direction:rtl;unicode-bidi:bidi-override;display:inline-block;text-align:center;">
+<div style="display:inline-block;text-align:center;">
 ${starsHtml}
 </div>
 </div>`;
@@ -251,10 +252,10 @@ async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumbe
 }
 
 // Egyetlen levél: a megvásárolt tervezet fájljai és az e-számla PDF együtt.
-async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber, planMode }, deps = {}) {
+async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber, planMode, documentId }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: Boolean(invoicePdf), title, orderNumber, to, hasZip: hasZipAttachment(attachments), planMode }, env);
+  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: Boolean(invoicePdf), title, orderNumber, to, hasZip: hasZipAttachment(attachments), planMode, documentId }, env);
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
@@ -290,10 +291,11 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
     `Értékelés: ${data.rating} / 5 csillag`,
     `Vásárló: ${data.email}`,
     `Név / beosztás: ${data.name || 'Nem adott meg nevet'}`,
+    data.documentId ? `Dokumentum azonosító: ${data.documentId}` : '',
     ``,
     `Vélemény, tapasztalat:`,
     data.comment || 'Nem fűzött hozzá szöveges megjegyzést.'
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   const html = `<!doctype html>
 <html lang="hu"><head><meta charset="utf-8"><title>OviTervező értékelés</title></head>
@@ -307,6 +309,7 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
   <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;width:140px;">Értékelés:</td><td style="padding:6px 0;font-size:16px;font-weight:700;color:#1f3d34;">${data.rating} / 5 csillag</td></tr>
   <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;">Vásárló:</td><td style="padding:6px 0;font-size:15px;color:#1f3d34;"><a href="mailto:${escapeHtml(data.email)}" style="color:#2f946f;text-decoration:none;">${escapeHtml(data.email)}</a></td></tr>
   <tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;">Név / beosztás:</td><td style="padding:6px 0;font-size:15px;color:#1f3d34;">${escapeHtml(data.name || 'Nem adott meg nevet')}</td></tr>
+  ${data.documentId ? `<tr><td style="padding:6px 0;color:#5b6b64;font-size:14px;">Dokumentum ID:</td><td style="padding:6px 0;font-size:14px;font-family:monospace;color:#1f3d34;">${escapeHtml(data.documentId)}</td></tr>` : ''}
 </table>
 <div style="background:#f4fbf7;border:1px solid #cfe8da;border-left:4px solid #3fae84;border-radius:8px;padding:14px 16px;">
   <div style="font-size:13px;font-weight:700;text-transform:uppercase;color:#1f5f52;margin-bottom:6px;">Vélemény, tapasztalat:</div>
@@ -327,11 +330,76 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
   return { sent: true };
 }
 
+// Rendszergazdai e-mail riasztás kritikus hibákról (Gemini generálás, számlázás, fizetési rendszerhibák).
+async function sendAdminErrorAlert({ operation, error, email, documentId, details }, deps = {}) {
+  const env = deps.env || process.env;
+  if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  const support = supportEmail(env);
+  const recipient = adminEmail(env);
+  const timestamp = new Date().toISOString();
+  const errorMessage = error?.stack || error?.message || String(error || 'Ismeretlen hiba');
+  const op = String(operation || 'Rendszerhiba');
+  const subject = `KRITIKUS HIBA: ${op}`;
+
+  const lines = [
+    `KRITIKUS RENDSZERHIBA RIASZTÁS - OviTervező`,
+    `Időpont: ${timestamp}`,
+    `Művelet: ${op}`,
+    `Felhasználó e-mail: ${email || '-'}`,
+    `Dokumentum / Munkamenet azonosító: ${documentId || '-'}`,
+    details ? `Részletek: ${typeof details === 'object' ? JSON.stringify(details, null, 2) : details}` : '',
+    ``,
+    `Hibaüzenet / Stack trace:`,
+    errorMessage
+  ].filter(Boolean).join('\n');
+
+  const html = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><title>Kritikus Rendszerhiba</title></head>
+<body style="margin:0;padding:0;background:#fef2f2;font-family:monospace;">
+<div style="padding:24px;max-width:700px;background:#ffffff;border:1px solid #f87171;border-radius:8px;margin:20px auto;">
+  <h2 style="color:#b91c1c;margin:0 0 16px;">KRITIKUS RENDSZERHIBA: ${escapeHtml(op)}</h2>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+    <tr><td><strong>Időpont:</strong></td><td>${escapeHtml(timestamp)}</td></tr>
+    <tr><td><strong>Művelet:</strong></td><td>${escapeHtml(op)}</td></tr>
+    <tr><td><strong>Felhasználó:</strong></td><td>${escapeHtml(email || '-')}</td></tr>
+    <tr><td><strong>Dokumentum / Session ID:</strong></td><td>${escapeHtml(documentId || '-')}</td></tr>
+    ${details ? `<tr><td><strong>Részletek:</strong></td><td><pre style="margin:0;white-space:pre-wrap;">${escapeHtml(typeof details === 'object' ? JSON.stringify(details, null, 2) : String(details))}</pre></td></tr>` : ''}
+  </table>
+  <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px;margin-top:12px;">
+    <strong>Hiba és Stack trace:</strong>
+    <pre style="margin:8px 0 0;white-space:pre-wrap;color:#991b1b;">${escapeHtml(errorMessage)}</pre>
+  </div>
+</div>
+</body></html>`;
+
+  if (!deps.transport && isMailMocked(env)) {
+    mockAlerts.push({ to: recipient, subject, text: lines, html });
+    return { sent: true, mock: true };
+  }
+
+  try {
+    const transport = createTransport(env, deps);
+    await transport.sendMail({
+      from: env.MAIL_FROM || `OviTervező Rendszerhiba <${support}>`,
+      to: recipient,
+      subject,
+      text: lines,
+      html
+    });
+    return { sent: true };
+  } catch (mailError) {
+    console.error('Failed to send admin error alert email:', mailError.message);
+    return { sent: false, error: mailError.message };
+  }
+}
+
 module.exports = {
   isMailMocked,
   mockOutbox,
+  mockAlerts,
   adminEmail,
   sendAdminNotification,
+  sendAdminErrorAlert,
   buildEmailContent,
   isConfigured,
   sanitizeAttachments,

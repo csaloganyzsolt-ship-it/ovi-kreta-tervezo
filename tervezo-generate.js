@@ -188,12 +188,19 @@ async function generatePlan() {
     try {
       data = JSON.parse(responseText);
     } catch (_error) {
+      if (response.status === 503 || response.status === 504 || response.status === 529 || response.status === 502 || response.status === 500) {
+        throw new Error('A rendszer jelenleg túlterhelt vagy a kapcsolat megszakadt. Kérjük, várj egy picit, és kattints újra a generálás gombra!');
+      }
       throw new Error(`A szerver nem valid JSON-választ adott (HTTP ${response.status}).`);
     }
 
     if (!response.ok || !data || data.success !== true) {
-      const message = [data?.error, data?.details].filter((part) => typeof part === 'string' && part.trim()).join(' ');
-      throw new Error(message || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
+      const rawDetails = [data?.error, data?.details].filter((part) => typeof part === 'string' && part.trim()).join(' ');
+      if (response.status === 503 || response.status === 504 || response.status === 529 ||
+          /503|529|504|timeout|abort|overload|túlterhelt|megszakadt/i.test(rawDetails)) {
+        throw new Error('A rendszer jelenleg túlterhelt vagy a kapcsolat megszakadt. Kérjük, várj egy picit, és kattints újra a generálás gombra!');
+      }
+      throw new Error(rawDetails || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
     }
 
     const generatedResult = { ...data, request: payload, generationId: data.generationId || newGenerationId() };
@@ -224,8 +231,19 @@ async function generatePlan() {
     }
   } catch (error) {
     resetGeneratedResult();
-    const message = error?.message || 'A generálás hiba miatt nem tudott lefutni.';
-    showGenerationError(message === LIMIT_MESSAGE ? message : `Generálási hiba: ${message}`);
+    const message = error?.message || '';
+    if (message === LIMIT_MESSAGE) {
+      showGenerationError(LIMIT_MESSAGE);
+    } else if (
+      message === 'A rendszer jelenleg túlterhelt vagy a kapcsolat megszakadt. Kérjük, várj egy picit, és kattints újra a generálás gombra!' ||
+      error.name === 'TimeoutError' ||
+      error.name === 'AbortError' ||
+      /503|529|504|timeout|túlterhelt|megszakadt/i.test(message)
+    ) {
+      showGenerationError('A rendszer jelenleg túlterhelt vagy a kapcsolat megszakadt. Kérjük, várj egy picit, és kattints újra a generálás gombra!');
+    } else {
+      showGenerationError(`Generálási hiba: ${message}`);
+    }
   } finally {
     if (window.turnstile && turnstileWidgetId !== null) {
       try { window.turnstile.reset(turnstileWidgetId); } catch (_e) {}

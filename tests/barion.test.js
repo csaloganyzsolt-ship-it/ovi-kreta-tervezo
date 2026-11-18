@@ -375,7 +375,7 @@ test('the Barion button refuses a foreign gateway address and shows server error
   assert.match(error.textContent, /érvénytelen fizetési címet/);
   barion.click();
   await new Promise((resolve) => setTimeout(resolve, 30));
-  assert.equal(error.textContent, 'A Barion fizetés nem indítható: A Barion fizetés indítása sikertelen (ShopIsClosed).');
+  assert.equal(error.textContent, 'Hiba történt a fizetés indításakor. Kérjük, frissítsd az oldalt (F5), és próbáld újra!');
   assert.deepEqual(redirects, []);
   assert.equal(window.localStorage.getItem('oviKretaPendingBarion'), null);
   assert.equal(barion.disabled, false, 'a gomb újra használható');

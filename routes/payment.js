@@ -33,9 +33,20 @@ const paymentLimiter = rateLimit({
   legacyHeaders: false
 });
 
-function sendPaymentError(res, error, context) {
+function sendPaymentError(res, error, context, req) {
   const status = error.status || 500;
-  if (status >= 500) console.error(`${context} failed:`, error.message);
+  if (status >= 500) {
+    console.error(`${context} failed:`, error.message);
+    if (context === 'Checkout' || context === 'Barion checkout') {
+      mailService.sendAdminErrorAlert({
+        operation: `Fizetés indítás (${context})`,
+        error,
+        email: req?.body?.email || req?.body?.customerEmail,
+        documentId: req?.body?.generationId,
+        details: { context, path: req?.originalUrl || req?.url }
+      }).catch((e) => console.warn('Admin error alert failed:', e.message));
+    }
+  }
   return res.status(status).json({ success: false, error: error.message });
 }
 
@@ -52,7 +63,7 @@ async function createCheckout(req, res) {
     const session = await stripeService.createCheckoutSession({ ...body, planMode: planModeFor(body) });
     return res.json({ success: true, ...session });
   } catch (error) {
-    return sendPaymentError(res, error, 'Checkout');
+    return sendPaymentError(res, error, 'Checkout', req);
   }
 }
 
@@ -79,7 +90,7 @@ function applyCoupon(req, res) {
       emailEnabled: mailService.isConfigured()
     });
   } catch (error) {
-    return sendPaymentError(res, error, 'Coupon');
+    return sendPaymentError(res, error, 'Coupon', req);
   }
 }
 
@@ -94,7 +105,7 @@ async function checkoutBarion(req, res) {
     const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), req });
     return res.json({ success: true, ...result });
   } catch (error) {
-    return sendPaymentError(res, error, 'Barion checkout');
+    return sendPaymentError(res, error, 'Barion checkout', req);
   }
 }
 
@@ -133,7 +144,7 @@ async function verifyCheckout(req, res) {
       emailEnabled: mailService.isConfigured() && !result.mock
     });
   } catch (error) {
-    return sendPaymentError(res, error, 'Checkout verification');
+    return sendPaymentError(res, error, 'Checkout verification', req);
   }
 }
 
@@ -146,7 +157,7 @@ async function downloadInvoice(req, res) {
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="OviTervezo_szamla.pdf"' });
     return res.send(pdf);
   } catch (error) {
-    return sendPaymentError(res, error, 'Invoice download');
+    return sendPaymentError(res, error, 'Invoice download', req);
   }
 }
 
@@ -164,11 +175,20 @@ async function deliverPurchase(req, res) {
     if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
     if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
     const attachments = mailService.sanitizeAttachments(req.body?.files);
-    await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: invoiceService.orderNumber(id, session.created || new Date()), attachments, invoicePdf, title: req.body?.title, planMode: requestedPlanMode(req) });
+    await mailService.sendPurchaseEmail({
+      to: session.email,
+      plan: session.plan,
+      orderNumber: invoiceService.orderNumber(id, session.created || new Date()),
+      attachments,
+      invoicePdf,
+      title: req.body?.title,
+      planMode: requestedPlanMode(req),
+      documentId: session.generationId || id
+    });
     mailService.markSent(id);
     return res.json({ success: true, sent: true });
   } catch (error) {
-    return sendPaymentError(res, error, 'Purchase delivery');
+    return sendPaymentError(res, error, 'Purchase delivery', req);
   }
 }
 
@@ -177,7 +197,15 @@ async function deliverCouponPurchase(req, res, session) {
   if (!mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
   if (mailService.wasSent(session.id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
   const attachments = mailService.sanitizeAttachments(req.body?.files);
-  await mailService.sendPurchaseEmail({ to: session.email, plan: session.plan, orderNumber: session.id.slice(-10).toUpperCase(), attachments, title: req.body?.title, planMode: session.planMode });
+  await mailService.sendPurchaseEmail({
+    to: session.email,
+    plan: session.plan,
+    orderNumber: session.id.slice(-10).toUpperCase(),
+    attachments,
+    title: req.body?.title,
+    planMode: session.planMode,
+    documentId: session.generationId || session.id
+  });
   mailService.markSent(session.id);
   return res.json({ success: true, sent: true, coupon: true });
 }
@@ -188,7 +216,7 @@ async function stripeWebhook(req, res) {
   try {
     event = stripeService.constructWebhookEvent(req.body, req.headers['stripe-signature']);
   } catch (error) {
-    return sendPaymentError(res, error, 'Stripe webhook');
+    return sendPaymentError(res, error, 'Stripe webhook', req);
   }
 
   if (event.type !== 'checkout.session.completed') return res.json({ received: true, ignored: event.type });
@@ -228,6 +256,13 @@ async function stripeWebhook(req, res) {
   } catch (error) {
     // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.
     console.error('Invoice generation failed:', error.message);
+    mailService.sendAdminErrorAlert({
+      operation: 'Számlázás (Stripe webhook)',
+      error,
+      email: session.customer_details?.email || session.customer_email,
+      documentId: session.metadata?.generationId || session.id,
+      details: { orderId: session.id, plan: session.metadata?.plan }
+    }).catch((e) => console.warn('Admin error alert failed:', e.message));
     return res.status(500).json({ success: false, error: error.message });
   }
 }

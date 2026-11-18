@@ -244,7 +244,11 @@ async function startBarionCheckout() {
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
     redirectTo(data.gatewayUrl);
   } catch (error) {
-    errorEl.textContent = `A Barion fizetés nem indítható: ${error.message}`;
+    if (error.message === 'A Barion érvénytelen fizetési címet adott vissza.') {
+      errorEl.textContent = error.message;
+    } else {
+      errorEl.textContent = 'Hiba történt a fizetés indításakor. Kérjük, frissítsd az oldalt (F5), és próbáld újra!';
+    }
   } finally {
     syncCheckoutButtons();
   }

@@ -831,17 +831,45 @@ test('feedback signature generation and verification with HMAC-SHA256', () => {
   assert.equal(mailService.verifyFeedbackSignature('', sig), false);
 });
 
-test('purchase e-mail contains discrete 5-star rating bar with HMAC link and zero emojis', () => {
+test('purchase e-mail contains discrete 5-star rating bar with Unicode stars, documentId and HMAC link', () => {
   const mailService = require('../services/mailService');
   const to = 'vasarlo@example.com';
-  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to }, {});
+  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to, documentId: 'gen_test_doc_123' }, {});
   assert.match(mail.html, /Hogy sikerült a tervezet\? Kattints a csillagokra/);
-  assert.match(mail.html, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=/);
-  assert.match(mail.html, /ertekeles\.html\?rating=1&email=vasarlo%40example\.com&sig=/);
+  assert.match(mail.html, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=[a-f0-9]+&documentId=gen_test_doc_123/);
+  assert.match(mail.html, /ertekeles\.html\?rating=1&email=vasarlo%40example\.com&sig=[a-f0-9]+&documentId=gen_test_doc_123/);
+  assert.match(mail.html, /⭐/);
   assert.match(mail.text, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=/);
-  // Zero emoji rule check in feedback block
-  assert.doesNotMatch(mail.html, /⭐|🌟|✨/);
-  assert.doesNotMatch(mail.text, /⭐|🌟|✨/);
+});
+
+test('sendAdminErrorAlert sends technical alert to admin on critical failure', async () => {
+  const mailService = require('../services/mailService');
+  const sent = [];
+  const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
+  const env = { SMTP_HOST: 'smtp.test', ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' };
+  const err = new Error('Gemini API 503 Service Unavailable');
+  err.status = 503;
+  err.stack = 'Error: Gemini API 503 Service Unavailable\n    at callGemini (/server.js:100:15)';
+
+  const result = await mailService.sendAdminErrorAlert({
+    operation: 'Tervezet generálás (Gemini)',
+    error: err,
+    email: 'pedagogus@ovoda.hu',
+    documentId: 'gen_failed_456',
+    details: { model: 'gemini-3.1-pro-preview', attempt: 3 }
+  }, { env, transport });
+
+  assert.equal(result.sent, true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'admin@ovitervezo.hu');
+  assert.match(sent[0].subject, /KRITIKUS HIBA: Tervezet generálás \(Gemini\)/);
+  assert.match(sent[0].text, /Tervezet generálás \(Gemini\)/);
+  assert.match(sent[0].text, /pedagogus@ovoda\.hu/);
+  assert.match(sent[0].text, /gen_failed_456/);
+  assert.match(sent[0].text, /Gemini API 503 Service Unavailable/);
+  assert.match(sent[0].text, /callGemini/);
+  assert.match(sent[0].html, /KRITIKUS RENDSZERHIBA/);
+  assert.match(sent[0].html, /gen_failed_456/);
 });
 
 test('sendFeedbackNotification sends notification to admin with customer replyTo and zero emojis', async () => {

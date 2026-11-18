@@ -79,6 +79,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const email = (urlParams.get('email') || '').trim();
         const sig = (urlParams.get('sig') || '').trim();
+        const documentId = (urlParams.get('documentId') || '').trim();
         const rawRating = parseInt(urlParams.get('rating'), 10);
         let selectedRating = Number.isInteger(rawRating) && rawRating >= 1 && rawRating <= 5 ? rawRating : 5;
 
@@ -166,7 +167,8 @@
                 sig: sig,
                 rating: selectedRating,
                 name: name,
-                comment: comment
+                comment: comment,
+                documentId: documentId || undefined
               })
             });
 

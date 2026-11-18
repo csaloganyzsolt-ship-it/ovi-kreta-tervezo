@@ -631,3 +631,79 @@ test('an area assigned only to an unselected day stays in the general list', () 
   });
   assert.match(prompt, /A többi napra a kiválasztott további területeket \(Rajzolás\)/);
 });
+
+test('callGemini retries up to 2 times on 503 and succeeds on subsequent attempt', async () => {
+  const geminiService = require('../services/geminiService');
+  let calls = 0;
+  const sleeps = [];
+  const fakeFetch = async () => {
+    calls++;
+    if (calls < 3) {
+      return Response.json({ error: { message: 'The model is overloaded.' } }, { status: 503 });
+    }
+    return Response.json(geminiResponse(JSON.stringify(makePlan())));
+  };
+
+  const text = await geminiService.callGemini('Teszt prompt', {
+    maxRetries: 2,
+    retryDelayMs: 20
+  }, {
+    env: { GEMINI_API_KEY: 'test-key' },
+    fetch: fakeFetch,
+    sleep: async (ms) => sleeps.push(ms)
+  });
+
+  assert.equal(calls, 3);
+  assert.deepEqual(sleeps, [20, 20]);
+  assert.ok(text.includes('kidolgozas_tablazat'));
+});
+
+test('callGemini fails after 2 retries on 503 and throws error', async () => {
+  const geminiService = require('../services/geminiService');
+  let calls = 0;
+  const sleeps = [];
+  const fakeFetch = async () => {
+    calls++;
+    return Response.json({ error: { message: 'Overloaded' } }, { status: 503 });
+  };
+
+  await assert.rejects(async () => {
+    await geminiService.callGemini('Teszt prompt', {
+      maxRetries: 2,
+      retryDelayMs: 10
+    }, {
+      env: { GEMINI_API_KEY: 'test-key' },
+      fetch: fakeFetch,
+      sleep: async (ms) => sleeps.push(ms)
+    });
+  }, (err) => {
+    assert.equal(err.status, 503);
+    assert.match(err.message, /Overloaded/);
+    return true;
+  });
+
+  assert.equal(calls, 3);
+  assert.equal(sleeps.length, 2);
+});
+
+test('POST /api/generate sends admin error alert if generation permanently fails', async (t) => {
+  const mailService = require('../services/mailService');
+  const alertCalls = [];
+  const origSendAlert = mailService.sendAdminErrorAlert;
+  mailService.sendAdminErrorAlert = async (data) => {
+    alertCalls.push(data);
+    return { sent: true };
+  };
+  t.after(() => {
+    mailService.sendAdminErrorAlert = origSendAlert;
+  });
+
+  stubGemini(t, { error: { message: 'Overloaded service' } }, 503);
+  const { response, data } = await postPlan(t, makePayload());
+
+  assert.equal(response.status, 503);
+  assert.equal(data.success, false);
+  assert.equal(alertCalls.length, 1);
+  assert.equal(alertCalls[0].operation, 'Tervezet generálás (Gemini)');
+  assert.match(alertCalls[0].error.message, /Overloaded service/);
+});

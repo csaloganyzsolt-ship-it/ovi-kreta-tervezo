@@ -220,16 +220,27 @@ async function settleRecord(record, deps) {
   saveRecord(latest, env);
   if (!latest.invoiceNumber) {
     const billing = latest.billing || {};
-    const result = await (deps.issueInvoice || invoiceService.issueInvoice)({
-      orderId: latest.sessionId,
-      created: Math.floor(latest.createdAt / 1000),
-      plan: latest.plan,
-      paymentMethod: 'Barion',
-      customer: { name: billing.name || '', email: latest.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
-    }, { env, fetch: deps.fetch });
-    latest.invoiceNumber = result.invoiceNumber || (result.mock ? 'mock' : 'duplicate');
-    saveRecord(latest, env);
-    if (!result.duplicate && !result.mock) notifyPurchase(latest, result.invoiceNumber, deps);
+    try {
+      const result = await (deps.issueInvoice || invoiceService.issueInvoice)({
+        orderId: latest.sessionId,
+        created: Math.floor(latest.createdAt / 1000),
+        plan: latest.plan,
+        paymentMethod: 'Barion',
+        customer: { name: billing.name || '', email: latest.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
+      }, { env, fetch: deps.fetch });
+      latest.invoiceNumber = result.invoiceNumber || (result.mock ? 'mock' : 'duplicate');
+      saveRecord(latest, env);
+      if (!result.duplicate && !result.mock) notifyPurchase(latest, result.invoiceNumber, deps);
+    } catch (invoiceErr) {
+      mailService.sendAdminErrorAlert({
+        operation: 'Számlázás (Barion fizetés)',
+        error: invoiceErr,
+        email: latest.email,
+        documentId: latest.generationId || latest.sessionId,
+        details: { sessionId: latest.sessionId, plan: latest.plan }
+      }, { env }).catch((e) => console.warn('Admin error alert failed:', e.message));
+      throw invoiceErr;
+    }
   }
   return latest;
 }
