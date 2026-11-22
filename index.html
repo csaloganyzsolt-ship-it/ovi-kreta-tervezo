@@ -33,7 +33,7 @@
           <span class="brand-text">Ovi<strong>Tervező</strong></span>
         </a>
         <div class="topbar-actions">
-          <button id="authBtn" class="auth-btn" type="button" aria-haspopup="dialog" hidden>Belépés / Mentett terveim</button>
+          <button id="authBtn" class="auth-btn" type="button" aria-haspopup="dialog" hidden>Belépés / Regisztráció</button>
           <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
         </div>
       </header>
@@ -416,24 +416,38 @@
       <div class="modal-backdrop" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
         <form class="modal-box auth-box" id="authForm" novalidate>
           <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
-          <h2 id="authModalTitle">Belépés / Mentett terveim</h2>
-          <div id="authLoggedOut">
-            <p class="modal-note">A belépés opcionális: add meg az e-mail címedet, és jelszó nélküli belépési linket küldünk. Belépve a tervezeteid felhőben is elérhetők lesznek bármely eszközről. Regisztráció nélkül is használhatod az OviTervezőt.</p>
+          <h2 id="authModalTitle">Bejelentkezés</h2>
+          <div class="auth-tabs" id="authTabs" role="tablist" aria-label="Belépés vagy regisztráció">
+            <button type="button" role="tab" class="auth-tab is-active" data-auth-tab="login" aria-selected="true">Bejelentkezés</button>
+            <button type="button" role="tab" class="auth-tab" data-auth-tab="register" aria-selected="false">Regisztráció</button>
+          </div>
+          <p class="modal-note" id="authIntro">Lépj be a fiókodba, hogy a tervezeteid és a számlázási adataid bármely eszközről elérhetők legyenek. Regisztráció nélkül is használhatod az OviTervezőt.</p>
+          <div id="authNameField" class="auth-field" hidden>
+            <label for="authName"><strong>Teljes név</strong> (nem kötelező)</label>
+            <input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Kovács Anna" />
+          </div>
+          <div id="authEmailField" class="auth-field">
             <label for="authEmail"><strong>E-mail cím</strong></label>
-            <input id="authEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
-            <div id="authStatus" class="modal-note" role="status" hidden></div>
-            <div id="authError" class="modal-error" role="alert" hidden></div>
-            <div class="modal-actions">
-              <button type="submit" class="primary" id="authSubmit">Belépési link küldése</button>
-              <button type="button" data-close-modal>Mégse</button>
+            <input id="authEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" />
+          </div>
+          <div id="authPasswordField" class="auth-field">
+            <label for="authPassword"><strong>Jelszó</strong> (legalább 8 karakter)</label>
+            <div class="auth-password">
+              <input id="authPassword" type="password" autocomplete="current-password" minlength="8" />
+              <button type="button" class="auth-eye" id="authPasswordToggle" aria-label="Jelszó megjelenítése" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg></button>
             </div>
           </div>
-          <div id="authLoggedIn" hidden>
-            <p class="modal-note">Bejelentkezve: <strong id="authUserEmail"></strong></p>
-            <div class="modal-actions">
-              <a class="auth-plans-link" id="authPlansLink" href="tervezo.html#cloudPlansField" data-close-modal>Mentett terveim</a>
-              <button type="button" id="authLogout">Kijelentkezés</button>
-            </div>
+          <button type="button" class="auth-link" id="authForgot">Elfelejtett jelszó</button>
+          <div id="authStatus" class="modal-note" role="status" hidden></div>
+          <div id="authError" class="modal-error" role="alert" hidden></div>
+          <div class="modal-actions">
+            <button type="submit" class="primary" id="authSubmit">Bejelentkezés</button>
+            <button type="button" id="authBack" hidden>Vissza a belépéshez</button>
+            <button type="button" data-close-modal>Mégse</button>
+          </div>
+          <div class="auth-social" id="authSocial">
+            <div class="auth-divider"><span>vagy</span></div>
+            <button type="button" class="auth-google" id="authGoogle" disabled aria-disabled="true">Folytatás Google-lel <span class="auth-soon" id="authGoogleSoon">Hamarosan</span></button>
           </div>
         </form>
       </div>

@@ -152,8 +152,44 @@ async function openCloudPlan(id, format) {
   else if (format === 'pdf') await exportAsPdf();
 }
 
+// A profiloldal hivatkozása: tervezo.html?open=<azonosító>[&download=docx|pdf]. A paraméterek beolvasás után eltűnnek a címsorból.
+function readOpenRequest() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('open');
+  if (id === null) return null;
+  const format = ['docx', 'pdf'].includes(params.get('download')) ? params.get('download') : '';
+  try {
+    params.delete('open');
+    params.delete('download');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  } catch (_error) { /* a címsor nem módosítható: a paraméter megmarad */ }
+  return /^[A-Za-z0-9_-]{1,100}$/.test(id) ? { id, format } : null;
+}
+
+let pendingOpenRequest = null;
+
+async function runPendingOpenRequest() {
+  if (!pendingOpenRequest || !cloudUser()) return;
+  const request = pendingOpenRequest;
+  pendingOpenRequest = null;
+  try {
+    await openCloudPlan(request.id, request.format);
+  } catch (error) {
+    showGenerationError(`A mentett terv megnyitása sikertelen: ${error.message}`);
+  }
+}
+
 function initCloudPlans() {
-  document.addEventListener('ovi-auth-change', () => { refreshCloudPlans({ sync: true }); });
+  pendingOpenRequest = readOpenRequest();
+  document.addEventListener('ovi-auth-change', () => {
+    refreshCloudPlans({ sync: true });
+    runPendingOpenRequest();
+  });
+  // Bejelentkezés nélkül a megnyitás nem lehetséges: a belépési ablak jelenik meg.
+  window.OviAuth?.ready?.then(() => {
+    if (pendingOpenRequest && !cloudUser()) window.OviAuth.openModal?.('login');
+  });
   document.getElementById('cloudPlansRefresh')?.addEventListener('click', () => refreshCloudPlans());
   loadPreviousBtn?.addEventListener('click', () => { if (cloudUser()) refreshCloudPlans(); });
   // A "Mentett terveim" hivatkozás az első lépésre visz, ahol a lista található.

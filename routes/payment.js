@@ -10,11 +10,13 @@ const planStore = require('../services/planStore');
 const coupons = require('../services/coupons');
 const barionService = require('../services/barionService');
 const authService = require('../services/authService');
+const orders = require('../services/orderService');
 
-// A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető.
+// A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető. A bejelentkezett felhasználót (vagy null-t) adja vissza.
 async function recordOwner(req, generationId, rawEmail) {
+  let user = null;
   try {
-    const user = await authService.optionalUser(req);
+    user = await authService.optionalUser(req);
     let email = user?.email || '';
     if (!email) {
       try { email = stripeService.parseEmail(rawEmail); } catch (_error) { email = ''; }
@@ -23,6 +25,7 @@ async function recordOwner(req, generationId, rawEmail) {
   } catch (error) {
     console.error('[account] A tulajdonos rögzítése sikertelen:', error.message);
   }
+  return user;
 }
 
 // A levél sablonját a kliens jelzi; csak az ismert érték fogadható el.
@@ -92,7 +95,7 @@ async function applyCoupon(req, res) {
     const generationId = String(body.generationId || '').slice(0, 100);
     const planData = generationId ? await planStore.loadPlan(generationId) : null;
     if (!planData) return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren. Készíts újat.' });
-    await recordOwner(req, generationId, email);
+    const user = await recordOwner(req, generationId, email);
     // Az már beváltott kód ugyanarra a tervre ismételten is ugyanazt a munkamenetet adja, akkor is, ha a kerete közben elfogyott.
     coupons.restoreSession(planStore.getDocumentState(generationId)?.coupon_session);
     const known = coupons.sessionFor(generationId);
@@ -108,6 +111,22 @@ async function applyCoupon(req, res) {
 
     const session = await coupons.redeem({ code: coupon.code, generationId, email, plan: product.key, planMode, originalPrice: product.amountHuf });
     await planStore.updateDocument(generationId, { unlocked: true, meta: { coupon: { code: coupon.code, plan: product.key, planMode, ...discount }, coupon_session: session } });
+    // A rendelés rögzítése nem akaszthatja meg a már beváltott kupont; a hiba hangosan naplózódik.
+    try {
+      await orders.markPaid({
+        orderNumber: orders.orderNumberFor(session.id, session.created),
+        userId: user?.id,
+        email: user?.email || email,
+        documentId: generationId,
+        planMode,
+        planKey: session.plan,
+        amount: 0,
+        couponCode: session.code,
+        paymentMethod: 'Kupon'
+      });
+    } catch (error) {
+      console.error('[orders]', error.message);
+    }
     return res.json({
       success: true,
       paid: true,
@@ -131,7 +150,7 @@ async function checkoutBarion(req, res) {
     if (!generationId || !(await planStore.loadPlan(generationId))) {
       return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.' });
     }
-    await recordOwner(req, generationId, body.email);
+    const user = await recordOwner(req, generationId, body.email);
     const saved = planStore.getDocumentState(generationId)?.coupon;
     let coupon = null;
     if (saved && saved.percent < 100) {
@@ -143,7 +162,7 @@ async function checkoutBarion(req, res) {
         throw error;
       }
     }
-    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, req });
+    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, user, req });
     return res.json({ success: true, ...result });
   } catch (error) {
     return sendPaymentError(res, error, 'Barion checkout', req);

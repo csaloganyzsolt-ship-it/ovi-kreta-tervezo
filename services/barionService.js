@@ -9,6 +9,7 @@ const mailService = require('./mailService');
 const sheetsService = require('./sheetsService');
 const planStore = require('./planStore');
 const coupons = require('./coupons');
+const orders = require('./orderService');
 const { PaymentError } = stripeService;
 
 const API_HOSTS = { test: 'https://api.test.barion.com', live: 'https://api.barion.com' };
@@ -139,7 +140,7 @@ async function callBarion(url, options, deps) {
 }
 
 // A Barion Payment/Start hívása: az összeg a mentett csomagból (részleges kuponnál a szerver által ellenőrzött kedvezménnyel csökkentve), a documentId az OrderNumber mezőben utazik.
-async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, req }, deps = {}) {
+async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, user, req }, deps = {}) {
   const env = deps.env || process.env;
   const product = stripeService.parsePlan(plan, planMode);
   const discount = coupon ? coupons.computeDiscount(product.amountHuf, coupon.percent) : null;
@@ -188,9 +189,17 @@ async function startPayment({ plan, planMode, email, billing, generationId, titl
   saveRecord({
     sessionId, paymentId: payload.PaymentId, generationId: documentId, email: payer, billing: customer, plan: product.key, planMode: product.planMode,
     amountHuf, title: body.Transactions[0].Comment, status: payload.Status || 'Prepared', paid: false, unlocked: false,
+    ...(user?.id ? { userId: user.id } : {}),
     ...(discount ? { couponCode: coupon.code, couponPercent: coupon.percent, listPriceHuf: product.amountHuf } : {}),
     createdAt: Date.now()
   }, env);
+  // A rendelés rögzítése nem akaszthatja meg a már elindult fizetést: a hiba hangosan naplózódik, a sikeres fizetés a lezáráskor újra próbálja.
+  const record = getRecord(sessionId, env);
+  try {
+    await orders.createPending(orderFromRecord(record));
+  } catch (error) {
+    console.error('[orders]', error.message);
+  }
   return { sessionId, paymentId: payload.PaymentId, gatewayUrl: payload.GatewayUrl, plan: product.key, amountHuf, ...(discount ? { originalAmountHuf: product.amountHuf, couponPercent: coupon.percent } : {}) };
 }
 
@@ -204,6 +213,35 @@ async function fetchPaymentState(paymentId, deps = {}) {
   return payload;
 }
 
+// A Barion-fizetés rendelés-nézete (Supabase `orders`).
+function orderFromRecord(record) {
+  return {
+    orderNumber: orders.orderNumberFor(record.sessionId, new Date(record.createdAt)),
+    userId: record.userId,
+    email: record.email,
+    documentId: record.generationId,
+    planMode: record.planMode,
+    planKey: record.plan,
+    amount: record.amountHuf,
+    couponCode: record.couponCode,
+    paymentMethod: 'Barion',
+    invoiceNumber: record.invoiceNumber && !['mock', 'duplicate'].includes(record.invoiceNumber) ? record.invoiceNumber : undefined
+  };
+}
+
+// A rendelés állapotának szinkronja: hiba esetén a rekordon marad a jelzés, és a következő lezárás újra próbálja.
+async function syncOrder(record, env) {
+  try {
+    if (record.paid) await orders.markPaid(orderFromRecord(record));
+    else if (FAILED_STATUSES.has(record.status)) await orders.markClosed(orders.orderNumberFor(record.sessionId, new Date(record.createdAt)), record.status === 'Canceled' ? 'cancelled' : 'failed');
+    record.orderSynced = true;
+  } catch (error) {
+    record.orderSynced = false;
+    console.error('[barion]', error.message);
+  }
+  saveRecord(record, env);
+}
+
 // Egy fizetésenként egyszerre egy lezárás fut (a webhook és a visszatérő oldal lekérdezése egyszerre érkezhet).
 const settling = new Map();
 
@@ -214,6 +252,7 @@ async function settleRecord(record, deps) {
   latest.status = state.Status;
   if (state.Status !== 'Succeeded') {
     saveRecord(latest, env);
+    if (FAILED_STATUSES.has(state.Status) && latest.orderSynced !== true) await syncOrder(latest, env);
     return latest;
   }
   // A Barion válasza a mérvadó: csak a saját kérésünkhöz tartozó, a mentett csomag árával egyező, forintos fizetés számít sikeresnek.
@@ -226,6 +265,7 @@ async function settleRecord(record, deps) {
   latest.unlocked = true;
   saveRecord(latest, env);
   await finalizePaid(latest, env);
+  await syncOrder(latest, env);
   if (!latest.invoiceNumber) {
     const billing = latest.billing || {};
     try {
@@ -240,6 +280,7 @@ async function settleRecord(record, deps) {
       }, { env, fetch: deps.fetch });
       latest.invoiceNumber = result.invoiceNumber || (result.mock ? 'mock' : 'duplicate');
       saveRecord(latest, env);
+      await syncOrder(latest, env);
       if (!result.duplicate && !result.mock) notifyPurchase(latest, result.invoiceNumber, deps);
     } catch (invoiceErr) {
       mailService.sendAdminErrorAlert({
@@ -288,9 +329,9 @@ async function finalizePaid(record, env) {
   saveRecord(record, env);
 }
 
-// A lezárás akkor kész, ha a számla kiállt, a kuponbeváltás naplózva van, és a dokumentum feloldott állapota nem maradt mentés nélkül.
+// A lezárás akkor kész, ha a számla kiállt, a kuponbeváltás naplózva van, és a dokumentum feloldott állapota és a rendelés nem maradt mentés nélkül.
 function isSettled(record) {
-  return Boolean(record.paid && record.invoiceNumber) && !(record.couponCode && !record.redemptionLogged) && record.documentSynced !== false;
+  return Boolean(record.paid && record.invoiceNumber) && !(record.couponCode && !record.redemptionLogged) && record.documentSynced !== false && record.orderSynced !== false;
 }
 
 // Mint a Stripe webhooknál: rendszergazdai levél és Google Táblázat-sor, nem várjuk meg; a hibájuk nem érinti a fizetést. A levél némítása (NODE_ENV=test) a mailService-ben él.

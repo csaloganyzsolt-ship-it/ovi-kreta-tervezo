@@ -19,7 +19,7 @@ const BILLING = { name: 'Minta Óvoda', zip: '9021', city: 'Győr', address: 'F�
 
 // Mockolt Supabase kliens: memóriabeli táblák, a használt lekérdezés-láncokkal (select/eq/maybeSingle, count, insert, upsert, JSON-útvonal szűrő).
 function fakeSupabase(seed = {}) {
-  const tables = { coupons: [], coupon_redemptions: [], documents: [], ...seed };
+  const tables = { coupons: [], coupon_redemptions: [], documents: [], orders: [], ...seed };
   const failures = {};
   const readPath = (row, column) => column.replace(/->>/g, '->').split('->').reduce((value, key) => (value == null ? value : value[key]), row);
   const client = {
@@ -44,9 +44,10 @@ function fakeSupabase(seed = {}) {
           tables[name].push({ id: tables[name].length + 1, used_at: new Date().toISOString(), ...row });
           return Promise.resolve({ error: null });
         },
-        upsert(row) {
+        upsert(row, options) {
           if (failures[`${name}.upsert`]) return Promise.resolve({ error: { message: failures[`${name}.upsert`] } });
-          const existing = tables[name].find((item) => item.document_id === row.document_id);
+          const key = options?.onConflict || 'document_id';
+          const existing = tables[name].find((item) => item[key] === row[key]);
           if (existing) Object.assign(existing, row);
           else tables[name].push({ created_at: new Date().toISOString(), ...row });
           return Promise.resolve({ error: null });
@@ -230,11 +231,17 @@ test('a 100% coupon unlocks the plan, skips Stripe and invoicing and logs one re
   const document = client.tables.documents.find((row) => row.document_id === id);
   assert.equal(document.unlocked, true);
   assert.equal(document.data.meta.coupon_session.id, data.sessionId);
+  assert.equal(client.tables.orders.length, 1);
+  assert.deepEqual(
+    { ...client.tables.orders[0], created_at: undefined },
+    { created_at: undefined, order_number: client.tables.orders[0].order_number, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 0, coupon_code: 'OVI100', payment_method: 'Kupon', status: 'paid' }
+  );
 
   // max_uses=1 már elfogyott, de ugyanaz a terv ugyanazt a munkamenetet kapja, és nem kerül második sor a statisztikába.
   const again = await (await post(base, '/api/apply-coupon', applyBody(id, { code: 'OVI100' }))).json();
   assert.equal(again.sessionId, data.sessionId);
   assert.equal(client.tables.coupon_redemptions.length, 1);
+  assert.equal(client.tables.orders.length, 1, 'ugyanaz a rendelés nem készül újra');
 
   // Másik terv már nem használhatja a kimerült kupont.
   const other = await post(base, '/api/apply-coupon', applyBody(seedPlan(), { code: 'OVI100' }));
@@ -384,12 +391,19 @@ test('after a 50% coupon the Barion payment starts with the reduced amount, the 
   const record = barionService.getRecord(started.sessionId);
   assert.deepEqual({ amountHuf: record.amountHuf, listPriceHuf: record.listPriceHuf, couponCode: record.couponCode }, { amountHuf: 195, listPriceHuf: 390, couponCode: 'OVI50' });
   assert.equal(client.tables.coupon_redemptions.length, 0, 'fizetés előtt nincs statisztikai sor');
+  assert.equal(client.tables.orders.length, 1);
+  assert.deepEqual(
+    { ...client.tables.orders[0], created_at: undefined, order_number: undefined },
+    { created_at: undefined, order_number: undefined, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 195, coupon_code: 'OVI50', payment_method: 'Barion', status: 'pending' },
+    'a fizetés indításakor függőben lévő rendelés jön létre'
+  );
 
   // A Barion a teljes árat jelző összeggel nem oldhatja fel a kedvezményes rendelést.
   holder.state = () => ({ PaymentId: PAYMENT_ID, PaymentRequestId: started.sessionId, Status: 'Succeeded', Total: 390, Currency: 'HUF', Errors: [] });
   const wrong = await fetch(`${base}/api/webhook/barion?paymentId=${PAYMENT_ID}`);
   assert.equal(wrong.status, 409);
   assert.equal(client.tables.coupon_redemptions.length, 0);
+  assert.equal(client.tables.orders[0].status, 'pending');
 
   holder.state = () => ({ PaymentId: PAYMENT_ID, PaymentRequestId: started.sessionId, Status: 'Succeeded', Total: 195, Currency: 'HUF', Errors: [] });
   const hook = await fetch(`${base}/api/webhook/barion?paymentId=${PAYMENT_ID}`);
@@ -407,6 +421,9 @@ test('after a 50% coupon the Barion payment starts with the reduced amount, the 
   const document = client.tables.documents.find((row) => row.document_id === id);
   assert.equal(document.unlocked, true);
   assert.equal(document.data.meta.payment.amountHuf, 195);
+  assert.equal(client.tables.orders.length, 1);
+  assert.equal(client.tables.orders[0].status, 'paid');
+  assert.equal(client.tables.orders[0].invoice_number, 'OVITE-2026-88');
 
   await fetch(`${base}/api/webhook/barion?paymentId=${PAYMENT_ID}`);
   const session = await (await fetch(`${base}/api/checkout-session/${started.sessionId}`)).json();

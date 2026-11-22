@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fiókom – OviTervező</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <script src="theme-init.js"></script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <a class="brand" href="index.html" aria-label="OviTervező – vissza a főoldalra">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
+          <span class="brand-text">Ovi<strong>Tervező</strong></span>
+        </a>
+        <div class="topbar-actions">
+          <a class="profile-btn" href="tervezo.html">Új tervezet</a>
+          <button id="authBtn" class="auth-btn" type="button" aria-haspopup="dialog" hidden>Belépés / Regisztráció</button>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
+        </div>
+      </header>
+
+      <main class="profile-page">
+        <section id="profileLoading" class="profile-gate" role="status">Fiók betöltése...</section>
+
+        <section id="profileGate" class="profile-gate" hidden>
+          <h1>Fiókom</h1>
+          <p id="profileGateText">A profil, a rendeléstörténet és a mentett tervezeteid eléréséhez jelentkezz be.</p>
+          <button type="button" class="profile-btn primary" id="profileLogin">Bejelentkezés / Regisztráció</button>
+        </section>
+
+        <section id="profileApp" hidden>
+          <div class="profile-head">
+            <div>
+              <h1>Fiókom</h1>
+              <p class="profile-email" id="profileEmail"></p>
+            </div>
+            <button type="button" class="profile-btn" id="profileLogout">Kijelentkezés</button>
+          </div>
+
+          <div class="profile-tabs" role="tablist" aria-label="Fiók menü">
+            <button type="button" role="tab" class="profile-tab" id="tabProfile" data-profile-tab="profile" aria-selected="true" aria-controls="panelProfile">Számlázási adatok &amp; Profil</button>
+            <button type="button" role="tab" class="profile-tab" id="tabDocuments" data-profile-tab="documents" aria-selected="false" aria-controls="panelDocuments">Dokumentumaim (tervezetek)</button>
+            <button type="button" role="tab" class="profile-tab" id="tabOrders" data-profile-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendeléstörténet</button>
+          </div>
+
+          <section class="profile-panel" id="panelProfile" role="tabpanel" aria-labelledby="tabProfile">
+            <h2>Számlázási adatok &amp; Profil</h2>
+            <p class="profile-hint">A számlázási adatok a következő vásárláskor automatikusan kitöltődnek. Gyermekek személyes adatait nem kérjük és nem tároljuk.</p>
+            <form class="profile-form" id="profileForm" novalidate>
+              <h3>Alapadatok</h3>
+              <div class="span-2">
+                <label for="profileFullName">Teljes név</label>
+                <input id="profileFullName" name="full_name" type="text" autocomplete="name" maxlength="120" />
+              </div>
+              <div class="span-2">
+                <label for="profileEmailField">E-mail cím</label>
+                <input id="profileEmailField" type="email" autocomplete="email" readonly />
+              </div>
+              <div>
+                <label for="profileKindergarten">Óvoda neve</label>
+                <input id="profileKindergarten" name="kindergarten_name" type="text" maxlength="120" />
+              </div>
+              <div>
+                <label for="profileGroup">Csoport neve</label>
+                <input id="profileGroup" name="group_name" type="text" maxlength="80" />
+              </div>
+              <h3>Számlázási adatok</h3>
+              <div class="span-2">
+                <label for="profileBillingName">Számlázási név</label>
+                <input id="profileBillingName" name="billing_name" type="text" autocomplete="name" maxlength="120" />
+              </div>
+              <div>
+                <label for="profileBillingZip">Irányítószám</label>
+                <input id="profileBillingZip" name="billing_zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="10" />
+              </div>
+              <div>
+                <label for="profileBillingCity">Település</label>
+                <input id="profileBillingCity" name="billing_city" type="text" autocomplete="address-level2" maxlength="80" />
+              </div>
+              <div class="span-2">
+                <label for="profileBillingAddress">Utca, házszám</label>
+                <input id="profileBillingAddress" name="billing_address" type="text" autocomplete="street-address" maxlength="120" />
+              </div>
+              <div class="span-2">
+                <label for="profileBillingTaxId">Adószám (cég esetén)</label>
+                <input id="profileBillingTaxId" name="billing_tax_id" type="text" maxlength="30" />
+              </div>
+              <div class="profile-actions">
+                <button type="submit" class="profile-btn primary" id="profileSave">Mentés</button>
+                <span class="profile-status" id="profileStatus" role="status" hidden></span>
+                <span class="profile-error" id="profileError" role="alert" hidden></span>
+              </div>
+            </form>
+
+            <div class="profile-danger">
+              <h3>Veszélyzóna</h3>
+              <p>A fiók végleges törlésekor a profilod és a mentett tervezeteid törlődnek. A számviteli törvény miatt a számlázási és rendelési adatokat 8 évig meg kell őriznünk, de azok a fiókodhoz már nem kapcsolódnak. A törlés nem vonható vissza.</p>
+              <button type="button" class="profile-btn danger" id="deleteOpen">Fiók végleges törlése</button>
+            </div>
+          </section>
+
+          <section class="profile-panel" id="panelDocuments" role="tabpanel" aria-labelledby="tabDocuments" hidden>
+            <h2>Dokumentumaim</h2>
+            <p class="profile-hint">A fiókodhoz mentett és a megvásárolt tervezeteid. A fizetett tervezetek Word és PDF formátumban is letölthetők.</p>
+            <ul class="profile-list" id="documentsList"></ul>
+          </section>
+
+          <section class="profile-panel" id="panelOrders" role="tabpanel" aria-labelledby="tabOrders" hidden>
+            <h2>Rendeléstörténet</h2>
+            <p class="profile-hint">A korábbi vásárlásaid. A számlát a vásárláskor megadott e-mail címre küldtük.</p>
+            <ul class="profile-list" id="ordersList"></ul>
+          </section>
+        </section>
+
+        <section id="profileDeleted" class="profile-gate" hidden>
+          <h1>A fiókod törölve lett</h1>
+          <p>A profilod és a mentett tervezeteid törlődtek. Köszönjük, hogy használtad az OviTervezőt!</p>
+          <a class="profile-btn primary" href="index.html">Vissza a főoldalra</a>
+        </section>
+      </main>
+
+      <div class="modal-backdrop" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <form class="modal-box auth-box" id="authForm" novalidate>
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
+          <h2 id="authModalTitle">Bejelentkezés</h2>
+          <div class="auth-tabs" id="authTabs" role="tablist" aria-label="Belépés vagy regisztráció">
+            <button type="button" role="tab" class="auth-tab is-active" data-auth-tab="login" aria-selected="true">Bejelentkezés</button>
+            <button type="button" role="tab" class="auth-tab" data-auth-tab="register" aria-selected="false">Regisztráció</button>
+          </div>
+          <p class="modal-note" id="authIntro">Lépj be a fiókodba, hogy a tervezeteid és a számlázási adataid bármely eszközről elérhetők legyenek. Regisztráció nélkül is használhatod az OviTervezőt.</p>
+          <div id="authNameField" class="auth-field" hidden>
+            <label for="authName"><strong>Teljes név</strong> (nem kötelező)</label>
+            <input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Kovács Anna" />
+          </div>
+          <div id="authEmailField" class="auth-field">
+            <label for="authEmail"><strong>E-mail cím</strong></label>
+            <input id="authEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" />
+          </div>
+          <div id="authPasswordField" class="auth-field">
+            <label for="authPassword"><strong>Jelszó</strong> (legalább 8 karakter)</label>
+            <div class="auth-password">
+              <input id="authPassword" type="password" autocomplete="current-password" minlength="8" />
+              <button type="button" class="auth-eye" id="authPasswordToggle" aria-label="Jelszó megjelenítése" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg></button>
+            </div>
+          </div>
+          <button type="button" class="auth-link" id="authForgot">Elfelejtett jelszó</button>
+          <div id="authStatus" class="modal-note" role="status" hidden></div>
+          <div id="authError" class="modal-error" role="alert" hidden></div>
+          <div class="modal-actions">
+            <button type="submit" class="primary" id="authSubmit">Bejelentkezés</button>
+            <button type="button" id="authBack" hidden>Vissza a belépéshez</button>
+            <button type="button" data-close-modal>Mégse</button>
+          </div>
+          <div class="auth-social" id="authSocial">
+            <div class="auth-divider"><span>vagy</span></div>
+            <button type="button" class="auth-google" id="authGoogle" disabled aria-disabled="true">Folytatás Google-lel <span class="auth-soon" id="authGoogleSoon">Hamarosan</span></button>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+        <div class="modal-box">
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
+          <h2 id="deleteModalTitle">Biztosan törlöd a fiókodat?</h2>
+          <p class="modal-note">A profilod és a mentett tervezeteid véglegesen törlődnek, a művelet nem vonható vissza. A számviteli megőrzési kötelezettség alá eső rendelési adatok (8 év) a fiókodtól függetlenül megmaradnak.</p>
+          <div id="deleteError" class="modal-error" role="alert" hidden></div>
+          <div class="modal-actions">
+            <button type="button" class="danger" id="deleteConfirm">Igen, véglegesen törlöm</button>
+            <button type="button" data-close-modal>Mégse</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="site.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+    <script src="auth.js"></script>
+    <script src="profil.js"></script>
+  </body>
+</html>

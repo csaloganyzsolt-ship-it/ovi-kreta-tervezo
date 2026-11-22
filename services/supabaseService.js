@@ -25,6 +25,16 @@ function isEnabled(env = process.env) {
   return getClient(env) !== null;
 }
 
+// Fiókfunkciókhoz: kliens nélkül 503-as hiba (nincs csendes tartalék).
+function requireClient(env = process.env) {
+  const client = getClient(env);
+  if (client) return client;
+  const error = new Error('A fiókkezelés ezen a szerveren nincs bekapcsolva.');
+  error.status = 503;
+  error.code = 'ACCOUNTS_UNAVAILABLE';
+  throw error;
+}
+
 // Tesztekhez: mockolt kliens beállítása (NODE_ENV=test mellett is él), null-ra állítva visszaáll az alapműködés.
 function setClient(client) {
   injected = client || null;
@@ -35,4 +45,4 @@ function resetClient() {
   cached = null;
 }
 
-module.exports = { isConfigured, isEnabled, getClient, setClient, resetClient };
+module.exports = { isConfigured, isEnabled, getClient, requireClient, setClient, resetClient };

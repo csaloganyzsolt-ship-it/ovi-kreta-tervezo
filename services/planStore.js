@@ -402,6 +402,19 @@ async function claimDocuments(user, ids) {
   return claimed;
 }
 
+// Fióktörléskor: a felhasználó tervei törlődnek, az ugyanerre az e-mail címre megvásárolt, fiók nélküli terveknél csak az e-mail cím törlődik.
+async function eraseUserData(user) {
+  const client = requireClient();
+  const removed = await client.from('documents').delete().eq('user_id', user.id);
+  if (removed.error) throw new Error(`A felhasználó tervezeteinek törlése sikertelen: ${removed.error.message}`);
+  const cleared = await client.from('documents').update({ user_email: null }).eq('user_email', user.email);
+  if (cleared.error) throw new Error(`A felhasználó e-mail címének törlése a tervezetekből sikertelen: ${cleared.error.message}`);
+  for (const [id, entry] of [...plans.entries()]) {
+    if (entry.userId === user.id) plans.delete(id);
+    else if (entry.userEmail === user.email) entry.userEmail = '';
+  }
+}
+
 function readEntry(id) {
   if (!id) return null;
   const key = String(id);
@@ -446,6 +459,7 @@ module.exports = {
   listUserDocuments,
   getUserDocument,
   claimDocuments,
+  eraseUserData,
   findDocumentByCouponSession,
   clearPlans,
   cleanup,

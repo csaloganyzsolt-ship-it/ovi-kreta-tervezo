@@ -3,6 +3,8 @@
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
 const planStore = require('../services/planStore');
+const profileService = require('../services/profileService');
+const orderService = require('../services/orderService');
 const { requireUser } = require('../services/authService');
 
 const MAX_SYNC_IDS = 50;
@@ -16,13 +18,22 @@ const accountLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// A fióktörlés visszafordíthatatlan: szigorúbb limit.
+const deleteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: () => Number(process.env.ACCOUNT_DELETE_RATE_LIMIT) || 5,
+  message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 function sendAccountError(res, error, context) {
   const status = error.status || 500;
   if (status >= 500) console.error(`${context} failed:`, error.message);
   return res.status(status).json({
     success: false,
     ...(error.code ? { code: error.code } : {}),
-    error: status === 503 ? error.message : `${context} sikertelen. Kérjük, próbáld újra később.`
+    error: status < 500 || status === 503 ? error.message : `${context} sikertelen. Kérjük, próbáld újra később.`
   });
 }
 
@@ -65,9 +76,50 @@ async function syncDocuments(req, res) {
   }
 }
 
+// A profil (számlázási és óvodai alapadatok) olvasása.
+async function getProfile(req, res) {
+  try {
+    return res.json({ success: true, profile: await profileService.getProfile(req.user) });
+  } catch (error) {
+    return sendAccountError(res, error, 'A profil lekérdezése');
+  }
+}
+
+// A profil részleges mentése: csak az ismert mezők, a hiányzó kulcs változatlan marad.
+async function saveProfile(req, res) {
+  try {
+    return res.json({ success: true, profile: await profileService.saveProfile(req.user, req.body) });
+  } catch (error) {
+    return sendAccountError(res, error, 'A profil mentése');
+  }
+}
+
+async function listOrders(req, res) {
+  try {
+    return res.json({ success: true, orders: await orderService.listUserOrders(req.user) });
+  } catch (error) {
+    return sendAccountError(res, error, 'A rendelések lekérdezése');
+  }
+}
+
+// Fiók végleges törlése: a kliens kifejezett megerősítést küld; a rendelések a számviteli megőrzés miatt megmaradnak.
+async function deleteAccount(req, res) {
+  try {
+    if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'A fiók törléséhez meg kell erősíteni a kérést.' });
+    await profileService.deleteAccount(req.user);
+    return res.json({ success: true });
+  } catch (error) {
+    return sendAccountError(res, error, 'A fiók törlése');
+  }
+}
+
 const router = express.Router();
 router.get('/my-documents', accountLimiter, requireUser, listDocuments);
 router.get('/my-documents/:id', accountLimiter, requireUser, openDocument);
 router.post('/sync-documents', accountLimiter, requireUser, syncDocuments);
+router.get('/profile', accountLimiter, requireUser, getProfile);
+router.post('/profile', accountLimiter, requireUser, saveProfile);
+router.get('/my-orders', accountLimiter, requireUser, listOrders);
+router.post('/delete-account', deleteLimiter, requireUser, deleteAccount);
 
-module.exports = { router, listDocuments, openDocument, syncDocuments };
+module.exports = { router, listDocuments, openDocument, syncDocuments, getProfile, saveProfile, listOrders, deleteAccount };
