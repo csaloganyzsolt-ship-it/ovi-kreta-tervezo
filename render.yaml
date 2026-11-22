@@ -2,11 +2,14 @@ services:
   - type: web
     name: ovi-kreta-tervezo-api
     runtime: node
+    # A Supabase kliens natív WebSocketet igényel (Node 22+).
     plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: GEMINI_API_KEY
         sync: false
       - key: BILLING_PROFILE
