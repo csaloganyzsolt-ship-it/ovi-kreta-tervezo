@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
 const { copyAssets } = require('./copy-assets');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, barionPixelId, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISHABLE_KEY, barionPixelId, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
 
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'dist-nethely');
@@ -55,6 +55,8 @@ const config = {
   paywallEnabled: true,
   turnstileSiteKey: TURNSTILE_SITE_KEY,
   barionPixelId: barionPixelId(),
+  SUPABASE_URL: SUPABASE_PUBLIC_URL,
+  SUPABASE_PUBLISHABLE_KEY,
   company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: testMode },
 };
 fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);

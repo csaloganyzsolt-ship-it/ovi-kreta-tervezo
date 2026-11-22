@@ -58,6 +58,12 @@ function writeDailyCount(count) {
   try { localStorage.setItem(STORAGE_KEYS.dailyCount, JSON.stringify({ date: todayKey(), count })); } catch (_error) { /* nincs tár */ }
 }
 
+// Bejelentkezett felhasználónál a Supabase hozzáférési token; vendég módban üres, a kérések változatlanok.
+function authHeaders() {
+  const token = window.OviAuth?.getAccessToken?.();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function getApiBaseUrl() {
   const configured = String(window.APP_CONFIG?.apiBaseUrl || '').trim().replace(/\/+$/, '');
   if (configured === 'same-origin') return window.location.origin;

@@ -78,6 +78,12 @@ const LEGAL_TEXTS = {
 <li>A helyi beállítások (pl. világos/sötét mód, az űrlap ideiglenes állapota) a böngésző saját helyi tárhelyén (localStorage) tárolódnak, ezekhez az Adatkezelő szervere nem fér hozzá.</li>
 <li>Az oldal a Barion Base Pixelt használja csalásmegelőzési (fraud prevention) célból, a Barion Payment Zrt. előírásainak megfelelően. A pixel a böngésző és az eszköz technikai adatait (pl. IP-cím, böngészőazonosító) továbbítja a Barion Payment Zrt.-nek, kizárólag a fizetések biztonságos lebonyolítása és a visszaélések kiszűrése érdekében; marketing célra nem használjuk. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési csalások megelőzése.</li>
 </ul>
+<p><strong>d) Opcionális felhasználói fiók</strong></p>
+<ul>
+<li>A fiók létrehozása nem kötelező, az OviTervező regisztráció nélkül is használható. Belépéskor a megadott e-mail cím a Supabase (Supabase Inc.) hitelesítési szolgáltatásához kerül, ahová jelszó nélküli belépési linket küldünk.</li>
+<li>Kezelt adatok: e-mail cím, a fiókhoz kötött tervezetek (az űrlap általános adatai és a generált dokumentum). Cél: a tervezetek felhős mentése és több eszközről való elérése. Jogalap: a Felhasználó hozzájárulása és a szerződés teljesítése (GDPR 6. cikk (1) bek. a) és b) pont).</li>
+<li>A fiók és a hozzá kötött tervezetek törlését az {{SUPPORT_EMAIL}} címen kérheted.</li>
+</ul>
 <h3>3. Bankkártyás fizetés</h3>
 <p>A bankkártyás fizetést a Barion Payment Zrt. (Magyarország) fizetési szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a {{COMPANY_NAME}} és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
 <h3>4. Címzettek és adatfeldolgozók köre</h3>

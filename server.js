@@ -5,13 +5,15 @@ const { rateLimit } = require('express-rate-limit');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } = require('./routes/payment');
+const { router: accountRouter } = require('./routes/account');
+const authService = require('./services/authService');
 const { SHIPPED_EXTENSIONS } = require('./scripts/copy-assets');
 const mailService = require('./services/mailService');
 const geminiService = require('./services/geminiService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
 const invoiceService = require('./services/invoiceService');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, barionPixelId, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISHABLE_KEY, barionPixelId, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
@@ -119,6 +121,7 @@ app.all('/api/webhook/barion', express.urlencoded({ extended: false, limit: '10k
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', accountRouter);
 app.use('/api', paymentRouter);
 
 // A frontend ugyanazon a domainen és porton fut. Csak a kifejezetten felsorolt fájlok érhetők el,
@@ -148,6 +151,8 @@ app.get('/config.js', (_req, res) => {
     stripePublishableKey: stripeService.stripePublishableKey(env),
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY,
     barionPixelId: barionPixelId(env),
+    SUPABASE_URL: SUPABASE_PUBLIC_URL,
+    SUPABASE_PUBLISHABLE_KEY,
     company: {
       ...publicCompany(env),
       email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL,
@@ -691,7 +696,9 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     }
     const result = normalizeResponse(rawText, request);
     const generationId = newServerGenerationId();
-    planStore.savePlan(generationId, { ...result, request, generationId });
+    // Bejelentkezett felhasználónál a terv a fiókjához kötődik; token nélkül (vendég mód) vagy érvénytelen tokennel semmi nem változik.
+    const user = await authService.optionalUser(req);
+    planStore.savePlan(generationId, { ...result, request, generationId }, user ? { userId: user.id, email: user.email } : undefined);
 
     console.info('Generated document:', result.is_thematic
       ? { weeks: result.hetek.length }

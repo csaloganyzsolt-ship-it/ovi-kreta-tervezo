@@ -9,6 +9,21 @@ const sheetsService = require('../services/sheetsService');
 const planStore = require('../services/planStore');
 const coupons = require('../services/coupons');
 const barionService = require('../services/barionService');
+const authService = require('../services/authService');
+
+// A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető.
+async function recordOwner(req, generationId, rawEmail) {
+  try {
+    const user = await authService.optionalUser(req);
+    let email = user?.email || '';
+    if (!email) {
+      try { email = stripeService.parseEmail(rawEmail); } catch (_error) { email = ''; }
+    }
+    if (user || email) await planStore.setOwner(generationId, { userId: user?.id, email });
+  } catch (error) {
+    console.error('[account] A tulajdonos rögzítése sikertelen:', error.message);
+  }
+}
 
 // A levél sablonját a kliens jelzi; csak az ismert érték fogadható el.
 function requestedPlanMode(req) {
@@ -77,6 +92,7 @@ async function applyCoupon(req, res) {
     const generationId = String(body.generationId || '').slice(0, 100);
     const planData = generationId ? await planStore.loadPlan(generationId) : null;
     if (!planData) return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren. Készíts újat.' });
+    await recordOwner(req, generationId, email);
     // Az már beváltott kód ugyanarra a tervre ismételten is ugyanazt a munkamenetet adja, akkor is, ha a kerete közben elfogyott.
     coupons.restoreSession(planStore.getDocumentState(generationId)?.coupon_session);
     const known = coupons.sessionFor(generationId);
@@ -115,6 +131,7 @@ async function checkoutBarion(req, res) {
     if (!generationId || !(await planStore.loadPlan(generationId))) {
       return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.' });
     }
+    await recordOwner(req, generationId, body.email);
     const saved = planStore.getDocumentState(generationId)?.coupon;
     let coupon = null;
     if (saved && saved.percent < 100) {

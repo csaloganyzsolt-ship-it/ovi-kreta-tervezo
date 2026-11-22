@@ -178,7 +178,7 @@ async function generatePlan() {
     }
     const response = await fetch(`${apiBaseUrl}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       // Fizetőfalnál a zárolt előnézetet a kliens is kéri; a zárolást a szerver konfigurációja akkor is érvényesíti, ha ez hiányzik.
       body: JSON.stringify(paywallEnabled() ? { ...payload, preview: true } : payload),
     });

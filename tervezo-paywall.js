@@ -231,7 +231,7 @@ async function startBarionCheckout() {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
@@ -296,7 +296,7 @@ async function applyCouponCode() {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/apply-coupon`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ code, plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));

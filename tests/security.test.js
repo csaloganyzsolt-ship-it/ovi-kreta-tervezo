@@ -277,18 +277,21 @@ test('CDN scripts carry SHA-384 integrity, crossorigin, and survive cache-bustin
   const { execFileSync } = require('node:child_process');
   const source = fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8');
   const cdn = [...source.matchAll(/<script src="(https:\/\/[^"]+)"[^>]*><\/script>/g)].filter((m) => !m[1].includes('challenges.cloudflare.com'));
-  assert.equal(cdn.length, 4);
+  assert.equal(cdn.length, 5);
   for (const [tag, url] of cdn) {
     assert.match(tag, /integrity="sha384-[A-Za-z0-9+/]{64}"/, url);
     assert.match(tag, /crossorigin="anonymous"/, url);
   }
-  // A pdfmake CDN-fájlok hash-e megegyezik a telepített csomag (a tesztelt) fájljaival.
+  // A CDN-fájlok hash-e megegyezik a telepített csomag (a tesztelt) fájljaival.
   const crypto = require('node:crypto');
+  const sriFor = (file) => crypto.createHash('sha384').update(fs.readFileSync(file)).digest('base64');
   for (const [tag, url] of cdn.filter((m) => m[1].includes('/npm/pdfmake@'))) {
     const file = path.join(ROOT, 'node_modules', 'pdfmake', 'build', path.basename(url));
-    const hash = crypto.createHash('sha384').update(fs.readFileSync(file)).digest('base64');
-    assert.ok(tag.includes(`sha384-${hash}`), `${path.basename(url)}: az SRI-hash nem egyezik a telepített fájllal`);
+    assert.ok(tag.includes(`sha384-${sriFor(file)}`), `${path.basename(url)}: az SRI-hash nem egyezik a telepített fájllal`);
   }
+  const [supabaseTag] = cdn.find((m) => m[1].includes('/npm/@supabase/supabase-js@')) || [];
+  assert.ok(supabaseTag, 'a Supabase kliens CDN-címkéje hiányzik');
+  assert.ok(supabaseTag.includes(`sha384-${sriFor(path.join(ROOT, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js'))}`), 'a Supabase SRI-hash nem egyezik a telepített fájllal');
   assert.equal(cdn.some((m) => /html2pdf|html2canvas|jspdf/i.test(m[1])), false, 'a raszteres PDF-készítő kikerült');
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
   execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });

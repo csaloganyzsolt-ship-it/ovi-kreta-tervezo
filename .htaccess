@@ -19,7 +19,7 @@ Options -Indexes
   Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header set X-Frame-Options "DENY"
   # Első körben Report-Only: élesben ellenőrizhető, hogy nem blokkol külső erőforrást. Azonos a services/siteConstants.js CSP-jével (teszt őrzi).
-  Header set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com; frame-src https://challenges.cloudflare.com https://checkout.stripe.com https://pixel.barion.com; img-src 'self' data: blob: https://pixel.barion.com; object-src 'none'; base-uri 'self'; form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'"
+  Header set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.onrender.com https://caaouwcfoxmuurhpvqoe.supabase.co https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com; frame-src https://challenges.cloudflare.com https://checkout.stripe.com https://pixel.barion.com; img-src 'self' data: blob: https://pixel.barion.com; object-src 'none'; base-uri 'self'; form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'"
 
   # A belépési oldal és a HTML mindig a legfrissebb legyen.
   <FilesMatch "\.html?$">

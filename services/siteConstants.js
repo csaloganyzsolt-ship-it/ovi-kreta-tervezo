@@ -7,17 +7,21 @@ const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html'];
 const SITE_ASSETS = [
   'styles.css', 'site.js', 'theme-init.js',
   'tervezo-core.js', 'tervezo-academic.js', 'tervezo-form.js', 'tervezo-preview.js', 'tervezo-export.js',
-  'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-init.js', 'barion-pixel.js',
+  'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-history.js', 'tervezo-init.js', 'barion-pixel.js', 'auth.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
 ];
 const SEO_FILES = ['robots.txt', 'sitemap.xml'];
+
+// A Supabase Auth publikus kapcsolati adatai (a publishable kulcs böngészőbe szánt, a titkos kulcs soha nem kerülhet ide).
+const SUPABASE_PUBLIC_URL = 'https://caaouwcfoxmuurhpvqoe.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_b5CmhcG0zDzDlR8aMQyoZA_aMUDp8AP';
 
 // Egyetlen CSP: a server.js Report-Only fejlécként küldi, a .htaccess ezzel azonos szöveget tartalmaz (tesztelt).
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://*.onrender.com https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com",
+  `connect-src 'self' https://*.onrender.com ${SUPABASE_PUBLIC_URL} https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com`,
   'frame-src https://challenges.cloudflare.com https://checkout.stripe.com https://pixel.barion.com',
   "img-src 'self' data: blob: https://pixel.barion.com",
   "object-src 'none'",
@@ -90,5 +94,7 @@ module.exports = {
   SITE_ASSETS,
   SEO_FILES,
   SUPPORT_EMAIL: 'info@ovitervezo.hu',
+  SUPABASE_PUBLIC_URL,
+  SUPABASE_PUBLISHABLE_KEY,
   TURNSTILE_SITE_KEY: '0x4AAAAAAGFSc8Zzow6VmxQ9'
 };

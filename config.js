@@ -6,6 +6,9 @@ window.APP_CONFIG = {
   paywallEnabled: true,
   turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9',
   barionPixelId: 'BP-U0p5Sp7I1Q-EF',
+  // Supabase Auth (opcionális fiókok): publikus URL és publishable kulcs, titkos kulcs ide soha nem kerülhet.
+  SUPABASE_URL: 'https://caaouwcfoxmuurhpvqoe.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_b5CmhcG0zDzDlR8aMQyoZA_aMUDp8AP',
   company: {
     type: 'ev',
     name: 'Csalogány Zsolt egyéni vállalkozó',

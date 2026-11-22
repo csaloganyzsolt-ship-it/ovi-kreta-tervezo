@@ -2235,3 +2235,28 @@ html[data-theme="dark"] .barion-pic-dark { display: block; }
 @media (max-width: 380px) { .barion-logo { width: min(100%, 260px); } }
 /* A fizetési ablakban a sor görgetés nélkül is látszik: az ablak alján marad. */
 .checkout-box .barion-strip { position: sticky; bottom: -26px; margin: 8px 0 -26px; padding-bottom: 34px; background: var(--card); }
+
+/* Opcionális fiók (Supabase Auth) és felhős tervek */
+.topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.auth-btn {
+  border: 1px solid var(--primary-dark);
+  background: var(--primary-dark);
+  color: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-btn.is-logged-in { background: var(--card); color: var(--text); border-color: var(--primary); }
+.auth-btn[hidden], #authModal [hidden], #cloudPlansField[hidden] { display: none !important; }
+.auth-box .modal-note { margin: 10px 0; line-height: 1.55; }
+.auth-box label[for="authEmail"] { display: block; margin: 10px 0 4px; }
+.auth-plans-link { display: inline-flex; align-items: center; min-height: 48px; padding: 10px 18px; border-radius: 14px; border: 1px solid var(--primary-dark); background: var(--primary-dark); color: #fff; font-weight: 600; text-decoration: none; }
+.cloud-plans-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.cloud-plans-head label { margin: 0; }
+.history-badge-cloud { background: var(--soft); color: var(--primary-text); border: 1px solid var(--primary); }
+.cloud-error { color: #c0392b; }

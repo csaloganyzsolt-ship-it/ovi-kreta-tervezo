@@ -220,7 +220,7 @@ function planModeOf(plan) {
   return plan?.planMode === 'academic' || plan?.is_thematic === true || plan?.request?.planMode === 'academic' ? 'academic' : 'standard';
 }
 
-// A Supabase `documents` tábla: document_id (PK), plan_mode, unlocked, data (jsonb: { plan, meta }), created_at, updated_at.
+// A Supabase `documents` tábla: document_id (PK), plan_mode, unlocked, data (jsonb: { plan, meta }), user_id (uuid), user_email (text), created_at, updated_at.
 async function persist(id, entry) {
   const client = supabase.getClient();
   if (!client) return;
@@ -229,18 +229,39 @@ async function persist(id, entry) {
     plan_mode: planModeOf(entry.plan),
     unlocked: entry.unlocked === true,
     data: { plan: entry.plan, meta: entry.meta },
+    // Csak az ismert tulajdonos-mezők kerülnek az upsertbe, így a tulajdonos nélküli mentés nem töröl semmit.
+    ...(entry.userId ? { user_id: entry.userId } : {}),
+    ...(entry.userEmail ? { user_email: entry.userEmail } : {}),
     updated_at: new Date().toISOString()
   }, { onConflict: 'document_id' });
   if (error) throw new Error(`A tervezet Supabase-be mentése sikertelen (${id}): ${error.message}`);
 }
 
+function normalizeOwnerEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  return email && email.length <= 254 ? email : '';
+}
+
+// owner: { userId?, email? } – bejelentkezett felhasználó vagy a vásárló e-mail címe; egy másik user_id-hoz rendelt tervezet tulajdonosát nem írja felül.
+function applyOwner(entry, owner) {
+  const userId = owner?.userId ? String(owner.userId) : '';
+  const email = normalizeOwnerEmail(owner?.email);
+  if (userId) {
+    if (!entry.userId) entry.userId = userId;
+    if (entry.userId === userId && email) entry.userEmail = email;
+  } else if (email && !entry.userId) {
+    entry.userEmail = email;
+  }
+}
+
 // A generálás nem akad meg a mentésen: a memória a mérvadó addig, a hiba pedig a naplóban jelenik meg.
-function savePlan(id, plan) {
+function savePlan(id, plan, owner) {
   if (!id || !plan) return Promise.resolve();
   const key = String(id);
   const stored = plan.request === undefined ? plan : { ...plan, request: sanitizeRequest(plan.request) };
   const previous = plans.get(key);
-  const entry = { plan: stored, createdAt: Date.now(), unlocked: previous?.unlocked === true, meta: previous?.meta || {} };
+  const entry = { plan: stored, createdAt: Date.now(), unlocked: previous?.unlocked === true, meta: previous?.meta || {}, userId: previous?.userId || null, userEmail: previous?.userEmail || '' };
+  applyOwner(entry, owner);
   plans.delete(key);
   plans.set(key, entry);
   trimPlans();
@@ -248,19 +269,24 @@ function savePlan(id, plan) {
 }
 
 // Szerver-újraindítás után a memóriából hiányzó tervet a Supabase-ből tölti vissza; hiba esetén dob, nem tér vissza csendben null-lal.
+// A feloldott vagy felhasználóhoz rendelt tervezet nem jár le; a gazdátlan piszkozat 48 óra után igen.
 async function loadPlan(id) {
   const local = getPlan(id);
   if (local) return local;
   const client = supabase.getClient();
   if (!client || !id) return null;
   const key = String(id).slice(0, 100);
-  const { data, error } = await client.from('documents').select('document_id, unlocked, data, created_at').eq('document_id', key).maybeSingle();
+  const { data, error } = await client.from('documents').select('document_id, unlocked, user_id, user_email, data, created_at').eq('document_id', key).maybeSingle();
   if (error) throw new Error(`A tervezet Supabase-ből olvasása sikertelen: ${error.message}`);
   if (!data?.data?.plan) return null;
-  if (data.unlocked !== true && data.created_at && Date.now() - Date.parse(data.created_at) > MAX_AGE_MS) return null;
-  plans.set(key, { plan: data.data.plan, createdAt: Date.now(), unlocked: data.unlocked === true, meta: data.data.meta || {} });
-  trimPlans();
+  if (data.unlocked !== true && !data.user_id && data.created_at && Date.now() - Date.parse(data.created_at) > MAX_AGE_MS) return null;
+  hydrate(key, data);
   return data.data.plan;
+}
+
+function hydrate(key, row) {
+  plans.set(key, { plan: row.data.plan, createdAt: Date.now(), unlocked: row.unlocked === true, meta: row.data.meta || {}, userId: row.user_id || null, userEmail: row.user_email || '' });
+  trimPlans();
 }
 
 // A dokumentum feloldott állapota és a hozzá tartozó metaadatok (kupon, kuponos munkamenet); ismeretlen tervnél null.
@@ -291,6 +317,89 @@ async function findDocumentByCouponSession(sessionId) {
   if (!data?.document_id || !(await loadPlan(data.document_id))) return null;
   const session = readEntry(data.document_id)?.meta?.coupon_session;
   return session ? { id: data.document_id, session } : null;
+}
+
+function requireClient() {
+  const client = supabase.getClient();
+  if (client) return client;
+  const error = new Error('A fiókkezelés és a felhős mentés ezen a szerveren nincs bekapcsolva.');
+  error.status = 503;
+  error.code = 'ACCOUNTS_UNAVAILABLE';
+  throw error;
+}
+
+// A fizetéskor vagy kuponbeváltáskor megadott (vagy bejelentkezett) tulajdonos rögzítése; ismeretlen tervnél false.
+async function setOwner(id, owner) {
+  if (!(await loadPlan(id))) return false;
+  const entry = readEntry(id);
+  const before = `${entry.userId}|${entry.userEmail}`;
+  applyOwner(entry, owner);
+  if (`${entry.userId}|${entry.userEmail}` !== before) await persist(String(id), entry);
+  return true;
+}
+
+const LIST_COLUMNS = 'document_id, plan_mode, unlocked, user_id, created_at, updated_at, request:data->plan->request';
+const MAX_LISTED_DOCUMENTS = 100;
+
+function summarize(row, user) {
+  const request = row.request && typeof row.request === 'object' ? row.request : {};
+  return {
+    id: row.document_id,
+    title: String(request.theme || '').trim().slice(0, 200) || 'Cím nélküli tervezet',
+    duration: request.duration === 'Heti' ? 'Heti' : 'Napi',
+    planMode: row.plan_mode === 'academic' ? 'academic' : 'standard',
+    unlocked: row.unlocked === true,
+    owned: row.user_id === user.id,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null
+  };
+}
+
+// A felhasználó tervei: a hozzá rendelt (user_id) és az ugyanezzel a (megerősített) e-mail címmel megvásárolt, feloldott tervek, újabbak elöl.
+// Két külön lekérdezés fut (nincs szövegbe épített OR-feltétel, így az e-mail cím nem injektálhat szűrőt).
+async function listUserDocuments(user) {
+  const client = requireClient();
+  const query = () => client.from('documents').select(LIST_COLUMNS).order('created_at', { ascending: false }).limit(MAX_LISTED_DOCUMENTS);
+  const [owned, purchased] = await Promise.all([query().eq('user_id', user.id), query().eq('user_email', user.email).eq('unlocked', true)]);
+  for (const result of [owned, purchased]) {
+    if (result.error) throw new Error(`A mentett tervek lekérdezése sikertelen: ${result.error.message}`);
+  }
+  const byId = new Map();
+  for (const row of [...(owned.data || []), ...(purchased.data || [])]) byId.set(row.document_id, row);
+  return [...byId.values()]
+    .sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0))
+    .slice(0, MAX_LISTED_DOCUMENTS)
+    .map((row) => summarize(row, user));
+}
+
+// Egy terv teljes tartalma, ha a felhasználóé (user_id) vagy az e-mail címére megvásárolt (feloldott); egyébként null, a lététét sem fedi fel.
+async function getUserDocument(user, id) {
+  const client = requireClient();
+  const key = String(id || '').slice(0, 100);
+  const { data, error } = await client.from('documents').select('document_id, plan_mode, unlocked, user_id, user_email, data, created_at').eq('document_id', key).maybeSingle();
+  if (error) throw new Error(`A tervezet Supabase-ből olvasása sikertelen: ${error.message}`);
+  if (!data?.data?.plan) return null;
+  const allowed = data.user_id === user.id || (data.unlocked === true && data.user_email === user.email);
+  if (!allowed) return null;
+  hydrate(key, data);
+  return { id: key, unlocked: data.unlocked === true, plan: data.data.plan };
+}
+
+// A böngésző helyi tervazonosítóit a bejelentkezett felhasználóhoz köti, ha még nincs más user_id-hoz rendelve; a került azonosítók listáját adja.
+async function claimDocuments(user, ids) {
+  const client = requireClient();
+  const { data, error } = await client.from('documents')
+    .update({ user_id: user.id, user_email: user.email, updated_at: new Date().toISOString() })
+    .in('document_id', ids)
+    .is('user_id', null)
+    .select('document_id');
+  if (error) throw new Error(`A tervek fiókhoz kötése sikertelen: ${error.message}`);
+  const claimed = (data || []).map((row) => row.document_id);
+  for (const id of claimed) {
+    const entry = plans.get(id);
+    if (entry) { entry.userId = user.id; entry.userEmail = user.email; }
+  }
+  return claimed;
 }
 
 function readEntry(id) {
@@ -333,6 +442,10 @@ module.exports = {
   hasPlan,
   getDocumentState,
   updateDocument,
+  setOwner,
+  listUserDocuments,
+  getUserDocument,
+  claimDocuments,
   findDocumentByCouponSession,
   clearPlans,
   cleanup,

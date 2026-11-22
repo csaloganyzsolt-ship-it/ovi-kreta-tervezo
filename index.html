@@ -32,7 +32,10 @@
           <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
           <span class="brand-text">Ovi<strong>Tervező</strong></span>
         </a>
-        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
+        <div class="topbar-actions">
+          <button id="authBtn" class="auth-btn" type="button" aria-haspopup="dialog" hidden>Belépés / Mentett terveim</button>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
+        </div>
       </header>
 
       <section class="landing" id="landing" aria-label="Bemutatkozás">
@@ -410,6 +413,30 @@
           </div>
         </div>
       </div>
+      <div class="modal-backdrop" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <form class="modal-box auth-box" id="authForm" novalidate>
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
+          <h2 id="authModalTitle">Belépés / Mentett terveim</h2>
+          <div id="authLoggedOut">
+            <p class="modal-note">A belépés opcionális: add meg az e-mail címedet, és jelszó nélküli belépési linket küldünk. Belépve a tervezeteid felhőben is elérhetők lesznek bármely eszközről. Regisztráció nélkül is használhatod az OviTervezőt.</p>
+            <label for="authEmail"><strong>E-mail cím</strong></label>
+            <input id="authEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
+            <div id="authStatus" class="modal-note" role="status" hidden></div>
+            <div id="authError" class="modal-error" role="alert" hidden></div>
+            <div class="modal-actions">
+              <button type="submit" class="primary" id="authSubmit">Belépési link küldése</button>
+              <button type="button" data-close-modal>Mégse</button>
+            </div>
+          </div>
+          <div id="authLoggedIn" hidden>
+            <p class="modal-note">Bejelentkezve: <strong id="authUserEmail"></strong></p>
+            <div class="modal-actions">
+              <a class="auth-plans-link" id="authPlansLink" href="tervezo.html#cloudPlansField" data-close-modal>Mentett terveim</a>
+              <button type="button" id="authLogout">Kijelentkezés</button>
+            </div>
+          </div>
+        </form>
+      </div>
       <div class="modal-backdrop" id="legalModal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
         <div class="modal-box">
           <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
@@ -421,5 +448,7 @@
     </div>
     <script src="config.js"></script>
     <script src="site.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+    <script src="auth.js"></script>
   </body>
 </html>
