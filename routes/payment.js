@@ -47,7 +47,7 @@ function sendPaymentError(res, error, context, req) {
       }).catch((e) => console.warn('Admin error alert failed:', e.message));
     }
   }
-  return res.status(status).json({ success: false, error: error.message });
+  return res.status(status).json({ success: false, ...(error.code === 'INVALID_COUPON' ? { code: error.code } : {}), error: error.message });
 }
 
 // A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri.
@@ -60,6 +60,7 @@ function planModeFor(body = {}) {
 async function createCheckout(req, res) {
   try {
     const body = req.body || {};
+    if (body.generationId) await planStore.loadPlan(String(body.generationId).slice(0, 100));
     const session = await stripeService.createCheckoutSession({ ...body, planMode: planModeFor(body) });
     return res.json({ success: true, ...session });
   } catch (error) {
@@ -67,18 +68,30 @@ async function createCheckout(req, res) {
   }
 }
 
-// 100%-os belső kupon: a fizetési szolgáltatót és a számlázást megkerüli, a terv azonnal feloldódik, a kézbesítés (/api/deliver) ugyanúgy fut.
-function applyCoupon(req, res) {
+// Kupon: a 100%-os kód a fizetési szolgáltatót és a számlázást megkerüli, a terv azonnal feloldódik, a kézbesítés (/api/deliver) ugyanúgy fut.
+// Részleges (1–99%) kuponnál a kedvezmény a dokumentumhoz mentődik, a fizetés a csökkentett összegre indul (/api/checkout-barion).
+async function applyCoupon(req, res) {
   try {
     const body = req.body || {};
     const email = stripeService.parseEmail(body.email);
-    if (!coupons.isValidCode(body.code)) return res.status(400).json({ success: false, code: 'INVALID_COUPON', error: 'Érvénytelen kuponkód.' });
     const generationId = String(body.generationId || '').slice(0, 100);
-    const planData = generationId ? planStore.getPlan(generationId) : null;
+    const planData = generationId ? await planStore.loadPlan(generationId) : null;
     if (!planData) return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren. Készíts újat.' });
+    // Az már beváltott kód ugyanarra a tervre ismételten is ugyanazt a munkamenetet adja, akkor is, ha a kerete közben elfogyott.
+    coupons.restoreSession(planStore.getDocumentState(generationId)?.coupon_session);
+    const known = coupons.sessionFor(generationId);
+    const coupon = known && known.code === coupons.normalizeCode(body.code) ? { code: known.code, percent: 100 } : await coupons.lookup(body.code);
     const planMode = planModeFor(body);
     const product = stripeService.parsePlan(body.plan, planMode);
-    const session = coupons.redeem({ code: body.code, generationId, email, plan: product.key, planMode });
+    const discount = coupons.computeDiscount(product.amountHuf, coupon.percent);
+
+    if (coupon.percent < 100) {
+      await planStore.updateDocument(generationId, { meta: { coupon: { code: coupon.code, plan: product.key, planMode, ...discount } } });
+      return res.json({ success: true, paid: false, coupon: { code: coupon.code, percent: coupon.percent }, plan: product.key, ...discount, generationId });
+    }
+
+    const session = await coupons.redeem({ code: coupon.code, generationId, email, plan: product.key, planMode, originalPrice: product.amountHuf });
+    await planStore.updateDocument(generationId, { unlocked: true, meta: { coupon: { code: coupon.code, plan: product.key, planMode, ...discount }, coupon_session: session } });
     return res.json({
       success: true,
       paid: true,
@@ -94,15 +107,26 @@ function applyCoupon(req, res) {
   }
 }
 
-// Barion fizetés indítása: az összeg a mentett terv módjából jön, a documentId (generationId) az OrderNumber mezőben utazik.
+// Barion fizetés indítása: az összeg a mentett terv módjából (és a dokumentumhoz mentett, újraellenőrzött kuponból) jön, a documentId (generationId) az OrderNumber mezőben utazik.
 async function checkoutBarion(req, res) {
   try {
     const body = req.body || {};
     const generationId = String(body.generationId || '').slice(0, 100);
-    if (!generationId || !planStore.hasPlan(generationId)) {
+    if (!generationId || !(await planStore.loadPlan(generationId))) {
       return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.' });
     }
-    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), req });
+    const saved = planStore.getDocumentState(generationId)?.coupon;
+    let coupon = null;
+    if (saved && saved.percent < 100) {
+      try {
+        coupon = await coupons.lookup(saved.code);
+      } catch (error) {
+        // A már nem érvényes kupon leválik a dokumentumról, hogy a fizetés teljes áron újrapróbálható legyen.
+        if (error.code === 'INVALID_COUPON') await planStore.updateDocument(generationId, { meta: { coupon: null } });
+        throw error;
+      }
+    }
+    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, req });
     return res.json({ success: true, ...result });
   } catch (error) {
     return sendPaymentError(res, error, 'Barion checkout', req);
@@ -134,7 +158,7 @@ async function verifyCheckout(req, res) {
     const result = await retrieveSession(req.params.id);
     let planData = null;
     if (result.paid && result.generationId) {
-      planData = planStore.getPlan(result.generationId);
+      planData = await planStore.loadPlan(result.generationId);
     }
     return res.json({
       success: true,
@@ -165,7 +189,7 @@ async function downloadInvoice(req, res) {
 async function deliverPurchase(req, res) {
   try {
     const id = req.params.id;
-    const couponSession = coupons.getSession(id);
+    const couponSession = await coupons.loadSession(id);
     if (couponSession) return await deliverCouponPurchase(req, res, couponSession);
     const session = await retrieveSession(id);
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });

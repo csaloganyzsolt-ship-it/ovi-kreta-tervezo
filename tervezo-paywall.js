@@ -160,11 +160,8 @@ function guardLocked() {
 
 function openCheckoutModal() {
   if (generationInFlight || !lastResult) return;
-  const kind = planKind();
-  document.getElementById('checkoutSummary').textContent =
-    `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
+  renderCheckoutPrice();
   document.getElementById('checkoutError').textContent = '';
-  document.getElementById('couponStatus').textContent = '';
   syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
   openModal('checkoutModal');
@@ -238,13 +235,21 @@ async function startBarionCheckout() {
       body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    if (!response.ok || !data.success) {
+      const failure = new Error(data.error || `HTTP ${response.status}`);
+      failure.code = data.code;
+      throw failure;
+    }
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
     redirectTo(data.gatewayUrl);
   } catch (error) {
-    if (error.message === 'A Barion érvénytelen fizetési címet adott vissza.') {
+    if (error.code === 'INVALID_COUPON') {
+      localStorage.removeItem(APPLIED_COUPON_KEY);
+      renderCheckoutPrice();
+      errorEl.textContent = `A kupon már nem érvényes (${error.message}) Kattints újra a fizetésre a teljes áron.`;
+    } else if (error.message === 'A Barion érvénytelen fizetési címet adott vissza.') {
       errorEl.textContent = error.message;
     } else {
       errorEl.textContent = 'Hiba történt a fizetés indításakor. Kérjük, frissítsd az oldalt (F5), és próbáld újra!';
@@ -254,7 +259,30 @@ async function startBarionCheckout() {
   }
 }
 
-// 100%-os kupon: a szerver fizetés és számla nélkül feloldja a tervet; innentől ugyanaz a folyamat, mint sikeres fizetés után.
+// Részleges kupon: a szerver a dokumentumhoz menti a kedvezményt, a böngésző csak a kijelzéshez őrzi meg (a fizetendő összeget a szerver számolja).
+const APPLIED_COUPON_KEY = 'oviKretaAppliedCoupon';
+
+function getAppliedDiscount() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(APPLIED_COUPON_KEY) || 'null');
+    return saved && saved.generationId === lastResult?.generationId && saved.plan === planKind() ? saved : null;
+  } catch (_e) { return null; }
+}
+
+function discountMessage(discount) {
+  return `Kupon elfogadva (-${discount.percent}%): fizetendő ${discount.finalPrice} Ft`;
+}
+
+function renderCheckoutPrice() {
+  const kind = planKind();
+  const discount = getAppliedDiscount();
+  document.getElementById('checkoutSummary').textContent = discount
+    ? `${PLAN_LABELS[kind]} – ${discount.finalPrice} Ft (eredeti ár: ${PAYWALL_PRICES[kind]} Ft)`
+    : `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
+  document.getElementById('couponStatus').textContent = discount ? discountMessage(discount) : '';
+}
+
+// Kupon: 100%-os kódnál a szerver fizetés és számla nélkül feloldja a tervet; részleges kódnál a Barion-fizetés a kedvezményes összegre indul.
 async function applyCouponCode() {
   const statusEl = document.getElementById('couponStatus');
   const errorEl = document.getElementById('checkoutError');
@@ -273,6 +301,13 @@ async function applyCouponCode() {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    if (!data.paid) {
+      localStorage.setItem(APPLIED_COUPON_KEY, JSON.stringify({ generationId: lastResult.generationId, plan: planKind(), code: data.coupon.code, percent: data.coupon.percent, finalPrice: data.finalPrice }));
+      document.getElementById('couponCode').value = '';
+      renderCheckoutPrice();
+      return;
+    }
+    localStorage.removeItem(APPLIED_COUPON_KEY);
     closeModals();
     document.getElementById('couponCode').value = '';
     showUnlockedPlan(lastResult.generationId, data.sessionId, data.planData);
@@ -290,6 +325,7 @@ function unlockGeneration(generationId, sessionId) {
   const ids = getUnlockedIds();
   if (!ids.includes(generationId)) ids.push(generationId);
   localStorage.setItem('oviKretaUnlocked', JSON.stringify(ids));
+  localStorage.removeItem(APPLIED_COUPON_KEY);
   writeDailyCount(0);
   if (sessionId) {
     const sessions = getPaidSessions();

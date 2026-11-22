@@ -62,11 +62,14 @@ function orderNumber(orderId, created = new Date()) {
   return `OVI-${ymd}-${String(orderId || '').slice(-6).toUpperCase()}`;
 }
 
-function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod }, env = process.env, date = new Date()) {
+function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
+  // Kuponos fizetésnél a számla a ténylegesen fizetett (kedvezményes) összegről szól.
+  const gross = Number.isInteger(amountHuf) && amountHuf > 0 ? amountHuf : product.amountHuf;
+  const itemName = couponPercent ? `${product.invoiceName} (kupon: -${couponPercent}%)` : product.invoiceName;
   const vatKey = vatRate(env);
-  const { net, vat } = splitGross(product.amountHuf, vatKey);
+  const { net, vat } = splitGross(gross, vatKey);
   const day = today(date);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
@@ -103,14 +106,14 @@ ${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</
   </vevo>
   <tetelek>
     <tetel>
-      <megnevezes>${escapeXml(product.invoiceName)}</megnevezes>
+      <megnevezes>${escapeXml(itemName)}</megnevezes>
       <mennyiseg>1</mennyiseg>
       <mennyisegiEgyseg>db</mennyisegiEgyseg>
       <nettoEgysegar>${net}</nettoEgysegar>
       <afakulcs>${escapeXml(vatKey)}</afakulcs>
       <nettoErtek>${net}</nettoErtek>
       <afaErtek>${vat}</afaErtek>
-      <bruttoErtek>${product.amountHuf}</bruttoErtek>
+      <bruttoErtek>${gross}</bruttoErtek>
     </tetel>
   </tetelek>
 </xmlszamla>`;

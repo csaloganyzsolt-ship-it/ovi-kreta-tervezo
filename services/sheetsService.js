@@ -36,7 +36,7 @@ function buildPayload({ session, invoiceNumber, customer, invoicePdf }, now = ne
     szamlazasi_cim: address,
     csomag: String(plan || '').startsWith('academic_') ? 'Oktatási célú tervezet' : (String(plan || '').startsWith('weekly') ? 'Heti csomag' : 'Napi tervezet'),
     tervezet_temaja: session.metadata?.title || '',
-    fizetett_osszeg_huf: product ? product.amountHuf : null,
+    fizetett_osszeg_huf: Number.isInteger(session.metadata?.amountHuf) ? session.metadata.amountHuf : (product ? product.amountHuf : null),
     stripe_session_id: session.id
   };
   if (Buffer.isBuffer(invoicePdf) && invoicePdf.length) {

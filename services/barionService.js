@@ -7,6 +7,8 @@ const stripeService = require('./stripeService');
 const invoiceService = require('./invoiceService');
 const mailService = require('./mailService');
 const sheetsService = require('./sheetsService');
+const planStore = require('./planStore');
+const coupons = require('./coupons');
 const { PaymentError } = stripeService;
 
 const API_HOSTS = { test: 'https://api.test.barion.com', live: 'https://api.barion.com' };
@@ -136,10 +138,14 @@ async function callBarion(url, options, deps) {
   return { response, payload };
 }
 
-// A Barion Payment/Start hívása: az összeg a mentett csomagból, a documentId az OrderNumber mezőben utazik.
-async function startPayment({ plan, planMode, email, billing, generationId, title, req }, deps = {}) {
+// A Barion Payment/Start hívása: az összeg a mentett csomagból (részleges kuponnál a szerver által ellenőrzött kedvezménnyel csökkentve), a documentId az OrderNumber mezőben utazik.
+async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, req }, deps = {}) {
   const env = deps.env || process.env;
   const product = stripeService.parsePlan(plan, planMode);
+  const discount = coupon ? coupons.computeDiscount(product.amountHuf, coupon.percent) : null;
+  const amountHuf = discount ? discount.finalPrice : product.amountHuf;
+  if (amountHuf <= 0) throw new PaymentError('A 100%-os kupon fizetés nélkül váltható be, a Barion fizetés nem indítható.', 400);
+  const itemName = discount ? `${product.invoiceName} (kupon: -${coupon.percent}%)` : product.invoiceName;
   const payer = stripeService.parseEmail(email);
   const customer = parseBilling(billing);
   const key = requireKey(env);
@@ -162,9 +168,9 @@ async function startPayment({ plan, planMode, email, billing, generationId, titl
     Transactions: [{
       POSTransactionId: `${sessionId}-1`,
       Payee: payeeEmail(env),
-      Total: product.amountHuf,
+      Total: amountHuf,
       Comment: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) || product.name,
-      Items: [{ Name: product.invoiceName, Description: product.invoiceName, Quantity: 1, Unit: 'db', UnitPrice: product.amountHuf, ItemTotal: product.amountHuf, SKU: product.key }]
+      Items: [{ Name: itemName, Description: itemName, Quantity: 1, Unit: 'db', UnitPrice: amountHuf, ItemTotal: amountHuf, SKU: product.key }]
     }]
   };
   const { response, payload } = await callBarion(`${apiBase(env)}/v2/Payment/Start`, {
@@ -181,10 +187,11 @@ async function startPayment({ plan, planMode, email, billing, generationId, titl
 
   saveRecord({
     sessionId, paymentId: payload.PaymentId, generationId: documentId, email: payer, billing: customer, plan: product.key, planMode: product.planMode,
-    amountHuf: product.amountHuf, title: body.Transactions[0].Comment, status: payload.Status || 'Prepared', paid: false, unlocked: false,
+    amountHuf, title: body.Transactions[0].Comment, status: payload.Status || 'Prepared', paid: false, unlocked: false,
+    ...(discount ? { couponCode: coupon.code, couponPercent: coupon.percent, listPriceHuf: product.amountHuf } : {}),
     createdAt: Date.now()
   }, env);
-  return { sessionId, paymentId: payload.PaymentId, gatewayUrl: payload.GatewayUrl, plan: product.key, amountHuf: product.amountHuf };
+  return { sessionId, paymentId: payload.PaymentId, gatewayUrl: payload.GatewayUrl, plan: product.key, amountHuf, ...(discount ? { originalAmountHuf: product.amountHuf, couponPercent: coupon.percent } : {}) };
 }
 
 async function fetchPaymentState(paymentId, deps = {}) {
@@ -218,6 +225,7 @@ async function settleRecord(record, deps) {
   latest.paid = true;
   latest.unlocked = true;
   saveRecord(latest, env);
+  await finalizePaid(latest, env);
   if (!latest.invoiceNumber) {
     const billing = latest.billing || {};
     try {
@@ -225,6 +233,8 @@ async function settleRecord(record, deps) {
         orderId: latest.sessionId,
         created: Math.floor(latest.createdAt / 1000),
         plan: latest.plan,
+        amountHuf: latest.amountHuf,
+        couponPercent: latest.couponPercent,
         paymentMethod: 'Barion',
         customer: { name: billing.name || '', email: latest.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
       }, { env, fetch: deps.fetch });
@@ -245,6 +255,44 @@ async function settleRecord(record, deps) {
   return latest;
 }
 
+// Sikeres fizetés után: a kuponbeváltás statisztikai sora és a dokumentum feloldott állapota a Supabase-ben. A fizetés ettől már nem változik, ezért a hiba csak naplózódik, és a következő lezáráskor újrapróbálódik.
+async function finalizePaid(record, env) {
+  if (record.couponCode && !record.redemptionLogged) {
+    try {
+      await coupons.logRedemption({
+        code: record.couponCode,
+        email: record.email,
+        generationId: record.generationId,
+        planMode: record.planMode,
+        originalPrice: record.listPriceHuf,
+        discountAmount: record.listPriceHuf - record.amountHuf,
+        finalPrice: record.amountHuf
+      }, env);
+      record.redemptionLogged = true;
+    } catch (error) {
+      console.error('[barion]', error.message);
+    }
+  }
+  if (record.documentSynced !== true) {
+    try {
+      await planStore.updateDocument(record.generationId, {
+        unlocked: true,
+        meta: { payment: { provider: 'barion', sessionId: record.sessionId, plan: record.plan, amountHuf: record.amountHuf, couponCode: record.couponCode || null, billing: record.billing } }
+      });
+      record.documentSynced = true;
+    } catch (error) {
+      record.documentSynced = false;
+      console.error('[barion]', error.message);
+    }
+  }
+  saveRecord(record, env);
+}
+
+// A lezárás akkor kész, ha a számla kiállt, a kuponbeváltás naplózva van, és a dokumentum feloldott állapota nem maradt mentés nélkül.
+function isSettled(record) {
+  return Boolean(record.paid && record.invoiceNumber) && !(record.couponCode && !record.redemptionLogged) && record.documentSynced !== false;
+}
+
 // Mint a Stripe webhooknál: rendszergazdai levél és Google Táblázat-sor, nem várjuk meg; a hibájuk nem érinti a fizetést. A levél némítása (NODE_ENV=test) a mailService-ben él.
 function notifyPurchase(record, invoiceNumber, deps) {
   const env = deps.env || process.env;
@@ -252,7 +300,7 @@ function notifyPurchase(record, invoiceNumber, deps) {
   const customer = { name: billing.name || '', email: record.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' };
   const created = Math.floor(record.createdAt / 1000);
   const invoicePdf = invoiceService.getInvoicePdf(record.sessionId, env);
-  const session = { id: record.sessionId, created, metadata: { plan: record.plan, title: record.title } };
+  const session = { id: record.sessionId, created, metadata: { plan: record.plan, title: record.title, amountHuf: record.amountHuf } };
   sheetsService.recordPurchase({ session, invoiceNumber, invoicePdf, customer }, { env, fetch: deps.sheetsFetch }).catch(() => {});
   mailService.sendAdminNotification({
     customer: { name: customer.name, email: customer.email },
@@ -267,7 +315,7 @@ function notifyPurchase(record, invoiceNumber, deps) {
 
 // Lekérdezi a Barion aktuális állapotát és (siker esetén, egyszer) lezárja a fizetést: feloldás + számla.
 async function refreshPayment(record, deps = {}) {
-  if (record.paid && record.invoiceNumber) return record;
+  if (isSettled(record)) return record;
   if (settling.has(record.sessionId)) return settling.get(record.sessionId);
   const task = settleRecord(record, deps).finally(() => settling.delete(record.sessionId));
   settling.set(record.sessionId, task);
@@ -280,7 +328,7 @@ async function retrieveSession(sessionId, deps = {}) {
   const record = getRecord(sessionId, env);
   if (!record) throw new PaymentError('Ismeretlen Barion fizetési azonosító.', 404);
   let current = record;
-  if (!(record.paid && record.invoiceNumber)) {
+  if (!isSettled(record)) {
     try {
       current = await refreshPayment(record, deps);
     } catch (error) {

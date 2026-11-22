@@ -1,5 +1,7 @@
 'use strict';
 
+const supabase = require('./supabaseService');
+
 const VOCAB = [
   'a', 'et', 'in', 'ut', 'ad', 'ex', 'de',
   'sed', 'non', 'iam', 'vel', 'sit', 'nam', 'tam',
@@ -209,14 +211,86 @@ function cleanup(now = Date.now()) {
 // A lejárt bejegyzések időzítve törlődnek; olvasáskor csak az adott bejegyzést ellenőrizzük.
 setInterval(cleanup, CLEANUP_INTERVAL_MS).unref();
 
-function savePlan(id, plan) {
-  if (!id || !plan) return;
-  const key = String(id);
-  const stored = plan.request === undefined ? plan : { ...plan, request: sanitizeRequest(plan.request) };
-  plans.delete(key);
-  plans.set(key, { plan: stored, createdAt: Date.now() });
+function trimPlans() {
   // A Map beszúrási sorrendet őriz, ezért az első kulcs a legrégebbi.
   while (plans.size > MAX_PLANS) plans.delete(plans.keys().next().value);
+}
+
+function planModeOf(plan) {
+  return plan?.planMode === 'academic' || plan?.is_thematic === true || plan?.request?.planMode === 'academic' ? 'academic' : 'standard';
+}
+
+// A Supabase `documents` tábla: document_id (PK), plan_mode, unlocked, data (jsonb: { plan, meta }), created_at, updated_at.
+async function persist(id, entry) {
+  const client = supabase.getClient();
+  if (!client) return;
+  const { error } = await client.from('documents').upsert({
+    document_id: id,
+    plan_mode: planModeOf(entry.plan),
+    unlocked: entry.unlocked === true,
+    data: { plan: entry.plan, meta: entry.meta },
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'document_id' });
+  if (error) throw new Error(`A tervezet Supabase-be mentése sikertelen (${id}): ${error.message}`);
+}
+
+// A generálás nem akad meg a mentésen: a memória a mérvadó addig, a hiba pedig a naplóban jelenik meg.
+function savePlan(id, plan) {
+  if (!id || !plan) return Promise.resolve();
+  const key = String(id);
+  const stored = plan.request === undefined ? plan : { ...plan, request: sanitizeRequest(plan.request) };
+  const previous = plans.get(key);
+  const entry = { plan: stored, createdAt: Date.now(), unlocked: previous?.unlocked === true, meta: previous?.meta || {} };
+  plans.delete(key);
+  plans.set(key, entry);
+  trimPlans();
+  return persist(key, entry).catch((error) => console.error('[supabase]', error.message));
+}
+
+// Szerver-újraindítás után a memóriából hiányzó tervet a Supabase-ből tölti vissza; hiba esetén dob, nem tér vissza csendben null-lal.
+async function loadPlan(id) {
+  const local = getPlan(id);
+  if (local) return local;
+  const client = supabase.getClient();
+  if (!client || !id) return null;
+  const key = String(id).slice(0, 100);
+  const { data, error } = await client.from('documents').select('document_id, unlocked, data, created_at').eq('document_id', key).maybeSingle();
+  if (error) throw new Error(`A tervezet Supabase-ből olvasása sikertelen: ${error.message}`);
+  if (!data?.data?.plan) return null;
+  if (data.unlocked !== true && data.created_at && Date.now() - Date.parse(data.created_at) > MAX_AGE_MS) return null;
+  plans.set(key, { plan: data.data.plan, createdAt: Date.now(), unlocked: data.unlocked === true, meta: data.data.meta || {} });
+  trimPlans();
+  return data.data.plan;
+}
+
+// A dokumentum feloldott állapota és a hozzá tartozó metaadatok (kupon, kuponos munkamenet); ismeretlen tervnél null.
+function getDocumentState(id) {
+  const entry = readEntry(id);
+  return entry ? { unlocked: entry.unlocked === true, ...entry.meta } : null;
+}
+
+// Memória + Supabase frissítés; a Supabase hibája továbbdobódik, hogy a hívó ne higgye feloldottnak a mentetlen állapotot.
+async function updateDocument(id, { unlocked, meta } = {}) {
+  if (!(await loadPlan(id))) return false;
+  const entry = readEntry(id);
+  if (unlocked !== undefined) entry.unlocked = unlocked === true;
+  if (meta) entry.meta = { ...entry.meta, ...meta };
+  await persist(String(id), entry);
+  return true;
+}
+
+// Kuponos (100%) munkamenet visszakeresése újraindítás után: a munkamenet a dokumentum metaadataiban él.
+async function findDocumentByCouponSession(sessionId) {
+  for (const [id, entry] of plans.entries()) {
+    if (entry.meta?.coupon_session?.id === sessionId && !isExpired(entry)) return { id, session: entry.meta.coupon_session };
+  }
+  const client = supabase.getClient();
+  if (!client || !/^coupon_[0-9a-f]{32}$/.test(String(sessionId || ''))) return null;
+  const { data, error } = await client.from('documents').select('document_id').eq('data->meta->coupon_session->>id', sessionId).maybeSingle();
+  if (error) throw new Error(`A kuponos munkamenet Supabase-ből olvasása sikertelen: ${error.message}`);
+  if (!data?.document_id || !(await loadPlan(data.document_id))) return null;
+  const session = readEntry(data.document_id)?.meta?.coupon_session;
+  return session ? { id: data.document_id, session } : null;
 }
 
 function readEntry(id) {
@@ -254,8 +328,12 @@ module.exports = {
   formatExtentSummary,
   createMirrorPlan,
   savePlan,
+  loadPlan,
   getPlan,
   hasPlan,
+  getDocumentState,
+  updateDocument,
+  findDocumentByCouponSession,
   clearPlans,
   cleanup,
   planCount,
