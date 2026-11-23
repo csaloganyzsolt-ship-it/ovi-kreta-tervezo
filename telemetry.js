@@ -1,192 +1,60 @@
-/**
- * Telemetria modul (frontend): Anonim, GDPR-kompatibilis eseménynaplózás
- * - Küld névtelen eseményeket a backend /api/telemetry végpontjára
- * - Nincs sütik, localStorage azonosítók vagy PII
- * - Eszköztípus detektálása, referrer domain kinyerése
- * - navigator.sendBeacon fallback fetch-hez
- */
-
-(function setupTelemetry() {
+// Anonim, GDPR-kompatibilis eseménykövetés: nincs süti, nincs localStorage/sessionStorage, nincs azonosító.
+// Csak az eseménynév, az eszköztípus (képernyőméretből), a küldő domain és néhány névtelen szakmai adat megy ki.
+(function () {
   'use strict';
 
-  const API_ENDPOINT = '/api/telemetry';
-  const BUFFER_SIZE = 10;
-  const BUFFER_FLUSH_MS = 30000; // 30 másodperc
-
-  let eventBuffer = [];
-  let flushTimeout = null;
-
-  /**
-   * Eszköztípus detektálása a viewport szélességéből
-   */
-  function detectDeviceType() {
-    const width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-    if (width < 768) return 'mobile';
-    if (width < 1024) return 'tablet';
-    return 'desktop';
+  function apiBase() {
+    const configured = String(window.APP_CONFIG?.apiBaseUrl || '').trim().replace(/\/+$/, '');
+    if (configured === 'same-origin') return window.location.origin;
+    if (configured) return configured;
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || !host ? 'http://localhost:4000' : '';
   }
 
-  /**
-   * Referrer domain kinyerése (parse URL)
-   */
-  function extractReferrerDomain() {
-    if (!document.referrer) return null;
+  function deviceType() {
+    const width = window.innerWidth || document.documentElement.clientWidth || 0;
+    return width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop';
+  }
+
+  function referrerDomain() {
     try {
-      const url = new URL(document.referrer);
-      return url.hostname || null;
+      const host = new URL(document.referrer).hostname;
+      return host && host !== window.location.hostname ? host : null;
     } catch {
       return null;
     }
   }
 
-  /**
-   * Telemetria API hívás (sendBeacon fallback fetch-hez)
-   */
-  async function sendTelemetryBatch(events) {
-    if (!events || events.length === 0) return;
-
-    const payload = JSON.stringify(events);
-
-    // Jelenlegi oldalon dolgozunk-e meg vagy navigáció közben
-    // Utolsó kísérlet: sendBeacon (legmegbízhatóbb az oldal elhagyásakor)
-    if (navigator.sendBeacon) {
-      try {
-        // sendBeacon a Blob-ot is elfogadja; payload előkészítés
-        const blob = new Blob([payload], { type: 'application/json' });
-        const success = navigator.sendBeacon(API_ENDPOINT, blob);
-        if (success) {
-          console.debug('[telemetry] Batch sent via sendBeacon', events.length);
-          return;
-        }
-      } catch (error) {
-        console.debug('[telemetry] sendBeacon fallback:', error.message);
-      }
-    }
-
-    // Fallback: fetch keepalive módban
-    try {
-      const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true
-      });
-
-      if (!response.ok) {
-        console.warn('[telemetry] HTTP error', response.status);
-      } else {
-        console.debug('[telemetry] Batch sent via fetch', events.length);
-      }
-    } catch (error) {
-      console.error('[telemetry] Send error:', error.message);
-    }
+  function utmSource() {
+    return new URLSearchParams(window.location.search).get('utm_source') || undefined;
   }
 
-  /**
-   * Buffer kiürítése időzítéssel
-   */
-  function scheduleFlush() {
-    if (flushTimeout) clearTimeout(flushTimeout);
-    flushTimeout = setTimeout(() => {
-      flushBuffer();
-    }, BUFFER_FLUSH_MS);
-  }
-
-  /**
-   * Buffer tartalmának küldése
-   */
-  async function flushBuffer() {
-    if (eventBuffer.length === 0) return;
-    const batch = eventBuffer.splice(0, eventBuffer.length);
-    await sendTelemetryBatch(batch);
-    if (flushTimeout) {
-      clearTimeout(flushTimeout);
-      flushTimeout = null;
-    }
-  }
-
-  /**
-   * Felhasználó által szerkesztett metaadatok beállítása (pl. korosztály, témakör)
-   * Ezt az alkalmazás állítja be az egyes lépésekben
-   */
-  window.telemetry = {
-    metadata: {},
-
-    /**
-     * Esemény naplózása (az alkalmazás által hívható)
-     * @param {string} eventName - Engedélyezett eseménynév (page_view, generator_started, stb.)
-     * @param {object} extra - Opcionális extra metaadatok ({plan_mode, age_group, theme_category, stb.})
-     */
-    logEvent(eventName, extra = {}) {
-      if (!eventName || typeof eventName !== 'string') {
-        console.warn('[telemetry] Invalid eventName:', eventName);
-        return;
-      }
-
-      const event = {
-        eventName,
-        deviceType: detectDeviceType(),
-        referrerDomain: extractReferrerDomain(),
-        metadata: {
-          ...window.telemetry.metadata,
-          ...extra,
-          timestamp: new Date().toISOString()
-        }
-      };
-
-      // Buffer hozzáadás
-      eventBuffer.push(event);
-      console.debug('[telemetry] Event buffered:', eventName, eventBuffer.length);
-
-      // Buffer kiürítés ha túl nagy
-      if (eventBuffer.length >= BUFFER_SIZE) {
-        flushBuffer();
-      } else {
-        scheduleFlush();
-      }
-    },
-
-    /**
-     * Globális metaadatok beállítása (az alkalmazás által)
-     */
-    setMetadata(metadata) {
-      if (typeof metadata === 'object' && metadata !== null) {
-        window.telemetry.metadata = { ...window.telemetry.metadata, ...metadata };
-        console.debug('[telemetry] Metadata updated:', window.telemetry.metadata);
-      }
-    },
-
-    /**
-     * Buffer kiürítés azonnalban (lehetséges adatvesztés nélkül)
-     */
-    async flush() {
-      await flushBuffer();
-    }
-  };
-
-  // Oldal betöltésének naplózása
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      window.telemetry.logEvent('page_view');
+  function logEvent(eventName, metadata = {}) {
+    const base = apiBase();
+    if (!base) return;
+    const body = JSON.stringify({
+      eventName,
+      deviceType: deviceType(),
+      referrerDomain: referrerDomain(),
+      metadata: { utm_source: utmSource(), ...metadata }
     });
-  } else {
-    window.telemetry.logEvent('page_view');
+    // A telemetria hibája nem zavarhatja a felhasználót, ezért itt (és csak itt) nem jelzünk a felületen.
+    fetch(`${base}/api/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true, credentials: 'omit' }).catch(() => {});
   }
 
-  // Oldal elhagyásakor: buffer kiürítés (sendBeacon-nal)
-  window.addEventListener('beforeunload', async () => {
-    // Szinkrón flushBuffer lehet problémás, de sendBeacon-nal szinkrón
-    if (eventBuffer.length > 0) {
-      await flushBuffer();
-    }
+  window.telemetry = { logEvent };
+
+  logEvent('page_view');
+
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    if (target.closest('#downloadDocxBtn')) logEvent('download_docx');
+    else if (target.closest('#downloadPdfBtn')) logEvent('download_pdf');
+    else if (target.closest('#authBtn')) logEvent('auth_modal_opened');
   });
 
-  // Pagehide is támogatása (Safari, stb.)
-  window.addEventListener('pagehide', async () => {
-    if (eventBuffer.length > 0) {
-      await flushBuffer();
-    }
+  document.addEventListener('focusin', (event) => {
+    if (event.target instanceof Element && event.target.id === 'couponCode') logEvent('coupon_box_opened');
   });
-
-  console.info('[telemetry] Module initialized');
 })();

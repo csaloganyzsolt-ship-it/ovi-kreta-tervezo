@@ -699,6 +699,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     }
     const result = normalizeResponse(rawText, request);
     const generationId = newServerGenerationId();
+    telemetryService.logEvent('document_generated', { metadata: { plan_mode: getPlanKind(request), age_group: request.group, theme_category: request.theme } });
     // Bejelentkezett felhasználónál a terv a fiókjához kötődik; token nélkül (vendég mód) vagy érvénytelen tokennel semmi nem változik.
     const user = await authService.optionalUser(req);
     planStore.savePlan(generationId, { ...result, request, generationId }, user ? { userId: user.id, email: user.email } : undefined);
@@ -811,7 +812,8 @@ app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
     });
 
     if (!result.success) {
-      return res.status(400).json({ success: false, error: 'Az esemény naplózása sikertelen volt.', reason: result.reason });
+      const status = result.reason === 'supabase_unavailable' ? 503 : result.reason === 'database_error' || result.reason === 'exception' ? 500 : 400;
+      return res.status(status).json({ success: false, error: 'Az esemény naplózása sikertelen volt.', reason: result.reason });
     }
 
     return res.json({ success: true });

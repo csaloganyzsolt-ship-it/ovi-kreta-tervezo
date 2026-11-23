@@ -33,14 +33,11 @@ test('Telemetry: Whitelist validation', () => {
   assert.ok(!telemetryService.ALLOWED_EVENTS.has('user_id_logged'));
 });
 
-test('Telemetry: PII detection', () => {
-  // Test Helper funkció (exportálva kellene az igazi teszthez)
-  // Ez egy szimuláció
-  const hasEmail = /@/.test('user@example.com');
-  const hasIP = /\b(?:\d{1,3}\.){3}\d{1,3}\b/.test('192.168.1.1');
-  
-  assert.ok(hasEmail, 'Email detection works');
-  assert.ok(hasIP, 'IP detection works');
+test('Telemetry: PII detection and metadata sanitising', () => {
+  assert.ok(telemetryService.isPIIDetected('user@example.com'));
+  assert.ok(telemetryService.isPIIDetected('192.168.1.1'));
+  assert.ok(!telemetryService.isPIIDetected('Nagycsoport'));
+  assert.deepEqual(telemetryService.sanitizeMetadata({ plan_mode: 'daily', user_id: 'x', email: 'a@b.hu' }), { plan_mode: 'daily' });
 });
 
 test('Analytics: Stats aggregation with mock data', async () => {

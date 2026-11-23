@@ -33,6 +33,29 @@ function extractReferrerDomain(referrer) {
   }
 }
 
+const DEVICE_TYPES = new Set(['mobile', 'tablet', 'desktop']);
+const METADATA_KEYS = ['plan_mode', 'age_group', 'theme_category', 'utm_source'];
+
+// Csak a névtelen szakmai kulcsok maradnak meg, rövid szövegként; minden más (pl. azonosító, időbélyeg) eldobódik.
+function sanitizeMetadata(metadata) {
+  const clean = {};
+  if (!metadata || typeof metadata !== 'object') return clean;
+  for (const key of METADATA_KEYS) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.trim()) clean[key] = value.trim().slice(0, 80);
+  }
+  return clean;
+}
+
+function sanitizeDeviceType(value) {
+  return DEVICE_TYPES.has(value) ? value : null;
+}
+
+function sanitizeReferrerDomain(value) {
+  const domain = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9.-]{1,100}$/.test(domain) && domain.includes('.') ? domain : null;
+}
+
 // Telemetria esemény logolása
 async function logEvent(eventName, options = {}) {
   const client = supabase.getClient();
@@ -59,8 +82,8 @@ async function logEvent(eventName, options = {}) {
     } = options;
 
     // PII-mentesség ellenőrzése a metaadatokban
-    const metadataStr = JSON.stringify(metadata);
-    if (isPIIDetected(metadataStr)) {
+    const cleanMetadata = sanitizeMetadata(metadata);
+    if (isPIIDetected(JSON.stringify(cleanMetadata))) {
       console.error(`[telemetry] PII észlelt az eseményben: ${eventName}`);
       return { success: false, reason: 'pii_detected' };
     }
@@ -68,9 +91,9 @@ async function logEvent(eventName, options = {}) {
     const record = {
       event_name: eventName,
       category: category || null,
-      device_type: deviceType || null,
-      referrer_domain: referrerDomain || null,
-      metadata: metadata || {}
+      device_type: sanitizeDeviceType(deviceType),
+      referrer_domain: sanitizeReferrerDomain(referrerDomain),
+      metadata: cleanMetadata
     };
 
     const { error } = await client
@@ -112,5 +135,7 @@ module.exports = {
   logEvent,
   detectDeviceType,
   extractReferrerDomain,
+  sanitizeMetadata,
+  isPIIDetected,
   ALLOWED_EVENTS
 };

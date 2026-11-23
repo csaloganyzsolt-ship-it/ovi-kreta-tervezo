@@ -167,6 +167,7 @@ async function generatePlan() {
   nextBtn.classList.add('is-busy');
   nextBtn.textContent = 'Tervezet generálása folyamatban...';
   const payload = buildGenerationPayload();
+  window.telemetry?.logEvent('generator_started', { plan_mode: String(payload.duration).toLowerCase() === 'heti' ? 'weekly' : 'daily', age_group: payload.group, theme_category: payload.theme });
   const stopLoader = startGenerationLoader(payload);
   document.getElementById('generationLoader')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 

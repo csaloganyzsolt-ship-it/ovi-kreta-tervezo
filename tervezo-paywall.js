@@ -164,6 +164,7 @@ function openCheckoutModal() {
   document.getElementById('checkoutError').textContent = '';
   syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
+  window.telemetry?.logEvent('paywall_opened');
   openModal('checkoutModal');
   document.getElementById('checkoutEmail').focus();
   prefillCheckoutFromProfile();
