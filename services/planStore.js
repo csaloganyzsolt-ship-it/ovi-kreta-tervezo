@@ -402,17 +402,48 @@ async function claimDocuments(user, ids) {
   return claimed;
 }
 
-// Fióktörléskor: a felhasználó tervei törlődnek, az ugyanerre az e-mail címre megvásárolt, fiók nélküli terveknél csak az e-mail cím törlődik.
-async function eraseUserData(user) {
+// A felhasználó saját tervezeteinek azonosítói (fióktörlés előtti archiváláshoz).
+async function listOwnedDocumentIds(user) {
   const client = requireClient();
-  const removed = await client.from('documents').delete().eq('user_id', user.id);
-  if (removed.error) throw new Error(`A felhasználó tervezeteinek törlése sikertelen: ${removed.error.message}`);
+  const { data, error } = await client.from('documents').select('document_id').eq('user_id', user.id);
+  if (error) throw new Error(`A felhasználó tervezeteinek lekérdezése sikertelen: ${error.message}`);
+  return (data || []).map((row) => row.document_id);
+}
+
+// Fióktörlés után (a user_id a külső kulcs miatt már NULL): a tervezetek elszakadnak az e-mail címtől, a memóriából is kikerülnek.
+// A tartalom az archívum lejáratáig megmarad (visszaállíthatóság), utána a purgeExpiredArchives törli.
+async function detachUserData(user, documentIds = []) {
+  const client = requireClient();
+  if (documentIds.length) {
+    const detached = await client.from('documents').update({ user_id: null, user_email: null }).in('document_id', documentIds);
+    if (detached.error) throw new Error(`A tervezetek leválasztása a fiókról sikertelen: ${detached.error.message}`);
+  }
   const cleared = await client.from('documents').update({ user_email: null }).eq('user_email', user.email);
   if (cleared.error) throw new Error(`A felhasználó e-mail címének törlése a tervezetekből sikertelen: ${cleared.error.message}`);
   for (const [id, entry] of [...plans.entries()]) {
     if (entry.userId === user.id) plans.delete(id);
     else if (entry.userEmail === user.email) entry.userEmail = '';
   }
+}
+
+// A lejárt archívum tervezeteinek végleges törlése (csak a már gazdátlanokat).
+async function deleteDetachedDocuments(documentIds) {
+  if (!documentIds.length) return;
+  const client = requireClient();
+  const removed = await client.from('documents').delete().in('document_id', documentIds).is('user_id', null);
+  if (removed.error) throw new Error(`A lejárt tervezetek törlése sikertelen: ${removed.error.message}`);
+  for (const id of documentIds) plans.delete(id);
+}
+
+// Egyetlen terv törlése a felhasználó fiókjából (csak a sajátja; a megvásárolt, de nem hozzárendelt terv nem törölhető).
+async function deleteUserDocument(user, id) {
+  const client = requireClient();
+  const key = String(id || '').slice(0, 100);
+  const { data, error } = await client.from('documents').delete().eq('document_id', key).eq('user_id', user.id).select('document_id');
+  if (error) throw new Error(`A tervezet törlése sikertelen: ${error.message}`);
+  if (!data?.length) return false;
+  plans.delete(key);
+  return true;
 }
 
 function readEntry(id) {
@@ -459,7 +490,10 @@ module.exports = {
   listUserDocuments,
   getUserDocument,
   claimDocuments,
-  eraseUserData,
+  listOwnedDocumentIds,
+  detachUserData,
+  deleteDetachedDocuments,
+  deleteUserDocument,
   findDocumentByCouponSession,
   clearPlans,
   cleanup,

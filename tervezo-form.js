@@ -951,6 +951,10 @@ function renderHistoryPanel() {
     const durationLabel = item.duration === 'Heti' ? 'Heti' : 'Napi';
     const themeTitle = item.theme || item.payload?.theme || 'Cím nélküli tervezet';
     const dateFormatted = formatHistoryDate(item.savedAt);
+    const localId = item.generationId || item.id;
+    const cloudPlans = window.oviCloudPlans;
+    const inCloud = Boolean(cloudPlans?.ids.has(localId));
+    const canAdopt = Boolean(cloudPlans?.canAdopt(localId));
 
     card.innerHTML = `
             <div class="history-item-header">
@@ -960,6 +964,9 @@ function renderHistoryPanel() {
               </div>
               <div class="history-item-meta">
                 <span class="history-item-date">${escapeHtml(dateFormatted)}</span>
+                ${inCloud
+            ? '<span class="history-badge history-badge-cloud">Profilba mentve</span>'
+            : '<span class="history-badge history-badge-local">Helyi / Offline</span>'}
                 ${isPaid
             ? '<span class="history-badge history-badge-paid">Fizetve</span>'
             : '<span class="history-badge history-badge-draft">Csak előnézet (piszkozat)</span>'}
@@ -971,6 +978,7 @@ function renderHistoryPanel() {
               ${isPaid && item.planData
           ? '<button type="button" class="btn-history btn-history-download" data-action="download">Letöltés</button>'
           : ''}
+              ${canAdopt ? '<button type="button" class="btn-history btn-history-adopt" data-action="adopt">Mentés a profilomba</button>' : ''}
               <button type="button" class="btn-history btn-history-delete" data-action="delete" title="Törlés">Törlés</button>
             </div>
           `;
@@ -1004,6 +1012,18 @@ function renderHistoryPanel() {
         updateExportLock();
         historyPanel.classList.remove('open');
         document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    card.querySelector('.btn-history-adopt')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const adoptButton = e.currentTarget;
+      adoptButton.disabled = true;
+      try {
+        await cloudPlans.adopt(localId);
+      } catch (error) {
+        adoptButton.disabled = false;
+        showGenerationError(`A terv mentése a profilba sikertelen: ${error.message}`);
       }
     });
 

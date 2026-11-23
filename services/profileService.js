@@ -73,12 +73,58 @@ async function saveProfile(user, body) {
   return toProfile(data, user);
 }
 
-// GDPR: a fiók és a hozzá tartozó tervezetek törlődnek (a profil a fiókkal együtt, kaszkáddal). A rendelések a számviteli megőrzési kötelezettség miatt (8 év) megmaradnak, a fiókhoz kötésük megszűnik.
-async function deleteAccount(user) {
-  const client = supabase.requireClient();
-  await planStore.eraseUserData(user);
-  const { error } = await client.auth.admin.deleteUser(user.id);
-  if (error) throw new Error(`A fiók törlése sikertelen: ${error.message}`);
+// A fizetésnél megadott (vagy módosított) számlázási adat visszaírása a bejelentkezett felhasználó profiljába. A hibát a hívó naplózza: a fizetést nem akaszthatja meg.
+async function rememberBilling(user, billing) {
+  return saveProfile(user, { billing_name: billing?.name, billing_zip: billing?.zip, billing_city: billing?.city, billing_address: billing?.address });
 }
 
-module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, deleteAccount };
+const ARCHIVE_TABLE = 'deleted_accounts_archive';
+const RESTORE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Fióktörlés: előbb archívum (profil + tervezet-azonosítók, 30 napig), aztán az auth-felhasználó törlése. Az `orders` a számviteli megőrzés (8 év) miatt marad.
+// A tervezetek a user_id külső kulcs (ON DELETE SET NULL) miatt elszakadnak a fióktól; tartalmuk az archívum lejártáig megmarad, utána purgeExpiredArchives törli.
+async function deleteAccount(user) {
+  const client = supabase.requireClient();
+  const profile = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (profile.error) throw new Error(`A profil archiválása sikertelen: ${profile.error.message}`);
+  const documentIds = await planStore.listOwnedDocumentIds(user);
+  const archived = await client.from(ARCHIVE_TABLE).insert({
+    original_user_id: user.id,
+    email: user.email,
+    profile_data: profile.data || {},
+    document_ids: documentIds,
+    restore_until: new Date(Date.now() + RESTORE_DAYS * DAY_MS).toISOString()
+  }).select('id').single();
+  if (archived.error) throw new Error(`A fiók archiválása sikertelen: ${archived.error.message}`);
+
+  const { error } = await client.auth.admin.deleteUser(user.id);
+  if (error) {
+    const rollback = await client.from(ARCHIVE_TABLE).delete().eq('id', archived.data.id);
+    if (rollback.error) console.error('[profil] A sikertelen törlés archív sora nem távolítható el:', rollback.error.message);
+    throw new Error(`A fiók törlése sikertelen: ${error.message}`);
+  }
+  // A fiók már nincs meg: a visszamaradó adatok takarítása nem állíthatja meg a törlés sikerét.
+  await planStore.detachUserData(user, documentIds).catch((cleanupError) => console.error('[profil]', cleanupError.message));
+}
+
+// A lejárt archívumok és a hozzájuk tartozó, gazdátlan tervezetek végleges törlése.
+async function purgeExpiredArchives() {
+  const client = supabase.getClient();
+  if (!client) return 0;
+  const { data, error } = await client.from(ARCHIVE_TABLE).select('id, document_ids').lt('restore_until', new Date().toISOString()).limit(50);
+  if (error) throw new Error(`A lejárt archívumok lekérdezése sikertelen: ${error.message}`);
+  for (const row of data || []) {
+    await planStore.deleteDetachedDocuments(row.document_ids || []);
+    const removed = await client.from(ARCHIVE_TABLE).delete().eq('id', row.id);
+    if (removed.error) throw new Error(`A lejárt archívum törlése sikertelen: ${removed.error.message}`);
+  }
+  return (data || []).length;
+}
+
+// Induláskor (a gyakori újraindítások miatt) és naponta egyszer fut.
+const runPurge = () => purgeExpiredArchives().catch((error) => console.error('[profil]', error.message));
+setTimeout(runPurge, 60 * 1000).unref();
+setInterval(runPurge, DAY_MS).unref();
+
+module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, rememberBilling, deleteAccount, purgeExpiredArchives };

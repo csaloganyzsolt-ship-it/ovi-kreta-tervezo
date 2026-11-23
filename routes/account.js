@@ -63,6 +63,19 @@ async function openDocument(req, res) {
   }
 }
 
+// A felhasználó saját, fiókhoz kötött tervének végleges törlése (más tervéhez nem nyúl, és a létét sem fedi fel).
+async function deleteDocument(req, res) {
+  try {
+    const id = String(req.params.id || '');
+    if (!DOCUMENT_ID_PATTERN.test(id) || !(await planStore.deleteUserDocument(req.user, id))) {
+      return res.status(404).json({ success: false, error: 'A tervezet nem található.' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    return sendAccountError(res, error, 'A tervezet törlése');
+  }
+}
+
 // A böngésző helyi tervazonosítóinak fiókhoz kötése; csak a még gazdátlan (user_id nélküli) tervek kerülnek át.
 async function syncDocuments(req, res) {
   try {
@@ -116,10 +129,11 @@ async function deleteAccount(req, res) {
 const router = express.Router();
 router.get('/my-documents', accountLimiter, requireUser, listDocuments);
 router.get('/my-documents/:id', accountLimiter, requireUser, openDocument);
+router.delete('/my-documents/:id', accountLimiter, requireUser, deleteDocument);
 router.post('/sync-documents', accountLimiter, requireUser, syncDocuments);
 router.get('/profile', accountLimiter, requireUser, getProfile);
 router.post('/profile', accountLimiter, requireUser, saveProfile);
 router.get('/my-orders', accountLimiter, requireUser, listOrders);
 router.post('/delete-account', deleteLimiter, requireUser, deleteAccount);
 
-module.exports = { router, listDocuments, openDocument, syncDocuments, getProfile, saveProfile, listOrders, deleteAccount };
+module.exports = { router, listDocuments, openDocument, deleteDocument, syncDocuments, getProfile, saveProfile, listOrders, deleteAccount };

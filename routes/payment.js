@@ -11,6 +11,7 @@ const coupons = require('../services/coupons');
 const barionService = require('../services/barionService');
 const authService = require('../services/authService');
 const orders = require('../services/orderService');
+const profileService = require('../services/profileService');
 
 // A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető. A bejelentkezett felhasználót (vagy null-t) adja vissza.
 async function recordOwner(req, generationId, rawEmail) {
@@ -163,6 +164,8 @@ async function checkoutBarion(req, res) {
       }
     }
     const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, user, req });
+    // A már ellenőrzött számlázási adat így kitölti a következő vásárlást; a hibája nem állítja meg a fizetést.
+    if (user) await profileService.rememberBilling(user, barionService.parseBilling(body.billing)).catch((error) => console.error('[profil] A számlázási adatok visszaírása sikertelen:', error.message));
     return res.json({ success: true, ...result });
   } catch (error) {
     return sendPaymentError(res, error, 'Barion checkout', req);

@@ -170,8 +170,8 @@ function openCheckoutModal() {
 }
 
 // Bejelentkezett felhasználónál a profil mentett számlázási adatai kitöltik az üres mezőket (a már beírt értéket nem írják felül).
+// A fizetés indításakor a szerver a megadott (vagy módosított) adatokat visszaírja a profilba, ezért itt nincs külön mentés.
 const PROFILE_BILLING_FIELDS = { billingName: 'billing_name', billingZip: 'billing_zip', billingCity: 'billing_city', billingAddress: 'billing_address' };
-let profileHasBilling = false;
 
 async function prefillCheckoutFromProfile() {
   const auth = window.OviAuth;
@@ -181,7 +181,6 @@ async function prefillCheckoutFromProfile() {
   if (emailInput && !emailInput.value.trim()) emailInput.value = user.email;
   try {
     const { profile } = await auth.apiFetch('/api/profile');
-    profileHasBilling = Object.values(PROFILE_BILLING_FIELDS).every((key) => Boolean(profile[key]));
     Object.entries(PROFILE_BILLING_FIELDS).forEach(([id, key]) => {
       const input = document.getElementById(id);
       if (input && !input.value.trim() && profile[key]) input.value = profile[key];
@@ -191,21 +190,6 @@ async function prefillCheckoutFromProfile() {
     document.getElementById('checkoutError').textContent = `A mentett számlázási adataid nem tölthetők be (${error.message}). Add meg őket kézzel.`;
   }
   syncCheckoutButtons();
-}
-
-// Első vásárláskor a megadott számlázási adatok a profilba is bekerülnek (a későbbi vásárlásoknál automatikusan kitöltődnek).
-async function rememberBillingInProfile(billing) {
-  const auth = window.OviAuth;
-  if (!auth?.getUser?.() || profileHasBilling) return;
-  try {
-    await auth.apiFetch('/api/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ billing_name: billing.name, billing_zip: billing.zip, billing_city: billing.city, billing_address: billing.address })
-    });
-  } catch (error) {
-    console.error('[profil] A számlázási adatok mentése a profilba sikertelen:', error.message);
-  }
 }
 
 const CHECKOUT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -283,7 +267,6 @@ async function startBarionCheckout() {
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
-    await rememberBillingInProfile(form.billing);
     redirectTo(data.gatewayUrl);
   } catch (error) {
     if (error.code === 'INVALID_COUPON') {

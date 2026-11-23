@@ -113,7 +113,7 @@ app.use((_req, res, next) => {
   res.setHeader('Content-Security-Policy-Report-Only', CONTENT_SECURITY_POLICY);
   next();
 });
-app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'OPTIONS'] }));
+app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'DELETE', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A Barion visszahívás query-ben (GET) vagy űrlapként/JSON-ban (POST) hozza a paymentId-t; az állapotot a handler a Barion API-tól kérdezi le.

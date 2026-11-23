@@ -14,29 +14,30 @@
     login: {
       title: 'Bejelentkezés',
       intro: 'Lépj be a fiókodba, hogy a tervezeteid és a számlázási adataid bármely eszközről elérhetők legyenek. Regisztráció nélkül is használhatod az OviTervezőt.',
-      submit: 'Bejelentkezés', password: true, email: true, name: false, forgot: true, social: true, tabs: true, back: false, autocomplete: 'current-password'
+      submit: 'Bejelentkezés', password: true, email: true, name: false, forgot: true, social: true, tabs: true, back: false, captcha: true, autocomplete: 'current-password'
     },
     register: {
       title: 'Regisztráció',
       intro: 'Hozz létre ingyenes fiókot: a tervezeteid felhőben is megmaradnak, a számlázási adataid pedig a vásárlásnál automatikusan kitöltődnek.',
-      submit: 'Regisztráció', password: true, email: true, name: true, forgot: false, social: true, tabs: true, back: false, autocomplete: 'new-password'
+      submit: 'Regisztráció', password: true, email: true, name: true, forgot: false, social: true, tabs: true, back: false, captcha: true, autocomplete: 'new-password'
     },
     forgot: {
       title: 'Elfelejtett jelszó',
       intro: 'Add meg a fiókod e-mail címét, és küldünk egy linket az új jelszó megadásához.',
-      submit: 'Visszaállító link küldése', password: false, email: true, name: false, forgot: false, social: false, tabs: false, back: true, autocomplete: 'current-password'
+      submit: 'Visszaállító link küldése', password: false, email: true, name: false, forgot: false, social: false, tabs: false, back: true, captcha: true, autocomplete: 'current-password'
     },
     recovery: {
       title: 'Új jelszó megadása',
       intro: 'Add meg az új jelszavadat, amellyel ezután belépsz.',
-      submit: 'Jelszó mentése', password: true, email: false, name: false, forgot: false, social: false, tabs: false, back: false, autocomplete: 'new-password'
+      submit: 'Jelszó mentése', password: true, email: false, name: false, forgot: false, social: false, tabs: false, back: false, captcha: false, autocomplete: 'new-password'
     }
   };
 
   const config = window.APP_CONFIG || {};
   const button = document.getElementById('authBtn');
   const form = document.getElementById('authForm');
-  const state = { client: null, user: null, token: '', mode: 'login' };
+  const state = { client: null, user: null, token: '', mode: 'login', captchaToken: '', captchaWidgetId: null, captchaTheme: '' };
+  const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   let resolveReady;
   const ready = new Promise((resolve) => { resolveReady = resolve; });
 
@@ -59,6 +60,71 @@
     if (el) el.hidden = hidden;
   }
 
+  // Cloudflare Turnstile a belépési ablakban: csak akkor él, ha a config.js-ben van site kulcs; üres kulcsnál nincs widget és nincs külső script.
+  function captchaSiteKey() {
+    return String(config.turnstileSiteKey || '').trim();
+  }
+
+  function captchaNeeded() {
+    return Boolean(captchaSiteKey()) && Boolean(MODES[state.mode]?.captcha);
+  }
+
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    return new Promise((resolve, reject) => {
+      const script = byId('turnstileScript') || document.createElement('script');
+      script.addEventListener('load', () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('Turnstile hiányzik'))));
+      script.addEventListener('error', () => { script.remove(); reject(new Error('Turnstile nem tölthető be')); });
+      if (!script.parentNode) {
+        script.id = 'turnstileScript';
+        script.src = TURNSTILE_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+    });
+  }
+
+  function resetCaptcha() {
+    state.captchaToken = '';
+    if (state.captchaWidgetId !== null && window.turnstile) {
+      try { window.turnstile.reset(state.captchaWidgetId); } catch (_error) { /* a widget már nincs meg */ }
+    }
+  }
+
+  async function ensureCaptcha() {
+    const container = byId('authCaptcha');
+    if (!container || !captchaNeeded()) return;
+    try {
+      const turnstile = await loadTurnstile();
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+      if (state.captchaWidgetId !== null && state.captchaTheme === theme) return;
+      if (state.captchaWidgetId !== null) {
+        try { turnstile.remove(state.captchaWidgetId); } catch (_error) { /* a widget már nincs meg */ }
+        state.captchaWidgetId = null;
+      }
+      state.captchaToken = '';
+      state.captchaWidgetId = turnstile.render(container, {
+        sitekey: captchaSiteKey(),
+        theme,
+        callback: (token) => { state.captchaToken = token; setMessage('authError', ''); },
+        'expired-callback': () => { state.captchaToken = ''; },
+        'error-callback': () => {
+          state.captchaToken = '';
+          setMessage('authError', 'A biztonsági ellenőrzés nem sikerült. Kérjük, próbáld újra, vagy frissítsd az oldalt.');
+        }
+      });
+      state.captchaTheme = theme;
+    } catch (_error) {
+      setMessage('authError', 'A biztonsági ellenőrzés nem tölthető be. Ellenőrizd az internetkapcsolatot, és frissítsd az oldalt.');
+    }
+  }
+
+  // Az egyszer használatos token minden Supabase-hívás előtt kerül a kérésbe, utána új ellenőrzés kell.
+  function captchaOptions() {
+    return captchaNeeded() ? { captchaToken: state.captchaToken } : {};
+  }
+
   function setMode(mode) {
     const spec = MODES[mode] || MODES.login;
     state.mode = MODES[mode] ? mode : 'login';
@@ -76,6 +142,7 @@
     setHidden('authForgot', !spec.forgot);
     setHidden('authSocial', !spec.social);
     setHidden('authBack', !spec.back);
+    setHidden('authCaptcha', !captchaNeeded());
     document.querySelectorAll('[data-auth-tab]').forEach((tab) => {
       const active = tab.dataset.authTab === state.mode;
       tab.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -97,6 +164,7 @@
     setMode(mode);
     if (typeof openModal === 'function') openModal('authModal');
     byId(state.mode === 'recovery' ? 'authPassword' : 'authEmail')?.focus();
+    ensureCaptcha();
   }
 
   function render() {
@@ -182,10 +250,10 @@
   }
 
   document.querySelectorAll('[data-auth-tab]').forEach((tab) => {
-    tab.addEventListener('click', () => setMode(tab.dataset.authTab));
+    tab.addEventListener('click', () => { setMode(tab.dataset.authTab); ensureCaptcha(); });
   });
-  byId('authForgot')?.addEventListener('click', () => setMode('forgot'));
-  byId('authBack')?.addEventListener('click', () => setMode('login'));
+  byId('authForgot')?.addEventListener('click', () => { setMode('forgot'); ensureCaptcha(); });
+  byId('authBack')?.addEventListener('click', () => { setMode('login'); ensureCaptcha(); });
 
   byId('authPasswordToggle')?.addEventListener('click', (event) => {
     const input = byId('authPassword');
@@ -232,7 +300,7 @@
   async function runMode(mode, values) {
     const redirectTo = `${window.location.origin}/tervezo.html`;
     if (mode === 'login') {
-      const { error } = await state.client.auth.signInWithPassword({ email: values.email, password: values.password });
+      const { error } = await state.client.auth.signInWithPassword({ email: values.email, password: values.password, ...(captchaNeeded() ? { options: captchaOptions() } : {}) });
       if (error) throw error;
       closeAuthModal();
       return '';
@@ -241,7 +309,7 @@
       const { data, error } = await state.client.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { emailRedirectTo: redirectTo, data: values.name ? { full_name: values.name } : {} }
+        options: { emailRedirectTo: redirectTo, data: values.name ? { full_name: values.name } : {}, ...captchaOptions() }
       });
       if (error) throw error;
       if (data?.session) {
@@ -251,7 +319,7 @@
       return 'Elküldtük a megerősítő levelet az e-mail címedre. A benne lévő linkre kattintva aktiválhatod a fiókodat.';
     }
     if (mode === 'forgot') {
-      const { error } = await state.client.auth.resetPasswordForEmail(values.email, { redirectTo });
+      const { error } = await state.client.auth.resetPasswordForEmail(values.email, { redirectTo, ...captchaOptions() });
       if (error) throw error;
       return 'Ha az e-mail címhez tartozik fiók, elküldtük a jelszó-visszaállító linket.';
     }
@@ -280,6 +348,10 @@
       setMessage('authError', `A jelszó legalább ${MIN_PASSWORD_LENGTH} karakter hosszú legyen.`);
       return;
     }
+    if (captchaNeeded() && !state.captchaToken) {
+      setMessage('authError', 'Kérjük, végezd el a biztonsági ellenőrzést.');
+      return;
+    }
     const submit = byId('authSubmit');
     if (submit) submit.disabled = true;
     try {
@@ -290,6 +362,7 @@
     } catch (error) {
       setMessage('authError', friendlyError(error));
     } finally {
+      if (captchaNeeded()) resetCaptcha();
       if (submit) submit.disabled = false;
     }
   });

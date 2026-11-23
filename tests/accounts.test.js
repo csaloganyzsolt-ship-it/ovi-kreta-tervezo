@@ -22,7 +22,7 @@ function docRow(id, overrides = {}) {
 
 // Mockolt Supabase kliens: auth.getUser(token) és a documents tábla használt lekérdezés-láncai (select/update/upsert, eq/is/in, order, limit).
 function fakeAccounts(documents = [], extra = {}) {
-  const tables = { documents, profiles: [], orders: [], ...extra };
+  const tables = { documents, profiles: [], orders: [], deleted_accounts_archive: [], ...extra };
   const failures = {};
   const calls = { getUser: [], deleteUser: [] };
   const read = (row, column) => (column === 'request' ? row.data?.plan?.request : row[column]);
@@ -65,6 +65,17 @@ function fakeAccounts(documents = [], extra = {}) {
         eq(column, value) { filters.push((row) => read(row, column) === value); return builder; },
         is(column, value) { filters.push((row) => (row[column] ?? null) === value); return builder; },
         in(column, values) { filters.push((row) => values.includes(row[column])); return builder; },
+        lt(column, value) { filters.push((row) => String(row[column]) < String(value)); return builder; },
+        single() {
+          const { data, error } = run();
+          return Promise.resolve({ data: data?.[0] || null, error });
+        },
+        insert(row) {
+          if (failures[name]) return { select: () => ({ single: () => Promise.resolve({ data: null, error: { message: failures[name] } }) }) };
+          const stored = { id: `arch-${tables[name].length + 1}`, deleted_at: new Date().toISOString(), ...row };
+          tables[name].push(stored);
+          return { select: () => ({ single: () => Promise.resolve({ data: { id: stored.id }, error: null }) }) };
+        },
         order(column, options) { order = { column, ascending: options?.ascending !== false }; return builder; },
         limit(count) { max = count; return builder; },
         maybeSingle() {
@@ -439,7 +450,7 @@ test('GET /api/my-orders lists own orders and guest purchases by e-mail, newest 
   assert.deepEqual(bob.orders.map((order) => order.orderNumber).sort(), ['OVI-260301-CCCCCC', 'OVI-260301-DDDDDD']);
 });
 
-test('POST /api/delete-account needs explicit confirmation, erases documents and the auth user but keeps orders', async (t) => {
+test('POST /api/delete-account needs confirmation, archives profile and document ids first, detaches documents and keeps orders', async (t) => {
   relaxLimits(t);
   const client = useClient(t, fakeAccounts([
     docRow('gen_alice1', { user_id: ALICE.id, user_email: ALICE.email }),
@@ -447,9 +458,16 @@ test('POST /api/delete-account needs explicit confirmation, erases documents and
     docRow('gen_bought', { user_email: ALICE.email, unlocked: true }),
     docRow('gen_bob', { user_id: BOB.id, user_email: BOB.email })
   ], {
-    profiles: [{ id: ALICE.id, email: ALICE.email }],
+    profiles: [{ id: ALICE.id, email: ALICE.email, full_name: 'Kovács Anna', billing_name: 'Napsugár Óvoda', billing_city: 'Győr' }],
     orders: [orderRow('AAAAAA', { user_id: ALICE.id, user_email: ALICE.email })]
   }));
+  // Az archív sor már a felhasználó törlése előtt létezik.
+  const realDelete = client.auth.admin.deleteUser;
+  let archivedBeforeDelete = null;
+  client.auth.admin.deleteUser = async (id) => {
+    archivedBeforeDelete = client.tables.deleted_accounts_archive.map((row) => ({ ...row }));
+    return realDelete(id);
+  };
   const base = await listen(t);
 
   for (const body of [undefined, {}, { confirm: 'true' }, { confirm: false }]) {
@@ -463,15 +481,33 @@ test('POST /api/delete-account needs explicit confirmation, erases documents and
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { success: true });
   assert.deepEqual(client.calls.deleteUser, [ALICE.id]);
-  assert.deepEqual(client.tables.documents.map((row) => row.document_id).sort(), ['gen_bob', 'gen_bought']);
+
+  // Soft-archive: profil + saját tervek azonosítói, 30 napos visszaállítási határidővel.
+  assert.equal(archivedBeforeDelete.length, 1, 'az archiválás megelőzi a fiók törlését');
+  const [archive] = client.tables.deleted_accounts_archive;
+  assert.equal(archive.original_user_id, ALICE.id);
+  assert.equal(archive.email, ALICE.email);
+  assert.equal(archive.profile_data.full_name, 'Kovács Anna');
+  assert.equal(archive.profile_data.billing_name, 'Napsugár Óvoda');
+  assert.deepEqual([...archive.document_ids].sort(), ['gen_alice1', 'gen_alice2']);
+  const days = (Date.parse(archive.restore_until) - Date.now()) / 86400000;
+  assert.ok(days > 29.9 && days <= 30, `a visszaállítási határidő 30 nap (${days})`);
+
+  // A tervezetek nem törlődnek, csak elszakadnak a fióktól és az e-mail címtől.
+  assert.deepEqual(client.tables.documents.map((row) => row.document_id).sort(), ['gen_alice1', 'gen_alice2', 'gen_bob', 'gen_bought']);
+  for (const id of ['gen_alice1', 'gen_alice2']) {
+    const row = client.tables.documents.find((item) => item.document_id === id);
+    assert.equal(row.user_id, null, id);
+    assert.equal(row.user_email, null, id);
+  }
   assert.equal(client.tables.documents.find((row) => row.document_id === 'gen_bought').user_email, null, 'a vásárlói e-mail cím is törlődik');
   assert.equal(client.tables.documents.find((row) => row.document_id === 'gen_bob').user_id, BOB.id);
   assert.equal(client.tables.orders.length, 1, 'a rendelés a számviteli megőrzés miatt megmarad');
 });
 
-test('a failed auth user deletion is reported as an error instead of a silent success', async (t) => {
+test('a failed auth user deletion is reported as an error, rolls the archive back and keeps the documents', async (t) => {
   relaxLimits(t);
-  const client = useClient(t, fakeAccounts());
+  const client = useClient(t, fakeAccounts([docRow('gen_alice1', { user_id: ALICE.id, user_email: ALICE.email })]));
   client.failures.deleteUser = 'admin api secret detail';
   const base = await listen(t);
   const response = await call(base, '/api/delete-account', { method: 'POST', token: 'token-alice', body: { confirm: true } });
@@ -479,6 +515,83 @@ test('a failed auth user deletion is reported as an error instead of a silent su
   const text = await response.text();
   assert.doesNotMatch(text, /secret detail/);
   assert.match(text, /"success":false/);
+  assert.deepEqual(client.tables.deleted_accounts_archive, [], 'sikertelen törlésnél nem marad archív sor');
+  assert.equal(client.tables.documents[0].user_id, ALICE.id);
+  assert.equal(client.tables.documents[0].user_email, ALICE.email);
+});
+
+test('an archive failure stops the account deletion before anything is removed', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts([docRow('gen_alice1', { user_id: ALICE.id })]));
+  client.failures.deleted_accounts_archive = 'archive secret detail';
+  const base = await listen(t);
+  const response = await call(base, '/api/delete-account', { method: 'POST', token: 'token-alice', body: { confirm: true } });
+  assert.equal(response.status, 500);
+  assert.doesNotMatch(await response.text(), /secret detail/);
+  assert.deepEqual(client.calls.deleteUser, [], 'archiválás nélkül a fiók nem törlődik');
+  assert.equal(client.tables.documents[0].user_id, ALICE.id);
+});
+
+test('purgeExpiredArchives removes expired archives with their detached documents only', async (t) => {
+  const profileService = require('../services/profileService');
+  const past = '2026-01-01T00:00:00.000Z';
+  const future = new Date(Date.now() + 86400000).toISOString();
+  const client = useClient(t, fakeAccounts([
+    docRow('gen_expired_detached'),
+    docRow('gen_expired_reowned', { user_id: BOB.id }),
+    docRow('gen_active_detached'),
+    docRow('gen_other')
+  ], {
+    deleted_accounts_archive: [
+      { id: 'arch-old', original_user_id: ALICE.id, document_ids: ['gen_expired_detached', 'gen_expired_reowned'], restore_until: past },
+      { id: 'arch-new', original_user_id: BOB.id, document_ids: ['gen_active_detached'], restore_until: future }
+    ]
+  }));
+
+  assert.equal(await profileService.purgeExpiredArchives(), 1);
+  assert.deepEqual(client.tables.deleted_accounts_archive.map((row) => row.id), ['arch-new']);
+  assert.deepEqual(client.tables.documents.map((row) => row.document_id).sort(), ['gen_active_detached', 'gen_expired_reowned', 'gen_other'], 'csak a gazdátlan, lejárt tervek törlődnek');
+
+  supabase.setClient(null);
+  assert.equal(await profileService.purgeExpiredArchives(), 0, 'kliens nélkül nincs teendő');
+});
+
+// ---------- DELETE /api/my-documents/:id ----------
+
+test('DELETE /api/my-documents/:id deletes only the own cloud plan and hides everything else', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts([
+    docRow('gen_mine', { user_id: ALICE.id, user_email: ALICE.email }),
+    docRow('gen_bought', { user_email: ALICE.email, unlocked: true }),
+    docRow('gen_bob', { user_id: BOB.id }),
+    docRow('gen_guest')
+  ]));
+  const base = await listen(t);
+  const remove = (id, token = 'token-alice') => call(base, `/api/my-documents/${encodeURIComponent(id)}`, { method: 'DELETE', token });
+
+  const noToken = await remove('gen_mine', null);
+  assert.equal(noToken.status, 401);
+  assert.equal(client.tables.documents.length, 4);
+
+  for (const id of ['gen_bob', 'gen_guest', 'gen_bought', 'gen_missing', 'gen_a,user_id.eq.x']) {
+    assert.equal((await remove(id)).status, 404, id);
+  }
+  assert.equal(client.tables.documents.length, 4, 'idegen vagy e-mail alapú terv nem törölhető');
+
+  const own = await remove('gen_mine');
+  assert.equal(own.status, 200);
+  assert.deepEqual(await own.json(), { success: true });
+  assert.deepEqual(client.tables.documents.map((row) => row.document_id).sort(), ['gen_bob', 'gen_bought', 'gen_guest']);
+  assert.equal((await remove('gen_mine')).status, 404, 'a törölt terv nem törölhető újra');
+});
+
+test('the CORS preflight allows DELETE for the account API', async (t) => {
+  const base = await listen(t);
+  const response = await fetch(`${base}/api/my-documents/gen_x`, {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://ovitervezo.hu', 'Access-Control-Request-Method': 'DELETE', 'Access-Control-Request-Headers': 'authorization' }
+  });
+  assert.match(response.headers.get('access-control-allow-methods') || '', /DELETE/);
 });
 
 test('the new account endpoints answer 503 without a Supabase client', async (t) => {
@@ -506,16 +619,25 @@ const { readPage } = require('./fixtures');
 const pageHtml = readPage('tervezo.html');
 const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
 
-async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.html', search = '', config = {}, routes = {}, local = true }) {
-  const state = { listener: null, otp: [], logins: [], signUps: [], resets: [], updates: [], oauth: [], fetches: [], signOuts: [] };
+async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.html', search = '', config = {}, routes = {}, local = true, history = null, turnstile = false }) {
+  const state = { listener: null, otp: [], logins: [], signUps: [], resets: [], updates: [], oauth: [], fetches: [], signOuts: [], turnstile: { renders: [], resets: [], removes: [] } };
   const dom = new JSDOM(page, {
     url: `http://localhost:8000/${pageName}${search}`,
     runScripts: 'dangerously',
     beforeParse(window) {
       window.HTMLElement.prototype.scrollIntoView = () => {};
       window.alert = (message) => { throw new Error(message); };
+      window.confirm = () => true;
       window.APP_CONFIG = { apiBaseUrl: 'same-origin', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test', ...config };
       if (local) window.localStorage.setItem('oviKretaUnlocked', JSON.stringify(['gen_local1', 'nem-gen']));
+      if (history) window.localStorage.setItem('oviKretaPlansHistory', JSON.stringify(history));
+      if (turnstile) {
+        window.turnstile = {
+          render(target, options) { state.turnstile.renders.push({ target, options }); state.turnstile.last = options; return `widget-${state.turnstile.renders.length}`; },
+          reset(id) { state.turnstile.resets.push(id); },
+          remove(id) { state.turnstile.removes.push(id); }
+        };
+      }
       window.fetch = async (url, options = {}) => {
         const path = new URL(url).pathname;
         const method = options.method || 'GET';
@@ -689,7 +811,7 @@ test('the Google login button becomes active only when the provider is enabled i
   assert.deepEqual(JSON.parse(JSON.stringify(state.oauth)), [{ provider: 'google', options: { redirectTo: 'http://localhost:8000/tervezo.html' } }]);
 });
 
-test('logging in syncs local plan ids, lists cloud plans, opens them and logging out clears them', async (t) => {
+test('logging in lists cloud plans without silently merging local ones, and logging out clears them', async (t) => {
   const { window, state } = await loadPage(t, { withSupabase: true });
   const document = window.document;
 
@@ -698,21 +820,19 @@ test('logging in syncs local plan ids, lists cloud plans, opens them and logging
   assert.equal(document.getElementById('authBtn').textContent, 'Fiókom');
   assert.ok(document.getElementById('authBtn').title.includes(ALICE.email));
 
-  const sync = state.fetches.find((call) => call.path === '/api/sync-documents');
-  assert.deepEqual(JSON.parse(sync.body).documentIds, ['gen_local1'], 'csak a gen_ előtagú helyi azonosítók mennek ki');
-  assert.equal(sync.headers.Authorization, 'Bearer jwt-alice');
+  assert.equal(state.fetches.some((call) => call.path === '/api/sync-documents'), false, 'belépéskor nincs automatikus összefésülés');
   const list = state.fetches.find((call) => call.path === '/api/my-documents');
   assert.equal(list.headers.Authorization, 'Bearer jwt-alice');
-  assert.ok(state.fetches.indexOf(sync) < state.fetches.indexOf(list), 'előbb a szinkronizálás, aztán a lista');
 
   assert.equal(document.getElementById('cloudPlansField').hidden, false);
   const cards = document.querySelectorAll('#cloudPlansPanel [data-cloud-id]');
   assert.equal(cards.length, 2);
   assert.ok(cards[0].textContent.includes('Őszi <b>erdő</b>'));
   assert.equal(cards[0].querySelector('b'), null, 'a cím escape-elve jelenik meg');
-  assert.ok(cards[0].textContent.includes('Felhőben mentve'));
+  assert.ok(cards[0].textContent.includes('Profilba mentve'));
   assert.ok(cards[0].querySelector('[data-cloud-action="docx"]') && cards[0].querySelector('[data-cloud-action="pdf"]'));
   assert.equal(cards[1].querySelector('[data-cloud-action="docx"]'), null, 'zárolt terv nem tölthető le');
+  assert.ok(cards[1].querySelector('[data-cloud-action="delete"]'), 'a profilba mentett terv törölhető');
 
   cards[0].querySelector('[data-cloud-action="open"]').click();
   await tick();
@@ -727,6 +847,99 @@ test('logging in syncs local plan ids, lists cloud plans, opens them and logging
   assert.equal(document.getElementById('authBtn').textContent, 'Belépés / Regisztráció');
   assert.equal(document.getElementById('cloudPlansField').hidden, true);
   assert.equal(document.getElementById('cloudPlansPanel').children.length, 0);
+});
+
+const localEntry = (id, theme) => ({ id, generationId: id, theme, duration: 'Napi', savedAt: '2026-03-01T10:00:00Z', status: 'draft', paid: false, payload: { theme }, planData: null });
+
+test('local plans are marked Helyi / Offline, only logged-in users can save them to the profile, and cloud plans can be deleted', async (t) => {
+  let cloud = [
+    { id: 'gen_cloud1', title: 'Őszi erdő', duration: 'Napi', unlocked: true, owned: true, createdAt: '2026-03-01T10:00:00Z' },
+    { id: 'gen_cloud2', title: 'Tavaszi nyitás', duration: 'Heti', unlocked: false, owned: true, createdAt: '2026-03-02T10:00:00Z' }
+  ];
+  const { window, state } = await loadPage(t, {
+    withSupabase: true,
+    history: [localEntry('gen_local1', 'Helyi terv'), localEntry('gen_cloud1', 'Már mentett terv'), localEntry('hist_x1', 'Régi terv')],
+    routes: {
+      '/api/my-documents': () => [{ success: true, documents: cloud }],
+      '/api/sync-documents': (_method, body) => {
+        cloud = [{ id: body.documentIds[0], title: 'Helyi terv', duration: 'Napi', unlocked: false, owned: true, createdAt: '2026-03-03T10:00:00Z' }, ...cloud];
+        return [{ success: true, claimed: body.documentIds }];
+      },
+      '/api/my-documents/gen_cloud2': (method) => {
+        assert.equal(method, 'DELETE');
+        cloud = cloud.filter((item) => item.id !== 'gen_cloud2');
+        return [{ success: true }];
+      }
+    }
+  });
+  const document = window.document;
+  const localCard = (id) => document.querySelector(`#historyPanel [data-history-id="${id}"]`);
+
+  // Vendégként: minden helyi terv "Helyi / Offline", mentés gomb nincs.
+  for (const id of ['gen_local1', 'gen_cloud1', 'hist_x1']) {
+    assert.ok(localCard(id).textContent.includes('Helyi / Offline'), id);
+    assert.equal(localCard(id).querySelector('[data-action="adopt"]'), null, id);
+  }
+
+  state.listener('INITIAL_SESSION', SESSION);
+  await tick();
+  assert.equal(state.fetches.some((call) => call.path === '/api/sync-documents'), false);
+  assert.ok(localCard('gen_local1').textContent.includes('Helyi / Offline'));
+  assert.equal(localCard('gen_local1').querySelector('[data-action="adopt"]').textContent, 'Mentés a profilomba');
+  assert.ok(localCard('gen_cloud1').textContent.includes('Profilba mentve'), 'a fiókban lévő terv jelölése');
+  assert.equal(localCard('gen_cloud1').querySelector('[data-action="adopt"]'), null);
+  assert.ok(localCard('hist_x1').textContent.includes('Helyi / Offline'));
+  assert.equal(localCard('hist_x1').querySelector('[data-action="adopt"]'), null, 'csak a szerveren tárolt (gen_) terv menthető');
+  assert.equal(document.querySelectorAll('#cloudPlansPanel [data-cloud-id]').length, 2);
+
+  // Kifejezett mentés: egyetlen azonosító megy ki, a kártya átvált, a felhős lista bővül.
+  localCard('gen_local1').querySelector('[data-action="adopt"]').click();
+  await tick();
+  const sync = state.fetches.filter((call) => call.path === '/api/sync-documents');
+  assert.equal(sync.length, 1);
+  assert.deepEqual(JSON.parse(sync[0].body), { documentIds: ['gen_local1'] });
+  assert.equal(sync[0].headers.Authorization, 'Bearer jwt-alice');
+  assert.ok(localCard('gen_local1').textContent.includes('Profilba mentve'));
+  assert.equal(localCard('gen_local1').querySelector('[data-action="adopt"]'), null);
+  assert.deepEqual([...document.querySelectorAll('#cloudPlansPanel [data-cloud-id]')].map((card) => card.dataset.cloudId), ['gen_local1', 'gen_cloud1', 'gen_cloud2']);
+
+  // Felhős terv törlése: megerősítés után DELETE, a lista frissül.
+  let confirmed = false;
+  window.confirm = () => { confirmed = true; return false; };
+  document.querySelector('#cloudPlansPanel [data-cloud-id="gen_cloud2"] [data-cloud-action="delete"]').click();
+  await tick();
+  assert.equal(confirmed, true);
+  assert.equal(state.fetches.some((call) => call.method === 'DELETE'), false, 'megerősítés nélkül nincs törlés');
+  window.confirm = () => true;
+  document.querySelector('#cloudPlansPanel [data-cloud-id="gen_cloud2"] [data-cloud-action="delete"]').click();
+  await tick();
+  const removal = state.fetches.find((call) => call.method === 'DELETE');
+  assert.equal(removal.path, '/api/my-documents/gen_cloud2');
+  assert.equal(removal.headers.Authorization, 'Bearer jwt-alice');
+  assert.deepEqual([...document.querySelectorAll('#cloudPlansPanel [data-cloud-id]')].map((card) => card.dataset.cloudId), ['gen_local1', 'gen_cloud1']);
+
+  // Kilépés után ismét minden helyi terv "Helyi / Offline", mentés gomb nélkül.
+  await window.OviAuth.signOut();
+  await tick();
+  assert.ok(localCard('gen_local1').textContent.includes('Helyi / Offline'));
+  assert.equal(localCard('gen_local1').querySelector('[data-action="adopt"]'), null);
+});
+
+test('a failed profile save keeps the plan local and shows the server message', async (t) => {
+  const { window, state } = await loadPage(t, {
+    withSupabase: true,
+    history: [localEntry('gen_local1', 'Helyi terv')],
+    routes: { '/api/sync-documents': () => [{ success: true, claimed: [] }] }
+  });
+  state.listener('INITIAL_SESSION', SESSION);
+  await tick();
+  const card = window.document.querySelector('#historyPanel [data-history-id="gen_local1"]');
+  card.querySelector('[data-action="adopt"]').click();
+  await tick();
+  const after = window.document.querySelector('#historyPanel [data-history-id="gen_local1"]');
+  assert.ok(after.textContent.includes('Helyi / Offline'));
+  assert.ok(after.querySelector('[data-action="adopt"]'), 'a gomb újra használható');
+  assert.match(window.document.body.textContent, /nem menthető a profilba/);
 });
 
 test('?open=<id> from the profile page opens the plan after login and asks guests to log in first', async (t) => {
@@ -874,4 +1087,185 @@ test('profil.html logout button signs the user out and returns to the login gate
   assert.equal(state.signOuts.length, 1);
   assert.equal(visible(window, 'profileGate'), true);
   assert.equal(visible(window, 'profileApp'), false);
+});
+
+test('profil.html has a subdued delete link at the bottom instead of the red danger zone and no billing hint text', async (t) => {
+  const { window } = await loadProfil(t);
+  const html = window.document.documentElement.outerHTML;
+  assert.equal(/Veszélyzóna/i.test(html), false);
+  assert.equal(window.document.querySelector('.profile-danger'), null);
+  assert.equal(html.includes('A számlázási adatok a következő vásárláskor automatikusan kitöltődnek'), false);
+  const link = window.document.querySelector('#profileApp .profile-footer #deleteOpen');
+  assert.equal(link.textContent.trim(), 'Fiók törlése');
+  assert.match(window.document.getElementById('deleteModal').textContent, /30 napig/);
+});
+
+// ---------- Cloudflare Turnstile a belépési ablakban ----------
+
+test('Turnstile: with an empty site key the auth modal shows no widget, loads no script and sends no captcha token', async (t) => {
+  const { window, state } = await loadPage(t, { withSupabase: true, turnstile: true, config: { turnstileSiteKey: '' } });
+  const document = window.document;
+  document.getElementById('authBtn').click();
+  await tick();
+  assert.equal(document.getElementById('authCaptcha').hidden, true);
+  assert.equal(state.turnstile.renders.length, 0);
+  assert.equal(document.getElementById('turnstileScript'), null);
+  document.getElementById('authEmail').value = 'tanar@example.com';
+  document.getElementById('authPassword').value = 'joJelszo123';
+  submitAuthForm(window);
+  await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.logins)), [{ email: 'tanar@example.com', password: 'joJelszo123' }]);
+});
+
+test('Turnstile: a configured site key renders the widget on login, register and forgot, requires the token and passes it to Supabase Auth', async (t) => {
+  const { window, state } = await loadPage(t, { withSupabase: true, turnstile: true, config: { turnstileSiteKey: 'site-key-1' } });
+  const document = window.document;
+  document.getElementById('authBtn').click();
+  await tick();
+  assert.equal(state.turnstile.renders.length, 1);
+  assert.equal(state.turnstile.last.sitekey, 'site-key-1');
+  assert.equal(state.turnstile.renders[0].target, document.getElementById('authCaptcha'));
+  assert.equal(document.getElementById('authCaptcha').hidden, false);
+
+  // Token nélkül nem megy ki hívás.
+  document.getElementById('authEmail').value = 'tanar@example.com';
+  document.getElementById('authPassword').value = 'joJelszo123';
+  submitAuthForm(window);
+  await tick();
+  assert.match(text(window, 'authError'), /biztonsági ellenőrzést/);
+  assert.equal(state.logins.length, 0);
+
+  // Belépés a tokennel; a token egyszer használatos, ezért a widget újraindul.
+  state.turnstile.last.callback('token-login');
+  submitAuthForm(window);
+  await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.logins)), [{ email: 'tanar@example.com', password: 'joJelszo123', options: { captchaToken: 'token-login' } }]);
+  assert.deepEqual(state.turnstile.resets, ['widget-1']);
+
+  // A használt token nem küldhető újra.
+  document.getElementById('authBtn').click();
+  submitAuthForm(window);
+  await tick();
+  assert.equal(state.logins.length, 1);
+
+  // Regisztráció.
+  document.querySelector('[data-auth-tab="register"]').click();
+  await tick();
+  assert.equal(document.getElementById('authCaptcha').hidden, false);
+  state.turnstile.last.callback('token-register');
+  document.getElementById('authName').value = 'Anna';
+  document.getElementById('authEmail').value = 'anna@example.com';
+  document.getElementById('authPassword').value = 'hosszabbJelszo1';
+  submitAuthForm(window);
+  await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.signUps[0].options)), { emailRedirectTo: 'http://localhost:8000/tervezo.html', data: { full_name: 'Anna' }, captchaToken: 'token-register' });
+
+  // Elfelejtett jelszó.
+  document.querySelector('[data-auth-tab="login"]').click();
+  document.getElementById('authForgot').click();
+  await tick();
+  assert.equal(document.getElementById('authCaptcha').hidden, false);
+  state.turnstile.last.callback('token-forgot');
+  document.getElementById('authEmail').value = 'tanar@example.com';
+  submitAuthForm(window);
+  await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.resets)), [{ email: 'tanar@example.com', options: { redirectTo: 'http://localhost:8000/tervezo.html', captchaToken: 'token-forgot' } }]);
+  assert.equal(state.turnstile.renders.length, 1, 'a widget egyszer jön létre, a fülek között újrahasznosul');
+
+  // Jelszó-visszaállítás (új jelszó): nincs widget és nincs token.
+  window.closeModals();
+  state.listener('PASSWORD_RECOVERY', SESSION);
+  await tick();
+  assert.equal(document.getElementById('authCaptcha').hidden, true);
+  document.getElementById('authPassword').value = 'ujJelszo12345';
+  submitAuthForm(window);
+  await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.updates)), [{ password: 'ujJelszo12345' }]);
+});
+
+test('Turnstile: the site key loads the Cloudflare script on demand and every auth page carries the widget container', async (t) => {
+  const { window } = await loadPage(t, { withSupabase: true, config: { turnstileSiteKey: 'site-key-1' } });
+  assert.equal(window.document.getElementById('turnstileScript'), null, 'a script csak a modál megnyitásakor töltődik');
+  window.document.getElementById('authBtn').click();
+  await tick();
+  const script = window.document.getElementById('turnstileScript');
+  assert.equal(script.src, 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
+
+  for (const name of ['index.html', 'tervezo.html', 'profil.html']) {
+    assert.match(readPage(name), /<div id="authCaptcha" class="auth-captcha" hidden><\/div>/, name);
+  }
+  const { CONTENT_SECURITY_POLICY } = require('../services/siteConstants');
+  assert.match(CONTENT_SECURITY_POLICY, /script-src[^;]*https:\/\/challenges\.cloudflare\.com/);
+  assert.match(CONTENT_SECURITY_POLICY, /frame-src[^;]*https:\/\/challenges\.cloudflare\.com/);
+});
+
+// ---------- Számlázási adatok visszaírása a profilba fizetéskor ----------
+
+test('starting a Barion payment writes the billing data back into the logged-in profile; guests and failed starts leave it alone', async (t) => {
+  relaxLimits(t);
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovi-billing-'));
+  const saved = {};
+  const env = { BARION_POS_KEY_EV: 'pos-key', BARION_POS_KEY: undefined, BARION_TEST_MODE: 'true', BARION_PAYEE_EMAIL: 'bolt@ovitervezo.hu', FRONTEND_URL: 'https://ovitervezo.hu', BACKEND_URL: 'https://api.ovitervezo.test', INVOICE_STORE_PATH: path.join(dir, 'invoiced.json') };
+  for (const [key, value] of Object.entries(env)) { saved[key] = process.env[key]; if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  const realFetch = global.fetch;
+  let barionFails = false;
+  global.fetch = async (url, options = {}) => {
+    const target = new URL(url);
+    if (/^api(\.test)?\.barion\.com$/.test(target.hostname)) {
+      const body = JSON.parse(options.body);
+      if (barionFails) return Response.json({ Errors: [{ ErrorCode: 'ShopIsClosed', Title: 'Shop is closed' }] }, { status: 400 });
+      return Response.json({ PaymentId: '4a1b2c3d4e5f60718293a4b5c6d7e8f9', PaymentRequestId: body.PaymentRequestId, Status: 'Prepared', GatewayUrl: 'https://secure.test.barion.com/Pay?id=4a1b2c3d4e5f60718293a4b5c6d7e8f9', Errors: [] });
+    }
+    return realFetch(url, options);
+  };
+  t.after(() => {
+    global.fetch = realFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  });
+
+  const client = useClient(t, fakeAccounts([], { profiles: [{ id: ALICE.id, email: ALICE.email, full_name: 'Kovács Anna', billing_name: 'Régi Óvoda', billing_zip: '1111', billing_city: 'Pest', billing_address: 'Régi utca 1.', kindergarten_name: 'Napsugár' }] }));
+  planStore.savePlan('gen_bill_1', { ...makePlan(3), request: { planMode: 'standard', duration: 'Napi' } });
+  const base = await listen(t);
+  const NEW_BILLING = { name: 'Új Óvoda Kft.', zip: '9021', city: 'Győr', address: 'Fő utca 12/B.' };
+  const start = (token, billing) => call(base, '/api/checkout-barion', { method: 'POST', token, body: { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing, generationId: 'gen_bill_1', title: 'Őszi erdő' } });
+  const profileOf = (id) => client.tables.profiles.find((row) => row.id === id);
+
+  // Bejelentkezve a módosított számlázási adat felülírja a profilét, a többi mező és az e-mail változatlan.
+  const edited = await start('token-alice', NEW_BILLING);
+  assert.equal(edited.status, 200);
+  const alice = profileOf(ALICE.id);
+  assert.deepEqual({ name: alice.billing_name, zip: alice.billing_zip, city: alice.billing_city, address: alice.billing_address }, { name: 'Új Óvoda Kft.', zip: '9021', city: 'Győr', address: 'Fő utca 12/B.' });
+  assert.equal(alice.full_name, 'Kovács Anna');
+  assert.equal(alice.kindergarten_name, 'Napsugár');
+  assert.equal(alice.email, ALICE.email, 'a profil e-mail címe nem a fizetőé');
+
+  // Első alkalommal (még nincs adat/sor) a megadott adat bekerül.
+  const first = await start('token-bob', { ...NEW_BILLING, name: 'Bob Óvoda' });
+  assert.equal(first.status, 200);
+  assert.equal(profileOf(BOB.id).billing_name, 'Bob Óvoda');
+  assert.equal(profileOf(BOB.id).email, BOB.email);
+
+  // Vendég: semmi nem íródik, a fizetés elindul.
+  const before = JSON.stringify(client.tables.profiles);
+  assert.equal((await start(undefined, { ...NEW_BILLING, name: 'Vendég Kft.' })).status, 200);
+  assert.equal(JSON.stringify(client.tables.profiles), before);
+
+  // Sikertelen Barion-indítás: a profil nem módosul.
+  barionFails = true;
+  assert.equal((await start('token-alice', { ...NEW_BILLING, name: 'Sosem fizetett Kft.' })).status >= 400, true);
+  barionFails = false;
+  assert.equal(profileOf(ALICE.id).billing_name, 'Új Óvoda Kft.');
+
+  // A profil mentésének hibája nem akasztja meg a fizetést.
+  client.failures.profiles = 'profiles adatbázis hiba';
+  const original = console.error;
+  console.error = () => {};
+  t.after(() => { console.error = original; });
+  const resilient = await start('token-alice', { ...NEW_BILLING, name: 'Másik Kft.' });
+  assert.equal(resilient.status, 200);
+  assert.equal((await resilient.json()).success, true);
 });

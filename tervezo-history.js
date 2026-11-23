@@ -1,10 +1,17 @@
-// Felhős tervek: belépés után a helyi tervek fiókhoz kötése és a mentett tervek listája.
+// Felhős tervek: a bejelentkezett felhasználó fiókba mentett tervei. A helyi (localStorage) tervek és a fiókban lévők külön maradnak:
+// a helyi tervet a felhasználó a "Mentés a profilomba" gombbal kötheti a fiókjához, automatikus összefésülés nincs.
 // Klasszikus script (nem ES modul): a felső szintű deklarációk közös globális hatókörben élnek.
 // Vendég módban (nincs bejelentkezett felhasználó) nem fut le semmi: a helyi előzmények változatlanok.
 
 const CLOUD_LOCAL_ID_PATTERN = /^gen_[A-Za-z0-9_-]{1,96}$/;
-const CLOUD_SYNC_MAX_IDS = 50;
 let cloudRequestSeq = 0;
+
+// A helyi előzménylista (tervezo-form.js) ebből tudja, mely tervek vannak már a fiókban és kínálható-e a mentés.
+window.oviCloudPlans = {
+  ids: new Set(),
+  canAdopt: (id) => Boolean(cloudUser()) && CLOUD_LOCAL_ID_PATTERN.test(String(id || '')) && !window.oviCloudPlans.ids.has(id),
+  adopt: (id) => adoptLocalPlan(id)
+};
 
 function cloudUser() {
   return window.OviAuth?.getUser?.() || null;
@@ -20,35 +27,30 @@ async function cloudFetch(path, options = {}) {
   return data;
 }
 
-// A böngészőben ismert tervazonosítók: helyi előzmények, feloldott tervek és az utoljára generált terv.
-function collectLocalPlanIds() {
-  const ids = new Set();
-  const add = (id) => { if (typeof id === 'string' && CLOUD_LOCAL_ID_PATTERN.test(id)) ids.add(id); };
-  loadHistoryFromStorage().forEach((item) => { add(item.generationId); add(item.id); });
-  getUnlockedIds().forEach(add);
-  try { add(JSON.parse(localStorage.getItem(STORAGE_KEYS.generatedPlan) || 'null')?.generationId); } catch (_error) { /* hibás mentés: kihagyjuk */ }
-  return [...ids].slice(0, CLOUD_SYNC_MAX_IDS);
-}
-
 function formatCloudDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function renderCloudPlans(documents, syncError = '') {
+function showCloudError(message) {
+  const panel = document.getElementById('cloudPlansPanel');
+  if (!panel) return showGenerationError(message);
+  panel.querySelector('.cloud-error')?.remove();
+  const note = document.createElement('div');
+  note.className = 'history-item history-item-empty cloud-error';
+  note.textContent = message;
+  panel.prepend(note);
+  return undefined;
+}
+
+function renderCloudPlans(documents) {
   const panel = document.getElementById('cloudPlansPanel');
   if (!panel) return;
   panel.innerHTML = '';
-  if (syncError) {
-    const note = document.createElement('div');
-    note.className = 'history-item history-item-empty cloud-error';
-    note.textContent = `A helyi tervek fiókhoz kötése sikertelen: ${syncError}`;
-    panel.appendChild(note);
-  }
   if (!documents.length) {
     const empty = document.createElement('div');
     empty.className = 'history-item history-item-empty';
-    empty.textContent = 'A fiókodhoz még nem tartozik mentett terv.';
+    empty.textContent = 'A profilodba még nincs mentett terv. A helyi terveid mellett a "Mentés a profilomba" gombbal mentheted el őket.';
     panel.appendChild(empty);
     return;
   }
@@ -64,7 +66,7 @@ function renderCloudPlans(documents, syncError = '') {
         </div>
         <div class="history-item-meta">
           <span class="history-item-date">${escapeHtml(formatCloudDate(item.createdAt))}</span>
-          <span class="history-badge history-badge-cloud">Felhőben mentve</span>
+          <span class="history-badge history-badge-cloud">Profilba mentve</span>
           ${item.unlocked
     ? '<span class="history-badge history-badge-paid">Fizetve</span>'
     : '<span class="history-badge history-badge-draft">Csak előnézet (piszkozat)</span>'}
@@ -75,13 +77,14 @@ function renderCloudPlans(documents, syncError = '') {
         ${item.unlocked
     ? '<button type="button" class="btn-history btn-history-download" data-cloud-action="docx">Letöltés (Word)</button><button type="button" class="btn-history btn-history-download" data-cloud-action="pdf">Letöltés (PDF)</button>'
     : ''}
+        ${item.owned ? '<button type="button" class="btn-history btn-history-delete" data-cloud-action="delete" title="Törlés a profilból">Törlés</button>' : ''}
       </div>`;
     panel.appendChild(card);
   });
 }
 
-// Belépés után (sync = true) előbb a helyi tervek a fiókhoz kötődnek, majd betöltődik a felhős lista.
-async function refreshCloudPlans({ sync = false } = {}) {
+// A fiókban lévő tervek betöltése; a helyi előzménylista jelvényei is frissülnek.
+async function refreshCloudPlans() {
   const field = document.getElementById('cloudPlansField');
   const panel = document.getElementById('cloudPlansPanel');
   if (!field || !panel) return;
@@ -90,29 +93,19 @@ async function refreshCloudPlans({ sync = false } = {}) {
   if (!user) {
     cloudRequestSeq += 1;
     panel.innerHTML = '';
+    window.oviCloudPlans.ids = new Set();
+    renderHistoryPanel();
     return;
   }
   const seq = ++cloudRequestSeq;
   panel.innerHTML = '<div class="history-item history-item-empty">Mentett tervek betöltése...</div>';
-  let syncError = '';
   try {
-    if (sync) {
-      const ids = collectLocalPlanIds();
-      if (ids.length) {
-        try {
-          await cloudFetch('/api/sync-documents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ documentIds: ids })
-          });
-        } catch (error) {
-          syncError = error.message;
-        }
-      }
-    }
     const data = await cloudFetch('/api/my-documents');
     if (seq !== cloudRequestSeq) return;
-    renderCloudPlans(Array.isArray(data.documents) ? data.documents : [], syncError);
+    const documents = Array.isArray(data.documents) ? data.documents : [];
+    window.oviCloudPlans.ids = new Set(documents.map((item) => item.id));
+    renderCloudPlans(documents);
+    renderHistoryPanel();
   } catch (error) {
     if (seq !== cloudRequestSeq) return;
     panel.innerHTML = '';
@@ -121,6 +114,24 @@ async function refreshCloudPlans({ sync = false } = {}) {
     failure.textContent = `A mentett tervek nem tölthetők be: ${error.message}`;
     panel.appendChild(failure);
   }
+}
+
+// Egy helyi terv fiókhoz kötése (csak kifejezett kérésre): a szerver user_id + user_email mezőt rögzít a terven.
+async function adoptLocalPlan(id) {
+  const data = await cloudFetch('/api/sync-documents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documentIds: [id] })
+  });
+  if (!Array.isArray(data.claimed) || !data.claimed.includes(id)) {
+    throw new Error('a terv nem menthető a profilba (lejárt, vagy már másik fiókhoz tartozik)');
+  }
+  await refreshCloudPlans();
+}
+
+async function deleteCloudPlan(id) {
+  await cloudFetch(`/api/my-documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  await refreshCloudPlans();
 }
 
 // A felhős tervhez a feloldás helyben is rögzül (a napi ingyenes keretet nem érinti, ellentétben az unlockGeneration-nel).
@@ -183,7 +194,7 @@ async function runPendingOpenRequest() {
 function initCloudPlans() {
   pendingOpenRequest = readOpenRequest();
   document.addEventListener('ovi-auth-change', () => {
-    refreshCloudPlans({ sync: true });
+    refreshCloudPlans();
     runPendingOpenRequest();
   });
   // Bejelentkezés nélkül a megnyitás nem lehetséges: a belépési ablak jelenik meg.
@@ -201,6 +212,17 @@ function initCloudPlans() {
     const button = event.target.closest('[data-cloud-action]');
     const id = button?.closest('[data-cloud-id]')?.dataset.cloudId;
     if (!button || !id) return;
+    if (button.dataset.cloudAction === 'delete') {
+      if (!window.confirm('Biztosan törlöd ezt a tervet a profilodból? A művelet nem vonható vissza.')) return;
+      button.disabled = true;
+      try {
+        await deleteCloudPlan(id);
+      } catch (error) {
+        button.disabled = false;
+        showCloudError(`A terv törlése sikertelen: ${error.message}`);
+      }
+      return;
+    }
     button.disabled = true;
     try {
       await openCloudPlan(id, button.dataset.cloudAction);
@@ -210,7 +232,7 @@ function initCloudPlans() {
       button.disabled = false;
     }
   });
-  if (cloudUser()) refreshCloudPlans({ sync: true });
+  if (cloudUser()) refreshCloudPlans();
 }
 
 initCloudPlans();
