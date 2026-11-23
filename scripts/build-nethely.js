@@ -20,7 +20,7 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) {
   throw new Error(`Érvénytelen API_BASE_URL: ${apiBaseUrl}`);
 }
 
-fs.rmSync(out, { recursive: true, force: true });
+fs.rmSync(out, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 
 // Megbocsátó beolvasás: a teljes meta címkét, a "google-site-verification=" előtagot, idézőjeleket és szóközöket is lecsupaszítja a tiszta tokenre.

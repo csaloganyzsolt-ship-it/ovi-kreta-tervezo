@@ -13,7 +13,7 @@ const apiBaseUrl = String(process.env.API_BASE_URL || 'https://ovi-kreta-tervezo
 if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) throw new Error(`Érvénytelen API_BASE_URL: ${apiBaseUrl}`);
 
 const version = buildVersion();
-fs.rmSync(out, { recursive: true, force: true });
+fs.rmSync(out, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 // A staging oldal nem indexelhető, ezért nem kap Search Console igazolást.
 for (const page of PAGES) {
