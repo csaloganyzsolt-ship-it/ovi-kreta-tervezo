@@ -10,6 +10,7 @@ const sheetsService = require('./sheetsService');
 const planStore = require('./planStore');
 const coupons = require('./coupons');
 const orders = require('./orderService');
+const logger = require('../utils/logger');
 const { PaymentError } = stripeService;
 
 const API_HOSTS = { test: 'https://api.test.barion.com', live: 'https://api.barion.com' };
@@ -237,7 +238,7 @@ async function syncOrder(record, env) {
     record.orderSynced = true;
   } catch (error) {
     record.orderSynced = false;
-    console.error('[barion]', error.message);
+    logger.error('barion_payment', `A rendelés szinkronja sikertelen: ${error.message}`, { email: record.email, details: { sessionId: record.sessionId, status: record.status } });
   }
   saveRecord(record, env);
 }
@@ -252,13 +253,16 @@ async function settleRecord(record, deps) {
   latest.status = state.Status;
   if (state.Status !== 'Succeeded') {
     saveRecord(latest, env);
-    if (FAILED_STATUSES.has(state.Status) && latest.orderSynced !== true) await syncOrder(latest, env);
+    if (FAILED_STATUSES.has(state.Status) && latest.orderSynced !== true) {
+      logger.warning('barion_payment', `A Barion fizetés nem sikerült (${state.Status})`, { email: latest.email, details: { sessionId: latest.sessionId, status: state.Status } });
+      await syncOrder(latest, env);
+    }
     return latest;
   }
   // A Barion válasza a mérvadó: csak a saját kérésünkhöz tartozó, a mentett csomag árával egyező, forintos fizetés számít sikeresnek.
   const total = Number(state.Total ?? state.Transactions?.[0]?.Total);
   if ((state.PaymentRequestId && state.PaymentRequestId !== latest.sessionId) || total !== latest.amountHuf || (state.Currency && state.Currency !== 'HUF')) {
-    console.error(`[barion] Eltérő fizetési adatok (${latest.sessionId}): összeg ${total} / várt ${latest.amountHuf}, pénznem ${state.Currency}`);
+    logger.error('barion_payment', `Eltérő fizetési adatok: összeg ${total} / várt ${latest.amountHuf}, pénznem ${state.Currency}`, { email: latest.email, details: { sessionId: latest.sessionId } });
     throw new PaymentError('A Barion fizetés adatai nem egyeznek a rendeléssel, a terv nem oldható fel.', 409);
   }
   latest.paid = true;
@@ -283,6 +287,7 @@ async function settleRecord(record, deps) {
       await syncOrder(latest, env);
       if (!result.duplicate && !result.mock) notifyPurchase(latest, result.invoiceNumber, deps);
     } catch (invoiceErr) {
+      logger.error('barion_payment', `Számlázás sikertelen: ${invoiceErr.message}`, { email: latest.email, details: { sessionId: latest.sessionId, plan: latest.plan } });
       mailService.sendAdminErrorAlert({
         operation: 'Számlázás (Barion fizetés)',
         error: invoiceErr,
@@ -351,7 +356,7 @@ function notifyPurchase(record, invoiceNumber, deps) {
     invoiceNumber,
     invoicePdf,
     paymentMethod: 'Barion'
-  }, { env }).catch((error) => console.error('[mail] Rendszergazdai értesítő sikertelen:', error.message));
+  }, { env }).catch((error) => logger.error('email_delivery', `Rendszergazdai értesítő sikertelen: ${error.message}`, { email: record.email, details: { sessionId: record.sessionId } }));
 }
 
 // Lekérdezi a Barion aktuális állapotát és (siker esetén, egyszer) lezárja a fizetést: feloldás + számla.

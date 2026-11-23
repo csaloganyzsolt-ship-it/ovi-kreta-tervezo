@@ -51,6 +51,7 @@
             <button type="button" role="tab" class="profile-tab" id="tabCoupons" data-admin-tab="coupons" aria-selected="false" aria-controls="panelCoupons">Kuponkezelő</button>
             <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
             <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók &amp; Hírlevél</button>
+            <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
           </div>
 
           <section class="profile-panel" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
@@ -200,11 +201,13 @@
             </div>
             <div class="admin-table-wrap">
               <table class="admin-table" id="usersTable">
-                <thead><tr><th>Név</th><th>E-mail</th><th>Regisztráció</th><th>E-mail megerősítve</th><th>Feliratkozott</th></tr></thead>
+                <thead><tr><th>Név</th><th>E-mail</th><th>Regisztráció</th><th>E-mail megerősítve</th><th>Feliratkozott</th><th>Ügyfélszolgálat</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
             <p class="profile-error" id="usersError" role="alert" hidden></p>
+            <p class="profile-status admin-support-result" id="supportResult" role="status" hidden></p>
+            <p class="profile-error" id="supportError" role="alert" hidden></p>
 
             <h3>Hírlevél küldése</h3>
             <div class="admin-newsletter">
@@ -256,6 +259,21 @@
               </table>
             </div>
             <p class="profile-error" id="campaignsError" role="alert" hidden></p>
+          </section>
+
+          <section class="profile-panel" id="panelLogs" role="tabpanel" aria-labelledby="tabLogs" hidden>
+            <h2>Rendszernapló</h2>
+            <div class="admin-filters">
+              <p class="profile-hint" id="logsCount" role="status"></p>
+              <button type="button" class="profile-btn" id="logsRefresh">Frissítés</button>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="logsTable">
+                <thead><tr><th>Dátum</th><th>Szint</th><th>Kontextus</th><th>Hibaüzenet</th><th>Felhasználó</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="logsError" role="alert" hidden></p>
           </section>
         </section>
       </main>

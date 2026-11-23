@@ -10,6 +10,7 @@ const planStore = require('../services/planStore');
 const coupons = require('../services/coupons');
 const barionService = require('../services/barionService');
 const authService = require('../services/authService');
+const logger = require('../utils/logger');
 const orders = require('../services/orderService');
 const profileService = require('../services/profileService');
 
@@ -56,6 +57,8 @@ function sendPaymentError(res, error, context, req) {
   const status = error.status || 500;
   if (status >= 500) {
     console.error(`${context} failed:`, error.message);
+    const logContext = /delivery/i.test(context) ? 'email_delivery' : 'barion_payment';
+    logger.error(logContext, `${context}: ${error.message}`, { email: req?.logEmail || req?.body?.email || req?.body?.customerEmail, details: { context, path: req?.originalUrl || req?.url } });
     if (context === 'Checkout' || context === 'Barion checkout') {
       mailService.sendAdminErrorAlert({
         operation: `Fizetés indítás (${context})`,
@@ -183,6 +186,7 @@ async function barionWebhook(req, res) {
   } catch (error) {
     // Nem 2xx válasznál a Barion újrapróbálja a visszahívást.
     console.error('Barion webhook failed:', error.message);
+    logger.error('barion_payment', `Barion webhook sikertelen: ${error.message}`, { details: { paymentId } });
     return res.status(error.status || 500).json({ success: false, error: error.message });
   }
 }
@@ -229,8 +233,9 @@ async function deliverPurchase(req, res) {
   try {
     const id = req.params.id;
     const couponSession = await coupons.loadSession(id);
-    if (couponSession) return await deliverCouponPurchase(req, res, couponSession);
+    if (couponSession) { req.logEmail = couponSession.email; return await deliverCouponPurchase(req, res, couponSession); }
     const session = await retrieveSession(id);
+    req.logEmail = session.email;
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
     if (session.mock || !mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
     if (mailService.wasSent(id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
@@ -313,12 +318,13 @@ async function stripeWebhook(req, res) {
         orderNumber: invoiceService.orderNumber(session.id, session.created ? new Date(session.created * 1000) : new Date()),
         invoiceNumber: result.invoiceNumber,
         invoicePdf: invoiceService.getInvoicePdf(session.id)
-      }).catch((error) => console.error('[mail] Rendszergazdai értesítő sikertelen:', error.message));
+      }).catch((error) => logger.error('email_delivery', `Rendszergazdai értesítő sikertelen: ${error.message}`, { email: session.customer_details?.email, details: { orderId: session.id } }));
     }
     return res.json({ received: true, invoice: result });
   } catch (error) {
     // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.
     console.error('Invoice generation failed:', error.message);
+    logger.error('barion_payment', `Számlázás sikertelen (Stripe webhook): ${error.message}`, { email: session.customer_details?.email || session.customer_email, details: { orderId: session.id } });
     mailService.sendAdminErrorAlert({
       operation: 'Számlázás (Stripe webhook)',
       error,

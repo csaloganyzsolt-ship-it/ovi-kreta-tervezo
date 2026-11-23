@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
+const logger = require('./utils/logger');
+const { createApiLimiter, DEFAULT_GENERATE_LIMIT } = require('./utils/rateLimits');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } = require('./routes/payment');
@@ -123,6 +125,8 @@ app.all('/api/webhook/barion', express.urlencoded({ extended: false, limit: '10k
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
+// Az általános limit a webhookok UTÁN jön (a Barion/Stripe visszahívás nem korlátozható), a tesztek nem futnak bele.
+app.use('/api', createApiLimiter({ skip: () => process.env.NODE_ENV === 'test' }));
 app.use('/api', accountRouter);
 app.use('/api', adminRouter);
 app.use('/api', paymentRouter);
@@ -544,15 +548,15 @@ function getClientIp(req) {
   return 'unknown';
 }
 
-// IP-alapú óránkénti limit: maximum 5 generálás óránként IP-címenként
+// IP-alapú óránkénti limit: alapból maximum 20 generálás óránként IP-címenként (GENERATE_RATE_LIMIT felülírja)
 const generateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: () => Number(process.env.GENERATE_RATE_LIMIT) || 5,
+  limit: () => Number(process.env.GENERATE_RATE_LIMIT) || DEFAULT_GENERATE_LIMIT,
   keyGenerator: (req) => getClientIp(req),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skipFailedRequests: true,
-  handler: (_req, res) => res.status(429).json({ success: false, code: 'RATE_LIMITED', error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' })
+  handler: (_req, res) => res.status(429).json({ success: false, code: 'RATE_LIMITED', error: `Túl sok generálási kísérlet. Óránként legfeljebb ${Number(process.env.GENERATE_RATE_LIMIT) || DEFAULT_GENERATE_LIMIT} tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!` })
 });
 
 const activeGenerationsByIp = new Set();
@@ -685,6 +689,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       });
     } catch (error) {
       releaseDailyGeneration();
+      logger.error('ai_generation', error, { email: req.user?.email, details: { model, topic: request?.topic, planMode: request?.planMode, clientIp, timeout: /timeout|időtúl|abort/i.test(error.message) } });
       mailService.sendAdminErrorAlert({
         operation: 'Tervezet generálás (Gemini)',
         error,

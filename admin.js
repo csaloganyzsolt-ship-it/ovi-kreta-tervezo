@@ -282,10 +282,50 @@
       users = data.users;
       byId('usersCount').textContent = `${users.length} regisztrált felhasználó, ebből ${data.subscriberCount} megerősített feliratkozó`;
       fillTable('usersTable', users.map((user) => [
-        user.name || '–', user.email, formatDate(user.createdAt), yesNo(user.confirmed), yesNo(user.subscribed)
-      ]), 5, 'Még nincs regisztrált felhasználó.');
+        user.name || '–', user.email, formatDate(user.createdAt), yesNo(user.confirmed), yesNo(user.subscribed), supportButton(user.email)
+      ]), 6, 'Még nincs regisztrált felhasználó.');
     } catch (error) {
       setText('usersError', `A felhasználók nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
+  // ---------- Ügyfélszolgálat: kárpótlási kupon ----------
+
+  function supportButton(email) {
+    const button = el('button', 'profile-btn', 'Kárpótlás (100% Kupon)');
+    button.type = 'button';
+    button.addEventListener('click', () => createSupportCoupon(email, button));
+    return button;
+  }
+
+  async function createSupportCoupon(email, button) {
+    setText('supportError', '');
+    setText('supportResult', '');
+    button.disabled = true;
+    try {
+      const data = await api('/api/admin/support/coupon', { method: 'POST', body: { email } });
+      setText('supportResult', `Kárpótlási kupon (${data.coupon.email}): ${data.coupon.code} – egyszer használható, 100%-os. Küldd el az ügyfélnek!`);
+      loaded.coupons = false;
+    } catch (error) {
+      setText('supportError', `A kupon nem hozható létre: ${errorMessage(error)}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // ---------- Rendszernapló ----------
+
+  async function loadLogs() {
+    setText('logsError', '');
+    try {
+      const data = await api('/api/admin/logs');
+      byId('logsCount').textContent = `Legutóbbi ${data.logs.length} naplóbejegyzés`;
+      fillTable('logsTable', data.logs.map((entry) => [formatDate(entry.createdAt), entry.level, entry.context, entry.message, entry.email || '–']), 5, 'Még nincs naplóbejegyzés.');
+      [...byId('logsTable').tBodies[0].rows].forEach((row, index) => {
+        if (data.logs[index]?.level === 'error') row.classList.add('log-error');
+      });
+    } catch (error) {
+      setText('logsError', `A rendszernapló nem tölthető be: ${errorMessage(error)}`);
     }
   }
 
@@ -372,7 +412,8 @@
     overview: [loadStats],
     coupons: [loadCoupons],
     orders: [loadOrders],
-    users: [loadUsers, loadCampaigns, refreshPreview]
+    users: [loadUsers, loadCampaigns, refreshPreview],
+    logs: [loadLogs]
   };
 
   function activateTab(name) {
@@ -396,6 +437,7 @@
     byId('ordersSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadOrders, SEARCH_DELAY_MS); });
     byId('ordersExport').addEventListener('click', exportOrders);
     byId('usersExport').addEventListener('click', exportSubscribers);
+    byId('logsRefresh').addEventListener('click', loadLogs);
     byId('newsletterForm').addEventListener('submit', sendNewsletter);
     byId('newsletterForm').addEventListener('input', schedulePreview);
     document.querySelectorAll('input[name="recipients"]').forEach((radio) => radio.addEventListener('change', syncRecipientMode));

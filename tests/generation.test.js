@@ -453,7 +453,7 @@ test('POST /api/generate answers 429 after the per-IP daily limit', async () => 
     assert.equal((await post()).status, 200);
     const blocked = await post();
     assert.equal(blocked.status, 429);
-    assert.deepEqual(await blocked.json(), { success: false, code: 'RATE_LIMITED', error: 'Túl sok generálási kísérlet. Óránként legfeljebb 5 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' });
+    assert.deepEqual(await blocked.json(), { success: false, code: 'RATE_LIMITED', error: 'Túl sok generálási kísérlet. Óránként legfeljebb 2 tervezet készíthető egy IP-címről. Kérjük, próbáld újra később!' });
     global.fetch = realFetch;
   } finally {
     process.env.GENERATE_RATE_LIMIT = previous;

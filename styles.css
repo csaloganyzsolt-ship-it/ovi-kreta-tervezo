@@ -2364,3 +2364,6 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-preview h4 { margin: 0 0 8px; }
 .admin-preview iframe { width: 100%; min-height: 560px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
 @media (max-width: 900px) { .admin-newsletter { grid-template-columns: 1fr; } }
+
+.admin-table tr.log-error td { background: #fdecec; color: #8a1c1c; font-weight: 600; }
+[data-theme="dark"] .admin-table tr.log-error td { background: #3a1f22; color: #ffb4b4; }

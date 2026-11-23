@@ -7,6 +7,7 @@ const { requireAdmin } = require('../services/authService');
 const admin = require('../services/adminService');
 const newsletter = require('../services/newsletterService');
 const analytics = require('../services/analyticsService');
+const logger = require('../utils/logger');
 
 const limiterOptions = { windowMs: 60 * 1000, standardHeaders: true, legacyHeaders: false, message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' } };
 // Az admin végpontok a hitelesítés ELŐTT is korlátozottak (jelszó- és tokenpróbálgatás ellen), a küldés szigorúbban.
@@ -64,6 +65,13 @@ router.post('/admin/coupons', handle('A kupon létrehozása', async (client, req
   res.status(201).json({ success: true, coupon });
 }));
 router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (client, req) => ({ coupon: await admin.setCouponActive(client, req.params.code, req.body?.is_active) })));
+
+router.get('/admin/logs', handle('A rendszernapló lekérdezése', (client) => admin.listLogs(client)));
+router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása', async (client, req, res) => {
+  const coupon = await admin.createSupportCoupon(client, req.body);
+  logger.info('admin_support', 'Kárpótlási kupon létrehozva', { email: coupon.email, details: { code: coupon.code, admin: req.user?.email } });
+  res.status(201).json({ success: true, coupon });
+}));
 
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
 router.get('/admin/users', handle('A felhasználók lekérdezése', (client) => admin.listUsers(client)));

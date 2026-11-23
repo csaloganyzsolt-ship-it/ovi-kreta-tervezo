@@ -910,3 +910,38 @@ test('auth.js shows the discreet Vezérlőpult link next to the account button o
   await tick();
   assert.equal(admin.document.getElementById('adminLink'), null);
 });
+
+// ---------- Rendszernapló és ügyfélszolgálati kupon ----------
+
+test('GET /api/admin/logs returns the latest 100 logs, newest first, only for admins', async (t) => {
+  const rows = Array.from({ length: 105 }, (_, i) => ({ id: `l${i}`, level: i === 104 ? 'error' : 'info', context: 'ai_generation', message: `m${i}`, details: { secret: 'x' }, user_email: i === 104 ? 'vevo@example.com' : null, created_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }));
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_logs: rows }));
+  const base = await listen(t);
+  const denied = await call(base, '/api/admin/logs', { token: 'token-bob' });
+  assert.equal(denied.status, 403);
+  const response = await call(base, '/api/admin/logs', { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.logs.length, 100);
+  assert.deepEqual({ level: data.logs[0].level, email: data.logs[0].email, message: data.logs[0].message }, { level: 'error', email: 'vevo@example.com', message: 'm104' });
+  assert.equal(JSON.stringify(data).includes('secret'), false);
+  assert.ok(client.db.system_logs.length >= 105);
+});
+
+test('POST /api/admin/support/coupon creates a single-use SORRY-XXXXXX 100% coupon for the user', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_logs: [] }));
+  const base = await listen(t);
+  assert.equal((await call(base, '/api/admin/support/coupon', { method: 'POST', token: 'token-bob', body: { email: 'a@example.com' } })).status, 403);
+  assert.equal((await call(base, '/api/admin/support/coupon', { method: 'POST', token: 'token-admin', body: { email: 'nem-email' } })).status, 400);
+  const response = await call(base, '/api/admin/support/coupon', { method: 'POST', token: 'token-admin', body: { email: 'Panasz@Example.com' } });
+  assert.equal(response.status, 201);
+  const { coupon } = await response.json();
+  assert.match(coupon.code, /^SORRY-[A-Z2-9]{6}$/);
+  assert.equal(coupon.email, 'panasz@example.com');
+  const stored = client.db.coupons.find((row) => row.code === coupon.code);
+  assert.equal(stored.discount_percent, 100);
+  assert.equal(stored.max_uses, 1);
+  assert.equal(stored.is_active, true);
+  assert.match(stored.note, /panasz@example\.com/);
+  assert.ok(client.db.system_logs.some((row) => row.context === 'admin_support' && row.user_email === 'panasz@example.com'));
+});

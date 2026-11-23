@@ -2,6 +2,7 @@
 
 // Az Admin Központ adatrétege (csak a service-role Supabase klienssel hívható, az útvonalakat a requireAdmin védi).
 // A hibák AdminError-ként érkeznek: a 4xx üzenete a kliensnek szól, az 5xx részleteit az útvonal naplózza, de nem adja ki.
+const crypto = require('node:crypto');
 const { CODE_PATTERN, normalizeCode } = require('./coupons');
 
 class AdminError extends Error {
@@ -187,6 +188,39 @@ async function setCouponActive(client, rawCode, isActive) {
   return couponView(data[0]);
 }
 
+// ---------- Rendszernapló és ügyfélszolgálat ----------
+
+const LOG_LIMIT = 100;
+
+async function listLogs(client) {
+  const { data, error } = await client.from('system_logs').select('id, level, context, message, user_email, created_at').order('created_at', { ascending: false }).limit(LOG_LIMIT);
+  if (error) throw dbError(error, 'A rendszernapló lekérdezése sikertelen');
+  return { logs: (data || []).map((row) => ({ id: row.id, level: row.level, context: row.context, message: row.message, email: row.user_email, createdAt: row.created_at })) };
+}
+
+const SUPPORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
+
+function supportCode() {
+  const bytes = crypto.randomBytes(6);
+  return `SORRY-${Array.from(bytes, (byte) => SUPPORT_CODE_ALPHABET[byte % SUPPORT_CODE_ALPHABET.length]).join('')}`;
+}
+
+// Kárpótlási kupon: egyszer használatos, 100%-os; a címzett e-mail címe a megjegyzésben marad, hogy az admin a kuponlistában is lássa, kié.
+async function createSupportCoupon(client, body = {}, now = Date.now()) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (email.length > 254 || !EMAIL_PATTERN.test(email)) throw validationError('Érvényes felhasználói e-mail cím szükséges.');
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const coupon = await createCoupon(client, { code: supportCode(), discount_percent: 100, max_uses: 1, note: `Kárpótlás: ${email}` }, now);
+      return { ...coupon, email };
+    } catch (error) {
+      if (!(error instanceof AdminError) || error.status !== 409) throw error;
+    }
+  }
+  throw new AdminError('A kuponkód generálása nem sikerült, kérjük, próbáld újra.', 500);
+}
+
 // ---------- Rendelések ----------
 
 const ORDER_COLUMNS = 'order_number, user_id, user_email, document_id, plan_mode, plan_key, amount, coupon_code, payment_method, status, invoice_number, created_at';
@@ -272,6 +306,9 @@ module.exports = {
   createCoupon,
   setCouponActive,
   parseCouponInput,
+  listLogs,
+  createSupportCoupon,
+  supportCode,
   listOrders,
   listUsers
 };
