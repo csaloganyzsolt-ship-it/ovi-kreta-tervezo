@@ -107,6 +107,26 @@ async function saveProfile(req, res) {
   }
 }
 
+// Feliratkozás a profilból (bejelentkezve). Leiratkozó végpont a bejelentkezett felhasználónak nincs: azt csak a levelek tokenes linkje adja.
+async function subscribeNewsletter(req, res) {
+  try {
+    const profile = await profileService.subscribeNewsletter(req.user);
+    return res.json({ success: true, newsletter_subscribed: profile.newsletter_subscribed });
+  } catch (error) {
+    return sendAccountError(res, error, 'A feliratkozás');
+  }
+}
+
+// Nyilvános, egykattintásos leiratkozás a levelek aljáról: a newsletter_token azonosít, belépés nem kell.
+async function unsubscribeNewsletter(req, res) {
+  try {
+    await profileService.unsubscribeNewsletter(req.body?.token);
+    return res.json({ success: true });
+  } catch (error) {
+    return sendAccountError(res, error, 'A leiratkozás');
+  }
+}
+
 async function listOrders(req, res) {
   try {
     return res.json({ success: true, orders: await orderService.listUserOrders(req.user) });
@@ -133,7 +153,9 @@ router.delete('/my-documents/:id', accountLimiter, requireUser, deleteDocument);
 router.post('/sync-documents', accountLimiter, requireUser, syncDocuments);
 router.get('/profile', accountLimiter, requireUser, getProfile);
 router.post('/profile', accountLimiter, requireUser, saveProfile);
+router.post('/newsletter/subscribe', accountLimiter, requireUser, subscribeNewsletter);
+router.post('/newsletter/unsubscribe', accountLimiter, unsubscribeNewsletter);
 router.get('/my-orders', accountLimiter, requireUser, listOrders);
 router.post('/delete-account', deleteLimiter, requireUser, deleteAccount);
 
-module.exports = { router, listDocuments, openDocument, deleteDocument, syncDocuments, getProfile, saveProfile, listOrders, deleteAccount };
+module.exports = { router, listDocuments, openDocument, deleteDocument, syncDocuments, getProfile, saveProfile, subscribeNewsletter, unsubscribeNewsletter, listOrders, deleteAccount };

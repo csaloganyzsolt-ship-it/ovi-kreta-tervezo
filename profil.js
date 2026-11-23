@@ -70,6 +70,28 @@
     byId('profileEmail').textContent = profile.email || '';
     byId('profileEmailField').value = profile.email || '';
     Object.entries(PROFILE_FIELDS).forEach(([key, id]) => { byId(id).value = profile[key] || ''; });
+    renderNewsletter(profile.newsletter_subscribed === true);
+  }
+
+  // Hírlevél: csak feliratkozás van; feliratkozva csak státusz látszik (a leiratkozás a levelek alján lévő link).
+  function renderNewsletter(subscribed) {
+    byId('newsletterBlock').hidden = false;
+    byId('newsletterOff').hidden = subscribed;
+    byId('newsletterOn').hidden = !subscribed;
+  }
+
+  async function subscribeNewsletter() {
+    setText('newsletterError', '');
+    const button = byId('newsletterSubscribe');
+    button.disabled = true;
+    try {
+      const data = await auth.apiFetch('/api/newsletter/subscribe', { method: 'POST' });
+      renderNewsletter(data.newsletter_subscribed === true);
+    } catch (error) {
+      setText('newsletterError', `A feliratkozás sikertelen: ${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function readProfileForm() {
@@ -272,6 +294,7 @@
 
   function init() {
     byId('profileForm').addEventListener('submit', saveProfile);
+    byId('newsletterSubscribe').addEventListener('click', subscribeNewsletter);
     document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.addEventListener('click', () => selectTab(tab.dataset.profileTab)));
     byId('profileLogin').addEventListener('click', () => auth.openModal('login'));
     byId('profileLogout').addEventListener('click', async () => {

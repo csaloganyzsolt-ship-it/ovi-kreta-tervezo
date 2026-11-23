@@ -357,7 +357,7 @@ test('GET /api/profile returns the own profile and creates the missing row witho
   const fresh = await (await call(base, '/api/profile', { token: 'token-alice' })).json();
   assert.equal(fresh.success, true);
   assert.deepEqual(fresh.profile, {
-    email: ALICE.email, full_name: '', billing_name: '', billing_zip: '', billing_city: '', billing_address: '', billing_tax_id: '', kindergarten_name: '', group_name: ''
+    email: ALICE.email, full_name: '', billing_name: '', billing_zip: '', billing_city: '', billing_address: '', billing_tax_id: '', kindergarten_name: '', group_name: '', newsletter_subscribed: false
   });
   assert.equal(client.tables.profiles.filter((row) => row.id === ALICE.id).length, 1, 'a hiányzó profilsor létrejön');
 
@@ -762,7 +762,7 @@ test('the auth modal offers login and registration tabs, validates the password 
   submitAuthForm(window);
   await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(state.signUps)), [{
-    email: 'anna@example.com', password: 'hosszabbJelszo1', options: { emailRedirectTo: 'http://localhost:8000/tervezo.html', data: { full_name: 'Kovács Anna' } }
+    email: 'anna@example.com', password: 'hosszabbJelszo1', options: { emailRedirectTo: 'http://localhost:8000/tervezo.html', data: { full_name: 'Kovács Anna', newsletter_subscribed: false } }
   }]);
   assert.match(text(window, 'authStatus'), /megerősítő levelet/);
   assert.equal(password.value, '', 'a jelszó nem marad a mezőben');
@@ -1158,7 +1158,7 @@ test('Turnstile: a configured site key renders the widget on login, register and
   document.getElementById('authPassword').value = 'hosszabbJelszo1';
   submitAuthForm(window);
   await tick();
-  assert.deepEqual(JSON.parse(JSON.stringify(state.signUps[0].options)), { emailRedirectTo: 'http://localhost:8000/tervezo.html', data: { full_name: 'Anna' }, captchaToken: 'token-register' });
+  assert.deepEqual(JSON.parse(JSON.stringify(state.signUps[0].options)), { emailRedirectTo: 'http://localhost:8000/tervezo.html', data: { full_name: 'Anna', newsletter_subscribed: false }, captchaToken: 'token-register' });
 
   // Elfelejtett jelszó.
   document.querySelector('[data-auth-tab="login"]').click();
@@ -1268,4 +1268,339 @@ test('starting a Barion payment writes the billing data back into the logged-in 
   const resilient = await start('token-alice', { ...NEW_BILLING, name: 'Másik Kft.' });
   assert.equal(resilient.status, 200);
   assert.equal((await resilient.json()).success, true);
+});
+
+// ---------- Hírlevél (GDPR) és admin jogosultsági alap ----------
+
+const TOKEN_ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const TOKEN_BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const newsletterProfiles = () => [
+  { id: ALICE.id, email: ALICE.email, full_name: 'Kovács Anna', is_admin: false, newsletter_subscribed: false, newsletter_subscribed_at: null, newsletter_token: TOKEN_ALICE },
+  { id: BOB.id, email: BOB.email, full_name: 'Bob', is_admin: false, newsletter_subscribed: true, newsletter_subscribed_at: '2026-01-01T00:00:00Z', newsletter_token: TOKEN_BOB }
+];
+
+test('POST /api/newsletter/subscribe needs a login, subscribes only the caller once and shows up in the profile', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  const base = await listen(t);
+  const row = (id) => client.tables.profiles.find((item) => item.id === id);
+
+  assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST' })).status, 401);
+  assert.equal(row(ALICE.id).newsletter_subscribed, false);
+  const before = (await (await call(base, '/api/profile', { token: 'token-alice' })).json()).profile;
+  assert.equal(before.newsletter_subscribed, false);
+
+  const response = await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true, newsletter_subscribed: true });
+  assert.equal(row(ALICE.id).newsletter_subscribed, true);
+  const subscribedAt = row(ALICE.id).newsletter_subscribed_at;
+  assert.ok(Date.now() - new Date(subscribedAt).getTime() < 60 * 1000, 'a feliratkozás ideje be van állítva');
+  assert.equal(row(ALICE.id).newsletter_token, TOKEN_ALICE, 'a token nem változik');
+  assert.equal(row(BOB.id).newsletter_subscribed_at, '2026-01-01T00:00:00Z', 'más felhasználó sora nem változik');
+
+  assert.equal((await (await call(base, '/api/profile', { token: 'token-alice' })).json()).profile.newsletter_subscribed, true);
+  // Ismételt feliratkozás nem írja át az eredeti időpontot.
+  assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' })).status, 200);
+  assert.equal(row(ALICE.id).newsletter_subscribed_at, subscribedAt);
+  // Bob már fel volt iratkozva: az ő időpontja sem módosul.
+  assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' })).status, 200);
+  assert.equal(row(BOB.id).newsletter_subscribed_at, '2026-01-01T00:00:00Z');
+});
+
+test('subscribing creates the missing profile row first and a database failure is a generic 500', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts());
+  const base = await listen(t);
+  assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' })).status, 200);
+  const created = client.tables.profiles.filter((item) => item.id === ALICE.id);
+  assert.equal(created.length, 1);
+  assert.equal(created[0].newsletter_subscribed, true);
+
+  client.failures.profiles = 'relation secret detail';
+  const original = console.error;
+  console.error = () => {};
+  t.after(() => { console.error = original; });
+  const failed = await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' });
+  assert.equal(failed.status, 500);
+  assert.doesNotMatch(await failed.text(), /secret detail/);
+});
+
+test('the profile API can never change is_admin or the newsletter fields and never returns the token or the admin flag', async (t) => {
+  relaxLimits(t);
+  const rows = newsletterProfiles();
+  rows[0].is_admin = true;
+  const client = useClient(t, fakeAccounts([], { profiles: rows }));
+  const base = await listen(t);
+  const save = (body, token = 'token-alice') => call(base, '/api/profile', { method: 'POST', token, body });
+  const alice = () => client.tables.profiles.find((item) => item.id === ALICE.id);
+  const bob = () => client.tables.profiles.find((item) => item.id === BOB.id);
+
+  const read = await (await call(base, '/api/profile', { token: 'token-alice' })).json();
+  assert.equal('is_admin' in read.profile, false);
+  assert.equal('newsletter_token' in read.profile, false);
+  assert.equal(JSON.stringify(read).includes(TOKEN_ALICE), false);
+
+  // Egy támadó minden védett mezőt megpróbál átírni, a megengedett mező mellett.
+  const hostile = { full_name: 'Új Név', is_admin: true, newsletter_token: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', newsletter_subscribed: true, newsletter_subscribed_at: '2030-01-01T00:00:00Z', id: BOB.id };
+  const response = await save({ ...hostile });
+  assert.equal(response.status, 200);
+  assert.equal(alice().full_name, 'Új Név');
+  assert.equal(alice().newsletter_token, TOKEN_ALICE);
+  assert.equal(alice().newsletter_subscribed, false);
+  assert.equal(alice().newsletter_subscribed_at, null);
+  assert.equal(alice().is_admin, true, 'a meglévő is_admin érték változatlan marad, a kérésből nem íródik');
+  const bobSaved = await save({ is_admin: true, newsletter_token: TOKEN_ALICE, full_name: 'Bob 2' }, 'token-bob');
+  assert.equal(bobSaved.status, 200);
+  assert.equal(bob().is_admin, false, 'a nem admin felhasználó nem tehet magát adminná');
+  assert.equal(bob().newsletter_token, TOKEN_BOB);
+
+  // Csak védett mezőt tartalmazó kérés nem menthető, és a felirat nem is kapcsolható ki ezen az úton.
+  for (const body of [{ is_admin: true }, { newsletter_token: TOKEN_BOB }, { newsletter_subscribed: false }]) {
+    const rejected = await save(body, 'token-bob');
+    assert.equal(rejected.status, 400, JSON.stringify(body));
+  }
+  assert.equal(bob().newsletter_subscribed, true, 'a profil-végpont nem tud leiratkoztatni');
+  assert.equal(bob().is_admin, false);
+});
+
+test('the newsletter migration keeps is_admin and the newsletter fields out of client reach', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'supabase', 'migrations');
+  const sql = fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((name) => name.includes('newsletter_admin'))), 'utf8');
+  assert.match(sql, /add column if not exists is_admin boolean not null default false/);
+  assert.match(sql, /add column if not exists newsletter_subscribed boolean not null default false/);
+  assert.match(sql, /add column if not exists newsletter_subscribed_at timestamptz/);
+  assert.match(sql, /add column if not exists newsletter_token uuid not null default gen_random_uuid\(\)/);
+  assert.match(sql, /unique \(newsletter_token\)/);
+  assert.match(sql, /create table if not exists public\.newsletter_campaigns/);
+  assert.match(sql, /alter table public\.newsletter_campaigns enable row level security/);
+  assert.match(sql, /revoke all on public\.newsletter_campaigns from anon, authenticated/);
+  assert.doesNotMatch(sql, /create policy[^;]*newsletter_campaigns/i, 'a kampánynaplóhoz nincs kliensoldali RLS-szabály');
+  // A regisztrációs trigger átveszi a hozzájárulást, de csak a pontos "true" értéket.
+  assert.match(sql, /raw_user_meta_data ->> 'newsletter_subscribed'/);
+  assert.match(sql, /case when subscribed then now\(\) end/);
+  assert.match(sql, /revoke execute on function public\.handle_new_user\(\) from public, anon, authenticated/);
+
+  // Egyetlen migráció sem ad UPDATE jogot a védett oszlopokra, és a token nem olvasható a böngészőből.
+  for (const name of fs.readdirSync(dir)) {
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    for (const grant of text.match(/grant\s+(?:update|all)[^;]*;/gi) || []) {
+      assert.match(grant, /^grant update \(/i, `${name}: csak oszlopszintű UPDATE jog engedett: ${grant}`);
+      assert.doesNotMatch(grant, /is_admin|newsletter_/i, `${name}: ${grant}`);
+    }
+  }
+  const selectGrant = sql.match(/grant select \(([^)]*)\)\s+on public\.profiles to authenticated/)[1];
+  assert.doesNotMatch(selectGrant, /newsletter_token/);
+  assert.match(sql, /revoke select on public\.profiles from authenticated/);
+});
+
+test('POST /api/newsletter/unsubscribe is public, token based, idempotent and friendly 404 for unknown tokens', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  const base = await listen(t);
+  const unsubscribe = (body) => call(base, '/api/newsletter/unsubscribe', { method: 'POST', body });
+  const row = (id) => client.tables.profiles.find((item) => item.id === id);
+
+  const response = await unsubscribe({ token: TOKEN_BOB });
+  assert.equal(response.status, 200, 'bejelentkezés nélkül is működik');
+  const body = await response.json();
+  assert.deepEqual(body, { success: true });
+  assert.equal(row(BOB.id).newsletter_subscribed, false);
+  assert.equal(row(ALICE.id).newsletter_subscribed, false);
+  assert.equal(row(BOB.id).newsletter_token, TOKEN_BOB, 'a token marad, így az újabb levélben is él');
+  assert.equal(JSON.stringify(body).includes(BOB.email), false, 'a válasz nem árul el e-mail címet');
+
+  // Ismételt vagy nagybetűs token is barátságosan lefut.
+  assert.equal((await unsubscribe({ token: TOKEN_BOB })).status, 200);
+  await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' });
+  assert.equal(row(BOB.id).newsletter_subscribed, true);
+  assert.equal((await unsubscribe({ token: TOKEN_BOB.toUpperCase() })).status, 200);
+  assert.equal(row(BOB.id).newsletter_subscribed, false);
+
+  // Érvénytelen, ismeretlen vagy hiányzó token: 404 barátságos üzenettel, semmi nem változik.
+  await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' });
+  for (const payload of [{ token: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }, { token: 'nem-uuid' }, { token: '' }, { token: 42 }, { token: { $ne: null } }, {}, undefined]) {
+    const missing = await unsubscribe(payload);
+    assert.equal(missing.status, 404, JSON.stringify(payload));
+    const data = await missing.json();
+    assert.equal(data.success, false);
+    assert.match(data.error, /érvénytelen vagy lejárt/);
+  }
+  assert.equal(row(BOB.id).newsletter_subscribed, true);
+});
+
+test('unsubscribing without Supabase is 503 and a database failure is a generic 500', async (t) => {
+  relaxLimits(t);
+  const base = await listen(t);
+  assert.equal((await call(base, '/api/newsletter/unsubscribe', { method: 'POST', body: { token: TOKEN_ALICE } })).status, 503);
+
+  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  client.failures.profiles = 'relation secret detail';
+  const original = console.error;
+  console.error = () => {};
+  t.after(() => { console.error = original; });
+  const failed = await call(base, '/api/newsletter/unsubscribe', { method: 'POST', body: { token: TOKEN_ALICE } });
+  assert.equal(failed.status, 500);
+  assert.doesNotMatch(await failed.text(), /secret detail/);
+});
+
+test('the unsubscribe call is allowed from the production frontend origin and the page is shipped', async (t) => {
+  relaxLimits(t);
+  useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  const base = await listen(t);
+  const preflight = await fetch(`${base}/api/newsletter/unsubscribe`, { method: 'OPTIONS', headers: { Origin: 'https://ovitervezo.hu', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } });
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://ovitervezo.hu');
+  const { PAGES, SITE_ASSETS } = require('../services/siteConstants');
+  assert.ok(PAGES.includes('leiratkozas.html') && SITE_ASSETS.includes('leiratkozas.js'));
+  const page = await fetch(`${base}/leiratkozas.html`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Leiratkozás a hírlevélről/);
+  assert.equal((await fetch(`${base}/leiratkozas.js`)).status, 200);
+});
+
+test('the registration tab offers an unchecked newsletter checkbox and passes the choice to signUp', async (t) => {
+  for (const name of ['index.html', 'tervezo.html', 'profil.html']) {
+    const html = readPage(name);
+    const box = html.match(/<input id="authNewsletter"[^>]*>/)[0];
+    assert.doesNotMatch(box, /checked/, `${name}: alapból nincs bepipálva`);
+    assert.ok(html.includes('Szeretnék értesítést kapni az OviTervező újdonságairól, pedagógiai tippekről és kedvezményekről.'), name);
+  }
+  const { window, state } = await loadPage(t, { withSupabase: true });
+  const document = window.document;
+  const box = document.getElementById('authNewsletter');
+  document.getElementById('authBtn').click();
+  assert.equal(visible(window, 'authNewsletterField'), false, 'belépésnél nem látszik');
+  document.querySelector('[data-auth-tab="register"]').click();
+  assert.equal(visible(window, 'authNewsletterField'), true);
+  assert.equal(box.checked, false);
+  document.getElementById('authEmail').value = 'anna@example.com';
+  document.getElementById('authPassword').value = 'hosszabbJelszo1';
+  submitAuthForm(window);
+  await tick();
+  assert.equal(state.signUps[0].options.data.newsletter_subscribed, false);
+
+  box.click();
+  assert.equal(box.checked, true);
+  document.getElementById('authPassword').value = 'hosszabbJelszo1';
+  submitAuthForm(window);
+  await tick();
+  assert.equal(state.signUps[1].options.data.newsletter_subscribed, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.signUps[1].options.data)), { newsletter_subscribed: true });
+  assert.equal(box.checked, false, 'a következő regisztrációnál újra bepipálatlan');
+
+  document.querySelector('[data-auth-tab="login"]').click();
+  assert.equal(visible(window, 'authNewsletterField'), false);
+  document.getElementById('authPassword').value = 'joJelszo123';
+  submitAuthForm(window);
+  await tick();
+  assert.equal(state.signUps.length, 2, 'belépés nem regisztrál');
+  assert.deepEqual(JSON.parse(JSON.stringify(state.logins[0])), { email: 'anna@example.com', password: 'joJelszo123' });
+});
+
+test('profil.html offers only a subscribe button while unsubscribed and calls the protected endpoint', async (t) => {
+  const { window, state } = await loadProfil(t, { routes: profilRoutes({ '/api/newsletter/subscribe': () => [{ success: true, newsletter_subscribed: true }] }) });
+  const document = window.document;
+  state.listener('INITIAL_SESSION', SESSION);
+  await tick();
+  assert.equal(visible(window, 'newsletterBlock'), true);
+  assert.match(document.querySelector('#newsletterBlock h3').textContent, /Hírlevél értesítések/);
+  assert.equal(visible(window, 'newsletterOff'), true);
+  assert.equal(visible(window, 'newsletterOn'), false);
+  const button = document.getElementById('newsletterSubscribe');
+  assert.equal(button.textContent.trim(), 'Feliratkozom a hírlevélre');
+
+  button.click();
+  await tick();
+  const request = state.fetches.find((item) => item.path === '/api/newsletter/subscribe');
+  assert.equal(request.method, 'POST');
+  assert.equal(request.headers.Authorization, 'Bearer jwt-alice');
+  assert.equal(visible(window, 'newsletterOff'), false);
+  assert.equal(visible(window, 'newsletterOn'), true);
+  assert.match(text(window, 'newsletterOn'), /✓ Feliratkozva az OviTervező hírlevelére/);
+});
+
+test('profil.html shows a calm subscribed status without any unsubscribe control', async (t) => {
+  const subscribed = profilRoutes();
+  const baseProfile = subscribed['/api/profile'];
+  const routes = profilRoutes({ '/api/profile': (method, body) => { const [data] = baseProfile(method, body); return [{ ...data, profile: { ...data.profile, newsletter_subscribed: true } }]; } });
+  const { window, state } = await loadProfil(t, { routes });
+  const document = window.document;
+  state.listener('INITIAL_SESSION', SESSION);
+  await tick();
+  assert.equal(visible(window, 'newsletterBlock'), true);
+  assert.equal(visible(window, 'newsletterOff'), false);
+  assert.equal(visible(window, 'newsletterOn'), true);
+  assert.match(text(window, 'newsletterOn'), /✓ Feliratkozva az OviTervező hírlevelére/);
+
+  // Mentés után (a szerver a teljes profilt adja vissza) az állapot megmarad, és a blokkban nincs vezérlő a leiratkozáshoz.
+  document.getElementById('profileForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  assert.equal(visible(window, 'newsletterOn'), true);
+  const block = document.getElementById('newsletterBlock');
+  assert.deepEqual(Array.from(block.querySelectorAll('button, input, select, a')).filter((el) => !el.closest('[hidden]')), [], 'nincs gomb, kapcsoló vagy link a látható állapotban');
+  assert.equal(state.fetches.some((item) => item.path.includes('unsubscribe')), false);
+  assert.equal(window.document.documentElement.outerHTML.includes('/api/newsletter/unsubscribe'), false, 'a profil oldal nem hívhatja a leiratkozó végpontot');
+});
+
+test('profil.html keeps the subscribe button and shows the error when subscribing fails', async (t) => {
+  const { window, state } = await loadProfil(t, { routes: profilRoutes({ '/api/newsletter/subscribe': () => [{ success: false, error: 'A feliratkozás sikertelen. Kérjük, próbáld újra később.' }, 500] }) });
+  state.listener('INITIAL_SESSION', SESSION);
+  await tick();
+  window.document.getElementById('newsletterSubscribe').click();
+  await tick();
+  assert.equal(visible(window, 'newsletterOff'), true);
+  assert.equal(visible(window, 'newsletterOn'), false);
+  assert.match(text(window, 'newsletterError'), /A feliratkozás sikertelen/);
+  assert.equal(window.document.getElementById('newsletterSubscribe').disabled, false);
+});
+
+// ---------- leiratkozas.html (jsdom) ----------
+
+const leiratkozasHtml = readPage('leiratkozas.html');
+const loadLeiratkozas = (t, search, routes) => loadPage(t, { withSupabase: false, page: leiratkozasHtml, pageName: 'leiratkozas.html', search, local: false, routes });
+const shown = (window) => ['unsubLoading', 'unsubSuccess', 'unsubInvalid', 'unsubError'].filter((id) => visible(window, id));
+
+test('leiratkozas.html unsubscribes automatically with the token from the URL and confirms it', async (t) => {
+  const { window, state } = await loadLeiratkozas(t, `?token=${TOKEN_BOB}`, { '/api/newsletter/unsubscribe': () => [{ success: true }] });
+  await tick();
+  assert.deepEqual(state.fetches.map((item) => [item.method, item.path, JSON.parse(item.body)]), [['POST', '/api/newsletter/unsubscribe', { token: TOKEN_BOB }]]);
+  assert.deepEqual(shown(window), ['unsubSuccess']);
+  assert.equal(text(window, 'unsubSuccess').replace(/\s+/g, ' ').includes('Sikeresen leiratkoztál az OviTervező hírleveléről. Ha a jövőben mégis szeretnél híreket kapni, a profilodban bármikor újra feliratkozhatsz.'), true);
+  assert.equal(state.fetches[0].headers.Authorization, undefined, 'bejelentkezés nélkül megy');
+});
+
+test('leiratkozas.html shows a friendly message for an unknown token or a missing one without calling the API', async (t) => {
+  const unknown = await loadLeiratkozas(t, '?token=cccccccc-cccc-4ccc-8ccc-cccccccccccc', { '/api/newsletter/unsubscribe': () => [{ success: false, error: 'A leiratkozási link érvénytelen vagy lejárt.' }, 404] });
+  await tick();
+  assert.deepEqual(shown(unknown.window), ['unsubInvalid']);
+  assert.match(text(unknown.window, 'unsubInvalid'), /érvénytelen/);
+
+  const missing = await loadLeiratkozas(t, '', {});
+  await tick();
+  assert.deepEqual(missing.state.fetches, []);
+  assert.deepEqual(shown(missing.window), ['unsubInvalid']);
+});
+
+test('leiratkozas.html reports a server error and can retry', async (t) => {
+  let calls = 0;
+  const { window, state } = await loadLeiratkozas(t, `?token=${TOKEN_ALICE}`, { '/api/newsletter/unsubscribe': () => (++calls === 1 ? [{ success: false, error: 'Szerverhiba' }, 500] : [{ success: true }]) });
+  await tick();
+  assert.deepEqual(shown(window), ['unsubError']);
+  assert.match(text(window, 'unsubErrorText'), /Szerverhiba/);
+  window.document.getElementById('unsubRetry').click();
+  await tick();
+  assert.deepEqual(shown(window), ['unsubSuccess']);
+  assert.equal(state.fetches.length, 2);
+});
+
+test('leiratkozas.html is a noindex page in the brand design without inline scripts', () => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'leiratkozas.html'), 'utf8');
+  assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
+  assert.match(html, /<link rel="stylesheet" href="styles\.css"/);
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg"/);
+  assert.equal(/<script(?![^>]*\bsrc=)[^>]*>/.test(html), false, 'nincs inline script');
+  assert.doesNotMatch(html, /#(?:e67e22|f39c12|ff9800|d35400)/i, 'nincs narancs szín');
 });

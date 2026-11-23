@@ -521,7 +521,7 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'assets', 'auth.js', 'barion-pixel.js', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'logo.svg', 'profil.html', 'profil.js', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-history.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
+  assert.deepEqual(files, ['.htaccess', 'assets', 'auth.js', 'barion-pixel.js', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'leiratkozas.html', 'leiratkozas.js', 'logo.svg', 'profil.html', 'profil.js', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-history.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
   const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);

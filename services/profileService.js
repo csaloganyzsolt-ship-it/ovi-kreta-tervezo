@@ -14,7 +14,9 @@ const FIELD_LIMITS = Object.freeze({
   kindergarten_name: 120,
   group_name: 80
 });
-const COLUMNS = ['email', ...Object.keys(FIELD_LIMITS)].join(', ');
+// Az is_admin és a newsletter_token szándékosan nincs a listán: a kliens sosem olvashatja és nem módosíthatja őket.
+const COLUMNS = ['email', ...Object.keys(FIELD_LIMITS), 'newsletter_subscribed'].join(', ');
+const TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZIP_PATTERN = /^[0-9A-Za-z][0-9A-Za-z -]{2,9}$/;
 const TAX_ID_PATTERN = /^[0-9A-Za-z][0-9A-Za-z -]{0,29}$/;
 
@@ -48,6 +50,7 @@ function parseProfileInput(body) {
 function toProfile(row, user) {
   const profile = { email: user.email };
   for (const key of Object.keys(FIELD_LIMITS)) profile[key] = row?.[key] || '';
+  profile.newsletter_subscribed = row?.newsletter_subscribed === true;
   return profile;
 }
 
@@ -76,6 +79,29 @@ async function saveProfile(user, body) {
 // A fizetésnél megadott (vagy módosított) számlázási adat visszaírása a bejelentkezett felhasználó profiljába. A hibát a hívó naplózza: a fizetést nem akaszthatja meg.
 async function rememberBilling(user, billing) {
   return saveProfile(user, { billing_name: billing?.name, billing_zip: billing?.zip, billing_city: billing?.city, billing_address: billing?.address });
+}
+
+// Hírlevél: a profilból csak feliratkozni lehet; a leiratkozás kizárólag a leveleken lévő, tokenes linkkel történik.
+async function subscribeNewsletter(user) {
+  const client = supabase.requireClient();
+  const current = await getProfile(user);
+  if (current.newsletter_subscribed) return current;
+  const { data, error } = await client.from('profiles')
+    .update({ newsletter_subscribed: true, newsletter_subscribed_at: new Date().toISOString() })
+    .eq('id', user.id)
+    .select(COLUMNS)
+    .single();
+  if (error) throw new Error(`A feliratkozás sikertelen: ${error.message}`);
+  return toProfile(data, user);
+}
+
+// Nyilvános, tokenes leiratkozás: az ismeretlen vagy hibás token 404 (nem derül ki, hogy melyik fiók létezik).
+async function unsubscribeNewsletter(token) {
+  if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) throw new ProfileError('A leiratkozási link érvénytelen vagy lejárt.', 404);
+  const client = supabase.requireClient();
+  const { data, error } = await client.from('profiles').update({ newsletter_subscribed: false }).eq('newsletter_token', token.toLowerCase()).select('id');
+  if (error) throw new Error(`A leiratkozás sikertelen: ${error.message}`);
+  if (!data?.length) throw new ProfileError('A leiratkozási link érvénytelen vagy lejárt.', 404);
 }
 
 const ARCHIVE_TABLE = 'deleted_accounts_archive';
@@ -127,4 +153,4 @@ const runPurge = () => purgeExpiredArchives().catch((error) => console.error('[p
 setTimeout(runPurge, 60 * 1000).unref();
 setInterval(runPurge, DAY_MS).unref();
 
-module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, rememberBilling, deleteAccount, purgeExpiredArchives };
+module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, rememberBilling, subscribeNewsletter, unsubscribeNewsletter, deleteAccount, purgeExpiredArchives };

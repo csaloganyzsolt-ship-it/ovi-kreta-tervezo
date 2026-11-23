@@ -19,7 +19,7 @@
     register: {
       title: 'Regisztráció',
       intro: 'Hozz létre ingyenes fiókot: a tervezeteid felhőben is megmaradnak, a számlázási adataid pedig a vásárlásnál automatikusan kitöltődnek.',
-      submit: 'Regisztráció', password: true, email: true, name: true, forgot: false, social: true, tabs: true, back: false, captcha: true, autocomplete: 'new-password'
+      submit: 'Regisztráció', password: true, email: true, name: true, newsletter: true, forgot: false, social: true, tabs: true, back: false, captcha: true, autocomplete: 'new-password'
     },
     forgot: {
       title: 'Elfelejtett jelszó',
@@ -137,6 +137,7 @@
     if (submit) submit.textContent = spec.submit;
     setHidden('authTabs', !spec.tabs);
     setHidden('authNameField', !spec.name);
+    setHidden('authNewsletterField', !spec.newsletter);
     setHidden('authEmailField', !spec.email);
     setHidden('authPasswordField', !spec.password);
     setHidden('authForgot', !spec.forgot);
@@ -309,9 +310,11 @@
       const { data, error } = await state.client.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { emailRedirectTo: redirectTo, data: values.name ? { full_name: values.name } : {}, ...captchaOptions() }
+        options: { emailRedirectTo: redirectTo, data: { ...(values.name ? { full_name: values.name } : {}), newsletter_subscribed: values.newsletter === true }, ...captchaOptions() }
       });
       if (error) throw error;
+      const newsletterBox = byId('authNewsletter');
+      if (newsletterBox) newsletterBox.checked = false;
       if (data?.session) {
         closeAuthModal();
         return '';
@@ -336,6 +339,7 @@
     const email = String(byId('authEmail')?.value || '').trim();
     const password = String(byId('authPassword')?.value || '');
     const name = String(byId('authName')?.value || '').trim().slice(0, 120);
+    const newsletter = state.mode === 'register' && Boolean(byId('authNewsletter')?.checked);
     if (spec.email && !EMAIL_PATTERN.test(email)) {
       setMessage('authError', 'Adj meg érvényes e-mail címet.');
       return;
@@ -355,7 +359,7 @@
     const submit = byId('authSubmit');
     if (submit) submit.disabled = true;
     try {
-      const status = await runMode(state.mode, { email, password, name });
+      const status = await runMode(state.mode, { email, password, name, newsletter });
       if (status) setMessage('authStatus', status);
       const passwordInput = byId('authPassword');
       if (passwordInput) passwordInput.value = '';
