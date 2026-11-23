@@ -6,6 +6,7 @@
   const LOGGED_OUT_LABEL = 'Belépés / Regisztráció';
   const LOGGED_IN_LABEL = 'Fiókom';
   const PROFILE_PAGE = 'profil.html';
+  const ADMIN_PAGE = 'admin.html';
   const MIN_PASSWORD_LENGTH = 8;
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -177,6 +178,31 @@
     button.classList.toggle('is-logged-in', loggedIn);
   }
 
+  // Admin-link: csak akkor jelenik meg, ha a szerver az /api/admin/me hívásra 200-zal és isAdmin: true értékkel válaszol.
+  // Minden más válasz (401, 403, hálózati hiba) esetén a link nem létezik, és nincs hibaüzenet sem (a rendes felhasználó semmit nem lát).
+  function removeAdminLink() {
+    byId('adminLink')?.remove();
+  }
+
+  async function checkAdmin() {
+    removeAdminLink();
+    if (!button || !state.user || window.location.pathname.endsWith(ADMIN_PAGE)) return;
+    const userId = state.user.id;
+    let data;
+    try {
+      data = await apiFetch('/api/admin/me');
+    } catch (_error) {
+      return;
+    }
+    if (data.isAdmin !== true || state.user?.id !== userId || byId('adminLink')) return;
+    const link = document.createElement('a');
+    link.id = 'adminLink';
+    link.className = 'admin-link';
+    link.href = ADMIN_PAGE;
+    link.textContent = 'Vezérlőpult';
+    button.insertAdjacentElement('afterend', link);
+  }
+
   function applySession(session) {
     const previousId = state.user?.id || null;
     state.token = session?.access_token || '';
@@ -185,6 +211,7 @@
     // A szinkronizálás csak tényleges belépéskor/kilépéskor fut (a tokenfrissítés nem indítja újra).
     if ((state.user?.id || null) !== previousId) {
       document.dispatchEvent(new CustomEvent('ovi-auth-change', { detail: { user: state.user } }));
+      checkAdmin();
     }
   }
 

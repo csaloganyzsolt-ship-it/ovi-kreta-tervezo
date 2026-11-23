@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Központ – OviTervező</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <script src="theme-init.js"></script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <a class="brand" href="index.html" aria-label="OviTervező – vissza a főoldalra">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec79e"/><stop offset="1" stop-color="#2f946f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#bm)"/>  <circle cx="23" cy="33" r="10.5" fill="none" stroke="#fff" stroke-width="5.5"/>  <path d="M38 23.5h18M47 23.5V44" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></svg>
+          <span class="brand-text">Ovi<strong>Tervező</strong></span>
+        </a>
+        <div class="topbar-actions">
+          <a class="profile-btn" href="tervezo.html">Új tervezet</a>
+          <button id="authBtn" class="auth-btn" type="button" hidden>Belépés / Regisztráció</button>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Világos / sötét mód váltása">Sötét mód</button>
+        </div>
+      </header>
+
+      <main class="admin-page">
+        <section id="adminLoading" class="profile-gate" role="status">Jogosultság ellenőrzése...</section>
+
+        <section id="adminApp" hidden>
+          <div class="profile-head">
+            <div>
+              <h1>Admin Központ</h1>
+              <p class="profile-email" id="adminEmail"></p>
+            </div>
+          </div>
+
+          <nav class="admin-tools" aria-labelledby="adminToolsTitle">
+            <h2 id="adminToolsTitle">Külső statisztikák &amp; Eszközök</h2>
+            <div class="admin-tools-list">
+              <a class="profile-btn" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare Analytics</a>
+              <a class="profile-btn" href="https://analytics.google.com/" target="_blank" rel="noopener noreferrer">Google Analytics</a>
+              <a class="profile-btn" href="https://search.google.com/search-console" target="_blank" rel="noopener noreferrer">Google Search Console</a>
+              <a class="profile-btn" href="https://secure.barion.com/" target="_blank" rel="noopener noreferrer">Barion</a>
+              <a class="profile-btn" href="https://www.szamlazz.hu/szamla/login" target="_blank" rel="noopener noreferrer">Számlázz.hu</a>
+            </div>
+          </nav>
+
+          <div class="profile-tabs" role="tablist" aria-label="Admin menü">
+            <button type="button" role="tab" class="profile-tab" id="tabOverview" data-admin-tab="overview" aria-selected="true" aria-controls="panelOverview">Áttekintés &amp; Statisztika</button>
+            <button type="button" role="tab" class="profile-tab" id="tabCoupons" data-admin-tab="coupons" aria-selected="false" aria-controls="panelCoupons">Kuponkezelő</button>
+            <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
+            <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók &amp; Hírlevél</button>
+          </div>
+
+          <section class="profile-panel" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
+            <h2>Áttekintés &amp; Statisztika</h2>
+            <p class="profile-error" id="overviewError" role="alert" hidden></p>
+            <div class="admin-kpis" id="kpiGrid">
+              <div class="admin-kpi"><span class="admin-kpi-label">Összes bevétel</span><strong class="admin-kpi-value" id="kpiRevenueTotal">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Bevétel az elmúlt 30 napban</span><strong class="admin-kpi-value" id="kpiRevenue30">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Sikeres rendelések</span><strong class="admin-kpi-value" id="kpiOrders">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Regisztrált felhasználók</span><strong class="admin-kpi-value" id="kpiUsers">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Megerősített hírlevél-feliratkozók</span><strong class="admin-kpi-value" id="kpiSubscribers">–</strong></div>
+            </div>
+            <h3>Tervezetek elemzése</h3>
+            <div class="admin-kpis" id="docGrid">
+              <div class="admin-kpi"><span class="admin-kpi-label">Generált tervezetek összesen</span><strong class="admin-kpi-value" id="docTotal">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Napi (standard)</span><strong class="admin-kpi-value" id="docStandard">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Oktatási célú (academic)</span><strong class="admin-kpi-value" id="docAcademic">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Heti csomag (weekly)</span><strong class="admin-kpi-value" id="docWeekly">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Konverzió (feloldva fizetéssel vagy kuponnal)</span><strong class="admin-kpi-value" id="docConversion">–</strong></div>
+            </div>
+          </section>
+
+          <section class="profile-panel" id="panelCoupons" role="tabpanel" aria-labelledby="tabCoupons" hidden>
+            <h2>Kuponkezelő</h2>
+            <form class="profile-form" id="couponForm" novalidate>
+              <h3>Új kupon létrehozása</h3>
+              <div>
+                <label for="couponCode">Kuponkód</label>
+                <input id="couponCode" name="code" type="text" maxlength="40" autocomplete="off" placeholder="NYAR20" />
+              </div>
+              <div>
+                <label for="couponPercent">Kedvezmény (%)</label>
+                <input id="couponPercent" name="discount_percent" type="number" min="1" max="100" step="1" inputmode="numeric" />
+              </div>
+              <div>
+                <label for="couponMaxUses">Felhasználási keret (üres = korlátlan)</label>
+                <input id="couponMaxUses" name="max_uses" type="number" min="1" step="1" inputmode="numeric" />
+              </div>
+              <div>
+                <label for="couponValidUntil">Érvényes eddig (nem kötelező)</label>
+                <input id="couponValidUntil" name="valid_until" type="date" />
+              </div>
+              <div class="span-2">
+                <label for="couponNote">Megjegyzés</label>
+                <input id="couponNote" name="note" type="text" maxlength="200" />
+              </div>
+              <div class="profile-actions">
+                <button type="submit" class="profile-btn primary" id="couponSave">Kupon létrehozása</button>
+                <span class="profile-status" id="couponStatus" role="status" hidden></span>
+                <span class="profile-error" id="couponError" role="alert" hidden></span>
+              </div>
+            </form>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="couponsTable">
+                <thead><tr><th>Kód</th><th>Kedvezmény</th><th>Felhasználás</th><th>Kiosztott kedvezmény</th><th>Érvényes eddig</th><th>Megjegyzés</th><th>Aktív</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <h3>Legutóbbi beváltások</h3>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="redemptionsTable">
+                <thead><tr><th>Időpont</th><th>Kupon</th><th>E-mail</th><th>Csomag</th><th>Eredeti ár</th><th>Kedvezmény</th><th>Fizetendő</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="couponsError" role="alert" hidden></p>
+          </section>
+
+          <section class="profile-panel" id="panelOrders" role="tabpanel" aria-labelledby="tabOrders" hidden>
+            <h2>Rendelések &amp; Számlák</h2>
+            <div class="admin-filters">
+              <div>
+                <label for="ordersSearch">Keresés</label>
+                <input id="ordersSearch" type="search" placeholder="E-mail, név, rendelésszám, kupon, számlaszám" autocomplete="off" />
+              </div>
+              <div>
+                <label for="ordersStatus">Státusz</label>
+                <select id="ordersStatus">
+                  <option value="">Összes</option>
+                  <option value="paid">Fizetve</option>
+                  <option value="pending">Függőben</option>
+                  <option value="failed">Sikertelen</option>
+                  <option value="cancelled">Megszakítva</option>
+                </select>
+              </div>
+              <button type="button" class="profile-btn" id="ordersExport">CSV export</button>
+            </div>
+            <p class="profile-hint" id="ordersCount" role="status"></p>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="ordersTable">
+                <thead><tr><th>Dátum</th><th>Vevő</th><th>Csomag</th><th>Összeg</th><th>Kupon</th><th>Státusz</th><th>Számlaszám</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="ordersError" role="alert" hidden></p>
+          </section>
+
+          <section class="profile-panel" id="panelUsers" role="tabpanel" aria-labelledby="tabUsers" hidden>
+            <h2>Felhasználók &amp; Hírlevélküldő</h2>
+            <div class="admin-filters">
+              <p class="profile-hint" id="usersCount" role="status"></p>
+              <button type="button" class="profile-btn" id="usersExport">Feliratkozók CSV exportja</button>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="usersTable">
+                <thead><tr><th>Név</th><th>E-mail</th><th>Regisztráció</th><th>E-mail megerősítve</th><th>Feliratkozott</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="usersError" role="alert" hidden></p>
+
+            <h3>Hírlevél küldése</h3>
+            <div class="admin-newsletter">
+              <form class="profile-form" id="newsletterForm" novalidate>
+                <div class="span-2">
+                  <label for="nlSubject">Tárgy</label>
+                  <input id="nlSubject" type="text" maxlength="200" autocomplete="off" />
+                </div>
+                <div class="span-2">
+                  <label for="nlHeading">Főcím a levélben</label>
+                  <input id="nlHeading" type="text" maxlength="200" autocomplete="off" />
+                </div>
+                <div class="span-2">
+                  <label for="nlBody">Szöveg (sima szöveg vagy egyedi HTML)</label>
+                  <textarea id="nlBody" rows="9" maxlength="50000"></textarea>
+                </div>
+                <div>
+                  <label for="nlCtaText">Gomb felirata (nem kötelező)</label>
+                  <input id="nlCtaText" type="text" maxlength="60" autocomplete="off" />
+                </div>
+                <div>
+                  <label for="nlCtaUrl">Gomb hivatkozása (https://)</label>
+                  <input id="nlCtaUrl" type="url" maxlength="500" autocomplete="off" placeholder="https://ovitervezo.hu/tervezo.html" />
+                </div>
+                <fieldset class="span-2 admin-recipients">
+                  <legend>Címzettek</legend>
+                  <label><input type="radio" name="recipients" value="test" checked /> Teszt: csak az admin e-mail címe</label>
+                  <label><input type="radio" name="recipients" value="subscribers" /> Minden megerősített feliratkozó</label>
+                  <label><input type="radio" name="recipients" value="custom" /> Egyedi lista (vesszővel elválasztott e-mail címek)</label>
+                  <textarea id="nlCustom" rows="2" placeholder="anna@example.com, bela@example.com" hidden></textarea>
+                </fieldset>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="nlSend">Hírlevél küldése</button>
+                  <span class="profile-status" id="nlStatus" role="status" hidden></span>
+                  <span class="profile-error" id="nlError" role="alert" hidden></span>
+                </div>
+              </form>
+              <div class="admin-preview">
+                <h4>Élő előnézet</h4>
+                <iframe id="nlPreview" title="Hírlevél előnézete" sandbox="" referrerpolicy="no-referrer"></iframe>
+              </div>
+            </div>
+
+            <h3>Korábbi kampányok</h3>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="campaignsTable">
+                <thead><tr><th>Időpont</th><th>Tárgy</th><th>Címzettek</th><th>Elküldve</th><th>Sikertelen</th><th>Küldte</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="campaignsError" role="alert" hidden></p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="site.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+    <script src="auth.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>

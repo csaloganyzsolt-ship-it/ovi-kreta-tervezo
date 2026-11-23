@@ -72,4 +72,32 @@ async function requireUser(req, res, next) {
   }
 }
 
-module.exports = { AuthError, bearerToken, normalizeEmail, verifyToken, optionalUser, requireUser };
+// Admin végpontokhoz: két független feltétel egyszerre. (1) az ADMIN_EMAIL környezeti változó be van állítva és megegyezik a felhasználó e-mail címével,
+// (2) a profiles.is_admin értéke true. Bármelyik hiányában 403 (a két ok nem különböztethető meg kívülről); az is_admin értéket semmilyen API nem állítja.
+const FORBIDDEN = { success: false, code: 'ADMIN_FORBIDDEN', error: 'Nincs jogosultságod ehhez a művelethez.' };
+
+function adminEmail(env = process.env) {
+  return normalizeEmail(env.ADMIN_EMAIL);
+}
+
+async function requireAdmin(req, res, next) {
+  const token = bearerToken(req);
+  if (!token) return res.status(401).json({ success: false, code: 'AUTH_REQUIRED', error: 'Ehhez a művelethez be kell jelentkezni.' });
+  try {
+    const user = await verifyToken(token);
+    const expected = adminEmail();
+    if (!expected || user.email !== expected) return res.status(403).json(FORBIDDEN);
+    const client = supabase.requireClient();
+    const { data, error } = await client.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+    if (error) throw new AuthError('Az admin jogosultság ellenőrzése sikertelen.', 503, 'AUTH_UNAVAILABLE');
+    if (data?.is_admin !== true) return res.status(403).json(FORBIDDEN);
+    req.user = user;
+    return next();
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ success: false, code: error.code, error: error.message });
+    console.error('[admin-auth]', error.message);
+    return res.status(503).json({ success: false, code: 'AUTH_UNAVAILABLE', error: 'Az admin jogosultság ellenőrzése most nem érhető el.' });
+  }
+}
+
+module.exports = { AuthError, bearerToken, normalizeEmail, verifyToken, optionalUser, requireUser, requireAdmin, adminEmail };

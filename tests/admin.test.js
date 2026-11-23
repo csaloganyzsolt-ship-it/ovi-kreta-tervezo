@@ -1,0 +1,912 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { once } = require('node:events');
+const { test } = require('node:test');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const server = require('../server');
+const supabase = require('../services/supabaseService');
+const mailService = require('../services/mailService');
+const newsletter = require('../services/newsletterService');
+const { readPage } = require('./fixtures');
+
+const user = (n, email, extra = {}) => ({ id: `${n}`.repeat(8) + '-1111-4111-8111-' + `${n}`.repeat(12), email, email_confirmed_at: '2026-01-01T00:00:00Z', created_at: `2026-01-0${n}T10:00:00Z`, ...extra });
+const ADMIN = user(1, 'Admin@Example.com');
+const ALICE = user(2, 'alice@example.com');
+const BOB = user(3, 'bob@example.com');
+const NEWBIE = user(4, 'new@example.com', { email_confirmed_at: null });
+const CAROL = user(5, 'carol@example.com');
+const IMPOSTOR = user(6, 'admin@example.com');
+const TOKENS = { 'token-admin': ADMIN, 'token-alice': ALICE, 'token-bob': BOB, 'token-new': NEWBIE, 'token-carol': CAROL, 'token-impostor': IMPOSTOR };
+
+const TOKEN_OF = { [ADMIN.id]: 'a0000000-0000-4000-8000-000000000001', [ALICE.id]: 'a0000000-0000-4000-8000-000000000002', [BOB.id]: 'a0000000-0000-4000-8000-000000000003', [NEWBIE.id]: 'a0000000-0000-4000-8000-000000000004', [CAROL.id]: 'a0000000-0000-4000-8000-000000000005' };
+
+const profile = (u, extra = {}) => ({ id: u.id, email: u.email.toLowerCase(), full_name: '', billing_name: '', is_admin: false, newsletter_subscribed: false, newsletter_subscribed_at: null, newsletter_token: TOKEN_OF[u.id], ...extra });
+
+const DAY = 24 * 60 * 60 * 1000;
+const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+
+// Mockolt Supabase kliens az admin végpontokhoz: auth.getUser, auth.admin.listUsers és a használt lekérdezés-láncok.
+function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], ...tables };
+  const failures = {};
+  const calls = { listUsers: 0 };
+  return {
+    db,
+    failures,
+    calls,
+    auth: {
+      async getUser(token) {
+        const found = TOKENS[token];
+        return found ? { data: { user: found }, error: null } : { data: { user: null }, error: { name: 'AuthApiError', status: 401, message: 'invalid JWT' } };
+      },
+      admin: {
+        async listUsers({ page, perPage }) {
+          calls.listUsers += 1;
+          if (failures.listUsers) return { data: null, error: { message: failures.listUsers } };
+          return { data: { users: authUsers.slice((page - 1) * perPage, page * perPage) }, error: null };
+        }
+      }
+    },
+    from(name) {
+      const filters = [];
+      let patch = null;
+      let order = null;
+      let window = null;
+      let single = false;
+      const run = () => {
+        if (failures[name]) return { data: null, error: { message: failures[name] } };
+        let rows = db[name].filter((row) => filters.every((matches) => matches(row)));
+        if (patch) rows.forEach((row) => Object.assign(row, patch));
+        if (order) rows = [...rows].sort((a, b) => (order.ascending ? 1 : -1) * String(a[order.column]).localeCompare(String(b[order.column])));
+        if (window) rows = rows.slice(window.from, window.to + 1);
+        const data = rows.map((row) => ({ ...row, ...(name === 'documents' ? { request: row.data?.plan?.request } : {}) }));
+        return single ? { data: data[0] || null, error: null } : { data, error: null };
+      };
+      const builder = {
+        select() { return builder; },
+        update(values) { patch = values; return builder; },
+        eq(column, value) { filters.push((row) => row[column] === value); return builder; },
+        in(column, values) { filters.push((row) => values.includes(row[column])); return builder; },
+        order(column, options) { order = { column, ascending: options?.ascending !== false }; return builder; },
+        range(from, to) { window = { from, to }; return builder; },
+        limit(count) { window = { from: 0, to: count - 1 }; return builder; },
+        insert(row) {
+          const insertError = failures[`insert:${name}`];
+          if (!insertError) {
+            const stored = { ...(name === 'newsletter_campaigns' ? { id: `camp-${db[name].length + 1}`, created_at: new Date().toISOString() } : {}), ...(name === 'coupons' ? { created_at: new Date().toISOString() } : {}), ...row };
+            db[name].push(stored);
+            filters.push((candidate) => candidate === stored);
+          } else {
+            filters.push(() => false);
+            builder.insertError = insertError;
+          }
+          return builder;
+        },
+        single() { single = true; return builder; },
+        maybeSingle() { single = true; return builder; },
+        then(resolve, reject) {
+          const result = builder.insertError ? { data: null, error: builder.insertError } : run();
+          return Promise.resolve(result).then(resolve, reject);
+        }
+      };
+      return builder;
+    }
+  };
+}
+
+function useAdminEnv(t, client, { adminEmail = 'ADMIN@example.com' } = {}) {
+  const keys = ['ADMIN_EMAIL', 'ADMIN_RATE_LIMIT', 'ADMIN_SEND_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'];
+  const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  if (adminEmail === null) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = adminEmail;
+  process.env.ADMIN_RATE_LIMIT = '100000';
+  process.env.ADMIN_SEND_RATE_LIMIT = '100000';
+  supabase.setClient(client);
+  t.after(() => {
+    supabase.setClient(null);
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  return client;
+}
+
+async function listen(t) {
+  const instance = server.app.listen(0, '127.0.0.1');
+  await once(instance, 'listening');
+  t.after(() => new Promise((resolve) => instance.close(resolve)));
+  return `http://127.0.0.1:${instance.address().port}`;
+}
+
+function call(base, route, { token, method = 'GET', body, headers = {} } = {}) {
+  return fetch(`${base}${route}`, {
+    method,
+    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+
+// Admin felhasználó + profil: mindkét feltétel teljesül.
+const adminProfiles = () => [profile(ADMIN, { is_admin: true }), profile(IMPOSTOR, { is_admin: false }), profile(ALICE, { is_admin: true })];
+
+// ---------- Jogosultság ----------
+
+test('admin routes answer 401 without a valid session, before any data is read', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  for (const route of ['/api/admin/me', '/api/admin/stats', '/api/admin/coupons', '/api/admin/orders', '/api/admin/users', '/api/admin/newsletter/campaigns']) {
+    assert.equal((await call(base, route)).status, 401, `${route} token nélkül`);
+    assert.equal((await call(base, route, { token: 'nem-letezo' })).status, 401, `${route} érvénytelen tokennel`);
+  }
+  assert.equal((await call(base, '/api/admin/me', { token: 'token-new' })).status, 401, 'a megerősítetlen e-mail nem fogadható el');
+  assert.equal(client.calls.listUsers, 0);
+});
+
+test('requireAdmin needs ADMIN_EMAIL AND profiles.is_admin: every other combination is a 403', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  const routes = [['GET', '/api/admin/me'], ['GET', '/api/admin/stats'], ['GET', '/api/admin/coupons'], ['POST', '/api/admin/coupons'], ['PATCH', '/api/admin/coupons/TEST100'], ['GET', '/api/admin/orders'], ['GET', '/api/admin/users'], ['POST', '/api/admin/newsletter/send'], ['POST', '/api/admin/newsletter/preview'], ['GET', '/api/admin/newsletter/campaigns']];
+  const expect403 = async (token, label) => {
+    for (const [method, route] of routes) {
+      const response = await call(base, route, { token, method, body: method === 'GET' ? undefined : { is_active: true } });
+      assert.equal(response.status, 403, `${label}: ${method} ${route}`);
+      const body = await response.json();
+      assert.equal(body.success, false);
+      assert.equal(body.code, 'ADMIN_FORBIDDEN');
+    }
+  };
+
+  // Rendes felhasználó: is_admin ugyan true, de az e-mail nem az ADMIN_EMAIL.
+  await expect403('token-alice', 'is_admin true, de más e-mail');
+  // Az e-mail egyezik, de a profilban az is_admin hamis.
+  await expect403('token-impostor', 'egyező e-mail, is_admin false');
+  // Profilsor nélkül sincs jog.
+  client.db.profiles = client.db.profiles.filter((row) => row.id !== IMPOSTOR.id);
+  await expect403('token-impostor', 'nincs profilsor');
+  // A nem logikai igaz érték sem elég.
+  client.db.profiles.find((row) => row.id === ADMIN.id).is_admin = 'true';
+  await expect403('token-admin', 'is_admin szövegként');
+  client.db.profiles.find((row) => row.id === ADMIN.id).is_admin = true;
+  // Nincs beállított ADMIN_EMAIL: még a jó profil sem elég.
+  delete process.env.ADMIN_EMAIL;
+  await expect403('token-admin', 'üres ADMIN_EMAIL');
+  process.env.ADMIN_EMAIL = '   ';
+  await expect403('token-admin', 'szóközös ADMIN_EMAIL');
+});
+
+test('GET /api/admin/me returns isAdmin only when both checks pass (case-insensitive e-mail match)', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }), { adminEmail: 'ADMIN@EXAMPLE.COM' });
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/me', { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { success: true, isAdmin: true });
+});
+
+test('a failing profile lookup is a 503, never an open door and never a leaked database message', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  client.failures.profiles = 'connection refused: secret-db-host';
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/me', { token: 'token-admin' });
+  assert.equal(response.status, 503);
+  assert.doesNotMatch(JSON.stringify(await response.json()), /secret-db-host/);
+});
+
+test('the admin limiter works before authentication and the CORS policy allows PATCH', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  const preflight = await call(base, '/api/admin/coupons/TEST100', { method: 'OPTIONS', headers: { Origin: 'https://ovitervezo.hu', 'Access-Control-Request-Method': 'PATCH', 'Access-Control-Request-Headers': 'authorization,content-type' } });
+  assert.match(preflight.headers.get('access-control-allow-methods') || '', /PATCH/);
+  process.env.ADMIN_RATE_LIMIT = '1';
+  const statuses = [];
+  for (let i = 0; i < 3; i += 1) statuses.push((await call(base, '/api/admin/me')).status);
+  assert.equal(statuses.at(-1), 429);
+});
+
+// ---------- Statisztika ----------
+
+function statsTables() {
+  const doc = (id, mode, duration, unlocked) => ({ document_id: id, plan_mode: mode, unlocked, data: { plan: { request: { duration } } } });
+  return {
+    profiles: [
+      ...adminProfiles().map((row) => (row.id === ALICE.id ? { ...row, newsletter_subscribed: true } : row)),
+      profile(BOB, { newsletter_subscribed: false }),
+      profile(NEWBIE, { newsletter_subscribed: true }),
+      profile(CAROL, { newsletter_subscribed: true })
+    ],
+    orders: [
+      { order_number: 'O1', amount: 390, status: 'paid', created_at: ago(5) },
+      { order_number: 'O2', amount: 890, status: 'paid', created_at: ago(40) },
+      { order_number: 'O3', amount: 390, status: 'pending', created_at: ago(1) },
+      { order_number: 'O4', amount: 390, status: 'failed', created_at: ago(2) }
+    ],
+    documents: [doc('d1', 'standard', 'Napi', true), doc('d2', 'standard', 'Heti', true), doc('d3', 'academic', 'Napi', false), doc('d4', 'standard', 'Napi', false), doc('d5', 'academic', 'Heti', true)]
+  };
+}
+
+test('GET /api/admin/stats aggregates revenue, users, confirmed subscribers and the document conversion', async (t) => {
+  useAdminEnv(t, fakeAdmin(statsTables()));
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/stats', { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  const { stats } = await response.json();
+  assert.deepEqual(stats.revenue, { total: 1280, last30Days: 390 }, 'csak a fizetett rendelések számítanak');
+  assert.equal(stats.paidOrders, 2);
+  assert.equal(stats.registeredUsers, 5);
+  assert.equal(stats.confirmedSubscribers, 2, 'Alice és Carol; a megerősítetlen e-mailű feliratkozó nem számít');
+  assert.deepEqual(stats.documents, { total: 5, unlocked: 3, breakdown: { standard: 2, academic: 2, weekly: 1 }, conversionRate: 60 });
+});
+
+test('stats handle an empty database without dividing by zero and report database failures generically', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  const empty = await (await call(base, '/api/admin/stats', { token: 'token-admin' })).json();
+  assert.equal(empty.stats.documents.conversionRate, 0);
+  assert.equal(empty.stats.revenue.total, 0);
+
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  t.after(() => { console.error = originalError; });
+  client.failures.documents = 'relation "documents" is missing';
+  const failed = await call(base, '/api/admin/stats', { token: 'token-admin' });
+  assert.equal(failed.status, 500);
+  assert.doesNotMatch(JSON.stringify(await failed.json()), /documents" is missing/);
+  assert.ok(errors.some((line) => line.includes('documents')), 'a részlet a szerver naplójába kerül');
+});
+
+// ---------- Kuponok ----------
+
+test('POST /api/admin/coupons creates an active coupon, normalizes the code and rejects invalid input', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  const post = (body) => call(base, '/api/admin/coupons', { token: 'token-admin', method: 'POST', body });
+
+  const created = await post({ code: ' nyar-20 ', discount_percent: '20', max_uses: 50, valid_until: '2099-12-31', note: ' Nyári akció ' });
+  assert.equal(created.status, 201);
+  const { coupon } = await created.json();
+  assert.equal(coupon.code, 'NYAR-20');
+  assert.equal(coupon.discountPercent, 20);
+  assert.equal(coupon.isActive, true);
+  assert.equal(coupon.maxUses, 50);
+  assert.equal(coupon.validUntil, '2099-12-31T23:59:59.999Z');
+  const stored = client.db.coupons[0];
+  assert.deepEqual({ code: stored.code, discount_percent: stored.discount_percent, max_uses: stored.max_uses, is_active: stored.is_active, note: stored.note }, { code: 'NYAR-20', discount_percent: 20, max_uses: 50, is_active: true, note: 'Nyári akció' });
+
+  const minimal = await post({ code: 'MINI', discount_percent: 100 });
+  assert.equal(minimal.status, 201);
+  const row = client.db.coupons.find((item) => item.code === 'MINI');
+  assert.equal(row.max_uses, null);
+  assert.equal(row.valid_until, null);
+  assert.equal(row.note, null);
+
+  assert.equal((await post({ code: 'nyar-20', discount_percent: 10 })).status, 409, 'ugyanaz a kód kisbetűvel is ütközik');
+  for (const bad of [
+    { code: '', discount_percent: 10 }, { code: 'ROSSZ KÓD', discount_percent: 10 }, { code: 'A'.repeat(41), discount_percent: 10 },
+    { code: 'X1', discount_percent: 0 }, { code: 'X1', discount_percent: 101 }, { code: 'X1', discount_percent: 12.5 }, { code: 'X1' }, { code: 'X1', discount_percent: 'abc' },
+    { code: 'X1', discount_percent: 10, max_uses: 0 }, { code: 'X1', discount_percent: 10, max_uses: 1.5 },
+    { code: 'X1', discount_percent: 10, valid_until: 'holnap' }, { code: 'X1', discount_percent: 10, valid_until: '2020-01-01' },
+    { code: 'X1', discount_percent: 10, note: 'n'.repeat(201) }
+  ]) {
+    const response = await post(bad);
+    assert.equal(response.status, 400, JSON.stringify(bad));
+    assert.ok((await response.json()).error.length > 5);
+  }
+  assert.equal(client.db.coupons.length, 2, 'érvénytelen kérésből nem jön létre kupon');
+});
+
+test('a unique-violation race on insert is reported as a 409', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  client.failures['insert:coupons'] = { code: '23505', message: 'duplicate key value violates unique constraint "coupons_pkey"' };
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/coupons', { token: 'token-admin', method: 'POST', body: { code: 'RACE', discount_percent: 5 } });
+  assert.equal(response.status, 409);
+});
+
+test('PATCH /api/admin/coupons/:code switches a coupon on and off, and answers 404/400 for bad requests', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({
+    profiles: adminProfiles(),
+    coupons: [{ code: 'TEST100', discount_percent: 100, max_uses: null, valid_until: null, is_active: true, note: 'Belső', created_at: ago(9) }]
+  }));
+  const base = await listen(t);
+  const patch = (code, body) => call(base, `/api/admin/coupons/${code}`, { token: 'token-admin', method: 'PATCH', body });
+
+  const off = await patch('test100', { is_active: false });
+  assert.equal(off.status, 200);
+  assert.equal((await off.json()).coupon.isActive, false);
+  assert.equal(client.db.coupons[0].is_active, false);
+  const on = await patch('TEST100', { is_active: true });
+  assert.equal((await on.json()).coupon.isActive, true);
+  assert.equal(client.db.coupons[0].is_active, true);
+
+  assert.equal((await patch('NINCS', { is_active: false })).status, 404);
+  assert.equal((await patch('rossz%20kod', { is_active: false })).status, 404);
+  assert.equal((await patch('TEST100', { is_active: 'false' })).status, 400, 'csak logikai érték fogadható el');
+  assert.equal((await patch('TEST100', { discount_percent: 1 })).status, 400, 'más mező nem módosítható');
+  assert.equal(client.db.coupons[0].discount_percent, 100);
+});
+
+test('GET /api/admin/coupons lists coupons with uses and total discount plus the latest redemptions', async (t) => {
+  const redemption = (n, code, discount, daysAgo) => ({ id: `r${n}`, coupon_code: code, user_email: `vevo${n}@example.com`, document_id: `gen_${n}`, plan_mode: 'standard', original_price: 390, discount_amount: discount, final_price: 390 - discount, used_at: ago(daysAgo) });
+  useAdminEnv(t, fakeAdmin({
+    profiles: adminProfiles(),
+    coupons: [
+      { code: 'TEST100', discount_percent: 100, max_uses: null, valid_until: null, is_active: true, note: null, created_at: ago(9) },
+      { code: 'NYAR20', discount_percent: 20, max_uses: 3, valid_until: null, is_active: false, note: 'Nyár', created_at: ago(2) }
+    ],
+    coupon_redemptions: [redemption(1, 'TEST100', 390, 5), redemption(2, 'NYAR20', 78, 3), redemption(3, 'NYAR20', 78, 1)]
+  }));
+  const base = await listen(t);
+  const data = await (await call(base, '/api/admin/coupons', { token: 'token-admin' })).json();
+  assert.deepEqual(data.coupons.map((c) => [c.code, c.uses, c.totalDiscount, c.isActive, c.maxUses]), [['NYAR20', 2, 156, false, 3], ['TEST100', 1, 390, true, null]], 'újabb kupon elöl');
+  assert.deepEqual(data.redemptions.map((r) => r.id), ['r3', 'r2', 'r1'], 'a legutóbbi beváltás elöl');
+  assert.equal(data.redemptions[0].email, 'vevo3@example.com');
+});
+
+// ---------- Rendelések és felhasználók ----------
+
+test('GET /api/admin/orders joins the buyer name, filters by status and searches several fields', async (t) => {
+  const order = (n, extra) => ({ order_number: `OVI-${n}`, user_id: null, user_email: `vevo${n}@example.com`, document_id: `gen_${n}`, plan_mode: 'standard', plan_key: 'daily', amount: 390, coupon_code: null, payment_method: 'Barion', status: 'paid', invoice_number: `OVITE-2026-${n}`, created_at: ago(n), ...extra });
+  useAdminEnv(t, fakeAdmin({
+    profiles: [...adminProfiles().slice(0, 1), profile(ALICE, { billing_name: 'Alice Óvoda Kft.', full_name: 'Alice' }), profile(BOB, { full_name: 'Bob' })],
+    orders: [order(1, { user_id: ALICE.id }), order(2, { status: 'pending', invoice_number: null }), order(3, { user_id: BOB.id, coupon_code: 'NYAR20', amount: 312 }), order(4, { status: 'failed' })]
+  }));
+  const base = await listen(t);
+  const get = async (query = '') => (await call(base, `/api/admin/orders${query}`, { token: 'token-admin' })).json();
+
+  const all = await get();
+  assert.deepEqual(all.orders.map((o) => o.orderNumber), ['OVI-1', 'OVI-2', 'OVI-3', 'OVI-4'], 'újabb elöl');
+  assert.equal(all.orders[0].name, 'Alice Óvoda Kft.', 'a számlázási név az elsődleges');
+  assert.equal(all.orders[2].name, 'Bob');
+  assert.equal(all.orders[1].name, '', 'vendég rendelésnél nincs név');
+  assert.equal(all.orders[2].couponCode, 'NYAR20');
+  assert.equal(all.orders[1].invoiceNumber, '');
+  assert.deepEqual((await get('?status=pending')).orders.map((o) => o.orderNumber), ['OVI-2']);
+  assert.deepEqual((await get('?q=nyar20')).orders.map((o) => o.orderNumber), ['OVI-3']);
+  assert.deepEqual((await get('?q=Óvoda')).orders.map((o) => o.orderNumber), ['OVI-1']);
+  assert.deepEqual((await get('?q=OVITE-2026-4')).orders.map((o) => o.orderNumber), ['OVI-4']);
+  assert.deepEqual((await get('?q=vevo2@')).orders.map((o) => o.orderNumber), ['OVI-2']);
+  assert.deepEqual((await get('?status=paid&q=nincs-ilyen')).orders, []);
+  assert.equal((await call(base, '/api/admin/orders?status=hamis', { token: 'token-admin' })).status, 400);
+});
+
+test('GET /api/admin/users lists registrations with confirmation and subscription state and never exposes tokens', async (t) => {
+  useAdminEnv(t, fakeAdmin(statsTables()));
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/users', { token: 'token-admin' });
+  const raw = await response.text();
+  for (const token of Object.values(TOKEN_OF)) assert.ok(!raw.includes(token), 'a leiratkozási token nem adható ki');
+  assert.doesNotMatch(raw, /is_admin|newsletter_token/);
+  const data = JSON.parse(raw);
+  assert.equal(data.subscriberCount, 2);
+  const alice = data.users.find((u) => u.email === 'alice@example.com');
+  assert.deepEqual({ confirmed: alice.confirmed, subscribed: alice.subscribed }, { confirmed: true, subscribed: true });
+  const newbie = data.users.find((u) => u.email === 'new@example.com');
+  assert.deepEqual({ confirmed: newbie.confirmed, subscribed: newbie.subscribed }, { confirmed: false, subscribed: true });
+  assert.equal(data.users.find((u) => u.email === 'bob@example.com').subscribed, false);
+});
+
+// ---------- Hírlevél ----------
+
+function newsletterTables() {
+  return {
+    profiles: [
+      profile(ADMIN, { is_admin: true }),
+      profile(ALICE, { newsletter_subscribed: true, full_name: 'Alice' }),
+      profile(BOB, { newsletter_subscribed: false }),
+      profile(NEWBIE, { newsletter_subscribed: true }),
+      profile(CAROL, { newsletter_subscribed: true })
+    ]
+  };
+}
+
+// A kimenő leveleket a mailService.createTransport kicserélt, rögzítő változata gyűjti.
+function captureMail(t, { failFor = [], gate = null } = {}) {
+  const sent = [];
+  const original = mailService.createTransport;
+  mailService.createTransport = () => ({
+    async sendMail(message) {
+      if (gate) await gate;
+      if (failFor.includes(message.to)) throw new Error('554 mailbox unavailable');
+      sent.push(message);
+      return { accepted: [message.to] };
+    }
+  });
+  t.after(() => { mailService.createTransport = original; });
+  return sent;
+}
+
+const campaignBody = (extra = {}) => ({ subject: 'Őszi újdonságok', heading: 'Szia <Anna>!', bodyHtml: 'Első bekezdés.\n\nMásodik & harmadik sor.', ctaText: '', ctaUrl: '', recipients: 'test', ...extra });
+const sendNewsletter = (base, body, token = 'token-admin') => call(base, '/api/admin/newsletter/send', { token, method: 'POST', body });
+
+test('newsletter test mode mails only the admin with the admin personal unsubscribe link and logs the campaign', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  const response = await sendNewsletter(base, campaignBody());
+  assert.equal(response.status, 202);
+  const result = await response.json();
+  assert.equal(result.recipientCount, 1);
+  await newsletter.whenIdle();
+
+  assert.deepEqual(sent.map((m) => m.to), ['admin@example.com']);
+  assert.equal(sent[0].subject, 'Őszi újdonságok');
+  assert.ok(sent[0].html.includes(`https://ovitervezo.hu/leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}`));
+  assert.ok(sent[0].text.includes(`leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}`));
+  assert.equal(sent[0].headers['List-Unsubscribe'], `<https://ovitervezo.hu/leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}>`);
+  assert.ok(sent[0].html.includes('Szia &lt;Anna&gt;!'), 'a főcím escape-elt');
+  assert.ok(sent[0].html.includes('Második &amp; harmadik sor.'), 'sima szöveg: escape-elt bekezdések');
+  assert.ok(sent[0].html.includes('cid:ovitervezo-logo'));
+  assert.equal(sent[0].attachments[0].cid, 'ovitervezo-logo');
+
+  assert.equal(client.db.newsletter_campaigns.length, 1);
+  const campaign = client.db.newsletter_campaigns[0];
+  assert.deepEqual({ subject: campaign.subject, filter: campaign.recipient_filter, count: campaign.recipient_count, sent: campaign.sent_count, failed: campaign.failed_count, by: campaign.sent_by }, { subject: 'Őszi újdonságok', filter: 'test', count: 1, sent: 1, failed: 0, by: 'admin@example.com' });
+});
+
+test('newsletter to all subscribers applies the GDPR filter: subscribed AND confirmed e-mail, each mail with its own token', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  const response = await sendNewsletter(base, campaignBody({ recipients: 'subscribers', ctaText: 'Új tervezet', ctaUrl: 'https://ovitervezo.hu/tervezo.html' }));
+  assert.equal(response.status, 202);
+  assert.equal((await response.json()).recipientCount, 2);
+  await newsletter.whenIdle();
+
+  assert.deepEqual(sent.map((m) => m.to).sort(), ['alice@example.com', 'carol@example.com'], 'Bob (nincs feliratkozva), Newbie (nincs megerősítve) és az admin kimarad');
+  for (const message of sent) {
+    const own = TOKEN_OF[message.to === 'alice@example.com' ? ALICE.id : CAROL.id];
+    const others = Object.values(TOKEN_OF).filter((token) => token !== own);
+    assert.ok(message.html.includes(`leiratkozas.html?token=${own}`), `${message.to}: saját link`);
+    assert.ok(message.text.includes(`leiratkozas.html?token=${own}`));
+    for (const token of others) assert.ok(!message.html.includes(token) && !message.text.includes(token), 'más token nem szerepelhet');
+    assert.ok(message.html.includes('href="https://ovitervezo.hu/tervezo.html"') && message.html.includes('Új tervezet'), 'zöld CTA gomb');
+    assert.ok(message.html.includes('#3fae84'), 'menta arculat');
+  }
+  const campaign = client.db.newsletter_campaigns[0];
+  assert.deepEqual([campaign.recipient_filter, campaign.recipient_count, campaign.sent_count, campaign.failed_count], ['subscribers', 2, 2, 0]);
+  for (const token of Object.values(TOKEN_OF)) assert.ok(!campaign.html_body.includes(token), 'a naplózott levélben nincs személyes token');
+  assert.ok(campaign.html_body.includes('{{UNSUBSCRIBE_URL}}'));
+});
+
+test('failed deliveries are counted, do not stop the campaign and the progress is saved', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const sent = captureMail(t, { failFor: ['alice@example.com'] });
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  t.after(() => { console.error = originalError; });
+  const base = await listen(t);
+  assert.equal((await sendNewsletter(base, campaignBody({ recipients: 'subscribers' }))).status, 202);
+  await newsletter.whenIdle();
+  assert.deepEqual(sent.map((m) => m.to), ['carol@example.com']);
+  const campaign = client.db.newsletter_campaigns[0];
+  assert.deepEqual([campaign.recipient_count, campaign.sent_count, campaign.failed_count], [2, 1, 1]);
+  assert.ok(errors.some((line) => line.includes('mailbox unavailable')));
+});
+
+test('custom recipients: unknown addresses get no personal link, unsubscribed members are skipped, invalid lists are rejected', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  const response = await sendNewsletter(base, campaignBody({ recipients: 'custom', emails: 'Ismeretlen@Example.com, alice@example.com;bob@example.com\nalice@example.com' }));
+  assert.equal(response.status, 202);
+  const result = await response.json();
+  assert.equal(result.recipientCount, 2);
+  assert.deepEqual(result.skipped, [{ email: 'bob@example.com', reason: 'leiratkozott vagy nem iratkozott fel' }]);
+  await newsletter.whenIdle();
+
+  const byTo = Object.fromEntries(sent.map((m) => [m.to, m]));
+  assert.deepEqual(Object.keys(byTo).sort(), ['alice@example.com', 'ismeretlen@example.com']);
+  assert.ok(byTo['alice@example.com'].html.includes(`token=${TOKEN_OF[ALICE.id]}`));
+  assert.ok(!byTo['ismeretlen@example.com'].html.includes('leiratkozas.html'), 'regisztráció nélkül nincs személyes link');
+  assert.ok(byTo['ismeretlen@example.com'].html.includes('válaszolj erre a levélre'));
+  assert.equal(byTo['ismeretlen@example.com'].headers, undefined);
+  assert.equal(client.db.newsletter_campaigns[0].recipient_filter, 'custom');
+
+  for (const emails of ['', '   ', 'nem-email', 'jo@example.com, rossz@']) {
+    assert.equal((await sendNewsletter(base, campaignBody({ recipients: 'custom', emails }))).status, 400, JSON.stringify(emails));
+  }
+  const tooMany = Array.from({ length: 201 }, (_, i) => `u${i}@example.com`).join(',');
+  assert.equal((await sendNewsletter(base, campaignBody({ recipients: 'custom', emails: tooMany }))).status, 400);
+  await newsletter.whenIdle();
+  assert.equal(client.db.newsletter_campaigns.length, 1, 'elutasított kérésből nincs kampány');
+});
+
+test('newsletter requests are validated and the custom HTML is stripped of active content', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  for (const bad of [
+    { subject: '' }, { subject: 'x'.repeat(201) }, { bodyHtml: '' }, { bodyHtml: 'y'.repeat(50001) }, { recipients: 'mindenki' }, { recipients: undefined },
+    { ctaText: 'Gomb' }, { ctaUrl: 'https://ovitervezo.hu' }, { ctaText: 'Gomb', ctaUrl: 'javascript:alert(1)' }, { ctaText: 'Gomb', ctaUrl: 'http://ovitervezo.hu' }, { ctaText: 'Gomb', ctaUrl: 'nem url' }
+  ]) {
+    const response = await sendNewsletter(base, campaignBody(bad));
+    assert.equal(response.status, 400, JSON.stringify(bad).slice(0, 60));
+  }
+  assert.equal(client.db.newsletter_campaigns.length, 0);
+
+  const html = '<h2 onclick="steal()">Cím</h2><script>alert(1)</script><p>Szia <a href="javascript:alert(2)">link</a> <a href="https://ovitervezo.hu" onmouseover=evil()>jó</a></p><iframe src="https://evil.example"></iframe>';
+  assert.equal((await sendNewsletter(base, campaignBody({ bodyHtml: html, subject: 'Tárgy\r\nBcc: rossz@example.com' }))).status, 202);
+  await newsletter.whenIdle();
+  const mail = sent[0].html;
+  assert.ok(mail.includes('<h2>Cím</h2>') && mail.includes('href="https://ovitervezo.hu"'));
+  assert.doesNotMatch(mail, /<script|<iframe|onclick|onmouseover|javascript:/i);
+  assert.ok(!/[\r\n]/.test(sent[0].subject), 'a tárgyban nincs sortörés (fejlécinjekció ellen)');
+});
+
+test('only one newsletter job runs at a time and the campaign list reports the running one', async (t) => {
+  useAdminEnv(t, fakeAdmin(newsletterTables()));
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  captureMail(t, { gate });
+  const base = await listen(t);
+  const first = await sendNewsletter(base, campaignBody({ recipients: 'subscribers' }));
+  assert.equal(first.status, 202);
+  const { campaignId } = await first.json();
+  assert.equal((await sendNewsletter(base, campaignBody())).status, 409);
+  const running = await (await call(base, '/api/admin/newsletter/campaigns', { token: 'token-admin' })).json();
+  assert.equal(running.sending, campaignId);
+  release();
+  await newsletter.whenIdle();
+  const done = await (await call(base, '/api/admin/newsletter/campaigns', { token: 'token-admin' })).json();
+  assert.equal(done.sending, null);
+  assert.deepEqual([done.campaigns[0].sentCount, done.campaigns[0].failedCount, done.campaigns[0].recipientFilter], [2, 0, 'subscribers']);
+  assert.ok(!('html_body' in done.campaigns[0]) && !('htmlBody' in done.campaigns[0]), 'a lista nem hozza a levéltörzset');
+});
+
+test('sending is refused without an SMTP configuration outside the test mode, and the pacing is 1.5 s (0 in tests)', async (t) => {
+  const client = fakeAdmin(newsletterTables());
+  await assert.rejects(newsletter.startCampaign(client, campaignBody(), { id: ADMIN.id, email: 'admin@example.com' }, { env: { NODE_ENV: 'production' } }), (error) => error.status === 503 && /SMTP/.test(error.message));
+  assert.equal(client.db.newsletter_campaigns.length, 0);
+  assert.equal(newsletter.sendDelayMs({ NODE_ENV: 'test' }), 0);
+  assert.equal(newsletter.sendDelayMs({ NODE_ENV: 'production' }), 1500);
+  assert.equal(newsletter.sendDelayMs({}), 1500);
+});
+
+test('POST /api/admin/newsletter/preview renders the official mail with an embedded logo and tolerates unfinished input', async (t) => {
+  useAdminEnv(t, fakeAdmin(newsletterTables()));
+  const base = await listen(t);
+  const empty = await call(base, '/api/admin/newsletter/preview', { token: 'token-admin', method: 'POST', body: {} });
+  assert.equal(empty.status, 200);
+  const { html } = await empty.json();
+  assert.ok(html.includes('data:image/png;base64,') && !html.includes('cid:'));
+  assert.ok(html.includes('leiratkozas.html?token='), 'minta leiratkozó link látszik');
+  const full = await (await call(base, '/api/admin/newsletter/preview', { token: 'token-admin', method: 'POST', body: { heading: '<b>Cím</b>', bodyHtml: 'Szöveg', ctaText: 'Gomb', ctaUrl: 'https://ovitervezo.hu/x' } })).json();
+  assert.ok(full.html.includes('&lt;b&gt;Cím&lt;/b&gt;') && full.html.includes('href="https://ovitervezo.hu/x"'));
+  const badLink = await (await call(base, '/api/admin/newsletter/preview', { token: 'token-admin', method: 'POST', body: { bodyHtml: 'x', ctaText: 'Gomb', ctaUrl: 'javascript:alert(1)' } })).json();
+  assert.ok(!badLink.html.includes('javascript:') && !badLink.html.includes('Gomb'));
+});
+
+// ---------- Fájllisták és oldal ----------
+
+test('admin.html and admin.js are shipped with every build, served by the backend and kept out of search engines', async (t) => {
+  const { PAGES, SITE_ASSETS } = require('../services/siteConstants');
+  assert.ok(PAGES.includes('admin.html') && SITE_ASSETS.includes('admin.js'));
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+  assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
+  assert.equal(/<script(?![^>]*\bsrc=)[^>]*>/.test(html), false, 'nincs inline script');
+  assert.doesNotMatch(html, /#(?:e67e22|f39c12|ff9800|d35400)/i, 'nincs narancs szín');
+  assert.match(html, /<iframe[^>]*id="nlPreview"[^>]*sandbox=""/, 'az előnézet sandboxolt');
+  for (const label of ['Cloudflare Analytics', 'Google Analytics', 'Google Search Console', 'Barion', 'Számlázz.hu', 'Külső statisztikák']) assert.ok(html.includes(label), label);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'sitemap.xml'), 'utf8'), /admin/);
+  const base = await listen(t);
+  assert.equal((await fetch(`${base}/admin.html`)).status, 200);
+  assert.equal((await fetch(`${base}/admin.js`)).status, 200);
+});
+
+// ---------- Böngészős rész (jsdom) ----------
+
+const tick = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
+const SESSION = { access_token: 'jwt-admin', user: { id: ADMIN.id, email: 'admin@example.com' } };
+
+async function loadPage(t, { page = 'admin.html', session = SESSION, routes = {} }) {
+  const state = { listener: null, fetches: [], errors: [], blobs: [], confirms: [] };
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on('jsdomError', (error) => state.errors.push(error.message));
+  const dom = new JSDOM(readPage(page), {
+    url: `http://localhost:8000/${page}`,
+    runScripts: 'dangerously',
+    virtualConsole,
+    beforeParse(window) {
+      window.APP_CONFIG = { apiBaseUrl: 'same-origin', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' };
+      window.alert = () => {};
+      window.confirm = (message) => { state.confirms.push(message); return true; };
+      window.URL.createObjectURL = (blob) => { state.blobs.push(blob); return 'blob:test'; };
+      window.URL.revokeObjectURL = () => {};
+      window.HTMLAnchorElement.prototype.click = () => {};
+      window.fetch = async (url, options = {}) => {
+        const parsed = new URL(url);
+        const method = options.method || 'GET';
+        const body = options.body ? JSON.parse(options.body) : null;
+        state.fetches.push({ path: parsed.pathname, query: parsed.search, method, body, headers: options.headers || {} });
+        const handler = routes[parsed.pathname];
+        const [data, status = 200] = handler ? [].concat(handler(method, body, parsed.searchParams)) : [{ success: false, error: 'nincs ilyen' }, 404];
+        return { ok: status < 400, status, json: async () => data };
+      };
+      window.supabase = { createClient: () => ({ auth: { onAuthStateChange(callback) { state.listener = callback; return { data: { subscription: {} } }; } } }) };
+    }
+  });
+  t.after(() => dom.window.close());
+  if (dom.window.document.readyState === 'loading') await new Promise((resolve) => dom.window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  state.listener('INITIAL_SESSION', session);
+  await tick();
+  return { window: dom.window, document: dom.window.document, state };
+}
+
+const STATS = { success: true, stats: { revenue: { total: 12340, last30Days: 4560 }, paidOrders: 25, registeredUsers: 42, confirmedSubscribers: 17, documents: { total: 80, unlocked: 30, breakdown: { standard: 40, academic: 25, weekly: 15 }, conversionRate: 37.5 } } };
+const ME = () => [{ success: true, isAdmin: true }];
+const hidden = (document, id) => document.getElementById(id).hidden;
+const redirected = (state) => state.errors.some((message) => /navigation/i.test(message));
+
+test('admin.js: a guest or a non-admin is redirected at once and no admin data is requested or shown', async (t) => {
+  const guest = await loadPage(t, { session: null, routes: {} });
+  assert.deepEqual(guest.state.fetches, [], 'vendég: semmilyen kérés');
+  assert.ok(redirected(guest.state), 'vendég: átirányítás a főoldalra');
+  assert.equal(hidden(guest.document, 'adminApp'), true);
+
+  const regular = await loadPage(t, { routes: { '/api/admin/me': () => [{ success: false, code: 'ADMIN_FORBIDDEN', error: 'Nincs jogosultság' }, 403] } });
+  assert.deepEqual(regular.state.fetches.map((f) => f.path), ['/api/admin/me'], 'csak a jogosultság-ellenőrzés fut');
+  assert.ok(redirected(regular.state));
+  assert.equal(hidden(regular.document, 'adminApp'), true);
+  assert.equal(regular.document.getElementById('kpiRevenueTotal').textContent, '–');
+
+  const offline = await loadPage(t, { routes: { '/api/admin/me': () => { throw new Error('hálózati hiba'); } } });
+  assert.ok(redirected(offline.state), 'hibánál is zárva marad');
+  assert.equal(hidden(offline.document, 'adminApp'), true);
+});
+
+test('admin.js: the admin sees the overview with KPI cards and the document analytics', async (t) => {
+  const { document, state } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS] } });
+  assert.ok(!redirected(state));
+  assert.equal(hidden(document, 'adminApp'), false);
+  assert.equal(hidden(document, 'adminLoading'), true);
+  assert.equal(state.fetches[0].headers.Authorization, 'Bearer jwt-admin');
+  const text = (id) => document.getElementById(id).textContent.replace(/\s/g, ' ');
+  assert.match(text('kpiRevenueTotal'), /12\s?340 Ft/);
+  assert.match(text('kpiRevenue30'), /4\s?560 Ft/);
+  assert.equal(text('kpiOrders'), '25');
+  assert.equal(text('kpiUsers'), '42');
+  assert.equal(text('kpiSubscribers'), '17');
+  assert.equal(text('docTotal'), '80');
+  assert.deepEqual(['docStandard', 'docAcademic', 'docWeekly'].map(text), ['40', '25', '15']);
+  assert.equal(text('docConversion'), '37,5%');
+  assert.equal(document.querySelectorAll('.admin-tools-list a[target="_blank"][rel~="noopener"]').length, 5);
+});
+
+test('admin.js: coupon form posts the new coupon and the switch patches the active flag', async (t) => {
+  let coupons = [{ code: 'TEST100', discountPercent: 100, maxUses: null, validUntil: null, isActive: true, note: 'Belső', createdAt: ago(3), uses: 2, totalDiscount: 780 }];
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/coupons': (method, body) => {
+        if (method === 'POST') { coupons = [{ code: body.code.toUpperCase(), discountPercent: Number(body.discount_percent), maxUses: body.max_uses, validUntil: null, isActive: true, note: body.note, createdAt: ago(0), uses: 0, totalDiscount: 0 }, ...coupons]; return [{ success: true, coupon: coupons[0] }, 201]; }
+        return [{ success: true, coupons, redemptions: [{ id: 'r1', code: 'TEST100', email: 'vevo@example.com', planMode: 'standard', originalPrice: 390, discountAmount: 390, finalPrice: 0, usedAt: ago(1) }] }];
+      },
+      '/api/admin/coupons/TEST100': (method, body) => { const coupon = coupons.find((c) => c.code === 'TEST100'); coupon.isActive = body.is_active; return [{ success: true, coupon }]; }
+    }
+  });
+  document.getElementById('tabCoupons').click();
+  await tick();
+  const rows = () => [...document.querySelectorAll('#couponsTable tbody tr')];
+  assert.equal(rows().length, 1);
+  assert.match(rows()[0].textContent, /TEST100.*100%.*2 \/ korlátlan/);
+  assert.match(document.querySelector('#redemptionsTable tbody').textContent, /vevo@example\.com/);
+  assert.equal(document.getElementById('panelOverview').hidden, true);
+
+  document.getElementById('couponCode').value = 'nyar20';
+  document.getElementById('couponPercent').value = '20';
+  document.getElementById('couponMaxUses').value = '10';
+  document.getElementById('couponNote').value = 'Nyári akció';
+  document.getElementById('couponForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  const post = state.fetches.find((f) => f.method === 'POST' && f.path === '/api/admin/coupons');
+  assert.deepEqual(post.body, { code: 'nyar20', discount_percent: '20', max_uses: '10', valid_until: null, note: 'Nyári akció' });
+  assert.match(document.getElementById('couponStatus').textContent, /NYAR20/);
+  assert.equal(rows().length, 2);
+
+  const toggle = rows()[1].querySelector('button[role="switch"]');
+  assert.equal(toggle.getAttribute('aria-checked'), 'true');
+  toggle.click();
+  await tick();
+  const patch = state.fetches.find((f) => f.method === 'PATCH');
+  assert.equal(patch.path, '/api/admin/coupons/TEST100');
+  assert.deepEqual(patch.body, { is_active: false });
+  assert.equal(rows()[1].querySelector('button[role="switch"]').getAttribute('aria-checked'), 'false');
+});
+
+test('admin.js: an invalid coupon shows the server message without adding a row', async (t) => {
+  const { document, window } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/coupons': (method) => (method === 'POST' ? [{ success: false, error: 'Ilyen kuponkód már létezik.' }, 409] : [{ success: true, coupons: [], redemptions: [] }])
+    }
+  });
+  document.getElementById('tabCoupons').click();
+  await tick();
+  document.getElementById('couponCode').value = 'DUPLA';
+  document.getElementById('couponPercent').value = '10';
+  document.getElementById('couponForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  assert.equal(document.getElementById('couponError').textContent, 'Ilyen kuponkód már létezik.');
+  assert.equal(document.getElementById('couponError').hidden, false);
+});
+
+const readBlob = (window, blob) => new Promise((resolve) => { const reader = new window.FileReader(); reader.onload = () => resolve(reader.result); reader.readAsText(blob); });
+
+test('admin.js: the orders table is filtered through the API and exports a formula-safe CSV', async (t) => {
+  const orders = [
+    { orderNumber: 'OVI-1', createdAt: '2026-03-01T10:00:00Z', email: 'vevo@example.com', name: '=HYPERLINK("x")', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: 'OVITE-2026-1' },
+    { orderNumber: 'OVI-2', createdAt: '2026-03-02T10:00:00Z', email: 'masik@example.com', name: '', planKey: 'weekly_detailed', amount: 890, couponCode: 'NYAR20', paymentMethod: 'Barion', status: 'pending', invoiceNumber: '' }
+  ];
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/orders': (_method, _body, params) => [{ success: true, truncated: false, orders: orders.filter((o) => (!params.get('status') || o.status === params.get('status')) && (!params.get('q') || o.email.includes(params.get('q')))) }]
+    }
+  });
+  document.getElementById('tabOrders').click();
+  await tick();
+  assert.equal(document.querySelectorAll('#ordersTable tbody tr').length, 2);
+  assert.match(document.getElementById('ordersTable').textContent, /Fizetve.*OVITE-2026-1/);
+  assert.match(document.getElementById('ordersTable').textContent, /Heti részletes csomag/);
+
+  const status = document.getElementById('ordersStatus');
+  status.value = 'pending';
+  status.dispatchEvent(new window.Event('change'));
+  await tick();
+  assert.equal(document.querySelectorAll('#ordersTable tbody tr').length, 1);
+  assert.match(state.fetches.at(-1).query, /status=pending/);
+
+  status.value = '';
+  status.dispatchEvent(new window.Event('change'));
+  const search = document.getElementById('ordersSearch');
+  search.value = 'vevo@';
+  search.dispatchEvent(new window.Event('input'));
+  await tick(450);
+  assert.match(state.fetches.at(-1).query, /q=vevo%40/);
+  assert.equal(document.querySelectorAll('#ordersTable tbody tr').length, 1);
+
+  document.getElementById('ordersExport').click();
+  assert.equal(state.blobs.length, 1);
+  const csv = await readBlob(window, state.blobs[0]);
+  assert.ok(csv.length > 0);
+  const lines = csv.trim().split('\r\n');
+  assert.equal(lines.length, 2, 'fejléc + a szűrt sor');
+  assert.match(lines[0], /Rendelésszám;Név;E-mail/);
+  assert.ok(lines[1].includes(`"'=HYPERLINK(""x"")"`) || lines[1].includes("'=HYPERLINK"), 'a képletnek látszó cella aposztróffal védett');
+  assert.ok(!/;=HYPERLINK/.test(lines[1]));
+});
+
+test('admin.js: toCsv quotes separators, newlines and neutralizes formula prefixes', async (t) => {
+  const { window } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS] } });
+  const csv = window.OviAdmin.toCsv([['a;b', 'sor\ntörés', '+36 30', '@parancs', '-1+1', 'idézet "x"', null, 390]]);
+  assert.equal(csv, '\uFEFF"a;b";"sor\ntörés";\'+36 30;\'@parancs;\'-1+1;"idézet ""x""";;390\r\n');
+});
+
+test('admin.js: the users tab lists registrations and exports only confirmed subscribers', async (t) => {
+  const usersData = [
+    { id: '1', email: 'alice@example.com', name: 'Alice', createdAt: '2026-01-02T10:00:00Z', confirmed: true, subscribed: true, subscribedAt: '2026-01-02T10:00:00Z' },
+    { id: '2', email: 'bob@example.com', name: '', createdAt: '2026-01-03T10:00:00Z', confirmed: true, subscribed: false, subscribedAt: null },
+    { id: '3', email: 'new@example.com', name: 'Új', createdAt: '2026-01-04T10:00:00Z', confirmed: false, subscribed: true, subscribedAt: '2026-01-04T10:00:00Z' }
+  ];
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/users': () => [{ success: true, users: usersData, subscriberCount: 1 }],
+      '/api/admin/newsletter/campaigns': () => [{ success: true, sending: null, campaigns: [{ id: 'c1', subject: 'Őszi hírlevél', recipientFilter: 'subscribers', recipientCount: 12, sentCount: 11, failedCount: 1, sentBy: 'admin@example.com', createdAt: ago(2) }] }],
+      '/api/admin/newsletter/preview': () => [{ success: true, html: '<html><body>ELŐNÉZET</body></html>' }]
+    }
+  });
+  document.getElementById('tabUsers').click();
+  await tick();
+  assert.equal(document.querySelectorAll('#usersTable tbody tr').length, 3);
+  assert.match(document.getElementById('usersCount').textContent, /3 regisztrált.*1 megerősített/);
+  assert.match(document.querySelector('#campaignsTable tbody').textContent, /Őszi hírlevél.*12 \(Összes feliratkozó\).*11.*1.*admin@example\.com/);
+  assert.equal(document.getElementById('nlPreview').srcdoc, '<html><body>ELŐNÉZET</body></html>');
+
+  document.getElementById('usersExport').click();
+  const csv = await readBlob(window, state.blobs[0]);
+  const lines = csv.trim().split('\r\n');
+  assert.equal(lines.length, 2, 'csak a feliratkozott ÉS megerősített felhasználó');
+  assert.ok(lines[1].startsWith('Alice;alice@example.com;'));
+});
+
+test('admin.js: the newsletter editor refreshes the live preview, asks for confirmation and sends the payload', async (t) => {
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/users': () => [{ success: true, users: [], subscriberCount: 0 }],
+      '/api/admin/newsletter/campaigns': () => [{ success: true, sending: null, campaigns: [] }],
+      '/api/admin/newsletter/preview': (_method, body) => [{ success: true, html: `<p>${body.heading}|${body.bodyHtml}</p>` }],
+      '/api/admin/newsletter/send': (_method, body) => (body.recipients === 'custom' ? [{ success: true, recipientCount: 2, skipped: [{ email: 'x@example.com', reason: 'leiratkozott' }] }, 202] : [{ success: true, recipientCount: 1, skipped: [] }, 202])
+    }
+  });
+  document.getElementById('tabUsers').click();
+  await tick();
+  const set = (id, value) => { const input = document.getElementById(id); input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); };
+  set('nlSubject', 'Tárgy');
+  set('nlHeading', 'Főcím');
+  set('nlBody', 'Törzs');
+  await tick(450);
+  assert.equal(document.getElementById('nlPreview').srcdoc, '<p>Főcím|Törzs</p>', 'az előnézet a beírt tartalmat mutatja');
+  assert.equal(document.getElementById('nlPreview').getAttribute('sandbox'), '');
+
+  // Teszt címzett: nincs megerősítő kérdés.
+  document.getElementById('newsletterForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  assert.deepEqual(state.confirms, []);
+  const testSend = state.fetches.find((f) => f.path === '/api/admin/newsletter/send');
+  assert.deepEqual(testSend.body, { subject: 'Tárgy', heading: 'Főcím', bodyHtml: 'Törzs', ctaText: '', ctaUrl: '', recipients: 'test' });
+  assert.match(document.getElementById('nlStatus').textContent, /elindult: 1 címzett/);
+
+  // Egyedi lista: a címmező megjelenik, és van megerősítés.
+  const custom = document.querySelector('input[name="recipients"][value="custom"]');
+  assert.equal(document.getElementById('nlCustom').hidden, true);
+  custom.checked = true;
+  custom.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(document.getElementById('nlCustom').hidden, false);
+  set('nlCustom', 'a@example.com, x@example.com');
+  document.getElementById('newsletterForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  assert.equal(state.confirms.length, 1);
+  const customSend = state.fetches.filter((f) => f.path === '/api/admin/newsletter/send').at(-1);
+  assert.equal(customSend.body.recipients, 'custom');
+  assert.equal(customSend.body.emails, 'a@example.com, x@example.com');
+  assert.match(document.getElementById('nlStatus').textContent, /1 címzett kimaradt/);
+});
+
+test('admin.js: a refused send shows the server error', async (t) => {
+  const { document, window } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/users': () => [{ success: true, users: [], subscriberCount: 0 }],
+      '/api/admin/newsletter/campaigns': () => [{ success: true, sending: null, campaigns: [] }],
+      '/api/admin/newsletter/preview': () => [{ success: true, html: '' }],
+      '/api/admin/newsletter/send': () => [{ success: false, error: 'A tárgy megadása kötelező.' }, 400]
+    }
+  });
+  document.getElementById('tabUsers').click();
+  await tick();
+  document.getElementById('newsletterForm').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await tick();
+  assert.equal(document.getElementById('nlError').textContent, 'A tárgy megadása kötelező.');
+  assert.equal(document.getElementById('nlSend').disabled, false);
+});
+
+// ---------- A Vezérlőpult link az auth.js-ben ----------
+
+test('auth.js shows the discreet Vezérlőpult link next to the account button only for a confirmed admin', async (t) => {
+  const admin = await loadPage(t, { page: 'index.html', routes: { '/api/admin/me': ME } });
+  const link = admin.document.getElementById('adminLink');
+  assert.ok(link, 'adminként megjelenik');
+  assert.equal(link.getAttribute('href'), 'admin.html');
+  assert.equal(link.textContent, 'Vezérlőpult');
+  assert.equal(link.previousElementSibling, admin.document.getElementById('authBtn'), 'a Fiókom gomb mellett');
+  assert.equal(admin.document.getElementById('authBtn').textContent, 'Fiókom');
+
+  const forbidden = await loadPage(t, { page: 'index.html', routes: { '/api/admin/me': () => [{ success: false, error: 'Nincs jogosultság' }, 403] } });
+  assert.equal(forbidden.document.getElementById('adminLink'), null, '403: nincs link');
+  assert.equal(forbidden.state.fetches.filter((f) => f.path === '/api/admin/me').length, 1);
+
+  const notTrue = await loadPage(t, { page: 'index.html', routes: { '/api/admin/me': () => [{ success: true, isAdmin: false }] } });
+  assert.equal(notTrue.document.getElementById('adminLink'), null, 'csak az isAdmin: true számít');
+
+  const broken = await loadPage(t, { page: 'index.html', routes: { '/api/admin/me': () => { throw new Error('offline'); } } });
+  assert.equal(broken.document.getElementById('adminLink'), null, 'hálózati hibánál nincs link');
+
+  const guest = await loadPage(t, { page: 'index.html', session: null, routes: { '/api/admin/me': ME } });
+  assert.equal(guest.document.getElementById('adminLink'), null);
+  assert.deepEqual(guest.state.fetches.filter((f) => f.path.startsWith('/api/admin')), [], 'vendégként nincs admin kérés');
+
+  // Kijelentkezéskor a link eltűnik.
+  admin.state.listener('SIGNED_OUT', null);
+  await tick();
+  assert.equal(admin.document.getElementById('adminLink'), null);
+});

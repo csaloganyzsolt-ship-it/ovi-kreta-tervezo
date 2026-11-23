@@ -394,6 +394,11 @@ async function sendAdminErrorAlert({ operation, error, email, documentId, detail
 }
 
 module.exports = {
+  LOGO_CID,
+  logoAttachment,
+  createTransport,
+  companyLines,
+  escapeHtml,
   isMailMocked,
   mockOutbox,
   mockAlerts,

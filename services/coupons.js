@@ -153,5 +153,5 @@ function resetSessions() {
 }
 
 module.exports = {
-  DEFAULT_COUPON_CODES, normalizeCode, couponCodes, isValidCode, isCouponSessionId, sessionFor, computeDiscount, lookup, logRedemption, redeem, restoreSession, getSession, loadSession, resetSessions
+  DEFAULT_COUPON_CODES, CODE_PATTERN, normalizeCode, couponCodes, isValidCode, isCouponSessionId, sessionFor, computeDiscount, lookup, logRedemption, redeem, restoreSession, getSession, loadSession, resetSessions
 };

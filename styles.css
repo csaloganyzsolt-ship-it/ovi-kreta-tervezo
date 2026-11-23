@@ -2326,3 +2326,38 @@ html[data-theme="dark"] .profile-badge.is-paid { color: var(--primary); }
 .modal-actions button.danger { background: #c0392b; border-color: #c0392b; color: #fff; }
 .profile-gate { max-width: 520px; margin: 40px auto; padding: 24px; text-align: center; border: 1px solid var(--border); border-radius: 20px; background: var(--card); }
 @media (max-width: 640px) { .profile-form { grid-template-columns: 1fr; } .profile-panel { padding: 16px 14px; } }
+
+/* Admin Központ (admin.html) és a fiók melletti Vezérlőpult link */
+.admin-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 14px; border: 1px dashed var(--border); color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; }
+.admin-link:hover { color: var(--primary-dark); border-color: var(--primary); }
+html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
+.admin-page { max-width: 1100px; margin: 0 auto; padding: 18px 18px 40px; }
+.admin-page [hidden] { display: none !important; }
+.admin-tools { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--mint); }
+.admin-tools h2 { margin: 0 0 10px; font-size: 1rem; }
+.admin-tools-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 18px; }
+.admin-kpi { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+.admin-kpi-label { color: var(--muted); font-size: 0.85rem; }
+.admin-kpi-value { font-size: 1.5rem; color: var(--primary-text); }
+.admin-filters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.admin-filters > div { flex: 1 1 220px; }
+.admin-page label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.92rem; }
+.admin-page input[type="text"], .admin-page input[type="search"], .admin-page input[type="number"], .admin-page input[type="date"], .admin-page input[type="url"], .admin-page select, .admin-page textarea { width: 100%; min-height: 46px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; }
+.admin-page textarea { resize: vertical; font-family: inherit; }
+.admin-table-wrap { margin: 12px 0 16px; overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.admin-table th, .admin-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.admin-table th { background: var(--soft); font-size: 0.82rem; white-space: nowrap; }
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-empty { text-align: center !important; color: var(--muted); }
+.admin-switch { min-height: 36px; padding: 4px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--soft); color: var(--muted); font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.admin-switch[aria-checked="true"] { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.admin-switch:disabled { opacity: 0.6; cursor: wait; }
+.admin-newsletter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.admin-recipients { display: grid; gap: 8px; margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; }
+.admin-recipients label { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 500; }
+.admin-recipients input[type="radio"] { width: auto; min-height: 0; }
+.admin-preview h4 { margin: 0 0 8px; }
+.admin-preview iframe { width: 100%; min-height: 560px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+@media (max-width: 900px) { .admin-newsletter { grid-template-columns: 1fr; } }

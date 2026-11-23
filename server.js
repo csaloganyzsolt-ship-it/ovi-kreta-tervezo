@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } = require('./routes/payment');
 const { router: accountRouter } = require('./routes/account');
+const { router: adminRouter } = require('./routes/admin');
 const authService = require('./services/authService');
 const { SHIPPED_EXTENSIONS } = require('./scripts/copy-assets');
 const mailService = require('./services/mailService');
@@ -113,7 +114,7 @@ app.use((_req, res, next) => {
   res.setHeader('Content-Security-Policy-Report-Only', CONTENT_SECURITY_POLICY);
   next();
 });
-app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'DELETE', 'OPTIONS'] }));
+app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A Barion visszahívás query-ben (GET) vagy űrlapként/JSON-ban (POST) hozza a paymentId-t; az állapotot a handler a Barion API-tól kérdezi le.
@@ -122,6 +123,7 @@ app.all('/api/webhook/barion', express.urlencoded({ extended: false, limit: '10k
 app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', accountRouter);
+app.use('/api', adminRouter);
 app.use('/api', paymentRouter);
 
 // A frontend ugyanazon a domainen és porton fut. Csak a kifejezetten felsorolt fájlok érhetők el,
@@ -130,7 +132,7 @@ const STATIC_ROOT = __dirname;
 for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
-for (const file of ['tervezo.html', 'ertekeles.html', 'profil.html', 'leiratkozas.html', ...SITE_ASSETS]) {
+for (const file of ['tervezo.html', 'ertekeles.html', 'profil.html', 'leiratkozas.html', 'admin.html', ...SITE_ASSETS]) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 
