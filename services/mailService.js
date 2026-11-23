@@ -162,7 +162,7 @@ ${starsHtml}
     textFeedbackBlock = `\n\nHogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:\n${feedbackUrl(5)}`;
   }
 
-  const text = `Kedves Kolléganő!\n\nKöszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}${planMode === 'academic' ? 'Tervezet típusa: Oktatási célú tervezet\n\n' : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nMelegséggel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})${textFeedbackBlock}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
+  const text = `Kedves Kolléganő!\n\nKöszönjük, hogy az OviTervezőt választotta, és köszönjük az elhivatott munkáját, amellyel nap mint nap a gyerekek mellett áll. Remélhetőleg ez a tervezet sok időt spórol Önnek, hogy többet jusson a legfontosabbra: a gyerekekre.\n\n${cleanTitle ? `Tervezet témája: ${cleanTitle}\n\n` : ''}${orderNumber ? `Rendelésszám: ${orderNumber}\n\n` : ''}${planMode === 'academic' ? 'Tervezet típusa: Oktatási célú tervezet\n\n' : ''}Mellékletben küldjük ${attachmentText}.${invoiceText}\n\nTipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.\n\nSikeres, játékos hetet kívánunk!\n\nÜdvözlettel,\nAz OviTervező csapata\n${site}\n\nKérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk! (${support})${textFeedbackBlock}\n\n--\nKibocsátó: ${legalText}\nAdatkezelési tájékoztató és ÁSZF: ${site}\nEz a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.`;
 
   const invoiceItem = withInvoice
     ? '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">🧾 <strong>E-számla</strong> (PDF)</td></tr>'
@@ -206,7 +206,7 @@ ${orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendel
 <p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#5b6b64;background:#f6f7f7;border-radius:10px;padding:10px 14px;">Tipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.</p>
 <p style="margin:20px 0;text-align:center;"><a href="${site}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">Új tervezet készítése</a></p>
 <p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
-<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Melegséggel,<br><strong>Az OviTervező csapata</strong></p>
+<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>
 <p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk!</p>
 ${feedbackBlock}
 </td></tr>
