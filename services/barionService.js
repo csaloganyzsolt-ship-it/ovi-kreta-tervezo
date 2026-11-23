@@ -387,6 +387,7 @@ async function retrieveSession(sessionId, deps = {}) {
     status: current.status,
     provider: 'barion',
     plan: current.plan,
+    amountHuf: current.amountHuf,
     generationId: current.generationId,
     created: Math.floor(current.createdAt / 1000),
     email: current.email

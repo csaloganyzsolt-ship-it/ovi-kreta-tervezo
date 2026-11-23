@@ -158,6 +158,11 @@ function guardLocked() {
   return true;
 }
 
+// A Barion Pixel termékadata: a csomag kulcsa, neve és a szerverrel egyező listaár.
+function pixelItem(kind = planKind()) {
+  return { id: kind, name: PLAN_LABELS[kind], price: PAYWALL_PRICES[kind] };
+}
+
 function openCheckoutModal() {
   if (generationInFlight || !lastResult) return;
   renderCheckoutPrice();
@@ -165,6 +170,7 @@ function openCheckoutModal() {
   syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
   window.telemetry?.logEvent('paywall_opened');
+  window.barionPixel?.addToCart(pixelItem());
   openModal('checkoutModal');
   document.getElementById('checkoutEmail').focus();
   prefillCheckoutFromProfile();
@@ -266,6 +272,7 @@ async function startBarionCheckout() {
       throw failure;
     }
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
+    window.barionPixel?.initiateCheckout({ ...pixelItem(), price: data.amountHuf || PAYWALL_PRICES[planKind()] });
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
     redirectTo(data.gatewayUrl);
@@ -423,6 +430,10 @@ async function handleCheckoutReturn() {
     localStorage.removeItem('oviKretaPendingCheckout');
     localStorage.removeItem(PENDING_BARION_KEY);
     showPurchaseNotice('');
+    if (!isCouponSession(sessionId)) {
+      const kind = PAYWALL_PRICES[data.plan] ? data.plan : planKind();
+      window.barionPixel?.purchase({ id: sessionId, itemId: kind, name: PLAN_LABELS[kind], price: data.amountHuf || PAYWALL_PRICES[kind] });
+    }
     showUnlockedPlan(pending, sessionId, data.planData);
     if (data.emailEnabled && lastResult) await deliverPurchaseEmail(sessionId);
   } catch (error) {

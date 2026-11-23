@@ -77,6 +77,7 @@ const LEGAL_TEXTS = {
 <ul>
 <li>A helyi beállítások (pl. világos/sötét mód, az űrlap ideiglenes állapota) a böngésző saját helyi tárhelyén (localStorage) tárolódnak, ezekhez az Adatkezelő szervere nem fér hozzá.</li>
 <li>Az oldal a Barion Base Pixelt használja csalásmegelőzési (fraud prevention) célból, a Barion Payment Zrt. előírásainak megfelelően. A pixel a böngésző és az eszköz technikai adatait (pl. IP-cím, böngészőazonosító) továbbítja a Barion Payment Zrt.-nek, kizárólag a fizetések biztonságos lebonyolítása és a visszaélések kiszűrése érdekében; marketing célra nem használjuk. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési csalások megelőzése.</li>
+<li>A Teljes (Full) Barion Pixel a fizetési folyamat e-kereskedelmi eseményeit (tervezet megtekintése, csomag kosárba helyezése, fizetés indítása, sikeres vásárlás) küldi a Barion Payment Zrt.-nek a csomag nevével, azonosítójával és árával; a megadott név, e-mail cím és számlázási adat nem kerül továbbításra. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési szolgáltatás biztonságos és ellenőrizhető nyújtása.</li>
 </ul>
 <p><strong>d) Opcionális felhasználói fiók</strong></p>
 <ul>
