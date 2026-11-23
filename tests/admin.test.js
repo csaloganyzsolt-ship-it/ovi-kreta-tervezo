@@ -28,7 +28,7 @@ const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
 
 // Mockolt Supabase kliens az admin végpontokhoz: auth.getUser, auth.admin.listUsers és a használt lekérdezés-láncok.
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {
@@ -944,4 +944,25 @@ test('POST /api/admin/support/coupon creates a single-use SORRY-XXXXXX 100% coup
   assert.equal(stored.is_active, true);
   assert.match(stored.note, /panasz@example\.com/);
   assert.ok(client.db.system_logs.some((row) => row.context === 'admin_support' && row.user_email === 'panasz@example.com'));
+});
+
+test('newsletter to all subscribers merges active guests, deduplicated by e-mail, with the guest token', async (t) => {
+  const tables = newsletterTables();
+  tables.newsletter_guests = [
+    { email: 'vendeg@example.com', newsletter_token: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', unsubscribed: false },
+    { email: 'alice@example.com', newsletter_token: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', unsubscribed: false },
+    { email: 'kilepett@example.com', newsletter_token: 'ffffffff-ffff-4fff-8fff-ffffffffffff', unsubscribed: true }
+  ];
+  useAdminEnv(t, fakeAdmin(tables));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  const response = await sendNewsletter(base, campaignBody({ recipients: 'subscribers' }));
+  assert.equal(response.status, 202);
+  assert.equal((await response.json()).recipientCount, 3);
+  await newsletter.whenIdle();
+  assert.deepEqual(sent.map((m) => m.to).sort(), ['alice@example.com', 'carol@example.com', 'vendeg@example.com']);
+  const guest = sent.find((m) => m.to === 'vendeg@example.com');
+  assert.ok(guest.html.includes('token=dddddddd-dddd-4ddd-8ddd-dddddddddddd'));
+  const alice = sent.find((m) => m.to === 'alice@example.com');
+  assert.ok(!alice.html.includes('eeeeeeee-eeee'), 'a regisztrált profil tokenje az erősebb');
 });

@@ -95,13 +95,31 @@ async function subscribeNewsletter(user) {
   return toProfile(data, user);
 }
 
-// Nyilvános, tokenes leiratkozás: az ismeretlen vagy hibás token 404 (nem derül ki, hogy melyik fiók létezik).
+// Vendég feliratkozás fizetéskor: az e-mail cím az elsődleges kulcs; ha már szerepel, a név frissül és a feliratkozás újra aktív lesz.
+// A newsletter_token csak az első beszúrásnál keletkezik (az upsert nem érinti), így a korábban kiküldött leiratkozó linkek érvényesek maradnak.
+async function subscribeGuest({ email, name } = {}) {
+  const address = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address) || address.length > 254) throw new ProfileError('Érvénytelen e-mail cím a feliratkozáshoz.', 400);
+  const client = supabase.requireClient();
+  const row = { email: address, unsubscribed: false, subscribed_at: new Date().toISOString() };
+  const cleanName = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (cleanName) row.name = cleanName;
+  const { error } = await client.from('newsletter_guests').upsert(row, { onConflict: 'email' });
+  if (error) throw new Error(`A vendég feliratkozás sikertelen: ${error.message}`);
+}
+
+// Nyilvános, tokenes leiratkozás: előbb a regisztrált profilok, majd a vendég feliratkozók között keres.
+// Az ismeretlen vagy hibás token 404 (nem derül ki, hogy melyik cím létezik).
 async function unsubscribeNewsletter(token) {
   if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) throw new ProfileError('A leiratkozási link érvénytelen vagy lejárt.', 404);
   const client = supabase.requireClient();
-  const { data, error } = await client.from('profiles').update({ newsletter_subscribed: false }).eq('newsletter_token', token.toLowerCase()).select('id');
+  const wanted = token.toLowerCase();
+  const { data, error } = await client.from('profiles').update({ newsletter_subscribed: false }).eq('newsletter_token', wanted).select('id');
   if (error) throw new Error(`A leiratkozás sikertelen: ${error.message}`);
-  if (!data?.length) throw new ProfileError('A leiratkozási link érvénytelen vagy lejárt.', 404);
+  if (data?.length) return;
+  const guests = await client.from('newsletter_guests').update({ unsubscribed: true }).eq('newsletter_token', wanted).select('email');
+  if (guests.error) throw new Error(`A leiratkozás sikertelen: ${guests.error.message}`);
+  if (!guests.data?.length) throw new ProfileError('A leiratkozási link érvénytelen vagy lejárt.', 404);
 }
 
 const ARCHIVE_TABLE = 'deleted_accounts_archive';
@@ -153,4 +171,4 @@ const runPurge = () => purgeExpiredArchives().catch((error) => console.error('[p
 setTimeout(runPurge, 60 * 1000).unref();
 setInterval(runPurge, DAY_MS).unref();
 
-module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, rememberBilling, subscribeNewsletter, unsubscribeNewsletter, deleteAccount, purgeExpiredArchives };
+module.exports = { ProfileError, FIELD_LIMITS, parseProfileInput, getProfile, saveProfile, rememberBilling, subscribeNewsletter, subscribeGuest, unsubscribeNewsletter, deleteAccount, purgeExpiredArchives };

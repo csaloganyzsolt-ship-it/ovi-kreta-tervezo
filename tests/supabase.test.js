@@ -508,8 +508,8 @@ test('the checkout box shows the discounted price after a partial coupon and the
   window.updateExportLock();
   window.openCheckoutModal();
   document.getElementById('checkoutEmail').value = 'vevo@example.com';
-  document.getElementById('consentTerms').checked = true;
-  document.getElementById('consentDigital').checked = true;
+  document.getElementById('cb-terms').checked = true;
+  document.getElementById('cb-digital').checked = true;
   document.getElementById('couponCode').value = 'OVI50';
 
   window.fetch = async () => Response.json({ success: true, paid: false, coupon: { code: 'OVI50', percent: 50 }, plan: 'daily', originalPrice: 390, discountAmount: 195, finalPrice: 195, generationId: 'gen_ui_partial' });

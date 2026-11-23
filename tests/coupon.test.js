@@ -206,8 +206,8 @@ function showLockedPreview(window, generationId = 'gen_ui_coupon') {
 const fillCheckout = (window, { email = 'vevo@example.com', consent = true } = {}) => {
   const { document } = window;
   document.getElementById('checkoutEmail').value = email;
-  document.getElementById('consentTerms').checked = consent;
-  document.getElementById('consentDigital').checked = consent;
+  document.getElementById('cb-terms').checked = consent;
+  document.getElementById('cb-digital').checked = consent;
 };
 
 const CTA_IDS = ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockFloatingBtn'];

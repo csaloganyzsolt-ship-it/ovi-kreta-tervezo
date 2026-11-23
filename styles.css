@@ -2367,3 +2367,9 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 
 .admin-table tr.log-error td { background: #fdecec; color: #8a1c1c; font-weight: 600; }
 [data-theme="dark"] .admin-table tr.log-error td { background: #3a1f22; color: #ffb4b4; }
+
+/* Fizetési ablak: tágasabb, hogy a nyilatkozatok kényelmesen elférjenek */
+.modal-box.checkout-box { width: min(600px, 100%); max-width: 600px; }
+.consent-group { margin: 14px 0; }
+.check-all-btn { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; }
+.check-all-btn:hover, .check-all-btn:focus-visible { filter: brightness(.92); }

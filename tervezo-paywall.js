@@ -205,8 +205,8 @@ const BILLING_ZIP_PATTERN = /^[0-9A-Za-z][0-9A-Za-z -]{2,9}$/;
 
 // A Barion-fizetés csak akkor kattintható, ha mindkét nyilatkozat be van pipálva, az e-mail cím érvényes és a számlázási mezők ki vannak töltve.
 function checkoutFormReady() {
-  return Boolean(document.getElementById('consentTerms')?.checked)
-    && Boolean(document.getElementById('consentDigital')?.checked)
+  return Boolean(document.getElementById('cb-terms')?.checked)
+    && Boolean(document.getElementById('cb-digital')?.checked)
     && CHECKOUT_EMAIL_PATTERN.test(String(document.getElementById('checkoutEmail')?.value || '').trim())
     && Boolean(readBilling());
 }
@@ -224,6 +224,15 @@ function readBilling() {
   return billing;
 }
 
+// A „Mindent bepipálok” gomb a három jelölőnégyzetet együtt jelöli be (a hírlevél opcionális, de ez is része a gyorsgombnak).
+function checkAllConsents() {
+  for (const id of ['cb-newsletter', 'cb-terms', 'cb-digital']) {
+    const box = document.getElementById(id);
+    if (box) box.checked = true;
+  }
+  syncCheckoutButtons();
+}
+
 // Közös ellenőrzés a fizetéshez és a kuponhoz; hibánál kiírja az okot és null-t ad. A számlázási adat csak a fizetésnél kötelező.
 function readCheckoutForm({ billing = false } = {}) {
   const errorEl = document.getElementById('checkoutError');
@@ -234,11 +243,11 @@ function readCheckoutForm({ billing = false } = {}) {
     errorEl.textContent = 'Add meg a számlázási nevet, az irányítószámot, a települést és az utcát, házszámot.';
     return null;
   }
-  if (!document.getElementById('consentTerms').checked) {
+  if (!document.getElementById('cb-terms').checked) {
     errorEl.textContent = 'A fizetéshez el kell fogadnod az ÁSZF-et és az Adatvédelmi tájékoztatót.';
     return null;
   }
-  if (!document.getElementById('consentDigital').checked) {
+  if (!document.getElementById('cb-digital').checked) {
     errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
     return null;
   }
@@ -263,7 +272,7 @@ async function startBarionCheckout() {
     const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, subscribeNewsletter: document.getElementById('cb-newsletter')?.checked === true, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {

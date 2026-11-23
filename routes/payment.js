@@ -147,6 +147,16 @@ async function applyCoupon(req, res) {
 }
 
 // Barion fizetés indítása: az összeg a mentett terv módjából (és a dokumentumhoz mentett, újraellenőrzött kuponból) jön, a documentId (generationId) az OrderNumber mezőben utazik.
+// Hírlevél-feliratkozás a fizetés indításakor: bejelentkezettnek a profilja, vendégnek a newsletter_guests tábla; a hibája nem állítja meg a fizetést.
+async function saveCheckoutSubscription(user, body) {
+  try {
+    if (user) await profileService.subscribeNewsletter(user);
+    else await profileService.subscribeGuest({ email: body.email, name: body.billing?.name });
+  } catch (error) {
+    logger.error('newsletter', `A hírlevél-feliratkozás mentése sikertelen: ${error.message}`, { email: user?.email || body.email });
+  }
+}
+
 async function checkoutBarion(req, res) {
   try {
     const body = req.body || {};
@@ -169,6 +179,7 @@ async function checkoutBarion(req, res) {
     const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, user, req });
     // A már ellenőrzött számlázási adat így kitölti a következő vásárlást; a hibája nem állítja meg a fizetést.
     if (user) await profileService.rememberBilling(user, barionService.parseBilling(body.billing)).catch((error) => console.error('[profil] A számlázási adatok visszaírása sikertelen:', error.message));
+    if (body.subscribeNewsletter === true) await saveCheckoutSubscription(user, body);
     return res.json({ success: true, ...result });
   } catch (error) {
     return sendPaymentError(res, error, 'Barion checkout', req);

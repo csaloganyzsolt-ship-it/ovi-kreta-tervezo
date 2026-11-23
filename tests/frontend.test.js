@@ -507,8 +507,8 @@ test('planner page keeps the legal footer and checkout withdrawal note', async (
   assert.match(footer, /Nethely Kft\./);
   assert.match(footer, /Békéltető Testület/);
   assert.match(doc.getElementById('checkoutWithdrawalNote').textContent, /14 napos elállási jog/);
-  assert.ok(doc.getElementById('consentDigital'));
-  assert.ok(doc.getElementById('consentTerms'));
+  assert.ok(doc.getElementById('cb-digital'));
+  assert.ok(doc.getElementById('cb-terms'));
 });
 
 test('history panel displays detailed items, distinguishes paid vs draft, supports attach, load, download and delete', async (t) => {

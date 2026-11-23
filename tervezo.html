@@ -692,8 +692,12 @@
           </div>
           <label for="billingAddress"><strong>Utca, házszám</strong></label>
           <input id="billingAddress" class="billing-input" type="text" autocomplete="street-address" maxlength="120" placeholder="Fő utca 1." required />
-          <label class="consent"><input type="checkbox" id="consentTerms" /> <span>Elolvastam és elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
-          <label class="consent"><input type="checkbox" id="consentDigital" /> <span>Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.</span></label>
+          <div class="consent-group">
+            <button type="button" class="check-all-btn" id="checkAll">&#10003; Mindent bepipálok.</button>
+            <label class="consent"><input type="checkbox" id="cb-newsletter" /> <span>Kérem az ingyenes szakmai tippeket, ovis ötleteket és az exkluzív kedvezményeket!</span></label>
+            <label class="consent"><input type="checkbox" id="cb-terms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
+            <label class="consent"><input type="checkbox" id="cb-digital" /> <span>Tudomásul veszem, hogy a fizetés után azonnal megkapom a digitális tartalmat, így elveszítem a 14 napos elállási jogomat.</span></label>
+          </div>
           <div class="coupon-row">
             <label for="couponCode"><strong>Kuponkód</strong></label>
             <div class="coupon-controls">

@@ -184,19 +184,36 @@ async function subscribedRecipients(client) {
     }
     recipients.push({ email, token: String(profile.newsletter_token) });
   }
-  return { recipients, skipped };
+  // A vendég feliratkozók (fizetéskor, hozzájárulással) a regisztráltak mellé kerülnek; e-mail alapján deduplikálunk, a regisztrált profil token-je az erősebb.
+  const guests = await fetchAll(() => client.from('newsletter_guests').select('email, newsletter_token').eq('unsubscribed', false).order('email', { ascending: true }), 'A vendég feliratkozók lekérdezése sikertelen');
+  const seen = new Set(recipients.map((recipient) => recipient.email));
+  const skippedEmails = new Set(skipped.map((entry) => entry.email));
+  for (const guest of guests) {
+    const email = String(guest.email || '').trim().toLowerCase();
+    if (!email || !guest.newsletter_token || seen.has(email)) continue;
+    // Ha ugyanezen a címen van regisztrált, de leiratkozott vagy meg nem erősített profil, a vendég-bejegyzés akkor is érvényes külön hozzájárulás.
+    seen.add(email);
+    skippedEmails.delete(email);
+    recipients.push({ email, token: String(guest.newsletter_token) });
+  }
+  return { recipients, skipped: skipped.filter((entry) => skippedEmails.has(entry.email)) };
 }
 
 async function customRecipients(client, emails) {
   const { data, error } = await client.from('profiles').select('email, newsletter_subscribed, newsletter_token').in('email', emails);
   if (error) throw new AdminError(`A címzettek lekérdezése sikertelen: ${error.message}`, 500);
   const byEmail = new Map((data || []).map((profile) => [String(profile.email).toLowerCase(), profile]));
+  const guestResult = await client.from('newsletter_guests').select('email, newsletter_token, unsubscribed').in('email', emails);
+  if (guestResult.error) throw new AdminError(`A címzettek lekérdezése sikertelen: ${guestResult.error.message}`, 500);
+  const guestByEmail = new Map((guestResult.data || []).map((guest) => [String(guest.email).toLowerCase(), guest]));
   const recipients = [];
   const skipped = [];
   for (const email of emails) {
     const profile = byEmail.get(email);
-    if (!profile) recipients.push({ email, token: null });
-    else if (profile.newsletter_subscribed === true && profile.newsletter_token) recipients.push({ email, token: String(profile.newsletter_token) });
+    const guest = guestByEmail.get(email);
+    if (profile?.newsletter_subscribed === true && profile.newsletter_token) recipients.push({ email, token: String(profile.newsletter_token) });
+    else if (guest && guest.unsubscribed !== true && guest.newsletter_token) recipients.push({ email, token: String(guest.newsletter_token) });
+    else if (!profile && !guest) recipients.push({ email, token: null });
     else skipped.push({ email, reason: 'leiratkozott vagy nem iratkozott fel' });
   }
   return { recipients, skipped };

@@ -22,7 +22,7 @@ function docRow(id, overrides = {}) {
 
 // Mockolt Supabase kliens: auth.getUser(token) és a documents tábla használt lekérdezés-láncai (select/update/upsert, eq/is/in, order, limit).
 function fakeAccounts(documents = [], extra = {}) {
-  const tables = { documents, profiles: [], orders: [], deleted_accounts_archive: [], ...extra };
+  const tables = { documents, profiles: [], orders: [], deleted_accounts_archive: [], newsletter_guests: [], ...extra };
   const failures = {};
   const calls = { getUser: [], deleteUser: [] };
   const read = (row, column) => (column === 'request' ? row.data?.plan?.request : row[column]);
@@ -1603,4 +1603,30 @@ test('leiratkozas.html is a noindex page in the brand design without inline scri
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg"/);
   assert.equal(/<script(?![^>]*\bsrc=)[^>]*>/.test(html), false, 'nincs inline script');
   assert.doesNotMatch(html, /#(?:e67e22|f39c12|ff9800|d35400)/i, 'nincs narancs szín');
+});
+
+const GUEST_TOKEN = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+test('guest newsletter signup is an upsert that reactivates unsubscribed guests and rejects bad e-mails', async (t) => {
+  const client = useClient(t, fakeAccounts([], { newsletter_guests: [{ email: 'vendeg@example.com', name: 'Régi', newsletter_token: GUEST_TOKEN, unsubscribed: true }] }));
+  const profileService = require('../services/profileService');
+  await profileService.subscribeGuest({ email: 'Vendeg@Example.com', name: 'Új Név' });
+  await profileService.subscribeGuest({ email: 'masik@example.com', name: '' });
+  const [first, second] = client.tables.newsletter_guests;
+  assert.equal(first.unsubscribed, false);
+  assert.equal(first.newsletter_token, GUEST_TOKEN, 'a régi leiratkozó link érvényes marad');
+  assert.equal(first.name, 'Új Név');
+  assert.equal(second.email, 'masik@example.com');
+  assert.equal(client.tables.newsletter_guests.length, 2);
+  await assert.rejects(() => profileService.subscribeGuest({ email: 'nem-email', name: 'X' }));
+});
+
+test('token unsubscribe falls back to newsletter_guests when no profile has the token', async (t) => {
+  relaxLimits(t);
+  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles(), newsletter_guests: [{ email: 'vendeg@example.com', newsletter_token: GUEST_TOKEN, unsubscribed: false }] }));
+  const base = await listen(t);
+  const response = await call(base, '/api/newsletter/unsubscribe', { method: 'POST', body: { token: GUEST_TOKEN } });
+  assert.equal(response.status, 200);
+  assert.equal(client.tables.newsletter_guests[0].unsubscribed, true);
+  assert.equal(client.tables.profiles.find((p) => p.id === BOB.id).newsletter_subscribed, true, 'a profilok érintetlenek');
 });

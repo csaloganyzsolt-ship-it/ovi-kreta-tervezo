@@ -213,10 +213,10 @@ const BILLING_FIELDS = { billingName: 'Minta Kft.', billingZip: '9021', billingC
 const fill = (window, { terms = true, digital = true, email = 'vevo@example.com', billing = {} } = {}) => {
   const { document } = window;
   document.getElementById('checkoutEmail').value = email;
-  document.getElementById('consentTerms').checked = terms;
-  document.getElementById('consentDigital').checked = digital;
+  document.getElementById('cb-terms').checked = terms;
+  document.getElementById('cb-digital').checked = digital;
   for (const [id, value] of Object.entries({ ...BILLING_FIELDS, ...billing })) document.getElementById(id).value = value;
-  for (const id of ['consentTerms', 'consentDigital']) document.getElementById(id).dispatchEvent(new window.Event('change', { bubbles: true }));
+  for (const id of ['cb-terms', 'cb-digital']) document.getElementById(id).dispatchEvent(new window.Event('change', { bubbles: true }));
   for (const id of ['checkoutEmail', ...Object.keys(BILLING_FIELDS)]) document.getElementById(id).dispatchEvent(new window.Event('input', { bubbles: true }));
 };
 
@@ -226,9 +226,9 @@ test('the payment form has the mandatory consent above the payment button and th
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
 
-  const consent = document.getElementById('consentTerms');
+  const consent = document.getElementById('cb-terms');
   const label = consent.closest('label');
-  assert.equal(label.textContent.replace(/\s+/g, ' ').trim(), 'Elolvastam és elfogadom az ÁSZF-et és az Adatvédelmi tájékoztatót.');
+  assert.equal(label.textContent.replace(/\s+/g, ' ').trim(), 'Elfogadom az ÁSZF-et és az Adatvédelmi tájékoztatót.');
   assert.equal(label.querySelector('a[data-legal="terms"]').textContent, 'ÁSZF');
   assert.equal(label.querySelector('a[data-legal="privacy"]').textContent, 'Adatvédelmi tájékoztatót');
 
@@ -249,8 +249,8 @@ test('the payment button needs both declarations, a valid billing e-mail and all
   const { document } = window;
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
-  const digital = document.getElementById('consentDigital').closest('label').textContent.replace(/\s+/g, ' ').trim();
-  assert.equal(digital, 'Tudomásul veszem és kifejezetten kérem, hogy a digitális tartalom szolgáltatása a sikeres fizetést követően azonnal megkezdődjön, és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat.');
+  const digital = document.getElementById('cb-digital').closest('label').textContent.replace(/\s+/g, ' ').trim();
+  assert.equal(digital, 'Tudomásul veszem, hogy a fizetés után azonnal megkapom a digitális tartalmat, így elveszítem a 14 napos elállási jogomat.');
   const state = () => document.getElementById('checkoutBarion').disabled;
 
   assert.equal(state(), true, 'induláskor letiltva');
@@ -274,8 +274,8 @@ test('the payment button needs both declarations, a valid billing e-mail and all
     field.dispatchEvent(new window.Event('input', { bubbles: true }));
     assert.equal(state(), false, `${id} visszaírva`);
   }
-  document.getElementById('consentDigital').checked = false;
-  document.getElementById('consentDigital').dispatchEvent(new window.Event('change', { bubbles: true }));
+  document.getElementById('cb-digital').checked = false;
+  document.getElementById('cb-digital').dispatchEvent(new window.Event('change', { bubbles: true }));
   assert.equal(state(), true);
 });
 
@@ -284,7 +284,7 @@ test('the billing fields sit under the e-mail field and above the consents and t
   const { document } = window;
   const nodes = Array.from(document.getElementById('checkoutForm').querySelectorAll('*'));
   const position = (id) => nodes.indexOf(document.getElementById(id));
-  const order = ['checkoutEmail', 'billingName', 'billingZip', 'billingCity', 'billingAddress', 'consentTerms', 'consentDigital', 'couponCode', 'checkoutBarion'].map(position);
+  const order = ['checkoutEmail', 'billingName', 'billingZip', 'billingCity', 'billingAddress', 'cb-terms', 'cb-digital', 'couponCode', 'checkoutBarion'].map(position);
   assert.ok(order.every((index, i) => index > -1 && (i === 0 || index > order[i - 1])), `sorrend: ${order}`);
   assert.equal(document.getElementById('billingZip').closest('.billing-row'), document.getElementById('billingCity').closest('.billing-row'));
   assert.notEqual(document.getElementById('billingZip').closest('.billing-row'), null);

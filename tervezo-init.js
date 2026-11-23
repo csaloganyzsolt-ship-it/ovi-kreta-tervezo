@@ -88,7 +88,8 @@ function initFooterAndModals() {
   });
   // Az űrlap sosem töltődik újra: egyetlen fizetési út van, a Barion gomb.
   document.getElementById('checkoutForm').addEventListener('submit', (event) => event.preventDefault());
-  for (const [id, eventName] of [['consentTerms', 'change'], ['consentDigital', 'change'], ['checkoutEmail', 'input'], ['checkoutEmail', 'change'],
+  document.getElementById('checkAll')?.addEventListener('click', checkAllConsents);
+  for (const [id, eventName] of [['cb-terms', 'change'], ['cb-digital', 'change'], ['checkoutEmail', 'input'], ['checkoutEmail', 'change'],
     ['billingName', 'input'], ['billingZip', 'input'], ['billingCity', 'input'], ['billingAddress', 'input']]) {
     document.getElementById(id).addEventListener(eventName, syncCheckoutButtons);
   }
