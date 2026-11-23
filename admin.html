@@ -150,7 +150,7 @@
             </form>
             <div class="admin-table-wrap">
               <table class="admin-table" id="couponsTable">
-                <thead><tr><th>Kód</th><th>Kedvezmény</th><th>Felhasználás</th><th>Kiosztott kedvezmény</th><th>Érvényes eddig</th><th>Megjegyzés</th><th>Aktív</th></tr></thead>
+                <thead><tr><th>Kód</th><th>Kedvezmény</th><th>Felhasználás</th><th>Kiosztott kedvezmény</th><th>Érvényes eddig</th><th>Megjegyzés</th><th>Aktív</th><th>Műveletek</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -162,6 +162,16 @@
               </table>
             </div>
             <p class="profile-error" id="couponsError" role="alert" hidden></p>
+            <dialog class="admin-dialog" id="couponEditDialog" aria-labelledby="couponEditTitle">
+              <form class="profile-form" id="couponEditForm" method="dialog" novalidate>
+                <h3 id="couponEditTitle">Kupon szerkesztése</h3>
+                <div class="profile-field"><label for="couponEditValidUntil">Érvényes eddig (üresen: sosem jár le)</label><input id="couponEditValidUntil" type="date" /></div>
+                <div class="profile-field"><label for="couponEditMaxUses">Maximális felhasználás (üresen: korlátlan)</label><input id="couponEditMaxUses" type="number" min="1" step="1" /></div>
+                <div class="profile-field"><label for="couponEditNote">Megjegyzés</label><input id="couponEditNote" type="text" maxlength="200" autocomplete="off" /></div>
+                <p class="profile-error" id="couponEditError" role="alert" hidden></p>
+                <div class="admin-dialog-actions"><button type="submit" class="btn" id="couponEditSave">Mentés</button> <button type="button" class="btn secondary" id="couponEditCancel">Mégse</button></div>
+              </form>
+            </dialog>
           </section>
 
           <section class="profile-panel" id="panelOrders" role="tabpanel" aria-labelledby="tabOrders" hidden>
@@ -254,7 +264,7 @@
             <h3>Korábbi kampányok</h3>
             <div class="admin-table-wrap">
               <table class="admin-table" id="campaignsTable">
-                <thead><tr><th>Időpont</th><th>Tárgy</th><th>Címzettek</th><th>Elküldve</th><th>Sikertelen</th><th>Küldte</th></tr></thead>
+                <thead><tr><th>Időpont</th><th>Tárgy</th><th>Címzettek</th><th>Elküldve</th><th>Sikertelen</th><th>Küldte</th><th>Művelet</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>

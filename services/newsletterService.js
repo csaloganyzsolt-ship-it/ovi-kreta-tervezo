@@ -327,7 +327,35 @@ async function listCampaigns(client) {
   };
 }
 
+const unescapeHtml = (text) => String(text).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+
+// A kampány naplója csak a kész HTML-t őrzi; a sablon fix részei között kinyerhető a főcím, a szöveg és a gomb.
+function extractCampaign(html) {
+  const start = html.indexOf('<tr><td style="padding:28px;">');
+  const end = html.indexOf('Üdvözlettel,<br>');
+  if (start < 0 || end < 0) return { heading: '', bodyHtml: '', ctaText: '', ctaUrl: '' };
+  let inner = html.slice(start + '<tr><td style="padding:28px;">'.length, html.lastIndexOf('<p', end)).trim();
+  let heading = '';
+  const h = inner.match(/^<h1 [^>]*>([\s\S]*?)<\/h1>\s*/);
+  if (h) { heading = unescapeHtml(h[1]); inner = inner.slice(h[0].length); }
+  let ctaText = '';
+  let ctaUrl = '';
+  const cta = inner.match(/<p style="margin:22px 0;text-align:center;"><a href="([^"]*)"[^>]*>([\s\S]*?)<\/a><\/p>\s*$/);
+  if (cta) { ctaUrl = unescapeHtml(cta[1]); ctaText = unescapeHtml(cta[2]); inner = inner.slice(0, cta.index); }
+  return { heading, bodyHtml: inner.trim(), ctaText, ctaUrl };
+}
+
+async function getCampaign(client, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw new AdminError('A kampány nem található.', 404);
+  const { data, error } = await client.from('newsletter_campaigns').select('id, subject, html_body').eq('id', id).maybeSingle();
+  if (error) throw new AdminError(`A kampány lekérdezése sikertelen: ${error.message}`, 500);
+  if (!data) throw new AdminError('A kampány nem található.', 404);
+  return { campaign: { id: data.id, subject: data.subject, ...extractCampaign(String(data.html_body || '')) } };
+}
+
 module.exports = {
+  extractCampaign,
+  getCampaign,
   SITE,
   UNSUBSCRIBE_PLACEHOLDER,
   sanitizeHtml,

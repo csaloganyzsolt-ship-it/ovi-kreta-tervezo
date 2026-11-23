@@ -167,6 +167,63 @@
 
   // ---------- 2. Kuponok ----------
 
+  let editingCoupon = null;
+
+  function couponActions(coupon) {
+    const wrap = el('span', 'admin-actions');
+    const edit = el('button', 'admin-switch', 'Szerkesztés');
+    edit.type = 'button';
+    edit.addEventListener('click', () => openCouponEdit(coupon));
+    const remove = el('button', 'admin-switch admin-danger', 'Törlés');
+    remove.type = 'button';
+    remove.addEventListener('click', () => deleteCoupon(coupon, remove));
+    wrap.append(edit, remove);
+    return wrap;
+  }
+
+  function openCouponEdit(coupon) {
+    editingCoupon = coupon;
+    byId('couponEditTitle').textContent = `${coupon.code} kupon szerkesztése`;
+    byId('couponEditValidUntil').value = coupon.validUntil ? String(coupon.validUntil).slice(0, 10) : '';
+    byId('couponEditMaxUses').value = coupon.maxUses || '';
+    byId('couponEditNote').value = coupon.note || '';
+    setText('couponEditError', '');
+    byId('couponEditDialog').showModal();
+  }
+
+  async function saveCouponEdit(event) {
+    event.preventDefault();
+    if (!editingCoupon) return;
+    setText('couponEditError', '');
+    const button = byId('couponEditSave');
+    button.disabled = true;
+    try {
+      await api(`/api/admin/coupons/${encodeURIComponent(editingCoupon.code)}`, {
+        method: 'PATCH',
+        body: { valid_until: byId('couponEditValidUntil').value || null, max_uses: byId('couponEditMaxUses').value.trim() || null, note: byId('couponEditNote').value.trim() }
+      });
+      byId('couponEditDialog').close();
+      await loadCoupons();
+    } catch (error) {
+      setText('couponEditError', errorMessage(error));
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function deleteCoupon(coupon, button) {
+    if (!window.confirm(`Biztosan törlöd a(z) ${coupon.code} kupont? Ha már használták, archiválódik (inaktív lesz).`)) return;
+    button.disabled = true;
+    setText('couponsError', '');
+    try {
+      await api(`/api/admin/coupons/${encodeURIComponent(coupon.code)}`, { method: 'DELETE' });
+      await loadCoupons();
+    } catch (error) {
+      button.disabled = false;
+      setText('couponsError', `A kupon nem törölhető: ${errorMessage(error)}`);
+    }
+  }
+
   function couponSwitch(coupon) {
     const button = el('button', 'admin-switch');
     button.type = 'button';
@@ -199,8 +256,9 @@
         formatAmount(coupon.totalDiscount),
         coupon.validUntil ? formatDate(coupon.validUntil) : 'Nincs lejárat',
         coupon.note || '',
-        couponSwitch(coupon)
-      ]), 7, 'Még nincs kupon.');
+        couponSwitch(coupon),
+        couponActions(coupon)
+      ]), 8, 'Még nincs kupon.');
       fillTable('redemptionsTable', redemptions.map((row) => [
         formatDate(row.usedAt), row.code, row.email || '–', PLAN_LABELS[row.planMode] || row.planMode || '–',
         formatAmount(row.originalPrice), formatAmount(row.discountAmount), formatAmount(row.finalPrice)
@@ -387,6 +445,28 @@
     }
   }
 
+  function reuseButton(campaign) {
+    const button = el('button', 'admin-switch', 'Újrahasználás');
+    button.type = 'button';
+    button.addEventListener('click', async () => {
+      setText('nlError', '');
+      setText('campaignsError', '');
+      try {
+        const { campaign: data } = await api(`/api/admin/newsletter/campaigns/${encodeURIComponent(campaign.id)}`);
+        byId('nlSubject').value = data.subject || '';
+        byId('nlHeading').value = data.heading || '';
+        byId('nlBody').value = data.bodyHtml || '';
+        byId('nlCtaText').value = data.ctaText || '';
+        byId('nlCtaUrl').value = data.ctaUrl || '';
+        await refreshPreview();
+        byId('newsletterForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (error) {
+        setText('campaignsError', `A kampány nem tölthető be: ${errorMessage(error)}`);
+      }
+    });
+    return button;
+  }
+
   async function loadCampaigns() {
     clearTimeout(pollTimer);
     setText('campaignsError', '');
@@ -398,8 +478,9 @@
         `${campaign.recipientCount} (${RECIPIENT_LABELS[campaign.recipientFilter] || campaign.recipientFilter})`,
         campaign.id === sending ? `${campaign.sentCount} / ${campaign.recipientCount} (folyamatban)` : String(campaign.sentCount),
         String(campaign.failedCount),
-        campaign.sentBy || '–'
-      ]), 6, 'Még nem volt kiküldött kampány.');
+        campaign.sentBy || '–',
+        reuseButton(campaign)
+      ]), 7, 'Még nem volt kiküldött kampány.');
       if (sending) pollTimer = setTimeout(loadCampaigns, POLL_MS);
     } catch (error) {
       setText('campaignsError', `A kampányok nem tölthetők be: ${errorMessage(error)}`);
@@ -433,6 +514,8 @@
     byId('adminEmail').textContent = auth.getUser()?.email || '';
     document.querySelectorAll('[data-admin-tab]').forEach((tab) => tab.addEventListener('click', () => activateTab(tab.dataset.adminTab)));
     byId('couponForm').addEventListener('submit', submitCoupon);
+    byId('couponEditForm').addEventListener('submit', saveCouponEdit);
+    byId('couponEditCancel').addEventListener('click', () => byId('couponEditDialog').close());
     byId('ordersStatus').addEventListener('change', loadOrders);
     byId('ordersSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadOrders, SEARCH_DELAY_MS); });
     byId('ordersExport').addEventListener('click', exportOrders);

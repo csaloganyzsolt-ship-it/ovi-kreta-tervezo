@@ -2373,3 +2373,8 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .consent-group { margin: 14px 0; }
 .check-all-btn { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; }
 .check-all-btn:hover, .check-all-btn:focus-visible { filter: brightness(.92); }
+
+.admin-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.admin-switch.admin-danger { background: #fdecec; border-color: #d64545; color: #a12626; }
+.admin-dialog { border: 1px solid var(--border, #d9ebe0); border-radius: 16px; padding: 20px; max-width: min(480px, 94vw); }
+.admin-dialog::backdrop { background: rgba(20, 40, 33, 0.45); }

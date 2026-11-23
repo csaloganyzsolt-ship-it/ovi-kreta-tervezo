@@ -178,14 +178,46 @@ async function createCoupon(client, body, now = Date.now()) {
   return couponView(data);
 }
 
-async function setCouponActive(client, rawCode, isActive) {
+function parseCouponPatch(body = {}, now = Date.now()) {
+  const patch = {};
+  if (body.is_active !== undefined) {
+    if (typeof body.is_active !== 'boolean') throw validationError('Az is_active mező logikai érték (true/false) legyen.');
+    patch.is_active = body.is_active;
+  }
+  if (body.valid_until !== undefined) patch.valid_until = parseValidUntil(body.valid_until, now);
+  if (body.max_uses !== undefined) patch.max_uses = parseCouponInput({ code: 'X', discount_percent: 1, max_uses: body.max_uses }, now).max_uses;
+  if (body.note !== undefined) patch.note = parseCouponInput({ code: 'X', discount_percent: 1, note: body.note }, now).note;
+  if (!Object.keys(patch).length) throw validationError('Az is_active mező logikai érték (true/false) legyen.');
+  return patch;
+}
+
+async function updateCoupon(client, rawCode, body, now = Date.now()) {
   const code = normalizeCode(rawCode);
   if (!CODE_PATTERN.test(code)) throw new AdminError('A kupon nem található.', 404);
-  if (typeof isActive !== 'boolean') throw validationError('Az is_active mező logikai érték (true/false) legyen.');
-  const { data, error } = await client.from('coupons').update({ is_active: isActive }).eq('code', code).select(COUPON_COLUMNS);
+  const patch = parseCouponPatch(body, now);
+  const { data, error } = await client.from('coupons').update(patch).eq('code', code).select(COUPON_COLUMNS);
   if (error) throw dbError(error, 'A kupon módosítása sikertelen');
   if (!data?.length) throw new AdminError('A kupon nem található.', 404);
   return couponView(data[0]);
+}
+
+const setCouponActive = (client, rawCode, isActive) => updateCoupon(client, rawCode, { is_active: isActive });
+
+// Idegenkulcs-hivatkozás (rendelés, beváltás) esetén nem törlünk, hanem archiválunk: a kupon inaktív, tegnap lejárt, a megjegyzésben jelölve.
+async function deleteCoupon(client, rawCode, now = Date.now()) {
+  const code = normalizeCode(rawCode);
+  if (!CODE_PATTERN.test(code)) throw new AdminError('A kupon nem található.', 404);
+  const { data, error } = await client.from('coupons').delete().eq('code', code).select('code');
+  if (!error) {
+    if (!data?.length) throw new AdminError('A kupon nem található.', 404);
+    return { deleted: true, archived: false, code };
+  }
+  if (error.code !== '23503') throw dbError(error, 'A kupon törlése sikertelen');
+  const archive = { is_active: false, valid_until: new Date(now - 24 * 60 * 60 * 1000).toISOString(), note: '[Archiválva/Törölve]' };
+  const { data: updated, error: archiveError } = await client.from('coupons').update(archive).eq('code', code).select(COUPON_COLUMNS);
+  if (archiveError) throw dbError(archiveError, 'A kupon archiválása sikertelen');
+  if (!updated?.length) throw new AdminError('A kupon nem található.', 404);
+  return { deleted: false, archived: true, code, coupon: couponView(updated[0]) };
 }
 
 // ---------- Rendszernapló és ügyfélszolgálat ----------
@@ -305,6 +337,8 @@ module.exports = {
   listCoupons,
   createCoupon,
   setCouponActive,
+  updateCoupon,
+  deleteCoupon,
   parseCouponInput,
   listLogs,
   createSupportCoupon,

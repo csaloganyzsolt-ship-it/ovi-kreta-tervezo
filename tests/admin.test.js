@@ -54,10 +54,13 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
       let order = null;
       let window = null;
       let single = false;
+      let removing = false;
       const run = () => {
+        if (removing && failures[`delete:${name}`]) return { data: null, error: failures[`delete:${name}`] };
         if (failures[name]) return { data: null, error: { message: failures[name] } };
         let rows = db[name].filter((row) => filters.every((matches) => matches(row)));
         if (patch) rows.forEach((row) => Object.assign(row, patch));
+        if (removing) db[name] = db[name].filter((row) => !rows.includes(row));
         if (order) rows = [...rows].sort((a, b) => (order.ascending ? 1 : -1) * String(a[order.column]).localeCompare(String(b[order.column])));
         if (window) rows = rows.slice(window.from, window.to + 1);
         const data = rows.map((row) => ({ ...row, ...(name === 'documents' ? { request: row.data?.plan?.request } : {}) }));
@@ -66,6 +69,7 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
       const builder = {
         select() { return builder; },
         update(values) { patch = values; return builder; },
+        delete() { removing = true; return builder; },
         eq(column, value) { filters.push((row) => row[column] === value); return builder; },
         in(column, values) { filters.push((row) => values.includes(row[column])); return builder; },
         order(column, options) { order = { column, ascending: options?.ascending !== false }; return builder; },
@@ -965,4 +969,66 @@ test('newsletter to all subscribers merges active guests, deduplicated by e-mail
   assert.ok(guest.html.includes('token=dddddddd-dddd-4ddd-8ddd-dddddddddddd'));
   const alice = sent.find((m) => m.to === 'alice@example.com');
   assert.ok(!alice.html.includes('eeeeeeee-eeee'), 'a regisztrált profil tokenje az erősebb');
+});
+
+test('PATCH /api/admin/coupons/:code edits valid_until (clearable), max_uses and note', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), coupons: [{ code: 'TEST100', discount_percent: 100, max_uses: 5, valid_until: '2099-01-01T00:00:00.000Z', is_active: true, note: 'Régi', created_at: '2026-01-01T00:00:00Z' }] }));
+  const base = await listen(t);
+  const patch = (body) => call(base, '/api/admin/coupons/TEST100', { token: 'token-admin', method: 'PATCH', body });
+  const row = () => client.db.coupons[0];
+
+  assert.equal((await patch({ valid_until: '2099-12-31', max_uses: '10', note: 'Új' })).status, 200);
+  assert.deepEqual([row().valid_until, row().max_uses, row().note, row().is_active], ['2099-12-31T23:59:59.999Z', 10, 'Új', true]);
+  assert.equal((await patch({ valid_until: '', max_uses: null, note: '' })).status, 200);
+  assert.deepEqual([row().valid_until, row().max_uses, row().note], [null, null, null], 'üres érték = NULL');
+  assert.equal((await patch({ is_active: false })).status, 200);
+  assert.equal(row().is_active, false);
+  assert.equal(row().note, null, 'a nem küldött mezők érintetlenek');
+  for (const bad of [{ max_uses: 0 }, { valid_until: '2001-01-01' }, { valid_until: 'nem-datum' }, { note: 'x'.repeat(201) }, {}]) assert.equal((await patch(bad)).status, 400, JSON.stringify(bad));
+  assert.equal((await call(base, '/api/admin/coupons/NINCS', { token: 'token-admin', method: 'PATCH', body: { note: 'x' } })).status, 404);
+});
+
+test('DELETE /api/admin/coupons/:code deletes, and soft-deletes on a foreign key violation (23503)', async (t) => {
+  const coupons = () => [
+    { code: 'FREE', discount_percent: 10, max_uses: null, valid_until: null, is_active: true, note: 'x', created_at: '2026-01-01T00:00:00Z' },
+    { code: 'USED', discount_percent: 10, max_uses: null, valid_until: null, is_active: true, note: 'x', created_at: '2026-01-01T00:00:00Z' }
+  ];
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), coupons: coupons() }));
+  const base = await listen(t);
+  const remove = (code) => call(base, `/api/admin/coupons/${code}`, { token: 'token-admin', method: 'DELETE' });
+
+  assert.equal((await call(base, '/api/admin/coupons/FREE', { method: 'DELETE' })).status, 401);
+  const plain = await remove('FREE');
+  assert.equal(plain.status, 200);
+  assert.deepEqual(await plain.json(), { success: true, deleted: true, archived: false, code: 'FREE' });
+  assert.deepEqual(client.db.coupons.map((c) => c.code), ['USED']);
+
+  client.failures['delete:coupons'] = { code: '23503', message: 'violates foreign key constraint' };
+  const before = Date.now();
+  const soft = await remove('USED');
+  assert.equal(soft.status, 200);
+  const body = await soft.json();
+  assert.equal(body.archived, true);
+  const used = client.db.coupons[0];
+  assert.equal(used.is_active, false);
+  assert.equal(used.note, '[Archiválva/Törölve]');
+  assert.ok(Date.parse(used.valid_until) < before, 'a lejárat múltbeli (tegnap)');
+  assert.ok(before - Date.parse(used.valid_until) < 25 * 3600 * 1000);
+
+  client.failures['delete:coupons'] = { code: '42501', message: 'permission denied' };
+  assert.equal((await remove('USED')).status, 500);
+  assert.equal((await remove('nem jó kód!')).status, 404);
+});
+
+test('GET /api/admin/newsletter/campaigns/:id extracts subject, heading, body and CTA for reuse', async (t) => {
+  const newsletterService = require('../services/newsletterService');
+  const html = newsletterService.buildNewsletterHtml({ heading: 'Új & jó', bodyHtml: '<p>Szia <b>ovis</b>!</p>', ctaText: 'Megnézem', ctaUrl: 'https://ovitervezo.hu/tervezo.html', unsubscribeUrl: '{{UNSUBSCRIBE_URL}}' });
+  const id = '11111111-1111-4111-8111-111111111111';
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), newsletter_campaigns: [{ id, subject: 'Tárgy', html_body: html, created_at: '2026-01-01T00:00:00Z' }] }));
+  const base = await listen(t);
+  const response = await call(base, `/api/admin/newsletter/campaigns/${id}`, { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).campaign, { id, subject: 'Tárgy', heading: 'Új & jó', bodyHtml: '<p>Szia <b>ovis</b>!</p>', ctaText: 'Megnézem', ctaUrl: 'https://ovitervezo.hu/tervezo.html' });
+  assert.equal((await call(base, '/api/admin/newsletter/campaigns/22222222-2222-4222-8222-222222222222', { token: 'token-admin' })).status, 404);
+  assert.equal((await call(base, '/api/admin/newsletter/campaigns/nem-id', { token: 'token-admin' })).status, 404);
 });

@@ -64,7 +64,9 @@ router.post('/admin/coupons', handle('A kupon létrehozása', async (client, req
   const coupon = await admin.createCoupon(client, req.body);
   res.status(201).json({ success: true, coupon });
 }));
-router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (client, req) => ({ coupon: await admin.setCouponActive(client, req.params.code, req.body?.is_active) })));
+router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (client, req) => ({ coupon: await admin.updateCoupon(client, req.params.code, req.body) })));
+router.delete('/admin/coupons/:code', handle('A kupon törlése', (client, req) => admin.deleteCoupon(client, req.params.code)));
+router.get('/admin/newsletter/campaigns/:id', handle('A kampány betöltése', (client, req) => newsletter.getCampaign(client, req.params.id)));
 
 router.get('/admin/logs', handle('A rendszernapló lekérdezése', (client) => admin.listLogs(client)));
 router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása', async (client, req, res) => {
