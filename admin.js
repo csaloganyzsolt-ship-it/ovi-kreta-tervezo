@@ -116,7 +116,9 @@
   async function loadStats() {
     setText('overviewError', '');
     try {
-      const { stats } = await api('/api/admin/stats');
+      const analyticsPeriod = byId('analyticsPeriod').value;
+      const params = analyticsPeriod ? `?analytics_period=${analyticsPeriod}` : '';
+      const { stats, analytics } = await api(`/api/admin/stats${params}`);
       byId('kpiRevenueTotal').textContent = formatAmount(stats.revenue.total);
       byId('kpiRevenue30').textContent = formatAmount(stats.revenue.last30Days);
       byId('kpiOrders').textContent = String(stats.paidOrders);
@@ -127,10 +129,41 @@
       byId('docAcademic').textContent = String(stats.documents.breakdown.academic);
       byId('docWeekly').textContent = String(stats.documents.breakdown.weekly);
       byId('docConversion').textContent = `${String(stats.documents.conversionRate).replace('.', ',')}%`;
+
+      // Telemetria statisztikák
+      if (analytics) {
+        byId('analyticsTotal').textContent = String(analytics.total_events);
+        byId('analyticsFunnelPageView').textContent = String(analytics.funnel.page_views);
+        byId('analyticsFunnelGeneratorStarted').textContent = String(analytics.funnel.generator_started);
+        byId('analyticsFunnelGenerated').textContent = String(analytics.funnel.document_generated);
+        byId('analyticsFunnelPaywall').textContent = String(analytics.funnel.paywall_opened);
+        byId('analyticsDownloadDocx').textContent = String(analytics.downloads.docx);
+        byId('analyticsDownloadPdf').textContent = String(analytics.downloads.pdf);
+
+        // Eszközmegoszlás
+        byId('deviceMobile').textContent = `${analytics.devices.mobile}%`;
+        byId('deviceTablet').textContent = `${analytics.devices.tablet}%`;
+        byId('deviceDesktop').textContent = `${analytics.devices.desktop}%`;
+
+        // Top témakörök
+        const topicsRows = (analytics.top_topics || []).map((t) => [t.name, String(t.count)]);
+        fillTable('topicsTable', topicsRows, 2, 'Nincsenek adatok');
+
+        // Top korcsoportok
+        const ageGroupsRows = (analytics.top_age_groups || []).map((a) => [a.name, String(a.count)]);
+        fillTable('ageGroupsTable', ageGroupsRows, 2, 'Nincsenek adatok');
+
+        // Top referrerek
+        const referrersRows = (analytics.top_referrers || []).map((r) => [r.domain || '(közvetlen)', String(r.count)]);
+        fillTable('referrersTable', referrersRows, 2, 'Nincsenek adatok');
+      }
     } catch (error) {
       setText('overviewError', `A statisztika nem tölthető be: ${errorMessage(error)}`);
     }
   }
+
+  // Telemetria időszak szűrő event listener
+  byId('analyticsPeriod')?.addEventListener('change', loadStats);
 
   // ---------- 2. Kuponok ----------
 

@@ -71,6 +71,50 @@
               <div class="admin-kpi"><span class="admin-kpi-label">Heti csomag (weekly)</span><strong class="admin-kpi-value" id="docWeekly">–</strong></div>
               <div class="admin-kpi"><span class="admin-kpi-label">Konverzió (feloldva fizetéssel vagy kuponnal)</span><strong class="admin-kpi-value" id="docConversion">–</strong></div>
             </div>
+
+            <h3>Anonim telemetria &amp; Konverziós tölcsér</h3>
+            <div class="admin-filter-controls">
+              <label for="analyticsPeriod">Időszak:</label>
+              <select id="analyticsPeriod" aria-label="Telemetria időszak szűrő">
+                <option value="7">Elmúlt 7 nap</option>
+                <option value="30">Elmúlt 30 nap</option>
+                <option value="">Összes</option>
+              </select>
+            </div>
+            <div class="admin-kpis" id="analyticsGrid">
+              <div class="admin-kpi"><span class="admin-kpi-label">Összes esemény</span><strong class="admin-kpi-value" id="analyticsTotal">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Oldalmegjelenítés</span><strong class="admin-kpi-value" id="analyticsFunnelPageView">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Generálás indítva</span><strong class="admin-kpi-value" id="analyticsFunnelGeneratorStarted">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Tervezet kész</span><strong class="admin-kpi-value" id="analyticsFunnelGenerated">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Fizetési ablak megnyitva</span><strong class="admin-kpi-value" id="analyticsFunnelPaywall">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Word letöltés (.docx)</span><strong class="admin-kpi-value" id="analyticsDownloadDocx">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">PDF letöltés</span><strong class="admin-kpi-value" id="analyticsDownloadPdf">–</strong></div>
+            </div>
+
+            <h3>Eszközmegoszlás</h3>
+            <div class="admin-kpis" id="deviceGrid">
+              <div class="admin-kpi"><span class="admin-kpi-label">Mobil (%)</span><strong class="admin-kpi-value" id="deviceMobile">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Tablet (%)</span><strong class="admin-kpi-value" id="deviceTablet">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Asztali gép (%)</span><strong class="admin-kpi-value" id="deviceDesktop">–</strong></div>
+            </div>
+
+            <h3>Top témakörök</h3>
+            <table class="admin-table" id="topicsTable">
+              <thead><tr><th>Témakör</th><th>Lekérdezések</th></tr></thead>
+              <tbody></tbody>
+            </table>
+
+            <h3>Top korcsoportok</h3>
+            <table class="admin-table" id="ageGroupsTable">
+              <thead><tr><th>Korcsoport</th><th>Lekérdezések</th></tr></thead>
+              <tbody></tbody>
+            </table>
+
+            <h3>Top forgalmi források</h3>
+            <table class="admin-table" id="referrersTable">
+              <thead><tr><th>Referrer domain</th><th>Kattintások</th></tr></thead>
+              <tbody></tbody>
+            </table>
           </section>
 
           <section class="profile-panel" id="panelCoupons" role="tabpanel" aria-labelledby="tabCoupons" hidden>
