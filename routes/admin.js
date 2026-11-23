@@ -6,6 +6,7 @@ const supabase = require('../services/supabaseService');
 const { requireAdmin } = require('../services/authService');
 const admin = require('../services/adminService');
 const newsletter = require('../services/newsletterService');
+const analytics = require('../services/analyticsService');
 
 const limiterOptions = { windowMs: 60 * 1000, standardHeaders: true, legacyHeaders: false, message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' } };
 // Az admin végpontok a hitelesítés ELŐTT is korlátozottak (jelszó- és tokenpróbálgatás ellen), a küldés szigorúbban.
@@ -44,7 +45,18 @@ router.get('/admin/me', (_req, res) => {
   res.json({ success: true, isAdmin: true });
 });
 
-router.get('/admin/stats', handle('A statisztika lekérdezése', async (client) => ({ stats: await admin.getStats(client) })));
+router.get('/admin/stats', handle('A statisztika lekérdezése', async (client, req) => {
+  const stats = await admin.getStats(client);
+  
+  // Telemetria adat hozzáadása időszakos szűréssel
+  const timePeriod = req.query.analytics_period ? parseInt(req.query.analytics_period, 10) : null;
+  const analyticsStats = await analytics.getAnalyticsStats(client, timePeriod);
+  
+  return { 
+    stats,
+    analytics: analyticsStats
+  };
+}));
 
 router.get('/admin/coupons', handle('A kuponok lekérdezése', (client) => admin.listCoupons(client)));
 router.post('/admin/coupons', handle('A kupon létrehozása', async (client, req, res) => {

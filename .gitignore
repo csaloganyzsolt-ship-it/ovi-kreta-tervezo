@@ -9,3 +9,4 @@ dist-nethely/
 
 dist-pages/
 supabase/.temp/
+*.csv

@@ -18,6 +18,7 @@ const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISH
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
+const telemetryService = require('./services/telemetryService');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -775,6 +776,48 @@ app.post('/api/feedback', feedbackLimiter, async (req, res) => {
   } catch (error) {
     console.error('Feedback submission error:', error);
     return res.status(500).json({ success: false, error: 'A visszajelzés elküldése nem sikerült.' });
+  }
+});
+
+// Telemetria végpont: anonim eseménynaplózás (GDPR-kompatibilis)
+const telemetryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { success: false, error: 'Túl sok telemetria kérés. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (_req) => process.env.NODE_ENV === 'test'
+});
+
+app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
+  try {
+    const { eventName, deviceType, referrerDomain, metadata } = req.body || {};
+
+    // Validáció
+    if (!eventName || typeof eventName !== 'string') {
+      return res.status(400).json({ success: false, error: 'Érvénytelen vagy hiányzó eseménynév.' });
+    }
+
+    // Whitelist ellenőrzés
+    if (!telemetryService.ALLOWED_EVENTS.has(eventName)) {
+      return res.status(400).json({ success: false, error: `Érvénytelen eseménynév: ${eventName}` });
+    }
+
+    // Telemetria naplózása
+    const result = await telemetryService.logEvent(eventName, {
+      deviceType: deviceType || null,
+      referrerDomain: referrerDomain || null,
+      metadata: (typeof metadata === 'object' && metadata !== null) ? metadata : {}
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: 'Az esemény naplózása sikertelen volt.', reason: result.reason });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Telemetry submission error:', error);
+    return res.status(500).json({ success: false, error: 'A telemetria feldolgozása nem sikerült.' });
   }
 });
 
