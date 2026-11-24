@@ -6,20 +6,21 @@
 const supabase = require('./supabaseService');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_SYSTEM_PROMPT = require('./defaultSystemPrompt');
 const AI_MODELS = Object.freeze(['gemini-3.1-pro-preview', 'gemini-2.5-pro', 'gemini-2.5-flash']);
 const PRICE_TIERS = Object.freeze(['standard', 'academic', 'weekly']);
 const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'password_reset']);
 const MAX_PRICE_HUF = 100000;
 const MAX_HINTS = 12;
-const MAX_HINT_LENGTH = 80;
+const MAX_HINT_LENGTH = 120;
 const MAX_PROMPT_LENGTH = 8000;
 const MAX_TEMPLATE_LENGTH = 100000;
 
 const DEFAULT_SETTINGS = Object.freeze({
   pricing: Object.freeze({ standard: 390, academic: 690, weekly: 890 }),
   ai_config: Object.freeze({
-    model: 'gpt-4o-mini',
-    system_prompt: 'Te egy 20 éves tapasztalattal rendelkező, kedves magyar óvodapedagógus vagy, aki életszerű, differenciált, a magyar óvodai nevelés országos alapprogramjához igazodó foglalkozásterveket készít.'
+    model: 'gemini-3.1-pro-preview',
+    system_prompt: DEFAULT_SYSTEM_PROMPT
   }),
   maintenance_mode: false,
   seasonal_hints: Object.freeze(['őszi falevelek gyűjtése', 'Márton-napi lámpáskészítés', 'farsangi mulatság'])
@@ -129,7 +130,7 @@ function parsePrice(value, label) {
 }
 
 function parseHints(value) {
-  const list = Array.isArray(value) ? value : String(value || '').split(',');
+  const list = Array.isArray(value) ? value : String(value || '').split(';');
   const hints = [...new Set(list.map((item) => String(item || '').replace(/\s+/g, ' ').trim()).filter(Boolean))];
   if (hints.length > MAX_HINTS) throw new SettingsError(`Legfeljebb ${MAX_HINTS} szezonális javaslat adható meg.`);
   if (hints.some((hint) => hint.length > MAX_HINT_LENGTH)) throw new SettingsError(`Egy javaslat legfeljebb ${MAX_HINT_LENGTH} karakter lehet.`);

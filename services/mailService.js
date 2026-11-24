@@ -217,7 +217,27 @@ ${feedbackBlock}
 Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
 </td></tr>
 </table></td></tr></table></body></html>`;
-  return { text, html };
+  const parts = {
+    attachments_rows: `${fileItems}${invoiceItem}`,
+    invoiceText,
+    feedback_block: feedbackBlock,
+    site_url: site
+  };
+  return { text, html, parts };
+}
+
+// A base_layout közös helyőrzői: a logó forrása, a kibocsátó adatai és a leiratkozó blokk (üres, ha nincs leiratkozási lehetőség).
+function layoutValues(env, { logoSrc, unsubscribeUrl, newsletter = false } = {}) {
+  const c = companyLines(env);
+  const unsubscribe = unsubscribeUrl
+    ? `Azért kaptad ezt a levelet, mert feliratkoztál az OviTervező hírlevelére. <a href="${escapeHtml(unsubscribeUrl)}" style="color:#2f946f;">Leiratkozás egy kattintással</a><br>`
+    : (newsletter ? 'Ha nem szeretnél több levelet kapni tőlünk, válaszolj erre a levélre.<br>' : '');
+  return {
+    logo_src: logoSrc || `cid:${LOGO_CID}`,
+    site_url: 'https://ovitervezo.hu',
+    company_legal: `${escapeHtml(c.name)}, székhely: ${escapeHtml(c.address)}, adószám: ${escapeHtml(c.taxId)}, ${escapeHtml(c.regLabel)}: ${escapeHtml(c.regNo)}`,
+    unsubscribe_link: unsubscribe
+  };
 }
 
 function hasZipAttachment(attachments) {
@@ -266,9 +286,12 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
     if (templates) {
       const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       const composed = settingsService.composeEmail(templates, 'payment_success', {
+        ...layoutValues(env),
+        ...built.parts,
         planLabel: escapeHtml(planLabelOf(plan)),
         invoiceText: invoicePdf ? ' Az e-számlát is mellékeltük PDF-ben.' : '',
         title_block: cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : '',
+        plan_type_block: planMode === 'academic' ? '<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Tervezet típusa: <strong>Oktatási célú tervezet</strong></p>' : '',
         order_block: orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>${escapeHtml(orderNumber)}</strong></p>` : ''
       });
       html = composed.html;
@@ -427,6 +450,7 @@ module.exports = {
   sendAdminNotification,
   sendAdminErrorAlert,
   buildEmailContent,
+  layoutValues,
   isConfigured,
   sanitizeAttachments,
   sendPurchaseEmail,

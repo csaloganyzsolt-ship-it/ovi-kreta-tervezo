@@ -259,3 +259,67 @@ test('admin settings routes are protected', async (t) => {
     assert.ok([401, 403, 503].includes(response.status), `${method} ${route} -> ${response.status}`);
   }
 });
+
+const MIGRATION_SQL = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261126090000_system_settings.sql'), 'utf8');
+const migrationTemplates = () => Object.fromEntries([...MIGRATION_SQL.matchAll(/\('(\w+)', '([^']*)', \$tpl\$([\s\S]*?)\$tpl\$\)/g)].map((m) => [m[1], { id: m[1], subject: m[2], bodyHtml: m[3] }]));
+
+test('the migration seeds the real model, the full original prompt and the real templates with upsert', () => {
+  const prompt = MIGRATION_SQL.match(/\$prompt\$([\s\S]*?)\$prompt\$/)[1];
+  assert.equal(prompt, settingsService.DEFAULT_SETTINGS.ai_config.system_prompt);
+  assert.match(MIGRATION_SQL, /'model', 'gemini-3\.1-pro-preview'/);
+  assert.ok(prompt.length > 3000 && prompt.includes('kidolgozas_tablazat') && prompt.includes('mester-óvodapedagógus'));
+  assert.equal(MIGRATION_SQL.includes('gpt-4o'), false);
+  assert.match(MIGRATION_SQL, /on conflict \(id\) do update set subject = excluded\.subject, body_html = excluded\.body_html/);
+  const templates = migrationTemplates();
+  assert.deepEqual(Object.keys(templates).sort(), ['base_layout', 'password_reset', 'payment_success', 'welcome_email']);
+  assert.ok(templates.base_layout.bodyHtml.includes('{{content}}') && templates.base_layout.bodyHtml.includes('{{unsubscribe_link}}'));
+  assert.ok(templates.welcome_email.bodyHtml.includes('Fiók aktiválása'));
+  assert.ok(templates.password_reset.bodyHtml.includes('Új jelszó megadása'));
+  assert.ok(templates.payment_success.bodyHtml.includes('{{attachments_rows}}') && templates.payment_success.bodyHtml.includes('Mellékletek'));
+  assert.equal(/lorem/i.test(MIGRATION_SQL), false);
+});
+
+test('the sync script prints the idempotent seed section of the migration', () => {
+  const { seedSql } = require('../scripts/sync-system-settings');
+  const sql = seedSql();
+  assert.match(sql, /^-- SEED-KEZDET/);
+  assert.match(sql, /on conflict \(key\) do update/);
+  assert.equal(sql.includes('create table'), false);
+});
+
+test('seasonal hints are separated by semicolons so a hint may contain commas', async (t) => {
+  const { store } = fakeDb(t);
+  const saved = await settingsService.updateSettings(supabase.getClient(), { seasonal_hints: 'Őszi termések gyűjtése, falevelek préselése; Márton-napi lámpás;' });
+  assert.deepEqual(saved.seasonal_hints, ['Őszi termések gyűjtése, falevelek préselése', 'Márton-napi lámpás']);
+  assert.deepEqual(store.system_settings.seasonal_hints, ['Őszi termések gyűjtése, falevelek préselése', 'Márton-napi lámpás']);
+});
+
+test('the newsletter is rendered into the base_layout with the recipient unsubscribe link, also when the layout forgets the placeholder', () => {
+  const newsletter = require('../services/newsletterService');
+  const templates = migrationTemplates();
+  const input = { heading: 'Szia', bodyHtml: '<p>Hír</p>', ctaText: 'Gomb', ctaUrl: 'https://ovitervezo.hu/x' };
+  const url = newsletter.unsubscribeUrlFor('tok-1');
+  const html = newsletter.renderNewsletter(templates, input, { unsubscribeUrl: url, env: { NODE_ENV: 'test' } });
+  assert.ok(html.includes('cid:ovitervezo-logo') && html.includes('<h1 style="margin:0 0 14px;font-size:22px;color:#1f5f52;">Szia</h1>'));
+  assert.ok(html.includes(`href="${url}"`) && html.includes('Leiratkozás egy kattintással'));
+  assert.equal(html.includes('{{'), false);
+  const bare = { ...templates, base_layout: { ...templates.base_layout, bodyHtml: '<html><body>{{content}}</body></html>' } };
+  const forced = newsletter.renderNewsletter(bare, input, { unsubscribeUrl: url, env: { NODE_ENV: 'test' } });
+  assert.ok(forced.includes(`href="${url}"`), 'a leiratkozó link sablontól függetlenül bekerül');
+  assert.equal(newsletter.extractCampaign(html).heading, 'Szia');
+  assert.equal(newsletter.extractCampaign(html).ctaUrl, 'https://ovitervezo.hu/x');
+});
+
+test('the newsletter preview and the payment e-mail use the same base_layout from the database', async (t) => {
+  const rows = Object.values(migrationTemplates()).map((row) => ({ id: row.id, subject: row.subject, body_html: row.bodyHtml }));
+  fakeDb(t, { templates: rows });
+  const newsletter = require('../services/newsletterService');
+  const preview = await newsletter.buildPreview({ heading: 'Cím', bodyHtml: 'Szöveg' }, { NODE_ENV: 'test' });
+  assert.ok(preview.includes('data:image/png;base64,') && preview.includes('leiratkozas.html?token='));
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF'), title: 'Erdő', orderNumber: 'OVI-9' }, { env: { NODE_ENV: 'test' }, transport });
+  assert.ok(sent[0].html.includes('Kibocsátó:') && sent[0].html.includes('Mellékletek') && sent[0].html.includes('OVI-9'));
+  assert.equal(sent[0].html.includes('Leiratkozás'), false, 'a fizetési levélben nincs leiratkozó mondat');
+  assert.equal(sent[0].html.includes('{{'), false);
+});

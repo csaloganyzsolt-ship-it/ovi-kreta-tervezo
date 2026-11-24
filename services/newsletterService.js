@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const mailService = require('./mailService');
+const settingsService = require('./settingsService');
 const { supportEmail } = require('./invoiceService');
 const { AdminError, fetchAll, listAuthUsers, isConfirmed } = require('./adminService');
 
@@ -125,6 +126,38 @@ ${footerUnsub}<br>
 </table></td></tr></table></body></html>`;
 }
 
+// A levél törzse (főcím, szöveg, gomb, aláírás) a base_layout {{content}} helyére kerül.
+function newsletterContent({ heading, bodyHtml, ctaText, ctaUrl }) {
+  return `${heading ? `<h1 style="margin:0 0 14px;font-size:22px;color:#1f5f52;">${escapeHtml(heading)}</h1>` : ''}
+${bodyHtml}
+${ctaUrl ? `<p style="margin:22px 0;text-align:center;"><a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">${escapeHtml(ctaText)}</a></p>` : ''}
+<p style="margin:18px 0 0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>`;
+}
+
+// Az adatbázisból szerkeszthető base_layout sablont tölti be; hiba esetén a küldés/előnézet hangosan leáll (nincs csendes tartalék).
+async function loadTemplates(deps = {}) {
+  try {
+    return deps.templates !== undefined ? deps.templates : await settingsService.getTemplates();
+  } catch (error) {
+    throw new AdminError(`Az e-mail sablon (base_layout) nem tölthető be: ${error.message}`, 503);
+  }
+}
+
+// Ha nincs adatbázis-kliens (null), a beépített sablon marad; különben a base_layout adja a keretet.
+// A leiratkozó hivatkozás akkor is bekerül, ha a szerkesztett base_layout kihagyta a {{unsubscribe_link}} helyőrzőt (GDPR).
+function renderNewsletter(templates, input, { unsubscribeUrl, logoSrc, env = process.env } = {}) {
+  if (!templates) return buildNewsletterHtml({ ...input, unsubscribeUrl, logoSrc }, env);
+  const layout = templates.base_layout;
+  if (!layout) throw new AdminError('Hiányzik az e-mail sablon: base_layout.', 503);
+  const values = { ...mailService.layoutValues(env, { logoSrc, unsubscribeUrl, newsletter: true }), content: newsletterContent(input) };
+  let html = settingsService.fillPlaceholders(layout.bodyHtml, values);
+  if (unsubscribeUrl && !html.includes(escapeHtml(unsubscribeUrl))) {
+    const link = `<p style="margin:0;padding:12px 28px;font-size:12px;line-height:1.6;color:#7a8480;text-align:center;">${values.unsubscribe_link}</p>`;
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${link}</body>`) : `${html}${link}`;
+  }
+  return html;
+}
+
 function buildNewsletterText(input, unsubscribeUrl) {
   const parts = [input.heading, htmlToText(input.bodyHtml), input.ctaUrl ? `${input.ctaText}: ${input.ctaUrl}` : '', 'Üdvözlettel,\nAz OviTervező csapata\n' + SITE];
   parts.push(unsubscribeUrl ? `Leiratkozás: ${unsubscribeUrl}` : 'Ha nem szeretnél több levelet kapni, válaszolj erre a levélre.');
@@ -139,19 +172,21 @@ function logoDataUriOf() {
 
 // Élő előnézet: ugyanaz a sablon, mint a kiküldött levélé; a CID-es logó helyett beágyazott kép, a leiratkozó link mintaérték.
 // Az előnézet szándékosan elnéző (gépelés közben hiányos mezők is lehetnek); a hibákat a tényleges küldés jelzi.
-function buildPreview(body = {}, env = process.env) {
+async function buildPreview(body = {}, env = process.env, deps = {}) {
   const text = (value, limit) => (typeof value === 'string' ? value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, limit) : '');
   const ctaText = text(body.ctaText, LIMITS.ctaText);
   const ctaUrl = ctaText ? parseHttpsUrl(text(body.ctaUrl, LIMITS.ctaUrl)) || '' : '';
   const rawBody = typeof body.bodyHtml === 'string' ? body.bodyHtml.slice(0, LIMITS.body) : '';
-  return buildNewsletterHtml({
+  return renderNewsletter(await loadTemplates(deps), {
     heading: text(body.heading, LIMITS.heading),
     bodyHtml: renderBody(rawBody),
     ctaText: ctaUrl ? ctaText : '',
-    ctaUrl,
+    ctaUrl
+  }, {
     unsubscribeUrl: unsubscribeUrlFor('00000000-0000-4000-8000-000000000000'),
-    logoSrc: logoDataUriOf()
-  }, env);
+    logoSrc: logoDataUriOf(),
+    env
+  });
 }
 
 // ---------- Címzettek ----------
@@ -243,7 +278,7 @@ async function whenIdle() {
   while (activeJob) await activeJob.promise;
 }
 
-async function runJob({ client, campaignId, input, recipients, env, deps, logger }) {
+async function runJob({ client, campaignId, input, recipients, env, deps, logger, templates }) {
   const transport = mailService.createTransport(env, deps);
   const from = env.MAIL_FROM || `OviTervező <${supportEmail(env)}>`;
   const replyTo = supportEmail(env);
@@ -260,7 +295,7 @@ async function runJob({ client, campaignId, input, recipients, env, deps, logger
         replyTo,
         subject: input.subject,
         text: buildNewsletterText(input, unsubscribeUrl),
-        html: buildNewsletterHtml({ ...input, unsubscribeUrl }, env),
+        html: renderNewsletter(templates, input, { unsubscribeUrl, env }),
         headers: unsubscribeUrl ? { 'List-Unsubscribe': `<${unsubscribeUrl}>` } : undefined,
         attachments: [mailService.logoAttachment()]
       });
@@ -284,12 +319,13 @@ async function startCampaign(client, body, admin, { env = process.env, deps = {}
   if (!mailService.isConfigured(env) && !mailService.isMailMocked(env) && !deps.transport) {
     throw new AdminError('Az e-mail küldés nincs beállítva a szerveren (SMTP_HOST).', 503);
   }
+  const templates = await loadTemplates(deps);
   const { recipients, skipped } = await resolveRecipients(client, { recipients: mode, emails: body?.emails }, admin);
   if (!recipients.length) throw new AdminError('Nincs olyan címzett, akinek a levél jogszerűen elküldhető.', 400);
 
   const { data, error } = await client.from('newsletter_campaigns').insert({
     subject: input.subject,
-    html_body: buildNewsletterHtml({ ...input, unsubscribeUrl: UNSUBSCRIBE_PLACEHOLDER, logoSrc: `cid:${mailService.LOGO_CID}` }, env),
+    html_body: renderNewsletter(templates, input, { unsubscribeUrl: UNSUBSCRIBE_PLACEHOLDER, logoSrc: `cid:${mailService.LOGO_CID}`, env }),
     recipient_filter: mode,
     recipient_count: recipients.length,
     sent_count: 0,
@@ -299,7 +335,7 @@ async function startCampaign(client, body, admin, { env = process.env, deps = {}
   if (error || !data?.id) throw new AdminError(`A kampány naplózása sikertelen: ${error?.message || 'ismeretlen hiba'}`, 500);
 
   const job = { campaignId: data.id };
-  job.promise = runJob({ client, campaignId: data.id, input, recipients, env, deps, logger })
+  job.promise = runJob({ client, campaignId: data.id, input, recipients, env, deps, logger, templates })
     .catch((jobError) => logger.error('[hírlevél] a küldés megszakadt:', jobError.message))
     .finally(() => { if (activeJob === job) activeJob = null; });
   activeJob = job;
@@ -366,6 +402,8 @@ module.exports = {
   buildNewsletterText,
   buildPreview,
   unsubscribeUrlFor,
+  renderNewsletter,
+  logoDataUriOf,
   resolveRecipients,
   startCampaign,
   listCampaigns,

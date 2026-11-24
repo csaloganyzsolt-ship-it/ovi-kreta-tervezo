@@ -7,6 +7,7 @@ const { requireAdmin } = require('../services/authService');
 const admin = require('../services/adminService');
 const newsletter = require('../services/newsletterService');
 const analytics = require('../services/analyticsService');
+const mailService = require('../services/mailService');
 const settingsService = require('../services/settingsService');
 const logger = require('../utils/logger');
 
@@ -79,7 +80,7 @@ router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
 router.get('/admin/users', handle('A felhasználók lekérdezése', (client) => admin.listUsers(client)));
 
-router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: newsletter.buildPreview(req.body) })));
+router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: await newsletter.buildPreview(req.body) })));
 router.post('/admin/newsletter/send', sendLimiter, handle('A hírlevél indítása', async (client, req, res) => {
   const result = await newsletter.startCampaign(client, req.body, req.user);
   res.status(202).json({ success: true, ...result });
@@ -109,7 +110,7 @@ router.post('/admin/email-templates/preview', handle('Az előnézet készítése
   const saved = Object.fromEntries((await settingsService.listTemplates(client)).map((row) => [row.id, row]));
   const edited = { id: body.id, subject: String(body.subject || '').slice(0, 200), bodyHtml: String(body.bodyHtml || '').slice(0, 100000) };
   const templates = { ...saved, [body.id]: edited };
-  const sample = { content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', action_url: 'https://ovitervezo.hu/' };
+  const sample = { ...mailService.layoutValues(process.env, { logoSrc: newsletter.logoDataUriOf(), unsubscribeUrl: body.id === 'payment_success' ? '' : 'https://ovitervezo.hu/leiratkozas.html?token=minta' }), content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', plan_type_block: '', feedback_block: '', attachments_rows: '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr>', action_url: 'https://ovitervezo.hu/' };
   return { html: settingsService.composeEmail(templates, body.id, sample).html };
 }));
 

@@ -27,8 +27,14 @@ const DAY = 24 * 60 * 60 * 1000;
 const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
 
 // Mockolt Supabase kliens az admin végpontokhoz: auth.getUser, auth.admin.listUsers és a használt lekérdezés-láncok.
+// A migráció valós sablonjai (base_layout stb.), hogy a hírlevél tesztek az éles keretet használják.
+function seedTemplateRows() {
+  const sql = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'supabase', 'migrations', '20261126090000_system_settings.sql'), 'utf8');
+  return [...sql.matchAll(/\('(\w+)', '([^']*)', \$tpl\$([\s\S]*?)\$tpl\$\)/g)].map((m) => ({ id: m[1], subject: m[2], body_html: m[3] }));
+}
+
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {

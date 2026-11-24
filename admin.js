@@ -503,7 +503,7 @@
       byId('setPriceStandard').value = settings.pricing.standard;
       byId('setPriceAcademic').value = settings.pricing.academic;
       byId('setPriceWeekly').value = settings.pricing.weekly;
-      byId('setHints').value = settings.seasonal_hints.join(', ');
+      byId('setHints').value = settings.seasonal_hints.join('; ');
       const select = byId('setAiModel');
       const models = aiModels.includes(settings.ai_config.model) ? aiModels : [settings.ai_config.model, ...aiModels];
       select.replaceChildren(...models.map((model) => {
