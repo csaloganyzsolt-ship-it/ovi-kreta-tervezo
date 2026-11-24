@@ -4,8 +4,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const telemetryService = require('../services/telemetryService');
-const analyticsService = require('../services/analyticsService');
+const telemetryService = require('../backend/services/telemetryService');
+const analyticsService = require('../backend/services/analyticsService');
 
 test('Telemetry: Device type detection', () => {
   assert.strictEqual(telemetryService.detectDeviceType(0), null);

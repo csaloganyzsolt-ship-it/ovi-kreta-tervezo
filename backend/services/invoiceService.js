@@ -120,7 +120,7 @@ ${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</
 }
 
 function storePath(env = process.env) {
-  return env.INVOICE_STORE_PATH || path.join(__dirname, '..', 'data', 'invoiced-sessions.json');
+  return env.INVOICE_STORE_PATH || path.join(__dirname, '..', '..', 'data', 'invoiced-sessions.json');
 }
 
 function storageDir(env = process.env) {

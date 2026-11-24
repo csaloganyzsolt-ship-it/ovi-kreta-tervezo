@@ -5,9 +5,9 @@
 // Egyetlen statikus fájllista: a server.js, a build scriptek és a check-site.js is innen dolgoznak.
 const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html', 'profil.html', 'leiratkozas.html', 'admin.html'];
 const SITE_ASSETS = [
-  'styles.css', 'site.js', 'theme-init.js', 'telemetry.js',
-  'tervezo-core.js', 'tervezo-academic.js', 'tervezo-form.js', 'tervezo-preview.js', 'tervezo-export.js',
-  'tervezo-generate.js', 'tervezo-paywall.js', 'tervezo-history.js', 'tervezo-init.js', 'barion-pixel.js', 'auth.js', 'profil.js', 'leiratkozas.js', 'admin.js',
+  'styles.css', 'js/site.js', 'js/theme-init.js', 'js/telemetry.js',
+  'js/tervezo-core.js', 'js/tervezo-academic.js', 'js/tervezo-form.js', 'js/tervezo-preview.js', 'js/tervezo-export.js',
+  'js/tervezo-generate.js', 'js/tervezo-paywall.js', 'js/tervezo-history.js', 'js/tervezo-init.js', 'js/barion-pixel.js', 'js/auth.js', 'js/profil.js', 'js/leiratkozas.js', 'js/admin.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
 ];
 const SEO_FILES = ['robots.txt', 'sitemap.xml'];

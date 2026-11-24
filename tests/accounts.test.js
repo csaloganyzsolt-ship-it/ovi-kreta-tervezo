@@ -2,10 +2,10 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { test } = require('node:test');
 const { makePayload, makePlan } = require('./fixtures');
-const server = require('../server');
-const planStore = require('../services/planStore');
-const supabase = require('../services/supabaseService');
-const authService = require('../services/authService');
+const server = require('../backend/server');
+const planStore = require('../backend/services/planStore');
+const supabase = require('../backend/services/supabaseService');
+const authService = require('../backend/services/authService');
 
 const ALICE = { id: '11111111-1111-4111-8111-111111111111', email: 'alice@example.com', email_confirmed_at: '2026-01-01T00:00:00Z' };
 const BOB = { id: '22222222-2222-4222-8222-222222222222', email: 'bob@example.com', email_confirmed_at: '2026-01-01T00:00:00Z' };
@@ -535,7 +535,7 @@ test('an archive failure stops the account deletion before anything is removed',
 });
 
 test('purgeExpiredArchives removes expired archives with their detached documents only', async (t) => {
-  const profileService = require('../services/profileService');
+  const profileService = require('../backend/services/profileService');
   const past = '2026-01-01T00:00:00.000Z';
   const future = new Date(Date.now() + 86400000).toISOString();
   const client = useClient(t, fakeAccounts([
@@ -607,8 +607,8 @@ test('the new account endpoints answer 503 without a Supabase client', async (t)
 });
 
 test('the account client files are shipped and the CSP allows the Supabase host', () => {
-  const { SITE_ASSETS, CONTENT_SECURITY_POLICY, SUPABASE_PUBLIC_URL, PAGES } = require('../services/siteConstants');
-  assert.ok(SITE_ASSETS.includes('auth.js') && SITE_ASSETS.includes('tervezo-history.js') && SITE_ASSETS.includes('profil.js'));
+  const { SITE_ASSETS, CONTENT_SECURITY_POLICY, SUPABASE_PUBLIC_URL, PAGES } = require('../backend/services/siteConstants');
+  assert.ok(SITE_ASSETS.includes('js/auth.js') && SITE_ASSETS.includes('js/tervezo-history.js') && SITE_ASSETS.includes('js/profil.js'));
   assert.ok(PAGES.includes('profil.html'));
   assert.match(CONTENT_SECURITY_POLICY, new RegExp(`connect-src[^;]*${SUPABASE_PUBLIC_URL.replace(/\./g, '\\.')}`));
 });
@@ -1198,7 +1198,7 @@ test('Turnstile: the site key loads the Cloudflare script on demand and every au
   for (const name of ['index.html', 'tervezo.html', 'profil.html']) {
     assert.match(readPage(name), /<div id="authCaptcha" class="auth-captcha" hidden><\/div>/, name);
   }
-  const { CONTENT_SECURITY_POLICY } = require('../services/siteConstants');
+  const { CONTENT_SECURITY_POLICY } = require('../backend/services/siteConstants');
   assert.match(CONTENT_SECURITY_POLICY, /script-src[^;]*https:\/\/challenges\.cloudflare\.com/);
   assert.match(CONTENT_SECURITY_POLICY, /frame-src[^;]*https:\/\/challenges\.cloudflare\.com/);
 });
@@ -1456,12 +1456,12 @@ test('the unsubscribe call is allowed from the production frontend origin and th
   const base = await listen(t);
   const preflight = await fetch(`${base}/api/newsletter/unsubscribe`, { method: 'OPTIONS', headers: { Origin: 'https://ovitervezo.hu', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } });
   assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://ovitervezo.hu');
-  const { PAGES, SITE_ASSETS } = require('../services/siteConstants');
-  assert.ok(PAGES.includes('leiratkozas.html') && SITE_ASSETS.includes('leiratkozas.js'));
+  const { PAGES, SITE_ASSETS } = require('../backend/services/siteConstants');
+  assert.ok(PAGES.includes('leiratkozas.html') && SITE_ASSETS.includes('js/leiratkozas.js'));
   const page = await fetch(`${base}/leiratkozas.html`);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Leiratkozás a hírlevélről/);
-  assert.equal((await fetch(`${base}/leiratkozas.js`)).status, 200);
+  assert.equal((await fetch(`${base}/js/leiratkozas.js`)).status, 200);
 });
 
 test('the registration tab offers an unchecked newsletter checkbox and passes the choice to signUp', async (t) => {
@@ -1601,7 +1601,7 @@ test('leiratkozas.html reports a server error and can retry', async (t) => {
 
 test('leiratkozas.html is a noindex page in the brand design without inline scripts', () => {
   const fs = require('node:fs');
-  const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'leiratkozas.html'), 'utf8');
+  const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'leiratkozas.html'), 'utf8');
   assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
   assert.match(html, /<link rel="stylesheet" href="styles\.css"/);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg"/);
@@ -1613,7 +1613,7 @@ const GUEST_TOKEN = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
 test('guest newsletter signup is an upsert that reactivates unsubscribed guests and rejects bad e-mails', async (t) => {
   const client = useClient(t, fakeAccounts([], { newsletter_guests: [{ email: 'vendeg@example.com', name: 'Régi', newsletter_token: GUEST_TOKEN, unsubscribed: true }] }));
-  const profileService = require('../services/profileService');
+  const profileService = require('../backend/services/profileService');
   await profileService.subscribeGuest({ email: 'Vendeg@Example.com', name: 'Új Név' });
   await profileService.subscribeGuest({ email: 'masik@example.com', name: '' });
   const [first, second] = client.tables.newsletter_guests;

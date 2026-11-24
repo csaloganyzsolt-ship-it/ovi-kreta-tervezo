@@ -7,11 +7,11 @@ const docxLib = require('docx');
 const {
   makePayload, makeAcademicPayload, makeAcademicResponse, makeThematicPayload, makeThematicResponse, readPage
 } = require('./fixtures');
-const server = require('../server');
-const academicPlan = require('../services/academicPlan');
-const planStore = require('../services/planStore');
-const mailService = require('../services/mailService');
-const { validateGeneratePayload } = require('../services/generateValidation');
+const server = require('../backend/server');
+const academicPlan = require('../backend/services/academicPlan');
+const planStore = require('../backend/services/planStore');
+const mailService = require('../backend/services/mailService');
+const { validateGeneratePayload } = require('../backend/services/generateValidation');
 const { installPdfMake, readPdf } = require('./pdf-helpers');
 
 const html = readPage('tervezo.html');

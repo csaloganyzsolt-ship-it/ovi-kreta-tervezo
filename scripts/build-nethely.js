@@ -8,9 +8,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { addVersion, buildVersion } = require('./cache-bust');
 const { copyAssets } = require('./copy-assets');
-const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISHABLE_KEY, barionPixelId, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../services/siteConstants');
+const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISHABLE_KEY, barionPixelId, PAGES, SITE_ASSETS, SEO_FILES, publicCompany, applyCompanyToHtml } = require('../backend/services/siteConstants');
 
 const root = path.join(__dirname, '..');
+const frontend = path.join(root, 'frontend');
 const out = path.join(root, 'dist-nethely');
 const apiBaseUrl = String(process.env.API_BASE_URL || 'https://ovi-kreta-tervezo-api.onrender.com').trim().replace(/\/+$/, '');
 const version = buildVersion();
@@ -22,6 +23,7 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBaseUrl)) {
 
 fs.rmSync(out, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
+fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 
 // Megbocsátó beolvasás: a teljes meta címkét, a "google-site-verification=" előtagot, idézőjeleket és szóközöket is lecsupaszítja a tiszta tokenre.
 function cleanVerificationToken(raw) {
@@ -43,12 +45,12 @@ function applySiteVerification(html) {
 
 // Mindkét oldal relatív hivatkozásokat használ (tervezo.html, styles.css, tervezo-*.js, config.js), ezért bármilyen gyökérben működik.
 for (const file of [...SEO_FILES, ...SITE_ASSETS]) {
-  fs.copyFileSync(path.join(root, file), path.join(out, file));
+  fs.copyFileSync(path.join(frontend, file), path.join(out, file));
 }
 for (const page of PAGES) {
-  fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(applySiteVerification(fs.readFileSync(path.join(root, page), 'utf8'))), version));
+  fs.writeFileSync(path.join(out, page), addVersion(applyCompanyToHtml(applySiteVerification(fs.readFileSync(path.join(frontend, page), 'utf8'))), version));
 }
-copyAssets(root, out);
+copyAssets(frontend, out);
 
 const config = {
   apiBaseUrl,
@@ -59,7 +61,7 @@ const config = {
   SUPABASE_PUBLISHABLE_KEY,
   company: { ...publicCompany(), email: SUPPORT_EMAIL, stripeTestMode: testMode },
 };
-fs.writeFileSync(path.join(out, 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
+fs.writeFileSync(path.join(out, 'js', 'config.js'), `window.APP_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
 fs.copyFileSync(path.join(root, '.htaccess'), path.join(out, '.htaccess'));
 

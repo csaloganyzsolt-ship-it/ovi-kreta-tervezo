@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
-const stripeService = require('../services/stripeService');
-const invoiceService = require('../services/invoiceService');
-const mailService = require('../services/mailService');
+const stripeService = require('../backend/services/stripeService');
+const invoiceService = require('../backend/services/invoiceService');
+const mailService = require('../backend/services/mailService');
 const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const devEnv = { BASE_URL: 'https://ovitervezo.hu' };
@@ -67,7 +67,7 @@ test('invoice errors from Számlázz.hu are surfaced', async () => {
 });
 
 test('webhook rejects calls without valid configuration or signature', async () => {
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const saved = {};
   for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'NODE_ENV']) { saved[key] = process.env[key]; delete process.env[key]; }
   const server = app.listen(0);
@@ -205,7 +205,7 @@ test('signed checkout.session.completed webhook issues the invoice with the new 
   for (const [k, v] of Object.entries(set)) { saved[k] = process.env[k]; process.env[k] = v; }
   const realFetch = global.fetch;
   let sentXml = '';
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const server = app.listen(0);
   const port = server.address().port;
   global.fetch = async (url, options) => {
@@ -278,7 +278,7 @@ test('invoice request disables Számlázz.hu mailing and asks for the PDF; the P
 });
 
 test('one combined purchase email carries the plan files and the invoice PDF', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   let message;
   const transport = { sendMail: async (m) => { message = m; return { messageId: 'x' }; } };
   const attachments = mailService.sanitizeAttachments([
@@ -446,7 +446,7 @@ test('invoice shows a short friendly order number instead of the Stripe session 
   const xml = invoiceService.buildInvoiceXml({ orderId: sessionId, created, plan: 'daily', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
   assert.match(xml, /<rendelesSzam>OVI-261108-7TTU12<\/rendelesSzam>/);
   assert.doesNotMatch(xml, /cs_live_/);
-  const { buildEmailContent } = require('../services/mailService');
+  const { buildEmailContent } = require('../backend/services/mailService');
   const mail = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, orderNumber: 'OVI-261108-7TTU12' }, {});
   assert.match(mail.html, /OVI-261108-7TTU12/);
   assert.match(mail.text, /Rendelésszám: OVI-261108-7TTU12/);
@@ -504,7 +504,7 @@ test('footer has three organised columns and checkout modal has the new title', 
 });
 
 test('CORS allows ovitervezo.hu, www and localhost but rejects other origins', () => {
-  const { corsOrigin } = require('../server');
+  const { corsOrigin } = require('../backend/server');
   const check = (origin, env = {}) => { let allowed; corsOrigin(origin, (_e, ok) => { allowed = ok; }, env); return allowed; };
   assert.equal(check('https://ovitervezo.hu'), true);
   assert.equal(check('https://www.ovitervezo.hu'), true);
@@ -521,9 +521,9 @@ test('Nethely build contains only static files and points to the Render API', ()
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, API_BASE_URL: 'https://api.example.onrender.com' } });
   const dir = path.join(__dirname, '..', 'dist-nethely');
   const files = fs.readdirSync(dir).sort();
-  assert.deepEqual(files, ['.htaccess', 'admin.html', 'admin.js', 'assets', 'auth.js', 'barion-pixel.js', 'config.js', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'leiratkozas.html', 'leiratkozas.js', 'logo.svg', 'profil.html', 'profil.js', 'robots.txt', 'site.js', 'sitemap.xml', 'styles.css', 'telemetry.js', 'tervezo-academic.js', 'tervezo-core.js', 'tervezo-export.js', 'tervezo-form.js', 'tervezo-generate.js', 'tervezo-history.js', 'tervezo-init.js', 'tervezo-paywall.js', 'tervezo-preview.js', 'tervezo.html', 'theme-init.js']);
+  assert.deepEqual(files, ['.htaccess', 'admin.html', 'assets', 'ertekeles.html', 'favicon.ico', 'favicon.svg', 'index.html', 'js', 'leiratkozas.html', 'logo.svg', 'profil.html', 'robots.txt', 'sitemap.xml', 'styles.css', 'tervezo.html']);
   assert.ok(fs.existsSync(path.join(dir, 'assets', 'og-preview.png')));
-  const config = fs.readFileSync(path.join(dir, 'config.js'), 'utf8');
+  const config = fs.readFileSync(path.join(dir, 'js', 'config.js'), 'utf8');
   assert.match(config, /"apiBaseUrl": "https:\/\/api\.example\.onrender\.com"/);
   assert.doesNotMatch(config, /sk_|whsec_|GEMINI/);
 });
@@ -549,21 +549,21 @@ test('both builds keep the paywall on, so GitHub Pages is paid like production a
   const path = require('node:path');
   const cwd = path.join(__dirname, '..');
   execFileSync('node', ['scripts/build-pages.js'], { cwd });
-  const staging = fs.readFileSync(path.join(cwd, 'dist-pages', 'config.js'), 'utf8');
+  const staging = fs.readFileSync(path.join(cwd, 'dist-pages', 'js', 'config.js'), 'utf8');
   assert.match(staging, /"paywallEnabled": true/);
   assert.doesNotMatch(staging, /testDelivery/);
   assert.match(fs.readFileSync(path.join(cwd, 'dist-pages', 'robots.txt'), 'utf8'), /Disallow: \//);
   execFileSync('node', ['scripts/build-nethely.js'], { cwd });
-  assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /"paywallEnabled": true/);
-  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'config.js'), 'utf8'), /testDelivery/);
+  assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', 'js', 'config.js'), 'utf8'), /"paywallEnabled": true/);
+  assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'js', 'config.js'), 'utf8'), /testDelivery/);
   const html = readPage('tervezo.html');
   assert.ok(!html.includes('testDeliver'), 'a tesztkézbesítés felülete kivezetve');
-  assert.equal(require('../routes/payment').testDeliver, undefined);
-  assert.equal(require('../server').isFreeTestOrigin, undefined);
+  assert.equal(require('../backend/routes/payment').testDeliver, undefined);
+  assert.equal(require('../backend/server').isFreeTestOrigin, undefined);
 });
 
 test('mail template is warm, lists attachments and carries the legal footer', () => {
-  const { buildEmailContent } = require('../services/mailService');
+  const { buildEmailContent } = require('../backend/services/mailService');
   const daily = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, {});
   assert.match(daily.html, /Kedves Kolléganő!/);
   assert.doesNotMatch(daily.html, /🌱|📚|✨|💚|🌿/);
@@ -586,7 +586,7 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
 });
 
 test('sheets webhook payload has all purchase fields and failures never throw', async () => {
-  const sheets = require('../services/sheetsService');
+  const sheets = require('../backend/services/sheetsService');
   const session = { id: 'cs_live_a1oHW2xOQfzz8abc7TTU12', created: Date.UTC(2026, 10, 10, 8) / 1000, metadata: { plan: 'weekly_detailed', title: 'Őszi erdő' } };
   const customer = { name: 'Teszt Elek', email: 'a@b.hu', zip: '9153', city: 'Öttevény', address: 'Arany J. u. 10.' };
   const payload = sheets.buildPayload({ session, invoiceNumber: 'OVITE-2026-1', customer }, new Date(Date.UTC(2026, 10, 10, 8, 5)));
@@ -613,7 +613,7 @@ test('sheets webhook payload has all purchase fields and failures never throw', 
 });
 
 test('purchase e-mail is sent to the customer without BCC copying plan attachments to admin', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
   const args = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF') };
@@ -624,8 +624,8 @@ test('purchase e-mail is sent to the customer without BCC copying plan attachmen
 });
 
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {
-  const landing = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const planner = fs.readFileSync(path.join(__dirname, '..', 'tervezo.html'), 'utf8');
+  const landing = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
+  const planner = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'tervezo.html'), 'utf8');
   for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Átlátható, szakmai felépítés', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
   assert.equal((landing.match(/href="tervezo\.html"/g) || []).length >= 2, true);
   for (const absent of ['id="wizardList"', 'id="generateBtn"', 'id="previewPanel"', 'id="checkoutModal"', 'html2pdf']) assert.ok(!landing.includes(absent), `landing: ${absent}`);
@@ -641,9 +641,9 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
     assert.match(page, /href="https:\/\/www\.cloudflare\.com\/website-terms\/"/);
     assert.doesNotMatch(page, /reCAPTCHA|policies\.google\.com/);
   }
-  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'styles.css'), 'utf8');
   assert.doesNotMatch(css, /grecaptcha|recaptcha/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'site.js'), 'utf8'), /Cloudflare, Inc\. \(USA\) – Turnstile/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'site.js'), 'utf8'), /Cloudflare, Inc\. \(USA\) – Turnstile/);
   for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
@@ -727,7 +727,7 @@ test('both builds ship both pages with every local reference resolvable and the 
         assert.ok(fs.existsSync(path.join(cwd, dir, decodeURI(ref.split('?')[0]))), `${dir}/${page}: hiányzó fájl ${ref}`);
       }
       assert.doesNotMatch(html, /<!--GOOGLE_SITE_VERIFICATION-->/);
-      for (const f of ['styles.css', 'site.js', 'config.js', 'favicon.svg', 'favicon.ico']) assert.match(html, new RegExp(`(?:href|src)="${f.replace('.', '\\.')}\\?v=\\d{12}"`), `${dir}/${page}: ${f} verzió nélkül`);
+      for (const f of ['styles.css', 'js/site.js', 'js/config.js', 'favicon.svg', 'favicon.ico']) assert.match(html, new RegExp(`(?:href|src)="${f.replace('.', '\\.')}\\?v=\\d{12}"`), `${dir}/${page}: ${f} verzió nélkül`);
       assert.doesNotMatch(html, /(?:cdn|stripe)[^"]*\?v=/);
       assert.doesNotMatch(html, /href="(?:index|tervezo|ertekeles)\.html\?v=/);
     }
@@ -742,7 +742,7 @@ test('both builds ship both pages with every local reference resolvable and the 
 });
 
 test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO brief', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const blocks = [...html.matchAll(/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
   const faq = blocks.find((b) => b['@type'] === 'FAQPage');
   const app = blocks.find((b) => b['@type'] === 'SoftwareApplication');
@@ -760,7 +760,7 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
 });
 
 test('both pages use the OT logo and favicon, and both builds ship the icon files', () => {
-  const root = path.join(__dirname, '..');
+  const root = path.join(__dirname, '..', 'frontend');
   for (const page of ['index.html', 'tervezo.html']) {
     const html = fs.readFileSync(path.join(root, page), 'utf8');
     assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg"/);
@@ -773,7 +773,7 @@ test('both pages use the OT logo and favicon, and both builds ship the icon file
 });
 
 test('purchase e-mails with and without an invoice embed the OT logo as a CID image in the mint brand header', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return { response: 'ok' }; } };
   const base = { to: 'v@b.hu', plan: 'daily', attachments: [{ filename: 'a.pdf', content: Buffer.from('x') }] };
@@ -808,7 +808,7 @@ test('Nethely .htaccess keeps HTML uncached and versioned assets immutable', () 
 });
 
 test('the webhook-side admin notification carries the invoice PDF', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
   const result = await mailService.sendAdminNotification({ customer: { name: 'Teszt', email: 'v@b.hu' }, plan: 'daily', orderNumber: 'OVITE-1', invoiceNumber: 'E-1', invoicePdf: Buffer.from('%PDF') }, { transport, env: { SMTP_HOST: 'smtp.test' } });
@@ -818,7 +818,7 @@ test('the webhook-side admin notification carries the invoice PDF', async () => 
 });
 
 test('feedback signature generation and verification with HMAC-SHA256', () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const email = 'teszt.ovono@example.com';
   const sig = mailService.createFeedbackSignature(email);
   assert.equal(typeof sig, 'string');
@@ -832,7 +832,7 @@ test('feedback signature generation and verification with HMAC-SHA256', () => {
 });
 
 test('purchase e-mail contains discrete 5-star rating bar with Unicode stars, documentId and HMAC link', () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const to = 'vasarlo@example.com';
   const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to, documentId: 'gen_test_doc_123' }, {});
   assert.match(mail.html, /Hogy sikerült a tervezet\? Kattints a csillagokra/);
@@ -843,7 +843,7 @@ test('purchase e-mail contains discrete 5-star rating bar with Unicode stars, do
 });
 
 test('sendAdminErrorAlert sends technical alert to admin on critical failure', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
   const env = { SMTP_HOST: 'smtp.test', ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' };
@@ -873,7 +873,7 @@ test('sendAdminErrorAlert sends technical alert to admin on critical failure', a
 });
 
 test('sendFeedbackNotification sends notification to admin with customer replyTo and zero emojis', async () => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const sent = [];
   const transport = { sendMail: async (m) => { sent.push(m); return {}; } };
   const env = { SMTP_HOST: 'smtp.test', ADMIN_NOTIFICATION_EMAIL: 'admin@ovitervezo.hu' };
@@ -894,8 +894,8 @@ test('sendFeedbackNotification sends notification to admin with customer replyTo
 });
 
 test('POST /api/feedback validates HMAC signature, rating, comment and sends email', async () => {
-  const { app, feedbackLimiter } = require('../server');
-  const mailService = require('../services/mailService');
+  const { app, feedbackLimiter } = require('../backend/server');
+  const mailService = require('../backend/services/mailService');
   const email = 'ertekeles.teszt@example.com';
   const sig = mailService.createFeedbackSignature(email, process.env);
   const server = app.listen(0);
@@ -964,7 +964,7 @@ test('POST /api/feedback validates HMAC signature, rating, comment and sends ema
   }
 });
 
-const SHARED = require('../services/siteConstants');
+const SHARED = require('../backend/services/siteConstants');
 const ROOT = require('node:path').join(__dirname, '..');
 
 test('one shared source defines the public support e-mail and Turnstile site key', () => {
@@ -976,17 +976,17 @@ test('one shared source defines the public support e-mail and Turnstile site key
 
 test('no file still carries the old customer-service address', () => {
   const fs = require('node:fs');
-  for (const file of ['index.html', 'tervezo.html', 'site.js', 'server.js', 'services/invoiceService.js', 'services/mailService.js', 'config.js']) {
+  for (const file of ['frontend/index.html', 'frontend/tervezo.html', 'frontend/js/site.js', 'backend/server.js', 'backend/services/invoiceService.js', 'backend/services/mailService.js', 'frontend/js/config.js']) {
     assert.doesNotMatch(fs.readFileSync(require('node:path').join(ROOT, file), 'utf8'), /csb-vill\.com/, file);
   }
 });
 
 test('static footers and site.js fallback use the shared support e-mail', () => {
   const fs = require('node:fs');
-  for (const file of ['index.html', 'tervezo.html']) {
+  for (const file of ['frontend/index.html', 'frontend/tervezo.html']) {
     assert.match(fs.readFileSync(require('node:path').join(ROOT, file), 'utf8'), /<a id="footerEmail" href="mailto:info@ovitervezo\.hu">info@ovitervezo\.hu<\/a>/, file);
   }
-  const site = fs.readFileSync(require('node:path').join(ROOT, 'site.js'), 'utf8');
+  const site = fs.readFileSync(require('node:path').join(ROOT, 'frontend', 'js', 'site.js'), 'utf8');
   assert.match(site, new RegExp(`const DEFAULT_SUPPORT_EMAIL = '${SHARED.SUPPORT_EMAIL}';`));
   assert.doesNotMatch(site, /OVITERVEZO_CONFIG/);
 });
@@ -999,23 +999,23 @@ test('every config source emits the same turnstile key and support e-mail under 
   const evalConfig = (code) => { const sandbox = { window: {} }; vm.runInNewContext(code, sandbox); return sandbox.window; };
   for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely'], ['scripts/build-pages.js', 'dist-pages']]) {
     execFileSync('node', [script], { cwd: ROOT });
-    const code = fs.readFileSync(path.join(ROOT, dir, 'config.js'), 'utf8');
+    const code = fs.readFileSync(path.join(ROOT, dir, 'js', 'config.js'), 'utf8');
     assert.doesNotMatch(code, /OVITERVEZO_CONFIG/);
     const cfg = evalConfig(code).APP_CONFIG;
     assert.equal(cfg.turnstileSiteKey, script.includes('pages') ? '' : SHARED.TURNSTILE_SITE_KEY, script);
     assert.equal(cfg.barionPixelId, 'BP-U0p5Sp7I1Q-EF', `${script}: Barion Pixel azonosító`);
     assert.equal(cfg.company.email, SHARED.SUPPORT_EMAIL, script);
   }
-  const local = evalConfig(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'));
+  const local = evalConfig(fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'config.js'), 'utf8'));
   assert.equal(local.APP_CONFIG.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY);
   assert.equal(local.APP_CONFIG.company.email, SHARED.SUPPORT_EMAIL);
   assert.equal(local.OVITERVEZO_CONFIG, undefined);
 
-  const { start } = require('../server');
+  const { start } = require('../backend/server');
   const server = start(0);
   try {
     await new Promise((resolve) => server.once('listening', resolve));
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/config.js`);
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/js/config.js`);
     const served = evalConfig(await res.text());
     assert.equal(served.APP_CONFIG.turnstileSiteKey, SHARED.TURNSTILE_SITE_KEY);
     assert.equal(served.APP_CONFIG.company.email, SHARED.SUPPORT_EMAIL);
@@ -1033,17 +1033,17 @@ test('the planner reads the Turnstile key only from APP_CONFIG', () => {
 
 test('static HTML carries no inline styles except the JS-toggled display:none ones', () => {
   for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
-    const html = fs.readFileSync(path.join(ROOT, page), 'utf8').replace(/<script\b[\s\S]*?<\/script>/g, '');
+    const html = fs.readFileSync(path.join(ROOT, 'frontend', page), 'utf8').replace(/<script\b[\s\S]*?<\/script>/g, '');
     const inline = [...html.matchAll(/\sstyle="([^"]*)"/g)].map((m) => m[1]);
     for (const style of inline) assert.match(style, /^display:\s*none;$/, `${page}: ${style}`);
   }
-  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'frontend', 'styles.css'), 'utf8');
   assert.equal((css.match(/@media print/g) || []).length, 1, 'egyetlen @media print blokk');
 });
 
 test('the synchronous theme bootstrap lives in theme-init.js and is shipped everywhere', async () => {
   const { execFileSync } = require('node:child_process');
-  const script = fs.readFileSync(path.join(ROOT, 'theme-init.js'), 'utf8');
+  const script = fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'theme-init.js'), 'utf8');
   for (const [stored, expected] of [['dark', 'dark'], ['light', 'light'], [null, 'light']]) {
     const dom = new JSDOM('<!doctype html><html><head></head></html>', { url: 'http://localhost/', runScripts: 'outside-only' });
     if (stored) dom.window.localStorage.setItem('oviKretaTheme', stored);
@@ -1052,24 +1052,24 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
     dom.window.close();
   }
   for (const page of ['index.html', 'tervezo.html']) {
-    const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, 'frontend', page), 'utf8');
     const head = html.slice(0, html.indexOf('</head>'));
-    assert.ok(head.indexOf('<script src="theme-init.js"></script>') !== -1 && head.indexOf('<script src="theme-init.js"></script>') < head.indexOf('rel="stylesheet"'), `${page}: theme-init.js a stíluslap előtt`);
+    assert.ok(head.indexOf('<script src="js/theme-init.js"></script>') !== -1 && head.indexOf('<script src="js/theme-init.js"></script>') < head.indexOf('rel="stylesheet"'), `${page}: js/theme-init.js a stíluslap előtt`);
     assert.doesNotMatch(head, /<script>[\s\S]*oviKretaTheme/, `${page}: nincs inline téma-script`);
   }
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
   execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
   for (const dir of ['dist-nethely', 'dist-pages']) {
-    assert.ok(fs.existsSync(path.join(ROOT, dir, 'theme-init.js')), `${dir}: theme-init.js hiányzik`);
+    assert.ok(fs.existsSync(path.join(ROOT, dir, 'js', 'theme-init.js')), `${dir}: theme-init.js hiányzik`);
     for (const page of ['index.html', 'tervezo.html']) {
-      assert.match(fs.readFileSync(path.join(ROOT, dir, page), 'utf8'), /<script src="theme-init\.js\?v=\d{12}"><\/script>/, `${dir}/${page}`);
+      assert.match(fs.readFileSync(path.join(ROOT, dir, page), 'utf8'), /<script src="js\/theme-init\.js\?v=\d{12}"><\/script>/, `${dir}/${page}`);
     }
   }
-  const { start } = require('../server');
+  const { start } = require('../backend/server');
   const server = start(0);
   try {
     await new Promise((resolve) => server.once('listening', resolve));
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/theme-init.js`);
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/js/theme-init.js`);
     assert.equal(res.status, 200);
     assert.equal(await res.text(), script);
   } finally {
@@ -1080,25 +1080,25 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
 const PLANNER_SCRIPTS = ['core', 'academic', 'form', 'preview', 'export', 'generate', 'paywall', 'history', 'init'].map((name) => `tervezo-${name}.js`);
 
 test('tervezo.html loads the planner scripts in order and the single static list covers every shipped file', async () => {
-  const { SITE_ASSETS, PAGES } = require('../services/siteConstants');
-  const html = fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8');
-  const loaded = [...html.matchAll(/<script src="(tervezo-[a-z]+\.js)"><\/script>/g)].map((m) => m[1]);
+  const { SITE_ASSETS, PAGES } = require('../backend/services/siteConstants');
+  const html = fs.readFileSync(path.join(ROOT, 'frontend', 'tervezo.html'), 'utf8');
+  const loaded = [...html.matchAll(/<script src="js\/(tervezo-[a-z]+\.js)"><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(loaded, PLANNER_SCRIPTS);
   assert.doesNotMatch(html.replace(/<script src=[^>]*><\/script>/g, ''), /<script\b/, 'nincs beágyazott script a tervezőben');
-  assert.deepEqual(fs.readdirSync(ROOT).filter((f) => /^tervezo-.*\.js$/.test(f)).sort(), [...PLANNER_SCRIPTS].sort());
-  for (const f of PLANNER_SCRIPTS) assert.ok(SITE_ASSETS.includes(f), `${f} hiányzik a közös listáról`);
+  assert.deepEqual(fs.readdirSync(path.join(ROOT, 'frontend', 'js')).filter((f) => /^tervezo-.*\.js$/.test(f)).sort(), [...PLANNER_SCRIPTS].sort());
+  for (const f of PLANNER_SCRIPTS) assert.ok(SITE_ASSETS.includes(`js/${f}`), `${f} hiányzik a közös listáról`);
 
   const { execFileSync } = require('node:child_process');
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
   execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
   for (const dir of ['dist-nethely', 'dist-pages']) {
     const built = fs.readFileSync(path.join(ROOT, dir, 'tervezo.html'), 'utf8');
-    const versioned = [...built.matchAll(/<script src="(tervezo-[a-z]+\.js)\?v=\d{12}"><\/script>/g)].map((m) => m[1]);
+    const versioned = [...built.matchAll(/<script src="js\/(tervezo-[a-z]+\.js)\?v=\d{12}"><\/script>/g)].map((m) => m[1]);
     assert.deepEqual(versioned, PLANNER_SCRIPTS, `${dir}: verziózott tervezo-*.js`);
     for (const file of [...SITE_ASSETS, ...PAGES]) assert.ok(fs.existsSync(path.join(ROOT, dir, file)), `${dir}: ${file} hiányzik`);
   }
 
-  const { start } = require('../server');
+  const { start } = require('../backend/server');
   const server = start(0);
   try {
     await new Promise((resolve) => server.once('listening', resolve));

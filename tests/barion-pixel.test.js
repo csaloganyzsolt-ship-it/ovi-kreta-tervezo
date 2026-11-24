@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'barion-pixel.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'barion-pixel.js'), 'utf8');
 
 function pixelWindow({ ba, pathname = '/' } = {}) {
   const dom = new JSDOM('<!doctype html><body></body>', { url: `http://localhost${pathname}`, runScripts: 'outside-only' });
@@ -69,9 +69,9 @@ test('Full Barion Pixel: blokkolt Pixel (nincs bp) vagy hibát dobó bp esetén 
 });
 
 test('Full Barion Pixel: CSP engedi a pixel.barion.com szkript-, kapcsolat-, keret- és képkéréseket, az adatvédelmi tájékoztató említi', () => {
-  const { CONTENT_SECURITY_POLICY } = require('../services/siteConstants');
+  const { CONTENT_SECURITY_POLICY } = require('../backend/services/siteConstants');
   for (const directive of ['script-src', 'connect-src', 'frame-src', 'img-src']) {
     assert.match(CONTENT_SECURITY_POLICY.split(';').find((d) => d.trim().startsWith(directive)), /https:\/\/pixel\.barion\.com/, directive);
   }
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'site.js'), 'utf8'), /Teljes \(Full\) Barion Pixel/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'site.js'), 'utf8'), /Teljes \(Full\) Barion Pixel/);
 });

@@ -31,7 +31,7 @@ if (pids.length) {
 console.log('Manual test restart: restarting only the backend on port 4000.');
 console.log('If you also need the static frontend, run: npm run serve');
 
-const child = spawn('node', ['-r', 'dotenv/config', 'server.js'], {
+const child = spawn('node', ['-r', 'dotenv/config', 'backend/server.js'], {
   stdio: 'inherit',
   shell: false
 });

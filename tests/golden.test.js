@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
-const { buildPrompt } = require('../server');
+const { buildPrompt } = require('../backend/server');
 const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const GOLDEN_DIR = path.join(__dirname, 'golden');

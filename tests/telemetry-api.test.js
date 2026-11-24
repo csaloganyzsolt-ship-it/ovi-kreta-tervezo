@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
-const server = require('../server');
-const supabase = require('../services/supabaseService');
-const telemetry = require('../services/telemetryService');
+const server = require('../backend/server');
+const supabase = require('../backend/services/supabaseService');
+const telemetry = require('../backend/services/telemetryService');
 
 async function listen(t) {
   const instance = server.app.listen(0, '127.0.0.1');

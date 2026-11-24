@@ -6,12 +6,12 @@ const { once } = require('node:events');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
 const { makePayload, makePlan, readPage } = require('./fixtures');
-const server = require('../server');
-const planStore = require('../services/planStore');
-const stripeService = require('../services/stripeService');
-const invoiceService = require('../services/invoiceService');
-const mailService = require('../services/mailService');
-const coupons = require('../services/coupons');
+const server = require('../backend/server');
+const planStore = require('../backend/services/planStore');
+const stripeService = require('../backend/services/stripeService');
+const invoiceService = require('../backend/services/invoiceService');
+const mailService = require('../backend/services/mailService');
+const coupons = require('../backend/services/coupons');
 
 async function listen(t) {
   const instance = server.app.listen(0, '127.0.0.1');

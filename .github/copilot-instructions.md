@@ -1,47 +1,39 @@
-# OviTervező – Állandó Fejlesztési Irányelvek
+# OviTervező – Projekt és fejlesztési irányelvek
 
-## 1. Projekt Kontextus és Architektúra
-- **Kétoldalas felépítés:**
-  * `index.html`: Kizárólag a konverziós és SEO fogadóoldal (Hero, 3 lépés, előnykártyák, tevékenységi területek, GYIK, lábléc és jogi modálok). Itt alkalmazáskód NEM futhat.
-  * `tervezo.html`: A tényleges pedagógiai tervező webalkalmazás a 4 lépéses űrlappal, előnézettel és Paywall-kezeléssel.
-- **Backend:** Node.js / Express (`server.js`), amely Render.com-on fut, kiszolgálja az API végpontokat, és a Gemini API-t hívja (`gemini-3.1-pro-preview`).
-- **Infrastruktúra:** Statikus frontend a Nethely tárhelyen (`ovitervezo.hu`), automatikus CI/CD deploy GitHub Actions segítségével.
-- **Konfiguráció:** A frontend a dinamikusan injektált vagy kiszolgált `config.js` fájlból veszi a backend URL-jét (`apiBaseUrl`).
+## 1. Üzleti cél és termékek
+Az **OviTervező** (`ovitervezo.hu`, üzemeltető: Csalogány Zsolt egyéni vállalkozó) egy AI-alapú magyar óvodai és egyetemi pedagógiai tervezetkészítő webalkalmazás.
+- **5 támogatott termékcsomag** (`backend/services/pricing.js`):
+  1. `daily` – Napi óvodai tervezet
+  2. `weekly` – Heti óvodai keretterv
+  3. `weekly_detailed` – Heti komplex csomag (heti keretterv + választható napokra bontott részletes napi tervezetek)
+  4. `academic_daily` – Oktatási célú (hallgatói/egyetemi) napi foglalkozási terv (A4 álló, percre bontott 3 oszlopos táblázat, szakirodalmi hivatkozásokkal)
+  5. `academic_weekly` – Oktatási célú egyhetes tematikus terv (A4 fekvő, 7 oszlopos mátrix)
+- **Árazás és AI-beállítások:** Nem beégetett konstansokból, hanem a Supabase `system_settings` táblából töltődnek be (`GET /api/config`, `backend/services/settingsService.js`).
+- **Fizetés és számlázás:** Elsődleges fizetési mód a **Barion** (másodlagos/fallback: Stripe), automatikus e-számla kiállítás a **Számlázz.hu** API-n keresztül.
+- **Nyelv és tilalmak:** Minden felhasználói felület, hibaüzenet, e-mail és dokumentumszöveg magyar nyelvű. A generált tervezetekben és az új kódban TILOS a régi munkanév (`OviKréta`) vagy külső elektronikus naplórendszerek nevének használata.
 
-## 2. Arculat és Design Rendszer (Egységes Márka)
-- **Márkaszínek:** Letisztult mentazöld paletta (fő szín: `--primary` = `#3fae84` a `styles.css`-ben / pasztell menta kiemelések). Barna vagy narancssárga színek használata szigorúan tilos!
-- **Sötét és világos mód:** A `styles.css` közös CSS változókat (`:root` és `[data-theme="dark"]`) használ. Sötét módban a tervező és a főoldal azonos kontrasztos, sötét palettát és világosabb menta fókuszokat alkalmaz.
-- **Logó és Favicon:**
-  * Vektoros (SVG) "OT" monogram lekerekített sarkú mentazöld kártyán, mellette tipográfiai "OviTervező" felirat.
-  * Hivatkozások: `favicon.svg` és `favicon.ico` mindkét oldalon.
-- **Tranzakciós levelek (`services/mailService.js`):** A vásárlói visszaigazoló e-mail fejlécében diszkrét menta sáv és beágyazott CID csatolmányú "OT" logó szerepel. Narancssárga gomb vagy elem nem maradhat a levélben.
+## 2. Mappaszerkezet és architektúra
+- `backend/` – Node.js + Express (CommonJS):
+  - `server.js` (fő Express alkalmazás és `/api/generate`, `/api/config`, `/api/feedback`, `/api/telemetry`), `app.js` (Nethely Passenger belépési pont).
+  - `routes/` (`account.js`, `admin.js`, `payment.js`).
+  - `services/` (üzleti logika: AI, fizetés, számlázás, Supabase, levelezés, admin).
+  - `utils/` (`logger.js`, `rateLimits.js`).
+- `frontend/` – Vanilla HTML, CSS (`styles.css`) és klasszikus globális hatókörű JS fájlok (`frontend/js/`):
+  - **FONTOS:** A frontend JS fájlok **nem ES modulok** (`type="module"` nélkül, `<script src="js/...">` sorrendben töltődnek be, a felső szintű függvények/változók közös globális hatókörben élnek). A `tervezo.html` betöltési sorrendje kötött: `js/config.js` → `js/site.js` → `js/auth.js` → `js/tervezo-core.js` → `js/tervezo-academic.js` → `js/tervezo-form.js` → `js/tervezo-preview.js` → `js/tervezo-export.js` → `js/tervezo-generate.js` → `js/tervezo-paywall.js` → `js/tervezo-history.js` → `js/tervezo-init.js`.
+  - A `js/config.js` fejlesztéskor a repóban lévő fájl, a backend `/js/config.js` útvonala dinamikusan állítja elő; a Nethely build a `dist-nethely/js/config.js` fájlt generálja.
+  - Az új frontend fájlokat a `backend/services/siteConstants.js` `PAGES` / `SITE_ASSETS` listájába is fel kell venni (útvonal a `frontend/` gyökeréhez képest, pl. `js/site.js`), különben nem kerülnek be a buildbe és a backend nem szolgálja ki őket.
+  - A statikus kiszolgálás a backendben (`STATIC_ROOT = frontend/`) és a `scripts/build-nethely.js` / `build-pages.js` is a `frontend/` mappából dolgozik; a `.htaccess` a repó gyökerében marad, a build másolja a `dist-nethely/` mappába.
+  - A dokumentum-előnézet saját A4-es laptördelőt használ (`paginateDocument`), az exportok kliensoldalon készülnek (`pdfmake`, `docx`, `JSZip`).
+- `scripts/` – Build (`build-nethely.js`, `cache-bust.js`, `copy-assets.js`), oldalellenőrző (`check-site.js`) és fejlesztői segédszkriptek.
+- `supabase/migrations/` – Adatbázis sémák és RLS szabályok.
+- `tests/` – Node beépített test runner (`node --test`) + jsdom tesztek és `golden/` referenciafájlok.
+- `docs/` – Műszaki dokumentációk.
 
-## 3. Cache-Busting és Gyorsítótár Szabályzat
-- **Verziózás a build során (`scripts/cache-bust.js`):** A belső CSS, JS és médiafájlok (`styles.css`, `site.js`, `config.js`, ikonok) minden Nethely és GitHub Pages build során dinamikus `?v=ÉÉÉÉHHNNÓÓPP` időbélyeget kapnak a HTML-ben. A külső CDN linkeket és horgonyokat érintetlenül kell hagyni.
-- **Nethely `.htaccess`:**
-  * A HTML fájlokra kötelező a `Cache-Control: no-cache, no-store, must-revalidate` fejléc, hogy a belépési oldal mindig friss maradjon.
-  * A verziózott (`?v=`) statikus fájlok hatékonyan gyorsítótárazhatók (`immutable`).
-
-## 4. Keresőoptimalizálás (SEO) és Strukturált Adatok
-- **Meta címkék:** Az `index.html` célzott kulcsszavai: *óvodai tervezet*, *óvodai tervezet készítés*, *heti tervezet*, *foglalkozásterv minta*.
-- **Schema.org JSON-LD:** A `<head>` kötelezően tartalmazza az érvényes `SoftwareApplication` és a látható tartalommal szó szerint megegyező `FAQPage` blokkokat.
-- **Indexelési fájlok:** A `sitemap.xml` és a `robots.txt` a kiadási csomag részét képezi, a Nethely gyökérkönyvtárába kerül.
-
-## 5. Kötelező Munkafolyamat Minden Módosítás Végén (Deploy & Teszt)
-Minden feladat vagy kódmódosítás befejezése után az AI KÖTELES elvégezni az alábbi lépéseket:
-1. **Szintaxis és tesztellenőrzés:** Futtasd le a teszteket (`npm test`) és ellenőrizd a szintaxist (`node --check server.js`). Csak hibátlan, 100%-ban zöld kód mehet tovább!
-2. **Git Commit:** Készíts tiszta, leíró üzenetű commitot a módosításokról.
-3. **Automatikus feltöltés (Push):** Futtasd le a `git push origin main` parancsot, hogy a GitHub Actions CI lefusson (Nethely FTP és GitHub Pages deploy).
-4. **Jelentés:** Röviden közöld, hogy mi módosult, zöldek-e a tesztek, és sikeresen lefutott-e a pipeline.
-
-## 6. Minőségi és Biztonsági Szabályok
-- **Nincs csendes Fallback/Mock:** SOHA ne rejts el hibákat beégetett kamu táblázatsorokkal. Ha a backend vagy az API hibát dob, az jelenjen meg tisztán a felületen és a terminálban!
-- **Titkok védelme:** Titkos kulcs (`GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `SZAMLAZZ_KEY`, stb.) soha nem kerülhet be a frontend kódba vagy a git commitokba. A `build-nethely.js` toleránsan tisztítsa a `GOOGLE_SITE_VERIFICATION` tokent.
-- **Tervezetek szakmai nyelve:** Szigorúan tilos az elcsépelt, ismétlődő sablonok használata. Mindig életszerű, differenciált, a magyar óvodapedagógiai irányelveknek megfelelő tartalmat kell generálni.
-- **Adatvédelem (GDPR):** Gyermekek személyes adatait az űrlapon tilos bekérni vagy tárolni. A számlázási adatokat a számviteli törvény szerint 8 évig kell megőrizni.
-
-## 7. Fizetés, Számlázás és Szervizréteg
-- **Árazás (Szerver az igazságforrás):** Napi tervezet: bruttó 390 Ft, heti komplex csomag (heti keretterv + 5 napi részletes tervezet): bruttó 890 Ft. Egyszeri díj, nincs előfizetés.
-- **Fizetési kapu:** `services/stripeService.js` (Checkout Session). A webhook (`/api/webhook/stripe`) `express.raw` feldolgozást igényel a sima `express.json` előtt.
-- **Számlázás:** `services/invoiceService.js` (Számlázz.hu Agent XML), számla előtag: `OVITE`, bizonylatszám és tiszta rendelésszám generálás. A PDF számlák archiválása és továbbítása közös e-mailben történik a megrendelt Word és PDF fájlokkal.
-- **Zárolt előnézet:** Fizetés előtt a foglalkozásmenet és a részletes módszerek nem kerülnek a DOM-ba; feloldás után az anyag szerkeszthető és letölthető.
+## 3. Kötelező fejlesztési és biztonsági szabályok
+1. **Titkok és konfiguráció:** Soha ne írj API-kulcsot, jelszót vagy fallback titkot a kódba. Minden új környezeti változót dokumentálj a `.env.example` fájlban is.
+2. **Fizetőfal és árak:** A fizetőfal zárolását (`shouldLockPlan`) és a csomagárakat kizárólag a backend határozhatja meg; a kliensoldali értékekben soha ne bízz meg.
+3. **XSS és injektálás elleni védelem:** Minden AI-választ és felhasználói bemenetet `escapeHtml` / `formatTableCell` / `escapeXml` függvényen át jeleníts meg.
+4. **Hiba- és adatkezelés:** Ne nyelj el hibákat csendben (üres objektummal visszatérve). Adatbázis-változtatáshoz mindig készíts új SQL migrációs fájlt a `supabase/migrations/` mappába RLS szabályokkal.
+5. **Ellenőrzés minden módosítás után:** Bármilyen fájlmozgatás, útvonal-módosítás vagy logikai változtatás után kötelező futtatni:
+   - `npm test`
+   - `node scripts/build-nethely.js`

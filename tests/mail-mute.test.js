@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 require('./fixtures');
 const nodemailer = require('nodemailer');
-const mail = require('../services/mailService');
+const mail = require('../backend/services/mailService');
 
 const smtp = { SMTP_HOST: 'smtp.invalid.example', SMTP_PORT: '587', SMTP_USER: 'u', SMTP_PASS: 'p', MAIL_FROM: 'OviTervező <info@example.com>' };
 const purchase = { to: 'vevo@example.com', plan: 'daily', attachments: [{ filename: 'a.docx', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF'), invoiceName: 'szamla.pdf', title: 'Téma', orderNumber: 'OVITE-1' };

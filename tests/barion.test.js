@@ -5,12 +5,12 @@ const { once } = require('node:events');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
 const { makePayload, makePlan, makeAcademicPayload, makeAcademicResponse, makeThematicPayload, makeThematicResponse, readPage } = require('./fixtures');
-const server = require('../server');
-const planStore = require('../services/planStore');
-const stripeService = require('../services/stripeService');
-const invoiceService = require('../services/invoiceService');
-const { PRODUCTS, resolveProductKey, productFor } = require('../services/pricing');
-const { barionPixelId, DEFAULT_BARION_PIXEL_ID, CONTENT_SECURITY_POLICY } = require('../services/siteConstants');
+const server = require('../backend/server');
+const planStore = require('../backend/services/planStore');
+const stripeService = require('../backend/services/stripeService');
+const invoiceService = require('../backend/services/invoiceService');
+const { PRODUCTS, resolveProductKey, productFor } = require('../backend/services/pricing');
+const { barionPixelId, DEFAULT_BARION_PIXEL_ID, CONTENT_SECURITY_POLICY } = require('../backend/services/siteConstants');
 
 const ROOT = path.join(__dirname, '..');
 const PIXEL_ID = 'BP-U0p5Sp7I1Q-EF';
@@ -129,7 +129,7 @@ test('the Barion pixel id comes from BARION_PIXEL_ID with a safe default and can
 function runPixel(config) {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost:8000', runScripts: 'outside-only' });
   if (config !== undefined) dom.window.APP_CONFIG = config;
-  dom.window.eval(fs.readFileSync(path.join(ROOT, 'barion-pixel.js'), 'utf8'));
+  dom.window.eval(fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'barion-pixel.js'), 'utf8'));
   return dom.window;
 }
 
@@ -151,18 +151,18 @@ test('barion-pixel.js loads the Barion script with the configured id and never b
 
 test('both pages carry the deferred Barion pixel script in the head, and every config source hands over the id', async (t) => {
   for (const page of ['tervezo.html', 'index.html']) {
-    const source = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    const source = fs.readFileSync(path.join(ROOT, 'frontend', page), 'utf8');
     const head = source.slice(source.indexOf('<head>'), source.indexOf('</head>'));
-    assert.match(head, /<script src="barion-pixel\.js" defer><\/script>/, page);
+    assert.match(head, /<script src="js\/barion-pixel\.js" defer><\/script>/, page);
     assert.doesNotMatch(source, /pixel\.barion\.com/, `${page}: nincs beágyazott Pixel-kód (CSP)`);
-    assert.ok(source.indexOf('src="config.js"') > 0);
+    assert.ok(source.indexOf('src="js/config.js"') > 0);
   }
-  assert.match(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'), new RegExp(`barionPixelId: '${PIXEL_ID}'`));
+  assert.match(fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'config.js'), 'utf8'), new RegExp(`barionPixelId: '${PIXEL_ID}'`));
 
   const saved = process.env.BARION_PIXEL_ID;
   t.after(() => { if (saved === undefined) delete process.env.BARION_PIXEL_ID; else process.env.BARION_PIXEL_ID = saved; });
   const base = await listen(t);
-  const served = async () => JSON.parse((await (await fetch(`${base}/config.js`)).text()).replace(/^window\.APP_CONFIG = /, '').replace(/;\s*$/, ''));
+  const served = async () => JSON.parse((await (await fetch(`${base}/js/config.js`)).text()).replace(/^window\.APP_CONFIG = /, '').replace(/;\s*$/, ''));
   delete process.env.BARION_PIXEL_ID;
   assert.equal((await served()).barionPixelId, PIXEL_ID);
   process.env.BARION_PIXEL_ID = 'BP-Masik-123456';
@@ -441,7 +441,7 @@ test('the front end price table matches the server price table for every product
   assert.deepEqual(Object.keys(labels).sort(), Object.keys(PRODUCTS).sort());
 });
 
-const BARION_PNG_DIR = path.join(ROOT, 'assets', 'Barion adatok', 'png');
+const BARION_PNG_DIR = path.join(ROOT, 'frontend', 'assets', 'Barion adatok', 'png');
 
 test('the official Barion banner files (light and dark, three sizes) are in the project as real PNGs', () => {
   for (const mode of ['Light', 'Dark']) {
@@ -458,7 +458,7 @@ test('the official Barion banner files (light and dark, three sizes) are in the 
 test('every Barion strip uses the official light and dark banner in three sizes, with no size attributes that could distort it', () => {
   const pages = { 'tervezo.html': 2, 'index.html': 1 };
   for (const [page, expectedStrips] of Object.entries(pages)) {
-    const dom = new JSDOM(fs.readFileSync(path.join(ROOT, page), 'utf8'));
+    const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'frontend', page), 'utf8'));
     const strips = Array.from(dom.window.document.querySelectorAll('[data-barion-strip]'));
     assert.equal(strips.length, expectedStrips, page);
     for (const strip of strips) {
@@ -476,17 +476,17 @@ test('every Barion strip uses the official light and dark banner in three sizes,
         for (const attribute of ['width', 'height', 'style']) assert.equal(img.hasAttribute(attribute), false, `${page}: nincs ${attribute} attribútum`);
         assert.match(img.getAttribute('alt'), /Barion Payment.*Barion, Mastercard, Visa, Apple Pay, Google Pay/);
         for (const reference of [img.getAttribute('src'), ...sources.map(([, srcset]) => srcset)]) {
-          assert.ok(fs.existsSync(path.join(ROOT, decodeURI(reference))), `${page}: hiányzó fájl ${reference}`);
+          assert.ok(fs.existsSync(path.join(ROOT, 'frontend', decodeURI(reference))), `${page}: hiányzó fájl ${reference}`);
         }
       }
     }
   }
-  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8')).window.document.querySelector('#checkoutForm [data-barion-strip]'), 'a fizetési ablakban');
-  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8')).window.document.querySelector('#siteFooter [data-barion-strip]'), 'a láblécben');
+  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'frontend', 'tervezo.html'), 'utf8')).window.document.querySelector('#checkoutForm [data-barion-strip]'), 'a fizetési ablakban');
+  assert.ok(new JSDOM(fs.readFileSync(path.join(ROOT, 'frontend', 'tervezo.html'), 'utf8')).window.document.querySelector('#siteFooter [data-barion-strip]'), 'a láblécben');
 });
 
 test('the Barion strip CSS keeps the aspect ratio, adds no effects, keeps at least 8px around it and follows the theme', () => {
-  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'frontend', 'styles.css'), 'utf8');
   const rule = (selector) => {
     const match = css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]()]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
     assert.ok(match, `hiányzó szabály: ${selector}`);
@@ -524,7 +524,7 @@ test('both builds copy the banner folders recursively and leave out the PDF and 
   const { copyAssets } = require('../scripts/copy-assets');
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ovi-assets-'));
   try {
-    copyAssets(ROOT, out);
+    copyAssets(path.join(ROOT, 'frontend'), out);
     for (const mode of ['Light', 'Dark']) for (const size of ['Small', 'Medium', 'Large']) {
       assert.ok(fs.existsSync(path.join(out, 'assets', 'Barion adatok', 'png', mode, `${size}-nobg-${mode.toLowerCase()}.png`)));
     }
@@ -641,10 +641,10 @@ test('a pending Barion payment is checked once more on the next page load, silen
 });
 
 test('the price texts mention the academic price consistently on the landing page, the legal texts and the JSON-LD', () => {
-  const landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const landing = fs.readFileSync(path.join(ROOT, 'frontend', 'index.html'), 'utf8');
   assert.match(landing, /oktatási célú \(egyetemi\) tervezet <strong>690 Ft<\/strong>/);
   assert.equal((landing.match(/napi és heti formában is 690 Ft, bruttó/g) || []).length, 2, 'látható GYIK és JSON-LD egyezik');
   assert.match(landing, /"lowPrice":"390","highPrice":"890","offerCount":"3"/);
-  const legal = fs.readFileSync(path.join(ROOT, 'site.js'), 'utf8');
+  const legal = fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'site.js'), 'utf8');
   assert.equal((legal.match(/Oktatási célú tervezet \(napi foglalkozásterv vagy heti tematikus terv\): 690 Ft \(bruttó\)/g) || []).length, 2);
 });

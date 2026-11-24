@@ -5,10 +5,10 @@ const path = require('node:path');
 const { once } = require('node:events');
 const { test } = require('node:test');
 const { makePlan } = require('./fixtures');
-const server = require('../server');
-const planStore = require('../services/planStore');
-const barionService = require('../services/barionService');
-const mailService = require('../services/mailService');
+const server = require('../backend/server');
+const planStore = require('../backend/services/planStore');
+const barionService = require('../backend/services/barionService');
+const mailService = require('../backend/services/mailService');
 
 const POS_KEY = 'pos-key-very-secret';
 const PAYMENT_ID = '4a1b2c3d4e5f60718293a4b5c6d7e8f9';

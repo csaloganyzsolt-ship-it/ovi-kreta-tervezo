@@ -157,11 +157,11 @@ module.exports = { makePayload, makePlan, makeAcademicPayload, makeAcademicRespo
 function readPage(name) {
   const fs = require('node:fs');
   const path = require('node:path');
-  const root = path.join(__dirname, '..');
+  const root = path.join(__dirname, '..', 'frontend');
   return fs.readFileSync(path.join(root, name), 'utf8')
     .replace(/<script src="([^":?]+)(?:\?v=\d+)?"><\/script>/g, (tag, file) => {
       const target = path.join(root, file);
-      return file !== 'config.js' && fs.existsSync(target) ? `<script>${fs.readFileSync(target, 'utf8')}</script>` : tag;
+      return file !== 'js/config.js' && fs.existsSync(target) ? `<script>${fs.readFileSync(target, 'utf8')}</script>` : tag;
     });
 }
 module.exports.readPage = readPage;

@@ -7,10 +7,10 @@ const { once } = require('node:events');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
 const { readPage } = require('./fixtures');
-const { BILLING_PROFILES, getBillingProfile, publicCompany } = require('../services/siteConstants');
-const invoiceService = require('../services/invoiceService');
-const stripeService = require('../services/stripeService');
-const { buildEmailContent } = require('../services/mailService');
+const { BILLING_PROFILES, getBillingProfile, publicCompany } = require('../backend/services/siteConstants');
+const invoiceService = require('../backend/services/invoiceService');
+const stripeService = require('../backend/services/stripeService');
+const { buildEmailContent } = require('../backend/services/mailService');
 
 const ROOT = path.join(__dirname, '..');
 const order = (plan) => ({ plan, orderId: 'cs_1', customer: { email: 'a@b.hu' } });
@@ -150,13 +150,13 @@ function evalConfig(code) {
 }
 
 test('/config.js serves the active profile company data', async (t) => {
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const saved = process.env.BILLING_PROFILE;
   t.after(() => { if (saved === undefined) delete process.env.BILLING_PROFILE; else process.env.BILLING_PROFILE = saved; });
   const instance = app.listen(0, '127.0.0.1');
   await once(instance, 'listening');
   t.after(() => new Promise((resolve) => instance.close(resolve)));
-  const read = async () => evalConfig(await (await fetch(`http://127.0.0.1:${instance.address().port}/config.js`)).text()).company;
+  const read = async () => evalConfig(await (await fetch(`http://127.0.0.1:${instance.address().port}/js/config.js`)).text()).company;
 
   delete process.env.BILLING_PROFILE;
   assert.deepEqual(await read(), { ...publicCompany({}), email: 'info@ovitervezo.hu', stripeTestMode: stripeService.isTestMode(process.env) });
@@ -173,7 +173,7 @@ test('both build scripts pass the active profile and rename the static publisher
     const run = (profile) => {
       execFileSync('node', [script], { cwd: ROOT, env: { ...process.env, BILLING_PROFILE: profile } });
       return {
-        cfg: evalConfig(fs.readFileSync(path.join(ROOT, dir, 'config.js'), 'utf8')),
+        cfg: evalConfig(fs.readFileSync(path.join(ROOT, dir, 'js', 'config.js'), 'utf8')),
         index: fs.readFileSync(path.join(ROOT, dir, 'index.html'), 'utf8')
       };
     };
@@ -268,14 +268,14 @@ for (const page of ['index.html', 'tervezo.html']) {
 }
 
 test('site.js carries no hard-coded company data besides the ev fallback that mirrors the profile', () => {
-  const site = fs.readFileSync(path.join(ROOT, 'site.js'), 'utf8');
+  const site = fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'site.js'), 'utf8');
   assert.doesNotMatch(site, /CSB-Villamosság|27891788|08 09 031727|Arany János utca|Győri Törvényszék|27%-os/);
   const ev = BILLING_PROFILES.ev;
   for (const value of [ev.name, ev.taxId, ev.regLabel, ev.regNo, ev.address, ev.vatNote]) assert.ok(site.includes(`'${value}'`), value);
 });
 
 test('ertekeles.html loads the shared site script for the company-aware legal texts', () => {
-  assert.match(fs.readFileSync(path.join(ROOT, 'ertekeles.html'), 'utf8'), /<script src="site\.js"><\/script>/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'frontend', 'ertekeles.html'), 'utf8'), /<script src="js\/site\.js"><\/script>/);
 });
 
 const ALL_KEYS = {
@@ -331,14 +331,14 @@ test('a missing key in production gives a clear error naming the active profile 
 });
 
 test('/config.js publishes the publishable key of the active profile only', async (t) => {
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const saved = { ...process.env };
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
   Object.assign(process.env, ALL_KEYS);
   const instance = app.listen(0, '127.0.0.1');
   await once(instance, 'listening');
   t.after(() => new Promise((resolve) => instance.close(resolve)));
-  const read = async () => evalConfig(await (await fetch(`http://127.0.0.1:${instance.address().port}/config.js`)).text());
+  const read = async () => evalConfig(await (await fetch(`http://127.0.0.1:${instance.address().port}/js/config.js`)).text());
   delete process.env.BILLING_PROFILE;
   assert.equal((await read()).stripePublishableKey, 'pk_ev');
   process.env.BILLING_PROFILE = 'kft';
@@ -346,7 +346,7 @@ test('/config.js publishes the publishable key of the active profile only', asyn
 });
 
 test('/health reports the active billing profile with booleans only and never leaks a secret', async (t) => {
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const saved = { ...process.env };
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
   for (const key of Object.keys(process.env)) if (/^(STRIPE_|SZAMLAZZ_|BILLING_PROFILE)/.test(key)) delete process.env[key];
@@ -390,7 +390,7 @@ test('/health reports the active billing profile with booleans only and never le
 
 test('EV webhook end to end: _EV keys, AAM, net = gross, no prefix, retry after a Számlázz.hu error', async (t) => {
   const Stripe = require('stripe');
-  const { app } = require('../server');
+  const { app } = require('../backend/server');
   const saved = { ...process.env };
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
   for (const key of Object.keys(process.env)) if (/^(STRIPE_|SZAMLAZZ_|BILLING_PROFILE)/.test(key)) delete process.env[key];

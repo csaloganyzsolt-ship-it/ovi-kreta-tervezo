@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
-const { app } = require('../server');
-const planStore = require('../services/planStore');
+const { app } = require('../backend/server');
+const planStore = require('../backend/services/planStore');
 const { makePayload, makePlan } = require('./fixtures');
 
 test('createMirrorPlan produces a 1:1 structural mirror with exact table rows and paragraphs', () => {

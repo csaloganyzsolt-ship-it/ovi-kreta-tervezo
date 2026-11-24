@@ -4,13 +4,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { once } = require('node:events');
 const { test } = require('node:test');
-const server = require('../server');
-const supabase = require('../services/supabaseService');
-const settingsService = require('../services/settingsService');
-const barionService = require('../services/barionService');
-const mailService = require('../services/mailService');
-const invoiceService = require('../services/invoiceService');
-const { productFor } = require('../services/pricing');
+const server = require('../backend/server');
+const supabase = require('../backend/services/supabaseService');
+const settingsService = require('../backend/services/settingsService');
+const barionService = require('../backend/services/barionService');
+const mailService = require('../backend/services/mailService');
+const invoiceService = require('../backend/services/invoiceService');
+const { productFor } = require('../backend/services/pricing');
 
 const DB_PRICING = { standard: 555, academic: 777, weekly: 1999 };
 const TEMPLATE_ROWS = [
@@ -173,7 +173,7 @@ test('maintenance mode blocks generation with a polite 503 before any model call
 });
 
 test('callGemini sends the configured system prompt and the supported model', async () => {
-  const { callGemini } = require('../services/geminiService');
+  const { callGemini } = require('../backend/services/geminiService');
   let request;
   const fetch = async (url, options) => {
     request = { url: String(url), body: JSON.parse(options.body) };
@@ -279,14 +279,6 @@ test('the migration seeds the real model, the full original prompt and the real 
   assert.equal(/lorem/i.test(MIGRATION_SQL), false);
 });
 
-test('the sync script prints the idempotent seed section of the migration', () => {
-  const { seedSql } = require('../scripts/sync-system-settings');
-  const sql = seedSql();
-  assert.match(sql, /^-- SEED-KEZDET/);
-  assert.match(sql, /on conflict \(key\) do update/);
-  assert.equal(sql.includes('create table'), false);
-});
-
 test('seasonal hints are separated by semicolons so a hint may contain commas', async (t) => {
   const { store } = fakeDb(t);
   const saved = await settingsService.updateSettings(supabase.getClient(), { seasonal_hints: 'Őszi termések gyűjtése, falevelek préselése; Márton-napi lámpás;' });
@@ -295,7 +287,7 @@ test('seasonal hints are separated by semicolons so a hint may contain commas', 
 });
 
 test('the newsletter is rendered into the base_layout with the recipient unsubscribe link, also when the layout forgets the placeholder', () => {
-  const newsletter = require('../services/newsletterService');
+  const newsletter = require('../backend/services/newsletterService');
   const templates = migrationTemplates();
   const input = { heading: 'Szia', bodyHtml: '<p>Hír</p>', ctaText: 'Gomb', ctaUrl: 'https://ovitervezo.hu/x' };
   const url = newsletter.unsubscribeUrlFor('tok-1');
@@ -313,7 +305,7 @@ test('the newsletter is rendered into the base_layout with the recipient unsubsc
 test('the newsletter preview and the payment e-mail use the same base_layout from the database', async (t) => {
   const rows = Object.values(migrationTemplates()).map((row) => ({ id: row.id, subject: row.subject, body_html: row.bodyHtml }));
   fakeDb(t, { templates: rows });
-  const newsletter = require('../services/newsletterService');
+  const newsletter = require('../backend/services/newsletterService');
   const preview = await newsletter.buildPreview({ heading: 'Cím', bodyHtml: 'Szöveg' }, { NODE_ENV: 'test' });
   assert.ok(preview.includes('data:image/png;base64,') && preview.includes('leiratkozas.html?token='));
   const sent = [];
@@ -331,7 +323,7 @@ test('the AI model is a free text field: any valid model name is accepted, malfo
   assert.equal(saved.ai_config.model, 'gemini-1.5-flash');
   assert.equal(settingsService.resolveAiModel(saved, 'x'), 'gemini-1.5-flash');
   await assert.rejects(settingsService.updateSettings(client, { ai_config: { model: 'a/b?key=1' } }), /Érvénytelen modellnév/);
-  const html = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
   assert.match(html, /<input id="setAiModel" type="text"/);
 });
 

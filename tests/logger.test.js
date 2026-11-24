@@ -4,11 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const { once } = require('node:events');
-const supabase = require('../services/supabaseService');
-const logger = require('../utils/logger');
-const { createApiLimiter } = require('../utils/rateLimits');
-const server = require('../server');
-const barionService = require('../services/barionService');
+const supabase = require('../backend/services/supabaseService');
+const logger = require('../backend/utils/logger');
+const { createApiLimiter } = require('../backend/utils/rateLimits');
+const server = require('../backend/server');
+const barionService = require('../backend/services/barionService');
 
 function fakeClient({ error } = {}) {
   const inserted = [];
@@ -72,7 +72,7 @@ test('generate limiter defaults to 20 requests per hour per IP', async () => {
   const saved = process.env.GENERATE_RATE_LIMIT;
   delete process.env.GENERATE_RATE_LIMIT;
   try {
-    const { DEFAULT_GENERATE_LIMIT } = require('../utils/rateLimits');
+    const { DEFAULT_GENERATE_LIMIT } = require('../backend/utils/rateLimits');
     assert.equal(DEFAULT_GENERATE_LIMIT, 20);
     assert.equal(typeof server.generateLimiter, 'function');
   } finally {

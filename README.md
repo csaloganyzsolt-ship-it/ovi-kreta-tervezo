@@ -66,7 +66,7 @@ A generálási napló tartalmazza a modell nevét, a `finishReason` értékét, 
 
 A projektben 2 workflow van:
 - `test.yml`: ellenőrzi a statikus oldal meglétét és az alapvető tartalmi elemeket
-- `deploy.yml`: GitHub Pages-re deployeli a weboldalt
+- `deploy-nethely.yml`: tesztek után a Nethely-re deployel (a GitHub Pages workflow megszűnt; a `build-pages.js` staging buildhez megmaradt)
 
 ## API biztonság
 
@@ -85,7 +85,7 @@ A GitHub Pages csak statikus frontendet tud kiszolgálni. Ha később valódi Ge
 A frontend pusztán a felhasználói adatokat küldi el a backendnek, a backend pedig a Gemini API-hoz fordul.
 
 ## Üzemeltetés (Nethely)
-Indítófájl: `app.js` (a port a `PORT` környezeti változóból jön). Környezeti változók: `.env.example`. Stripe webhook: `BASE_URL/api/webhook/stripe` (esemény: `checkout.session.completed`).
+Indítófájl: `backend/app.js` (a port a `PORT` környezeti változóból jön). Környezeti változók: `.env.example`. Stripe webhook: `BASE_URL/api/webhook/stripe` (esemény: `checkout.session.completed`).
 
 ## Hibrid üzem: frontend a Nethelyen, backend a Renderen
 
@@ -103,7 +103,7 @@ A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel a
 - **Staging (GitHub Pages):** `node scripts/build-pages.js` – ugyanúgy `paywallEnabled: true`; a fizetős tartalom minden eredetre zárolt. Ingyenes teszteléshez a fizetési ablak „Kuponkód" mezője való (`POST /api/apply-coupon`).
 - **Kuponok:** a 100%-os kódokat a `COUPON_CODES` környezeti változó adja (vesszővel elválasztva; beállítás nélkül: `TEST100`; üresen a kuponok kikapcsolva). A kupon megkerüli a Stripe-ot és a Számlázz.hu-t; a levél számla nélkül, a kuponnal feloldott tervezettel megy ki. A végpont IP-nként percenként 10 kísérletre korlátozott.
 - **Barion fizetés:** `POST /api/checkout-barion` (Payment/Start) és `POST /api/webhook/barion` (GetPaymentState → feloldás + Számlázz.hu számla, fájlt és levelet nem küld). Környezeti változók: `BARION_POS_KEY_EV` (vagy `_KFT`, vagy a közös `BARION_POS_KEY`), `BARION_TEST_MODE=true` (teszt API), `BARION_PAYEE_EMAIL` (a Barion-bolt regisztrált e-mail címe; hiányában `SUPPORT_EMAIL`), `BACKEND_URL` (a visszahívás címe; Renderen a `RENDER_EXTERNAL_URL` is jó). A Barion-bolt a teszt környezetben legyen „Open" állapotban.
-- Mindkét deploy a `main` push után fut (`deploy.yml`, `deploy-nethely.yml`).
+- A deploy a `main` push után fut (`deploy-nethely.yml`).
 - SMTP ellenőrzés: `node scripts/test-email.js sajat@email.hu` (a `.env` SMTP_* változóival).
 
 ## Vásárlások mentése Google Táblázatba

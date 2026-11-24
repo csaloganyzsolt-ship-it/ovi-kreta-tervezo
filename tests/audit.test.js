@@ -77,24 +77,24 @@ test('retired settings are gone from the client payload, the validator, the HTML
   const window = await loadPlanner(t);
   const payload = window.buildGenerationPayload();
   for (const key of ['outputMode', 'unlocked', 'includeLiterature', 'docSettings', 'margin', 'orientation', 'layout']) assert.equal(key in payload, false, key);
-  const { validateGeneratePayload } = require('../services/generateValidation');
+  const { validateGeneratePayload } = require('../backend/services/generateValidation');
   const clean = validateGeneratePayload({ ...payload, outputMode: 'x', unlocked: true, includeLiterature: true, docSettings: { margin: 1 } });
   for (const key of ['outputMode', 'unlocked', 'includeLiterature', 'docSettings']) assert.equal(key in clean, false, `a validátor eldobja: ${key}`);
   assert.equal(clean.preview, undefined);
   assert.equal(validateGeneratePayload({ ...payload, preview: true }).preview, true);
 
-  const sources = ['server.js', 'routes/payment.js', 'services/mailService.js', 'services/generateValidation.js', 'tervezo-core.js', 'tervezo-form.js', 'tervezo-paywall.js', 'tervezo-generate.js', 'tervezo-init.js', 'tervezo.html', 'styles.css', 'scripts/build-pages.js']
+  const sources = ['backend/server.js', 'backend/routes/payment.js', 'backend/services/mailService.js', 'backend/services/generateValidation.js', 'frontend/js/tervezo-core.js', 'frontend/js/tervezo-form.js', 'frontend/js/tervezo-paywall.js', 'frontend/js/tervezo-generate.js', 'frontend/js/tervezo-init.js', 'frontend/tervezo.html', 'frontend/styles.css', 'scripts/build-pages.js']
     .map((file) => [file, read(file)]);
   for (const [file, source] of sources) {
     assert.doesNotMatch(source, /isFreeTestOrigin|FREE_TEST_ORIGINS|testDeliver|test-deliver|TEST_DELIVERY|sendTestDelivery|docSettings|export-settings|setting-option|setting-row|exportSection|includeLiterature\b/, file);
   }
-  assert.doesNotMatch(read('tervezo-form.js') + read('tervezo-generate.js') + read('tervezo-paywall.js'), /\boutputMode\b/);
+  assert.doesNotMatch(read('frontend/js/tervezo-form.js') + read('frontend/js/tervezo-generate.js') + read('frontend/js/tervezo-paywall.js'), /\boutputMode\b/);
 });
 
 // ---------- Egységes dokumentummodell ----------
 
 test('the web view, the PDF and the DOCX are all built from the same buildDocumentHtml and buildExportModel', async (t) => {
-  const exportSource = read('tervezo-export.js');
+  const exportSource = read('frontend/js/tervezo-export.js');
   const body = (name) => {
     const start = exportSource.indexOf(`function ${name}(`);
     assert.ok(start >= 0, name);
@@ -113,9 +113,9 @@ test('the web view, the PDF and the DOCX are all built from the same buildDocume
   assert.match(body('buildPdfDefinition'), /buildExportModel\(/);
   assert.match(asyncBody('renderPdfBlob'), /buildPdfDefinition\(/);
   assert.match(asyncBody('renderDocxBlob'), /buildExportModel\(/);
-  assert.match(read('tervezo-preview.js'), /resultDocument\.innerHTML = buildDocumentHtml\(/);
+  assert.match(read('frontend/js/tervezo-preview.js'), /resultDocument\.innerHTML = buildDocumentHtml\(/);
   // Más helyen nem épül dokumentum a HTML-ből: a ZIP és a kézbesítés is ugyanezeket a renderelőket hívja.
-  const callers = ['tervezo-export.js', 'tervezo-paywall.js'].map(read).join('\n');
+  const callers = ['frontend/js/tervezo-export.js', 'frontend/js/tervezo-paywall.js'].map(read).join('\n');
   assert.equal((callers.match(/buildExportModel\(/g) || []).length, 3, 'a modellt csak a definíció, a PDF-definíció és a DOCX hívja');
 
   const window = await loadPlanner(t);

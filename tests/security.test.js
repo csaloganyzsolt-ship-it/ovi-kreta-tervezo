@@ -5,12 +5,12 @@ const { once } = require('node:events');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
 const { makePayload, makePlan, readPage } = require('./fixtures');
-const server = require('../server');
-const planStore = require('../services/planStore');
-const stripeService = require('../services/stripeService');
-const paymentRoutes = require('../routes/payment');
-const { CONTENT_SECURITY_POLICY } = require('../services/siteConstants');
-const { validateGeneratePayload } = require('../services/generateValidation');
+const server = require('../backend/server');
+const planStore = require('../backend/services/planStore');
+const stripeService = require('../backend/services/stripeService');
+const paymentRoutes = require('../backend/routes/payment');
+const { CONTENT_SECURITY_POLICY } = require('../backend/services/siteConstants');
+const { validateGeneratePayload } = require('../backend/services/generateValidation');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -264,18 +264,18 @@ test('the CSP has the required directives, no unsafe-inline scripts, and .htacce
 
 test('index and planner ship no inline script (ertekeles.html is the one known exception before CSP enforcement)', () => {
   for (const page of ['index.html', 'tervezo.html']) {
-    const html = fs.readFileSync(path.join(ROOT, page), 'utf8').replace(/<script\b[^>]*\bsrc=[^>]*><\/script>/g, '');
+    const html = fs.readFileSync(path.join(ROOT, 'frontend', page), 'utf8').replace(/<script\b[^>]*\bsrc=[^>]*><\/script>/g, '');
     const inline = [...html.matchAll(/<script\b([^>]*)>/g)].filter((m) => !/type="application\/ld\+json"/.test(m[1]));
     assert.equal(inline.length, 0, `${page}: beágyazott script`);
     assert.doesNotMatch(html, /\son(click|load|error|change|submit)=/i, `${page}: inline eseménykezelő`);
   }
-  const feedback = fs.readFileSync(path.join(ROOT, 'ertekeles.html'), 'utf8');
+  const feedback = fs.readFileSync(path.join(ROOT, 'frontend', 'ertekeles.html'), 'utf8');
   assert.equal((feedback.match(/<script>/g) || []).length, 1);
 });
 
 test('CDN scripts carry SHA-384 integrity, crossorigin, and survive cache-busting untouched', () => {
   const { execFileSync } = require('node:child_process');
-  const source = fs.readFileSync(path.join(ROOT, 'tervezo.html'), 'utf8');
+  const source = fs.readFileSync(path.join(ROOT, 'frontend', 'tervezo.html'), 'utf8');
   const cdn = [...source.matchAll(/<script src="(https:\/\/[^"]+)"[^>]*><\/script>/g)].filter((m) => !m[1].includes('challenges.cloudflare.com'));
   assert.equal(cdn.length, 5);
   for (const [tag, url] of cdn) {

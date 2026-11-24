@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { test } = require('node:test');
-const { app, generateLimiter, buildPrompt, callGemini, clampRows, normalizeResponse } = require('../server');
+const { app, generateLimiter, buildPrompt, callGemini, clampRows, normalizeResponse } = require('../backend/server');
 const { makePayload, makePlan } = require('./fixtures');
 
 function stubGemini(t, body, status = 200) {
@@ -208,7 +208,7 @@ test('HTTP /api/generate with preview=true returns the structural mirror and hid
   assert.equal(bodyText.includes(secretMethod), false);
 
   // Plan is stored on server and retrievable via generationId
-  const { planStore } = require('../server');
+  const { planStore } = require('../backend/server');
   assert.ok(data.generationId);
   const stored = planStore.getPlan(data.generationId);
   assert.ok(stored);
@@ -283,7 +283,7 @@ test('weekly breakdown uses the weekly master prompt and 16384 output tokens', (
 });
 
 test('model requests are validated against the two allowed models', () => {
-  const { resolveModel } = require('../server');
+  const { resolveModel } = require('../backend/server');
   assert.equal(resolveModel({}), 'gemini-3.1-pro-preview');
   assert.throws(() => resolveModel({ requestedModel: 'gemini-4-argon' }), /Nem támogatott modell/);
   assert.throws(() => resolveModel({ requestedModel: 'evil-model' }), /Nem támogatott modell/);
@@ -305,7 +305,7 @@ test('available tools and the blacklist reach both prompts and the system instru
 });
 
 test('weekly generation covers only the selected days in prompt and response validation', () => {
-  const { getSelectedDays } = require('../server');
+  const { getSelectedDays } = require('../backend/server');
   assert.deepEqual(getSelectedDays({}), ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']);
   assert.deepEqual(getSelectedDays({ selectedDays: ['Péntek', 'Hétfő', 'Hétfő', 'Vasárnap'] }), ['Hétfő', 'Péntek']);
   assert.deepEqual(getSelectedDays({ selectedDays: [] }).length, 5);
@@ -463,7 +463,7 @@ test('POST /api/generate answers 429 after the per-IP daily limit', async () => 
 });
 
 test('POST /api/generate rejects concurrent requests from the same IP with 409', async () => {
-  const { activeGenerationsByIp } = require('../server');
+  const { activeGenerationsByIp } = require('../backend/server');
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}/api/generate`;
@@ -508,7 +508,7 @@ test('POST /api/generate rejects honeypot field submission with 400 immediately'
 });
 
 test('verifyTurnstileToken allows request if TURNSTILE_SECRET_KEY is not set and validates when set', async (t) => {
-  const { verifyTurnstileToken } = require('../server');
+  const { verifyTurnstileToken } = require('../backend/server');
   // When no key is configured, it always returns true
   assert.equal(await verifyTurnstileToken('any-token', '1.2.3.4', {}), true);
   assert.equal(await verifyTurnstileToken(undefined, '1.2.3.4', {}), true);
@@ -536,7 +536,7 @@ test('verifyTurnstileToken allows request if TURNSTILE_SECRET_KEY is not set and
 });
 
 test('getClientIp prioritizes headers correctly (cf-connecting-ip > x-forwarded-for first IP > req.ip > socket)', () => {
-  const { getClientIp } = require('../server');
+  const { getClientIp } = require('../backend/server');
 
   // cf-connecting-ip priority
   assert.equal(getClientIp({
@@ -576,7 +576,7 @@ test('getClientIp prioritizes headers correctly (cf-connecting-ip > x-forwarded-
 });
 
 test('previousPlanContext enters the prompt and instructs avoiding repetitions', () => {
-  const { buildPrompt } = require('../server');
+  const { buildPrompt } = require('../backend/server');
   const contextText = 'Csatolt előzmény: Falevelek gyűjtése (Napi, 2026. 11. 10. 09:00). Célok: megfigyelés. Eszközök: nagyító.';
   const payload = makePayload({
     previousPlanContext: contextText
@@ -633,7 +633,7 @@ test('an area assigned only to an unselected day stays in the general list', () 
 });
 
 test('callGemini retries up to 2 times on 503 and succeeds on subsequent attempt', async () => {
-  const geminiService = require('../services/geminiService');
+  const geminiService = require('../backend/services/geminiService');
   let calls = 0;
   const sleeps = [];
   const fakeFetch = async () => {
@@ -659,7 +659,7 @@ test('callGemini retries up to 2 times on 503 and succeeds on subsequent attempt
 });
 
 test('callGemini fails after 2 retries on 503 and throws error', async () => {
-  const geminiService = require('../services/geminiService');
+  const geminiService = require('../backend/services/geminiService');
   let calls = 0;
   const sleeps = [];
   const fakeFetch = async () => {
@@ -687,7 +687,7 @@ test('callGemini fails after 2 retries on 503 and throws error', async () => {
 });
 
 test('POST /api/generate sends admin error alert if generation permanently fails', async (t) => {
-  const mailService = require('../services/mailService');
+  const mailService = require('../backend/services/mailService');
   const alertCalls = [];
   const origSendAlert = mailService.sendAdminErrorAlert;
   mailService.sendAdminErrorAlert = async (data) => {

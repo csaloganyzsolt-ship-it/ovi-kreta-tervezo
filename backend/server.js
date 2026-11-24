@@ -10,7 +10,7 @@ const { router: paymentRouter, stripeWebhook, barionWebhook, deliverPurchase } =
 const { router: accountRouter } = require('./routes/account');
 const { router: adminRouter } = require('./routes/admin');
 const authService = require('./services/authService');
-const { SHIPPED_EXTENSIONS } = require('./scripts/copy-assets');
+const { SHIPPED_EXTENSIONS } = require('../scripts/copy-assets');
 const mailService = require('./services/mailService');
 const geminiService = require('./services/geminiService');
 const planStore = require('./services/planStore');
@@ -134,7 +134,7 @@ app.use('/api', paymentRouter);
 
 // A frontend ugyanazon a domainen és porton fut. Csak a kifejezetten felsorolt fájlok érhetők el,
 // hogy a server.js, a .env és a forráskód soha ne legyen letölthető.
-const STATIC_ROOT = __dirname;
+const STATIC_ROOT = path.join(__dirname, '..', 'frontend');
 for (const route of ['/', '/index.html']) {
   app.get(route, (_req, res) => res.sendFile(path.join(STATIC_ROOT, 'index.html')));
 }
@@ -162,7 +162,7 @@ app.get('/api/config', async (_req, res) => {
 });
 
 // Élesben a konfiguráció a környezeti változókból jön (nincs titkos adat benne), így a Nethely-telepítéshez nem kell a config.js-t szerkeszteni.
-app.get('/config.js', (_req, res) => {
+app.get('/js/config.js', (_req, res) => {
   const env = process.env;
   const config = {
     apiBaseUrl: 'same-origin',

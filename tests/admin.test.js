@@ -4,10 +4,10 @@ const path = require('node:path');
 const { once } = require('node:events');
 const { test } = require('node:test');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const server = require('../server');
-const supabase = require('../services/supabaseService');
-const mailService = require('../services/mailService');
-const newsletter = require('../services/newsletterService');
+const server = require('../backend/server');
+const supabase = require('../backend/services/supabaseService');
+const mailService = require('../backend/services/mailService');
+const newsletter = require('../backend/services/newsletterService');
 const { readPage } = require('./fixtures');
 
 const user = (n, email, extra = {}) => ({ id: `${n}`.repeat(8) + '-1111-4111-8111-' + `${n}`.repeat(12), email, email_confirmed_at: '2026-01-01T00:00:00Z', created_at: `2026-01-0${n}T10:00:00Z`, ...extra });
@@ -591,18 +591,18 @@ test('POST /api/admin/newsletter/preview renders the official mail with an embed
 // ---------- Fájllisták és oldal ----------
 
 test('admin.html and admin.js are shipped with every build, served by the backend and kept out of search engines', async (t) => {
-  const { PAGES, SITE_ASSETS } = require('../services/siteConstants');
-  assert.ok(PAGES.includes('admin.html') && SITE_ASSETS.includes('admin.js'));
-  const html = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+  const { PAGES, SITE_ASSETS } = require('../backend/services/siteConstants');
+  assert.ok(PAGES.includes('admin.html') && SITE_ASSETS.includes('js/admin.js'));
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
   assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
   assert.equal(/<script(?![^>]*\bsrc=)[^>]*>/.test(html), false, 'nincs inline script');
   assert.doesNotMatch(html, /#(?:e67e22|f39c12|ff9800|d35400)/i, 'nincs narancs szín');
   assert.match(html, /<iframe[^>]*id="nlPreview"[^>]*sandbox=""/, 'az előnézet sandboxolt');
   for (const label of ['Cloudflare Analytics', 'Google Analytics', 'Google Search Console', 'Barion', 'Számlázz.hu', 'Külső statisztikák']) assert.ok(html.includes(label), label);
-  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'sitemap.xml'), 'utf8'), /admin/);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'sitemap.xml'), 'utf8'), /admin/);
   const base = await listen(t);
   assert.equal((await fetch(`${base}/admin.html`)).status, 200);
-  assert.equal((await fetch(`${base}/admin.js`)).status, 200);
+  assert.equal((await fetch(`${base}/js/admin.js`)).status, 200);
 });
 
 // ---------- Böngészős rész (jsdom) ----------
@@ -1027,7 +1027,7 @@ test('DELETE /api/admin/coupons/:code deletes, and soft-deletes on a foreign key
 });
 
 test('GET /api/admin/newsletter/campaigns/:id extracts subject, heading, body and CTA for reuse', async (t) => {
-  const newsletterService = require('../services/newsletterService');
+  const newsletterService = require('../backend/services/newsletterService');
   const html = newsletterService.buildNewsletterHtml({ heading: 'Új & jó', bodyHtml: '<p>Szia <b>ovis</b>!</p>', ctaText: 'Megnézem', ctaUrl: 'https://ovitervezo.hu/tervezo.html', unsubscribeUrl: '{{UNSUBSCRIBE_URL}}' });
   const id = '11111111-1111-4111-8111-111111111111';
   useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), newsletter_campaigns: [{ id, subject: 'Tárgy', html_body: html, created_at: '2026-01-01T00:00:00Z' }] }));
