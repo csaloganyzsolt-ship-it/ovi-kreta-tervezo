@@ -190,7 +190,7 @@ test('POST /api/generate returns a thematic plan for an academic weekly request,
   stubGemini(t, JSON.stringify({ ...makeThematicResponse(), hetek: [] }));
   const failed = await postGenerate(base, makeThematicPayload());
   assert.equal(failed.response.status, 502);
-  assert.match(failed.data.details, /hétnyi tematikus tervet/);
+  assert.equal(failed.data.details, undefined);
 });
 
 test('a locked academic preview mirrors the daily table and the thematic matrix without leaking the real text', async (t) => {
@@ -893,7 +893,7 @@ test('without the paywall every origin gets the full plan, and the standard mode
 test('after payment the full real thematic plan is returned from the server for the web view and the exports', async (t) => {
   await withPaywall(t, 'true');
   const savedEnv = { ...process.env };
-  for (const key of Object.keys(process.env)) if (/^(STRIPE_|NODE_ENV)/.test(key)) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (/^(STRIPE_)/.test(key)) delete process.env[key];
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key]; Object.assign(process.env, savedEnv); });
   const secret = 'gesztenyebábú';
   const response = makeThematicResponse();

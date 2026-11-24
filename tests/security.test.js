@@ -294,8 +294,7 @@ test('CDN scripts carry SHA-384 integrity, crossorigin, and survive cache-bustin
   assert.ok(supabaseTag.includes(`sha384-${sriFor(path.join(ROOT, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js'))}`), 'a Supabase SRI-hash nem egyezik a telepített fájllal');
   assert.equal(cdn.some((m) => /html2pdf|html2canvas|jspdf/i.test(m[1])), false, 'a raszteres PDF-készítő kikerült');
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
-  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
-  for (const dir of ['dist-nethely', 'dist-pages']) {
+  for (const dir of ['dist-nethely']) {
     const built = fs.readFileSync(path.join(ROOT, dir, 'tervezo.html'), 'utf8');
     for (const [tag] of cdn) assert.ok(built.includes(tag), `${dir}: a CDN címke módosult: ${tag.slice(0, 70)}`);
   }
@@ -353,7 +352,7 @@ test('seasonal theme chips and the paywall gate stay inert with hostile data', a
   assert.equal(window.__xss, undefined);
 });
 
-test('Turnstile is skipped without a token only for the GitHub Pages origin', async (t) => {
+test('Turnstile is required for every origin, including the former GitHub Pages one', async (t) => {
   const calls = stubGemini(t, JSON.stringify(makePlan()));
   const saved = process.env.TURNSTILE_SECRET_KEY;
   process.env.TURNSTILE_SECRET_KEY = 'test-secret';
@@ -365,12 +364,10 @@ test('Turnstile is skipped without a token only for the GitHub Pages origin', as
     body: JSON.stringify(makePayload())
   });
 
-  assert.equal((await send('https://csaloganyzsolt-ship-it.github.io')).status, 200);
-  for (const origin of ['https://ovitervezo.hu', 'https://csaloganyzsolt-ship-it.github.io.evil.com', '']) {
+  for (const origin of ['https://csaloganyzsolt-ship-it.github.io', 'https://ovitervezo.hu', '']) {
     const response = await send(origin);
     assert.equal(response.status, 403, origin || 'no origin');
   }
-  assert.equal(calls.length, 1);
-  assert.equal(server.isTurnstileExemptOrigin('https://csaloganyzsolt-ship-it.github.io/'), true);
-  assert.equal(server.isTurnstileExemptOrigin(undefined), false);
+  assert.equal(calls.length, 0);
+  assert.equal(server.isTurnstileExemptOrigin, undefined);
 });

@@ -169,7 +169,7 @@ test('/config.js serves the active profile company data', async (t) => {
 });
 
 test('both build scripts pass the active profile and rename the static publisher', () => {
-  for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely'], ['scripts/build-pages.js', 'dist-pages']]) {
+  for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely']]) {
     const run = (profile) => {
       execFileSync('node', [script], { cwd: ROOT, env: { ...process.env, BILLING_PROFILE: profile } });
       return {
@@ -190,7 +190,6 @@ test('both build scripts pass the active profile and rename the static publisher
     assert.doesNotMatch(kft.index, /Csalogány Zsolt/);
   }
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT, env: { ...process.env, BILLING_PROFILE: '' } });
-  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT, env: { ...process.env, BILLING_PROFILE: '' } });
 });
 
 async function loadPage(t, page, company) {

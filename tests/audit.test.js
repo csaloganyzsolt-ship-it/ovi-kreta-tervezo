@@ -83,7 +83,7 @@ test('retired settings are gone from the client payload, the validator, the HTML
   assert.equal(clean.preview, undefined);
   assert.equal(validateGeneratePayload({ ...payload, preview: true }).preview, true);
 
-  const sources = ['backend/server.js', 'backend/routes/payment.js', 'backend/services/mailService.js', 'backend/services/generateValidation.js', 'frontend/js/tervezo-core.js', 'frontend/js/tervezo-form.js', 'frontend/js/tervezo-paywall.js', 'frontend/js/tervezo-generate.js', 'frontend/js/tervezo-init.js', 'frontend/tervezo.html', 'frontend/styles.css', 'scripts/build-pages.js']
+  const sources = ['backend/server.js', 'backend/routes/payment.js', 'backend/services/mailService.js', 'backend/services/generateValidation.js', 'frontend/js/tervezo-core.js', 'frontend/js/tervezo-form.js', 'frontend/js/tervezo-paywall.js', 'frontend/js/tervezo-generate.js', 'frontend/js/tervezo-init.js', 'frontend/tervezo.html', 'frontend/styles.css']
     .map((file) => [file, read(file)]);
   for (const [file, source] of sources) {
     assert.doesNotMatch(source, /isFreeTestOrigin|FREE_TEST_ORIGINS|testDeliver|test-deliver|TEST_DELIVERY|sendTestDelivery|docSettings|export-settings|setting-option|setting-row|exportSection|includeLiterature\b/, file);

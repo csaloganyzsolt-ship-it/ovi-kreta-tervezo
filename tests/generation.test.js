@@ -239,7 +239,7 @@ test('HTTP API failures return details and no fake document or fallback rows', a
   const { response, data } = await postPlan(t, makePayload());
   assert.equal(response.ok, false);
   assert.equal(data.success, false);
-  assert.match(data.details, /Requested model is unavailable/);
+  assert.equal(data.details, undefined);
   assert.equal(data.kidolgozas_tablazat, undefined);
   assert.equal(calls.length, 1);
 });
@@ -257,7 +257,7 @@ test('HTTP rejects syntactically invalid generated JSON, not just missing fields
   const { response, data } = await postPlan(t, makePayload());
   assert.equal(response.status, 502);
   assert.equal(data.success, false);
-  assert.match(data.details, /JSON/);
+  assert.equal(data.details, undefined);
   assert.equal(data.kidolgozas_tablazat, undefined);
 });
 
@@ -535,10 +535,14 @@ test('verifyTurnstileToken allows request if TURNSTILE_SECRET_KEY is not set and
   assert.match(sentBody, /response=valid-token/);
 });
 
-test('getClientIp prioritizes headers correctly (cf-connecting-ip > x-forwarded-for first IP > req.ip > socket)', () => {
+test('getClientIp uses req.ip; CF-Connecting-IP only with TRUST_CLOUDFLARE', (t) => {
   const { getClientIp } = require('../backend/server');
+  const saved = process.env.TRUST_CLOUDFLARE;
+  t.after(() => { if (saved === undefined) delete process.env.TRUST_CLOUDFLARE; else process.env.TRUST_CLOUDFLARE = saved; });
 
-  // cf-connecting-ip priority
+  delete process.env.TRUST_CLOUDFLARE;
+  assert.equal(getClientIp({ headers: { 'cf-connecting-ip': '203.0.113.195', 'x-forwarded-for': '198.51.100.10' }, ip: '10.0.0.1', socket: { remoteAddress: '10.0.0.9' } }), '10.0.0.1');
+  process.env.TRUST_CLOUDFLARE = 'true';
   assert.equal(getClientIp({
     headers: {
       'cf-connecting-ip': '203.0.113.195',
@@ -547,15 +551,6 @@ test('getClientIp prioritizes headers correctly (cf-connecting-ip > x-forwarded-
     ip: '10.0.0.1',
     socket: { remoteAddress: '10.0.0.1' }
   }), '203.0.113.195');
-
-  // x-forwarded-for first IP extraction
-  assert.equal(getClientIp({
-    headers: {
-      'x-forwarded-for': ' 198.51.100.42 , 10.0.0.2, 172.16.0.1'
-    },
-    ip: '10.0.0.2',
-    socket: { remoteAddress: '10.0.0.2' }
-  }), '198.51.100.42');
 
   // req.ip fallback
   assert.equal(getClientIp({

@@ -93,7 +93,7 @@ function getPlanKind(payload = {}) {
 }
 
 // Hibrid üzem: a frontend a Nethelyen (ovitervezo.hu), a backend a Renderen fut, ezért a böngészős hívásokhoz kifejezett CORS-lista kell.
-const DEFAULT_CORS_ORIGINS = ['https://ovitervezo.hu', 'https://www.ovitervezo.hu', 'https://csaloganyzsolt-ship-it.github.io'];
+const DEFAULT_CORS_ORIGINS = ['https://ovitervezo.hu', 'https://www.ovitervezo.hu'];
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 function allowedOrigins(env = process.env) {
@@ -124,7 +124,16 @@ app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), strip
 // A Barion visszahívás query-ben (GET) vagy űrlapként/JSON-ban (POST) hozza a paymentId-t; az állapotot a handler a Barion API-tól kérdezi le.
 app.all('/api/webhook/barion', express.urlencoded({ extended: false, limit: '10kb' }), express.json({ limit: '10kb' }), (req, res, next) => (['GET', 'POST'].includes(req.method) ? barionWebhook(req, res) : next()));
 // A tervezetfájlok (base64) miatt ennek az egy végpontnak nagyobb törzs kell, ezért az általános parser ELŐTT van.
-app.post('/api/deliver/:id', express.json({ limit: '25mb' }), deliverPurchase);
+const deliverLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: () => Number(process.env.DELIVER_RATE_LIMIT) || 10,
+  keyGenerator: (req) => getClientIp(req),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  handler: (_req, res) => res.status(429).json({ success: false, code: 'RATE_LIMITED', error: 'Túl sok kézbesítési kísérlet. Kérjük, próbáld újra később!' })
+});
+app.post('/api/deliver/:id', deliverLimiter, express.json({ limit: '25mb' }), deliverPurchase);
 app.use(express.json({ limit: '1mb' }));
 // Az általános limit a webhookok UTÁN jön (a Barion/Stripe visszahívás nem korlátozható), a tesztek nem futnak bele.
 app.use('/api', createApiLimiter({ skip: () => process.env.NODE_ENV === 'test' }));
@@ -542,13 +551,10 @@ async function callGemini(prompt, options = {}, deps = {}) {
 
 function getClientIp(req) {
   if (!req) return 'unknown';
-  const cfConnectingIp = req.headers?.['cf-connecting-ip'];
-  if (typeof cfConnectingIp === 'string' && cfConnectingIp.trim()) {
-    return cfConnectingIp.trim().split(',')[0].trim();
-  }
-  const xForwardedFor = req.headers?.['x-forwarded-for'];
-  if (typeof xForwardedFor === 'string' && xForwardedFor.trim()) {
-    return xForwardedFor.trim().split(',')[0].trim();
+  // A CF-Connecting-IP csak akkor megbízható, ha a backend tényleg Cloudflare mögött fut.
+  if (process.env.TRUST_CLOUDFLARE === 'true') {
+    const cfConnectingIp = req.headers?.['cf-connecting-ip'];
+    if (typeof cfConnectingIp === 'string' && cfConnectingIp.trim()) return cfConnectingIp.trim().split(',')[0].trim();
   }
   if (typeof req.ip === 'string' && req.ip.trim()) {
     return req.ip.trim();
@@ -600,14 +606,6 @@ function releaseDailyGeneration() {
 function resetDailyGenerations() {
   dailyGenerations.day = '';
   dailyGenerations.count = 0;
-}
-
-// A GitHub Pages demó nincs felvéve a Turnstile-ba, ezért csak a botvédelem alól mentes. Fizetős (zárolt) kiszolgálás minden eredetre ugyanúgy jár.
-// Az Origin kliensoldali fejléc, ezért ez nem erős hitelesítés (a nem böngészős kliens hamisíthatja).
-const TURNSTILE_EXEMPT_ORIGINS = ['https://csaloganyzsolt-ship-it.github.io'];
-
-function isTurnstileExemptOrigin(origin) {
-  return TURNSTILE_EXEMPT_ORIGINS.includes(String(origin || '').trim().replace(/\/+$/, ''));
 }
 
 async function verifyTurnstileToken(token, ip, env = process.env) {
@@ -673,8 +671,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     const request = validateGeneratePayload(rawPayload);
 
     // Cloudflare Turnstile token ellenőrzése (opcionális, csak ha TURNSTILE_SECRET_KEY be van állítva)
-    const exempt = !payload.turnstileToken && isTurnstileExemptOrigin(req.get('origin'));
-    const turnstileValid = exempt || await verifyTurnstileToken(payload.turnstileToken, clientIp, process.env);
+    const turnstileValid = await verifyTurnstileToken(payload.turnstileToken, clientIp, process.env);
     if (!turnstileValid) {
       return res.status(403).json({
         success: false,
@@ -750,13 +747,12 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     res.json({ success: true, ...result, generationId });
   } catch (error) {
     const reason = error?.message || 'Unknown backend error';
-    console.error('Generation failed:', reason);
-
-    return res.status(error.status || 500).json({
-      success: false,
-      error: 'A generálás sikertelen volt.',
-      details: reason
-    });
+    const status = error.status || 500;
+    logger.error('generation_failed', error, { details: { status, clientIp } });
+    // Csak a felhasználónak szánt üzenetek (400/403/429/503) mennek vissza; a belső backend/API részletek csak a naplóba.
+    const body = { success: false, error: 'A generálás sikertelen volt.' };
+    if ([400, 403, 429, 503].includes(status)) body.details = reason;
+    return res.status(status).json(body);
   } finally {
     activeGenerationsByIp.delete(clientIp);
   }
@@ -867,4 +863,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, isTurnstileExemptOrigin, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };
+module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

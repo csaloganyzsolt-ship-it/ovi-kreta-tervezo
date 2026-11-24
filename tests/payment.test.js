@@ -9,16 +9,16 @@ const invoiceService = require('../backend/services/invoiceService');
 const mailService = require('../backend/services/mailService');
 const { makePayload, makePlan, readPage } = require('./fixtures');
 
-const devEnv = { BASE_URL: 'https://ovitervezo.hu' };
+const devEnv = { NODE_ENV: 'test', BASE_URL: 'https://ovitervezo.hu' };
 
-test('stripe mock mode answers clearly without keys and is refused in production', async () => {
+test('stripe mock mode answers clearly without keys, only under NODE_ENV=test', async () => {
   const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: devEnv });
   assert.equal(mock.mock, true);
   assert.match(mock.url, /^https:\/\/ovitervezo\.hu\/tervezo\.html\?payment=success&session_id=cs_mock_/);
-  await assert.rejects(
-    stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { NODE_ENV: 'production' } }),
-    (error) => error.status === 503
-  );
+  await assert.rejects(stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { NODE_ENV: 'production' } }), (error) => error.status === 503);
+  await assert.rejects(stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: {} }), (error) => error.status === 503);
+  await assert.rejects(stripeService.retrieveCheckoutSession('cs_mock_unknown1', { env: { NODE_ENV: 'production' } }), (error) => error.status === 503);
+  await assert.rejects(stripeService.retrieveCheckoutSession('cs_mock_unknown1', { env: devEnv }), (error) => error.status === 404);
 });
 
 test('checkout validates plan and email', async () => {
@@ -69,7 +69,7 @@ test('invoice errors from Számlázz.hu are surfaced', async () => {
 test('webhook rejects calls without valid configuration or signature', async () => {
   const { app } = require('../backend/server');
   const saved = {};
-  for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'NODE_ENV']) { saved[key] = process.env[key]; delete process.env[key]; }
+  for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) { saved[key] = process.env[key]; delete process.env[key]; }
   const server = app.listen(0);
   try {
     const port = server.address().port;
@@ -262,7 +262,7 @@ test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async
   await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
   assert.equal(params.success_url, 'https://pages.example/ovi/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}');
   assert.equal(params.cancel_url, 'https://pages.example/ovi/tervezo.html?payment=cancel');
-  const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { FRONTEND_URL: 'http://localhost:4000' } });
+  const mock = await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env: { NODE_ENV: 'test', FRONTEND_URL: 'http://localhost:4000' } });
   assert.match(mock.url, /^http:\/\/localhost:4000\/tervezo\.html\?payment=success&session_id=cs_mock_/);
 });
 
@@ -548,11 +548,6 @@ test('both builds keep the paywall on, so GitHub Pages is paid like production a
   const fs = require('node:fs');
   const path = require('node:path');
   const cwd = path.join(__dirname, '..');
-  execFileSync('node', ['scripts/build-pages.js'], { cwd });
-  const staging = fs.readFileSync(path.join(cwd, 'dist-pages', 'js', 'config.js'), 'utf8');
-  assert.match(staging, /"paywallEnabled": true/);
-  assert.doesNotMatch(staging, /testDelivery/);
-  assert.match(fs.readFileSync(path.join(cwd, 'dist-pages', 'robots.txt'), 'utf8'), /Disallow: \//);
   execFileSync('node', ['scripts/build-nethely.js'], { cwd });
   assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', 'js', 'config.js'), 'utf8'), /"paywallEnabled": true/);
   assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-nethely', 'js', 'config.js'), 'utf8'), /testDelivery/);
@@ -716,8 +711,7 @@ test('both builds ship both pages with every local reference resolvable and the 
   const cwd = path.join(__dirname, '..');
   const env = { ...process.env, API_BASE_URL: 'https://api.example.onrender.com', GOOGLE_SITE_VERIFICATION: 'abcDEF1234567890xyz' };
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env });
-  execFileSync('node', ['scripts/build-pages.js'], { cwd, env });
-  for (const dir of ['dist-nethely', 'dist-pages']) {
+  for (const dir of ['dist-nethely']) {
     for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
       const html = fs.readFileSync(path.join(cwd, dir, page), 'utf8');
       const refs = [...html.matchAll(/(?:href|src)="([^"#]+)"/g)].map((m) => m[1]).filter((r) => !/^(https?:|mailto:|data:)/.test(r));
@@ -734,7 +728,6 @@ test('both builds ship both pages with every local reference resolvable and the 
   }
   for (const page of ['index.html', 'tervezo.html', 'ertekeles.html']) {
     assert.match(fs.readFileSync(path.join(cwd, 'dist-nethely', page), 'utf8'), /<meta name="google-site-verification" content="abcDEF1234567890xyz" \/>/);
-    assert.doesNotMatch(fs.readFileSync(path.join(cwd, 'dist-pages', page), 'utf8'), /google-site-verification/);
   }
   const { GOOGLE_SITE_VERIFICATION, ...clean } = env;
   execFileSync('node', ['scripts/build-nethely.js'], { cwd, env: clean });
@@ -831,10 +824,17 @@ test('feedback signature generation and verification with HMAC-SHA256', () => {
   assert.equal(mailService.verifyFeedbackSignature('', sig), false);
 });
 
+test('without FEEDBACK_SECRET there is no feedback link and no signature verifies', () => {
+  const mailService = require('../backend/services/mailService');
+  assert.equal(mailService.createFeedbackSignature('a@b.hu', {}), '');
+  assert.equal(mailService.verifyFeedbackSignature('a@b.hu', 'a'.repeat(64), {}), false);
+  assert.equal(mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to: 'a@b.hu' }, {}).html.includes('ertekeles.html'), false);
+});
+
 test('purchase e-mail contains discrete 5-star rating bar with Unicode stars, documentId and HMAC link', () => {
   const mailService = require('../backend/services/mailService');
   const to = 'vasarlo@example.com';
-  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to, documentId: 'gen_test_doc_123' }, {});
+  const mail = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, to, documentId: 'gen_test_doc_123' }, { FEEDBACK_SECRET: 'unit-secret' });
   assert.match(mail.html, /Hogy sikerült a tervezet\? Kattints a csillagokra/);
   assert.match(mail.html, /ertekeles\.html\?rating=5&email=vasarlo%40example\.com&sig=[a-f0-9]+&documentId=gen_test_doc_123/);
   assert.match(mail.html, /ertekeles\.html\?rating=1&email=vasarlo%40example\.com&sig=[a-f0-9]+&documentId=gen_test_doc_123/);
@@ -997,7 +997,7 @@ test('every config source emits the same turnstile key and support e-mail under 
   const path = require('node:path');
   const vm = require('node:vm');
   const evalConfig = (code) => { const sandbox = { window: {} }; vm.runInNewContext(code, sandbox); return sandbox.window; };
-  for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely'], ['scripts/build-pages.js', 'dist-pages']]) {
+  for (const [script, dir] of [['scripts/build-nethely.js', 'dist-nethely']]) {
     execFileSync('node', [script], { cwd: ROOT });
     const code = fs.readFileSync(path.join(ROOT, dir, 'js', 'config.js'), 'utf8');
     assert.doesNotMatch(code, /OVITERVEZO_CONFIG/);
@@ -1058,8 +1058,7 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
     assert.doesNotMatch(head, /<script>[\s\S]*oviKretaTheme/, `${page}: nincs inline téma-script`);
   }
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
-  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
-  for (const dir of ['dist-nethely', 'dist-pages']) {
+  for (const dir of ['dist-nethely']) {
     assert.ok(fs.existsSync(path.join(ROOT, dir, 'js', 'theme-init.js')), `${dir}: theme-init.js hiányzik`);
     for (const page of ['index.html', 'tervezo.html']) {
       assert.match(fs.readFileSync(path.join(ROOT, dir, page), 'utf8'), /<script src="js\/theme-init\.js\?v=\d{12}"><\/script>/, `${dir}/${page}`);
@@ -1090,8 +1089,7 @@ test('tervezo.html loads the planner scripts in order and the single static list
 
   const { execFileSync } = require('node:child_process');
   execFileSync('node', ['scripts/build-nethely.js'], { cwd: ROOT });
-  execFileSync('node', ['scripts/build-pages.js'], { cwd: ROOT });
-  for (const dir of ['dist-nethely', 'dist-pages']) {
+  for (const dir of ['dist-nethely']) {
     const built = fs.readFileSync(path.join(ROOT, dir, 'tervezo.html'), 'utf8');
     const versioned = [...built.matchAll(/<script src="js\/(tervezo-[a-z]+\.js)\?v=\d{12}"><\/script>/g)].map((m) => m[1]);
     assert.deepEqual(versioned, PLANNER_SCRIPTS, `${dir}: verziózott tervezo-*.js`);

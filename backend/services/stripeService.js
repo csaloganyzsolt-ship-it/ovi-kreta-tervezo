@@ -58,13 +58,9 @@ function isTestMode(env = process.env) {
   return stripeSecretKey(env).startsWith('sk_test_');
 }
 
-function isProduction(env = process.env) {
-  return env.NODE_ENV === 'production';
-}
-
-// Kulcs nélkül fejlesztői (mock) mód van; élesben ez tiltott, hogy soha ne tűnjön sikeresnek egy ki nem fizetett rendelés.
+// A mock mód kizárólag NODE_ENV=test alatt él; kulcs nélkül máshol mindig hiba, hogy soha ne tűnjön sikeresnek egy ki nem fizetett rendelés.
 function assertPaymentsAvailable(env = process.env) {
-  if (!isLive(env) && isProduction(env)) {
+  if (!isLive(env) && env.NODE_ENV !== 'test') {
     throw new PaymentError(`A fizetés jelenleg nem érhető el: a(z) ${keyName('STRIPE_SECRET_KEY', env)} nincs beállítva (aktív profil: ${getBillingProfile(env).type}).`, 503);
   }
 }
@@ -160,7 +156,8 @@ async function retrieveCheckoutSession(sessionId, deps = {}) {
 
   if (!isLive(env)) {
     if (!id.startsWith(MOCK_PREFIX)) throw new PaymentError('Ismeretlen fizetési azonosító (mock mód).', 404);
-    const mock = mockSessions.get(id) || {};
+    const mock = mockSessions.get(id);
+    if (!mock) throw new PaymentError('Ismeretlen fizetési azonosító (mock mód).', 404);
     return { mock: true, paid: true, plan: mock.plan || null, email: mock.email || null, generationId: mock.generationId || null };
   }
   const session = await getClient(env, deps).checkout.sessions.retrieve(id);

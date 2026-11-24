@@ -58,11 +58,23 @@ services:
         value: "true"
       - key: SZAMLAZZ_INVOICE_PREFIX
         sync: false
-      - key: COUPON_CODES
-        value: TEST100
       - key: BARION_POS_KEY_EV
         sync: false
       - key: BARION_POS_KEY_KFT
+        sync: false
+      - key: BARION_POS_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: FEEDBACK_SECRET
+        sync: false
+      - key: SZAMLAZZ_API_KEY
+        sync: false
+      - key: BACKEND_URL
         sync: false
       - key: BARION_TEST_MODE
         value: "true"

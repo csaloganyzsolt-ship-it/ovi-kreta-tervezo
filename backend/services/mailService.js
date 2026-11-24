@@ -104,18 +104,20 @@ function companyLines(env) {
 }
 
 function feedbackSecret(env = process.env) {
-  return String(env.FEEDBACK_SECRET || stripeSecretKey(env) || 'ovitervezo-feedback-key').trim();
+  return String(env.FEEDBACK_SECRET || '').trim();
 }
 
 function createFeedbackSignature(email, env = process.env) {
   const normalized = String(email || '').trim().toLowerCase();
   const secret = feedbackSecret(env);
+  if (!secret) return '';
   return crypto.createHmac('sha256', secret).update(normalized).digest('hex');
 }
 
 function verifyFeedbackSignature(email, sig, env = process.env) {
   if (!email || !sig) return false;
   const expected = createFeedbackSignature(email, env);
+  if (!expected) return false;
   if (typeof sig !== 'string' || sig.length !== expected.length) return false;
   try {
     return crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'));
@@ -144,8 +146,8 @@ function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, has
 
   let feedbackBlock = '';
   let textFeedbackBlock = '';
-  if (to) {
-    const sig = createFeedbackSignature(to, env);
+  const sig = to ? createFeedbackSignature(to, env) : '';
+  if (to && sig) {
     const docParam = documentId ? `&documentId=${encodeURIComponent(documentId)}` : '';
     const feedbackUrl = (r) => `${site}/ertekeles.html?rating=${r}&email=${encodeURIComponent(to)}&sig=${sig}${docParam}`;
     const starsHtml = [1, 2, 3, 4, 5].map((r) =>

@@ -84,7 +84,7 @@ async function listen(t) {
 
 function cleanPaymentEnv(t) {
   const saved = { ...process.env };
-  for (const key of Object.keys(process.env)) if (/^(STRIPE_|NODE_ENV|BARION_)/.test(key)) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (/^(STRIPE_|BARION_)/.test(key)) delete process.env[key];
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
 }
 

@@ -66,7 +66,7 @@ A generálási napló tartalmazza a modell nevét, a `finishReason` értékét, 
 
 A projektben 2 workflow van:
 - `test.yml`: ellenőrzi a statikus oldal meglétét és az alapvető tartalmi elemeket
-- `deploy-nethely.yml`: tesztek után a Nethely-re deployel (a GitHub Pages workflow megszűnt; a `build-pages.js` staging buildhez megmaradt)
+- `deploy-nethely.yml`: tesztek után a Nethely-re deployel (a GitHub Pages workflow és a `build-pages.js` megszűnt)
 
 ## API biztonság
 
@@ -97,10 +97,9 @@ Indítófájl: `backend/app.js` (a port a `PORT` környezeti változóból jön)
 A `.github/workflows/deploy-nethely.yml` minden `main` push után (és kézzel az Actions fülön) lefuttatja a teszteket, a `node scripts/build-nethely.js` buildet, majd FTP-vel szinkronizálja a `dist-nethely/` tartalmát. Szükséges Repository Secret-ek: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; opcionális: `FTP_PORT` (21), `FTP_SERVER_DIR` (`./`). A kapcsolat FTPS (passzív mód, `security: loose`, 60 s időkorlát).
 
 
-## Két környezet (Staging / Production)
+## Környezet
 
-- **Production (Nethely, ovitervezo.hu):** `node scripts/build-nethely.js` – `paywallEnabled: true`, éles Stripe + számlázás.
-- **Staging (GitHub Pages):** `node scripts/build-pages.js` – ugyanúgy `paywallEnabled: true`; a fizetős tartalom minden eredetre zárolt. Ingyenes teszteléshez a fizetési ablak „Kuponkód" mezője való (`POST /api/apply-coupon`).
+- **Production (Nethely, ovitervezo.hu):** `node scripts/build-nethely.js` – `paywallEnabled: true`, éles Barion/Stripe + számlázás.
 - **Kuponok:** a 100%-os kódokat a `COUPON_CODES` környezeti változó adja (vesszővel elválasztva; beállítás nélkül: `TEST100`; üresen a kuponok kikapcsolva). A kupon megkerüli a Stripe-ot és a Számlázz.hu-t; a levél számla nélkül, a kuponnal feloldott tervezettel megy ki. A végpont IP-nként percenként 10 kísérletre korlátozott.
 - **Barion fizetés:** `POST /api/checkout-barion` (Payment/Start) és `POST /api/webhook/barion` (GetPaymentState → feloldás + Számlázz.hu számla, fájlt és levelet nem küld). Környezeti változók: `BARION_POS_KEY_EV` (vagy `_KFT`, vagy a közös `BARION_POS_KEY`), `BARION_TEST_MODE=true` (teszt API), `BARION_PAYEE_EMAIL` (a Barion-bolt regisztrált e-mail címe; hiányában `SUPPORT_EMAIL`), `BACKEND_URL` (a visszahívás címe; Renderen a `RENDER_EXTERNAL_URL` is jó). A Barion-bolt a teszt környezetben legyen „Open" állapotban.
 - A deploy a `main` push után fut (`deploy-nethely.yml`).
