@@ -15,12 +15,18 @@ async function loadApp(t) {
       // jsdom provides the real DOM but does not implement scrolling or dialogs.
       window.HTMLElement.prototype.scrollIntoView = () => {};
       window.alert = (message) => { throw new Error(message); };
+      // A nyilvános beállításokat (GET /api/config) a teszt adja; más kérés itt nincs.
+      window.fetch = async (url) => {
+        if (!String(url).endsWith('/api/config')) throw new Error(`váratlan kérés: ${url}`);
+        return { ok: true, status: 200, json: async () => ({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false, seasonal_hints: ['őszi falevelek gyűjtése', 'farsangi mulatság'] }) };
+      };
     }
   });
   t.after(() => dom.window.close());
   if (dom.window.document.readyState === 'loading') {
     await new Promise((resolve) => dom.window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
   }
+  await new Promise((resolve) => setTimeout(resolve, 20));
   dom.window.document.querySelector('.wizard-item[data-step="3"]').click();
   return dom.window;
 }

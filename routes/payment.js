@@ -13,6 +13,7 @@ const authService = require('../services/authService');
 const logger = require('../utils/logger');
 const orders = require('../services/orderService');
 const profileService = require('../services/profileService');
+const settingsService = require('../services/settingsService');
 
 // A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető. A bejelentkezett felhasználót (vagy null-t) adja vissza.
 async function recordOwner(req, generationId, rawEmail) {
@@ -105,6 +106,7 @@ async function applyCoupon(req, res) {
     const known = coupons.sessionFor(generationId);
     const coupon = known && known.code === coupons.normalizeCode(body.code) ? { code: known.code, percent: 100 } : await coupons.lookup(body.code);
     const planMode = planModeFor(body);
+    await settingsService.getSettings();
     const product = stripeService.parsePlan(body.plan, planMode);
     const discount = coupons.computeDiscount(product.amountHuf, coupon.percent);
 

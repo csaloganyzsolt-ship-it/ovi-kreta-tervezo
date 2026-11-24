@@ -637,7 +637,7 @@ test('a pending Barion payment is checked once more on the next page load, silen
   assert.equal(stillPending.window.localStorage.getItem('oviKretaPendingBarion'), SESSION);
 
   const none = await loadReturn(t, { search: '', pendingKey: false, answers: () => Response.json({}) });
-  assert.equal(none.calls.length, 0, 'függő fizetés nélkül nincs hálózati hívás');
+  assert.equal(none.calls.filter((call) => !String(call.url).includes('/api/config')).length, 0, 'függő fizetés nélkül nincs hálózati hívás (a nyilvános konfiguráció kivételével)');
 });
 
 test('the price texts mention the academic price consistently on the landing page, the legal texts and the JSON-LD', () => {

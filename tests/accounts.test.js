@@ -45,6 +45,8 @@ function fakeAccounts(documents = [], extra = {}) {
       }
     },
     from(name) {
+      // A rendszerbeállítások és e-mail sablonok táblái üresek: az alapértékek érvényesek.
+      if (name === 'system_settings' || name === 'email_templates') return { select: async () => ({ data: [], error: null }) };
       const filters = [];
       let patch = null;
       let removing = false;
@@ -644,6 +646,7 @@ async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.
         state.fetches.push({ path, method, headers: options.headers || {}, body: options.body });
         const json = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
         if (routes[path]) return json(...[].concat(routes[path](method, options.body ? JSON.parse(options.body) : null)));
+        if (path === '/api/config') return json({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false, seasonal_hints: ['őszi falevelek gyűjtése'] });
         if (path === '/api/sync-documents') return json({ success: true, claimed: ['gen_local1'] });
         if (path === '/api/my-documents') {
           return json({ success: true, documents: [
@@ -689,7 +692,8 @@ test('guest mode in the browser: no login button, no auth header, no account req
   assert.deepEqual(JSON.parse(JSON.stringify(window.authHeaders())), {});
   assert.equal(window.document.getElementById('cloudPlansField').hidden, true);
   await tick();
-  assert.deepEqual(state.fetches, []);
+  // Egyedül a nyilvános konfiguráció kérése megengedett; fiókkérés nincs.
+  assert.deepEqual(state.fetches.filter((call) => call.path !== '/api/config'), []);
 });
 
 const submitAuthForm = (window) => window.document.getElementById('authForm').dispatchEvent(new window.Event('submit', { cancelable: true }));

@@ -26,6 +26,8 @@ function fakeSupabase(seed = {}) {
     tables,
     failures,
     from(name) {
+      // A rendszerbeállítások és e-mail sablonok táblái üresek: az alapértékek érvényesek.
+      if (name === 'system_settings' || name === 'email_templates') return { select: async () => ({ data: [], error: null }) };
       const filters = [];
       const matching = () => tables[name].filter((row) => filters.every(([column, value]) => readPath(row, column) === value));
       const builder = {

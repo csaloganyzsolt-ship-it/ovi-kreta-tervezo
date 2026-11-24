@@ -9,6 +9,7 @@ const mailService = require('./mailService');
 const sheetsService = require('./sheetsService');
 const planStore = require('./planStore');
 const coupons = require('./coupons');
+const settingsService = require('./settingsService');
 const orders = require('./orderService');
 const logger = require('../utils/logger');
 const { PaymentError } = stripeService;
@@ -143,6 +144,7 @@ async function callBarion(url, options, deps) {
 // A Barion Payment/Start hívása: az összeg a mentett csomagból (részleges kuponnál a szerver által ellenőrzött kedvezménnyel csökkentve), a documentId az OrderNumber mezőben utazik.
 async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, user, req }, deps = {}) {
   const env = deps.env || process.env;
+  await settingsService.getSettings();
   const product = stripeService.parsePlan(plan, planMode);
   const discount = coupon ? coupons.computeDiscount(product.amountHuf, coupon.percent) : null;
   const amountHuf = discount ? discount.finalPrice : product.amountHuf;

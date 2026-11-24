@@ -87,6 +87,7 @@ function openTurnstileModal(siteKey) {
 
 // Kattintásra indított generálás: élő Turnstile-token nélkül előbb a felugró ellenőrzés fut.
 function requestGeneration() {
+  if (appConfig.maintenance) return;
   const siteKey = getTurnstileSiteKey();
   if (!siteKey || currentTurnstileToken || readCachedGeneration(buildGenerationPayload()) || readDailyCount().count >= DAILY_FREE_LIMIT) {
     generatePlan();
@@ -256,6 +257,7 @@ async function generatePlan() {
     nextBtn.disabled = false;
     nextBtn.classList.remove('is-busy');
     nextBtn.textContent = 'Tervezet elkészítése';
+    applyMaintenanceState();
     updateExportLock();
   }
 }

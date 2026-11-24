@@ -2,6 +2,7 @@
 
 const FAST_MODEL = 'gemini-3.1-pro-preview';
 const PREMIUM_MODEL = 'gemini-3.1-pro-preview';
+const { AI_MODELS } = require('./settingsService');
 
 function generationError(message, status = 502) {
   const error = new Error(message);
@@ -29,10 +30,11 @@ async function callGemini(prompt, {
   maxOutputTokens = 12288,
   timeoutMs = 120000,
   blacklist = '',
+  systemPrompt = '',
   maxRetries = 2,
   retryDelayMs = (process.env.GEMINI_RETRY_DELAY_MS ? Number(process.env.GEMINI_RETRY_DELAY_MS) : (process.env.NODE_ENV === 'test' ? 10 : 2000))
 } = {}, deps = {}) {
-  if (model !== FAST_MODEL) {
+  if (!AI_MODELS.includes(model)) {
     throw generationError(`Nem támogatott modell: ${model}.`, 400);
   }
   const env = deps.env || process.env;
@@ -54,7 +56,7 @@ async function callGemini(prompt, {
         signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({
           systemInstruction: {
-            parts: [{ text: 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' + (blacklist ? `\n\n${buildBlacklistRule(blacklist)}` : '') }]
+            parts: [{ text: (systemPrompt ? `${systemPrompt}\n\n` : '') + 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' + (blacklist ? `\n\n${buildBlacklistRule(blacklist)}` : '') }]
           },
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {

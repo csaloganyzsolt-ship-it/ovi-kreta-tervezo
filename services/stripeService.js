@@ -3,6 +3,7 @@
 const { getBillingProfile } = require('./siteConstants');
 
 const { PRODUCTS, productFor } = require('./pricing');
+const settingsService = require('./settingsService');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MOCK_PREFIX = 'cs_mock_';
@@ -111,6 +112,7 @@ function getClient(env = process.env, deps = {}) {
 
 async function createCheckoutSession({ plan, email, generationId, title, planMode } = {}, deps = {}) {
   const env = deps.env || process.env;
+  await settingsService.getSettings();
   const product = parsePlan(plan, planMode);
   const customerEmail = parseEmail(email);
   assertPaymentsAvailable(env);

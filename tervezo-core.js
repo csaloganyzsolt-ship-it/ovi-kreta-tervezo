@@ -7,6 +7,18 @@ const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
 
 const nextBtn = document.getElementById('nextBtn');
 
+// A szerver nyilvános beállításai (GET /api/config): árak, karbantartás, szezonális javaslatok. A betöltés a tervezo-init.js-ben történik.
+const appConfig = { loaded: false, maintenance: false, seasonalHints: [] };
+
+const MAINTENANCE_LABEL = 'Karbantartás alatt – a generálás átmenetileg szünetel';
+
+// Karbantartás alatt a generálás gomb (az utolsó lépésen) le van tiltva; a futó generálás gombját nem bántja.
+function applyMaintenanceState() {
+  if (!appConfig.maintenance || nextBtn.classList.contains('is-busy') || currentStep !== steps.length - 1) return;
+  nextBtn.disabled = true;
+  nextBtn.textContent = MAINTENANCE_LABEL;
+}
+
 const backBtn = document.getElementById('backBtn');
 
 const loadPreviousBtn = document.getElementById('loadPreviousBtn');

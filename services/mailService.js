@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { supportEmail, storageDir } = require('./invoiceService');
 const { SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
 const { stripeSecretKey } = require('./stripeService');
+const settingsService = require('./settingsService');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
 const LOGO_CID = 'ovitervezo-logo';
@@ -255,13 +256,33 @@ async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumbe
 async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceName, title, orderNumber, planMode, documentId }, deps = {}) {
   const env = deps.env || process.env;
   const support = supportEmail(env);
-  const { text, html } = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: Boolean(invoicePdf), title, orderNumber, to, hasZip: hasZipAttachment(attachments), planMode, documentId }, env);
+  const built = buildEmailContent({ planLabel: planLabelOf(plan), withInvoice: Boolean(invoicePdf), title, orderNumber, to, hasZip: hasZipAttachment(attachments), planMode, documentId }, env);
+  const { text } = built;
+  let { html } = built;
+  let subject = invoicePdf ? 'OviTervező – a megvásárolt tervezet és az e-számla' : 'OviTervező – a kuponnal feloldott tervezet';
+  // Az adatbázisban szerkeszthető sablon (payment_success a base_layout-ban) elsőbbséget élvez; a hiba hangosan naplózódik, a kézbesítés ettől nem akad el.
+  try {
+    const templates = deps.templates !== undefined ? deps.templates : await settingsService.getTemplates();
+    if (templates) {
+      const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const composed = settingsService.composeEmail(templates, 'payment_success', {
+        planLabel: escapeHtml(planLabelOf(plan)),
+        invoiceText: invoicePdf ? ' Az e-számlát is mellékeltük PDF-ben.' : '',
+        title_block: cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : '',
+        order_block: orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>${escapeHtml(orderNumber)}</strong></p>` : ''
+      });
+      html = composed.html;
+      if (invoicePdf && composed.subject) subject = composed.subject;
+    }
+  } catch (error) {
+    console.error(`[mail] Az e-mail sablon betöltése sikertelen, a beépített levél megy ki: ${error.message}`);
+  }
   const transport = createTransport(env, deps);
   return transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
     to,
     replyTo: support,
-    subject: invoicePdf ? 'OviTervező – a megvásárolt tervezet és az e-számla' : 'OviTervező – a kuponnal feloldott tervezet',
+    subject,
     text,
     html,
     attachments: [...attachments, ...(invoicePdf ? [{ filename: invoiceName || 'szamla.pdf', content: invoicePdf, contentType: 'application/pdf' }] : []), logoAttachment()]

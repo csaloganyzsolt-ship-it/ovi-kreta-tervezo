@@ -21,6 +21,7 @@ const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValida
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
 const telemetryService = require('./services/telemetryService');
+const settingsService = require('./services/settingsService');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -148,6 +149,17 @@ app.use('/assets', (req, res, next) => (SHIPPED_EXTENSIONS.has(path.extname(req.
 for (const file of SEO_FILES) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
+
+// Nyilvános beállítások a frontendnek: árak, karbantartás státusz, szezonális javaslatok. A rendszerprompt és az AI-konfiguráció soha nem kerül ki.
+app.get('/api/config', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    res.json({ success: true, ...settingsService.publicConfig(await settingsService.getSettings()) });
+  } catch (error) {
+    logger.error('settings', error);
+    res.status(error.status || 500).json({ success: false, error: 'A beállítások jelenleg nem érhetők el.' });
+  }
+});
 
 // Élesben a konfiguráció a környezeti változókból jön (nincs titkos adat benne), így a Nethely-telepítéshez nem kell a config.js-t szerkeszteni.
 app.get('/config.js', (_req, res) => {
@@ -670,7 +682,16 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       });
     }
 
-    const model = resolveModel(request);
+    // A karbantartás mód a drága műveletek (modellhívás, napi keret) előtt blokkol.
+    const settings = await settingsService.getSettings();
+    if (settings.maintenance_mode) {
+      return res.status(503).json({
+        success: false,
+        code: 'MAINTENANCE_MODE',
+        error: 'Az OviTervező átmeneti karbantartás alatt áll, a tervezetek generálása most nem érhető el. Kérjük, nézz vissza egy kicsit később!'
+      });
+    }
+    const model = request.requestedModel ? resolveModel(request) : settingsService.resolveAiModel(settings, FAST_MODEL);
     const prompt = buildPrompt(request);
     if (!reserveDailyGeneration(process.env)) {
       return res.status(429).json({
@@ -683,6 +704,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     try {
       rawText = await callGemini(prompt, {
         model,
+        systemPrompt: settings.ai_config.system_prompt,
         blacklist: normalizeFreeText(request.blacklist),
         maxOutputTokens: academicPlan.isAcademic(request) ? academicPlan.MAX_ACADEMIC_OUTPUT_TOKENS : (isWeeklyBreakdown(request) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined),
         timeoutMs: academicPlan.isAcademic(request) ? academicPlan.ACADEMIC_TIMEOUT_MS : (isWeeklyBreakdown(request) ? WEEKLY_TIMEOUT_MS : undefined)

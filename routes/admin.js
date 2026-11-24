@@ -7,6 +7,7 @@ const { requireAdmin } = require('../services/authService');
 const admin = require('../services/adminService');
 const newsletter = require('../services/newsletterService');
 const analytics = require('../services/analyticsService');
+const settingsService = require('../services/settingsService');
 const logger = require('../utils/logger');
 
 const limiterOptions = { windowMs: 60 * 1000, standardHeaders: true, legacyHeaders: false, message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' } };
@@ -84,5 +85,32 @@ router.post('/admin/newsletter/send', sendLimiter, handle('A hírlevél indítá
   res.status(202).json({ success: true, ...result });
 }));
 router.get('/admin/newsletter/campaigns', handle('A kampányok lekérdezése', (client) => newsletter.listCampaigns(client)));
+
+// Rendszerbeállítások (árak, AI, karbantartás, szezonális javaslatok) és e-mail sablonok.
+router.get('/admin/settings', handle('A beállítások lekérdezése', async () => ({
+  settings: await settingsService.getSettings({ force: true }),
+  aiModels: settingsService.AI_MODELS
+})));
+router.patch('/admin/settings', handle('A beállítások mentése', async (client, req) => {
+  const settings = await settingsService.updateSettings(client, req.body);
+  logger.info('admin_settings', 'Rendszerbeállítások módosítva', { details: { keys: Object.keys(req.body || {}), admin: req.user?.email } });
+  return { settings };
+}));
+router.get('/admin/email-templates', handle('Az e-mail sablonok lekérdezése', async (client) => ({ templates: await settingsService.listTemplates(client) })));
+router.patch('/admin/email-templates/:id', handle('Az e-mail sablon mentése', async (client, req) => {
+  const template = await settingsService.updateTemplate(client, req.params.id, req.body);
+  logger.info('admin_settings', 'E-mail sablon módosítva', { details: { id: template.id, admin: req.user?.email } });
+  return { template };
+}));
+// Élő előnézet: a mentés nélküli szerkesztett tartalom a mentett base_layout-ba (vagy a szerkesztett base_layoutba) illesztve, mintaadatokkal.
+router.post('/admin/email-templates/preview', handle('Az előnézet készítése', async (client, req) => {
+  const body = req.body || {};
+  if (!settingsService.TEMPLATE_IDS.includes(body.id)) throw new settingsService.SettingsError('Ismeretlen e-mail sablon.', 404);
+  const saved = Object.fromEntries((await settingsService.listTemplates(client)).map((row) => [row.id, row]));
+  const edited = { id: body.id, subject: String(body.subject || '').slice(0, 200), bodyHtml: String(body.bodyHtml || '').slice(0, 100000) };
+  const templates = { ...saved, [body.id]: edited };
+  const sample = { content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', action_url: 'https://ovitervezo.hu/' };
+  return { html: settingsService.composeEmail(templates, body.id, sample).html };
+}));
 
 module.exports = { router };

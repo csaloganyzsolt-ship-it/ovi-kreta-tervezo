@@ -530,6 +530,7 @@ function renderStep() {
   updateWizardProgress();
   backBtn.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
   nextBtn.textContent = currentStep === steps.length - 1 ? 'Tervezet elkészítése' : 'Következő lépés';
+  applyMaintenanceState();
   renderPreview();
   updateExportLock();
   persistDraftState();
@@ -1229,23 +1230,10 @@ function renderSeasonalThemeSuggestions() {
   const container = document.getElementById('themeSuggestions');
   if (!container) return;
 
-  const month = new Date().getMonth();
-  const seasonalMap = {
-    0: ['Téli kézműves nap', 'Téli állatok', 'Jégvarázs', 'Újévi terveztetés'],
-    1: ['Téli kézműves nap', 'Hideg és hó', 'Téli állatok', 'Színes hóesés'],
-    2: ['Tavaszi virágok', 'Kis madarak', 'Kert és növények', 'Fűzfa és szél'],
-    3: ['Húsvéti készülődés', 'Tavaszi fák', 'Madarak és fák', 'Kertészeti kaland'],
-    4: ['Május eleje', 'Madarak', 'Kerti munkák', 'Fák, virágok és méhek'],
-    5: ['Nyári napok', 'Balatoni élmények', 'Vizes játékok', 'Bogyók és gyümölcsök'],
-    6: ['Nyári kalandok', 'Nap és víz', 'Külföldi utazás', 'Nyaralási élmények'],
-    7: ['Őszi bogyók', 'Kerti termés', 'Művészi nyár', 'Álom és pihenés'],
-    8: ['Őszi színek', 'Madarak és fák', 'Téli előkészítés', 'Falevelek és gesztenye'],
-    9: ['Márton-nap', 'Őszi időjárás', 'Maci ébredése', 'Falevelek és gyűjtés'],
-    10: ['Márton-nap', 'Őszi időjárás', 'Maci ébredése', 'Falevelek és gyűjtés'],
-    11: ['Karácsonyi készülődés', 'Téli ünnepkör', 'Télapó és hó', 'Karácsony és fények']
-  };
-
-  const themes = seasonalMap[month] || seasonalMap[9];
+  // A javaslatok az adatbázisból (GET /api/config -> seasonal_hints) jönnek; betöltés előtt vagy hiba esetén nincs beégetett lista.
+  const themes = appConfig.seasonalHints;
+  const themeField = document.querySelector('input[data-field="theme"]');
+  if (themeField && themes.length) themeField.placeholder = `Pl.: ${themes[0]}`;
   const activeTheme = document.querySelector('input[data-field="theme"]')?.value?.trim();
   container.innerHTML = themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme)}">${escapeHtml(theme)}</button>`).join('');
 

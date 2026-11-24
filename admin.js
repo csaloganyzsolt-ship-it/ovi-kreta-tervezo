@@ -487,6 +487,111 @@
     }
   }
 
+  // ---------- Rendszerbeállítások ----------
+
+  let templates = {};
+
+  function flash(statusId, errorId, message, isError) {
+    setText(statusId, isError ? '' : message);
+    setText(errorId, isError ? message : '');
+  }
+
+  async function loadSettings() {
+    try {
+      const { settings, aiModels } = await api('/api/admin/settings');
+      byId('setMaintenance').checked = settings.maintenance_mode === true;
+      byId('setPriceStandard').value = settings.pricing.standard;
+      byId('setPriceAcademic').value = settings.pricing.academic;
+      byId('setPriceWeekly').value = settings.pricing.weekly;
+      byId('setHints').value = settings.seasonal_hints.join(', ');
+      const select = byId('setAiModel');
+      const models = aiModels.includes(settings.ai_config.model) ? aiModels : [settings.ai_config.model, ...aiModels];
+      select.replaceChildren(...models.map((model) => {
+        const option = el('option', '', aiModels.includes(model) ? model : `${model} (nem támogatott – válassz másikat)`);
+        option.value = model;
+        return option;
+      }));
+      select.value = settings.ai_config.model;
+      byId('setAiPrompt').value = settings.ai_config.system_prompt;
+    } catch (error) {
+      flash('generalStatus', 'generalError', `A beállítások nem tölthetők be: ${errorMessage(error)}`, true);
+    }
+  }
+
+  async function saveSettings(event, patchBuilder, ids) {
+    event.preventDefault();
+    flash(ids.status, ids.error, '', false);
+    const button = byId(ids.button);
+    button.disabled = true;
+    try {
+      await api('/api/admin/settings', { method: 'PATCH', body: patchBuilder() });
+      flash(ids.status, ids.error, 'Mentve. A változás azonnal érvényes.', false);
+    } catch (error) {
+      flash(ids.status, ids.error, errorMessage(error), true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  const saveGeneral = (event) => saveSettings(event, () => ({
+    maintenance_mode: byId('setMaintenance').checked,
+    pricing: { standard: Number(byId('setPriceStandard').value), academic: Number(byId('setPriceAcademic').value), weekly: Number(byId('setPriceWeekly').value) },
+    seasonal_hints: byId('setHints').value
+  }), { status: 'generalStatus', error: 'generalError', button: 'generalSave' });
+
+  const saveAi = (event) => saveSettings(event, () => ({
+    ai_config: { model: byId('setAiModel').value, system_prompt: byId('setAiPrompt').value }
+  }), { status: 'aiStatus', error: 'aiError', button: 'aiSave' });
+
+  function showTemplate() {
+    const template = templates[byId('tplSelect').value];
+    byId('tplSubject').value = template?.subject || '';
+    byId('tplBody').value = template?.bodyHtml || '';
+    refreshTemplatePreview();
+  }
+
+  async function loadTemplates() {
+    try {
+      const { templates: rows } = await api('/api/admin/email-templates');
+      templates = Object.fromEntries(rows.map((row) => [row.id, row]));
+      showTemplate();
+    } catch (error) {
+      flash('tplStatus', 'tplError', `A sablonok nem tölthetők be: ${errorMessage(error)}`, true);
+    }
+  }
+
+  async function refreshTemplatePreview() {
+    try {
+      const { html } = await api('/api/admin/email-templates/preview', { method: 'POST', body: { id: byId('tplSelect').value, subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
+      byId('tplPreview').srcdoc = html;
+      setText('tplError', '');
+    } catch (error) {
+      setText('tplError', `Az előnézet nem frissíthető: ${errorMessage(error)}`);
+    }
+  }
+
+  async function saveTemplate(event) {
+    event.preventDefault();
+    flash('tplStatus', 'tplError', '', false);
+    const id = byId('tplSelect').value;
+    const button = byId('tplSave');
+    button.disabled = true;
+    try {
+      const { template } = await api(`/api/admin/email-templates/${encodeURIComponent(id)}`, { method: 'PATCH', body: { subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
+      templates[id] = template;
+      flash('tplStatus', 'tplError', 'A sablon mentve.', false);
+    } catch (error) {
+      flash('tplStatus', 'tplError', errorMessage(error), true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function activateSettingsTab(name) {
+    document.querySelectorAll('[data-settings-tab]').forEach((tab) => tab.setAttribute('aria-selected', tab.dataset.settingsTab === name ? 'true' : 'false'));
+    document.querySelectorAll('[data-settings-panel]').forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== name; });
+  }
+
   // ---------- Lapok ----------
 
   const TAB_LOADERS = {
@@ -494,7 +599,8 @@
     coupons: [loadCoupons],
     orders: [loadOrders],
     users: [loadUsers, loadCampaigns, refreshPreview],
-    logs: [loadLogs]
+    logs: [loadLogs],
+    settings: [loadSettings, loadTemplates]
   };
 
   function activateTab(name) {
@@ -524,6 +630,12 @@
     byId('newsletterForm').addEventListener('submit', sendNewsletter);
     byId('newsletterForm').addEventListener('input', schedulePreview);
     document.querySelectorAll('input[name="recipients"]').forEach((radio) => radio.addEventListener('change', syncRecipientMode));
+    document.querySelectorAll('[data-settings-tab]').forEach((tab) => tab.addEventListener('click', () => activateSettingsTab(tab.dataset.settingsTab)));
+    byId('generalForm').addEventListener('submit', saveGeneral);
+    byId('aiForm').addEventListener('submit', saveAi);
+    byId('templateForm').addEventListener('submit', saveTemplate);
+    byId('tplSelect').addEventListener('change', showTemplate);
+    byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
   }
 

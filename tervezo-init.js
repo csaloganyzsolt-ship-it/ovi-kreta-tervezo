@@ -115,11 +115,45 @@ function initFooterAndModals() {
   });
 }
 
+// A nyilvános beállítások (árak, karbantartás, szezonális javaslatok) betöltése. Hiba esetén a felület hangosan jelez, nincs kamu adat.
+function applyPublicConfig(config) {
+  const prices = config.pricing || {};
+  const byKind = { daily: prices.standard, weekly: prices.standard, weekly_detailed: prices.weekly, academic_daily: prices.academic, academic_weekly: prices.academic };
+  Object.entries(byKind).forEach(([kind, price]) => {
+    if (Number.isInteger(price) && price > 0) PAYWALL_PRICES[kind] = price;
+  });
+  appConfig.maintenance = config.maintenance_mode === true;
+  appConfig.seasonalHints = Array.isArray(config.seasonal_hints) ? config.seasonal_hints.filter((hint) => typeof hint === 'string' && hint.trim()) : [];
+  appConfig.loaded = true;
+  renderSeasonalThemeSuggestions();
+  renderStep();
+  updateExportLock();
+}
+
+async function loadPublicConfig() {
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) return;
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/config`, { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.success) throw new Error(data?.error || `HTTP ${response.status}`);
+    applyPublicConfig(data);
+  } catch (error) {
+    console.error('A rendszerbeállítások nem tölthetők be:', error);
+    const note = document.getElementById('configError');
+    if (note) {
+      note.textContent = 'A friss árak és beállítások most nem tölthetők be. Kérjük, frissítsd az oldalt.';
+      note.hidden = false;
+    }
+  }
+}
+
 function initializeApp() {
   if (window.__oviKretaAppInitialized) return;
   window.__oviKretaAppInitialized = true;
 
   renderSeasonalThemeSuggestions();
+  loadPublicConfig();
   loadProfileFromStorage();
   loadDraftFromStorage();
   loadGeneratedPlanFromStorage();

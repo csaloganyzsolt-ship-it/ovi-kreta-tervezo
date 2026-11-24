@@ -2,6 +2,8 @@
 
 // Egyetlen árforrás (bruttó Ft; az egyéni vállalkozó AAM számláján nettó = bruttó): a Stripe, a számlázás és a jövőbeli Barion is innen számol.
 // Az óvodai (standard) tervezet 390/890 Ft, az oktatási célú (academic) tervezet napi és heti formában is 690 Ft.
+const settingsService = require('./settingsService');
+
 const STANDARD_NAME = 'OviTervező – Online szoftverhasználati díj';
 
 const PRODUCTS = Object.freeze({
@@ -20,9 +22,13 @@ function resolveProductKey(plan, planMode) {
   return raw.includes('weekly') ? 'academic_weekly' : 'academic_daily';
 }
 
-function productFor(plan, planMode) {
+// Az ár mindig a szerver beállításából (system_settings -> pricing) jön, a kliens csak a csomag azonosítóját adja.
+// A statikus PRODUCTS ár csak az adatbázis nélküli alapérték.
+function productFor(plan, planMode, pricing = settingsService.peek().pricing) {
   const key = resolveProductKey(plan, planMode);
-  return key ? PRODUCTS[key] : null;
+  if (!key) return null;
+  const amountHuf = pricing?.[settingsService.pricingTierFor(key)];
+  return Number.isInteger(amountHuf) && amountHuf > 0 ? { ...PRODUCTS[key], amountHuf } : PRODUCTS[key];
 }
 
 module.exports = { PRODUCTS, resolveProductKey, productFor };

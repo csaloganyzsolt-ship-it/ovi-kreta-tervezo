@@ -52,6 +52,7 @@
             <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
             <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók &amp; Hírlevél</button>
             <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
+            <button type="button" role="tab" class="profile-tab" id="tabSettings" data-admin-tab="settings" aria-selected="false" aria-controls="panelSettings">Beállítások</button>
           </div>
 
           <section class="profile-panel" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
@@ -284,6 +285,95 @@
               </table>
             </div>
             <p class="profile-error" id="logsError" role="alert" hidden></p>
+          </section>
+
+          <section class="profile-panel" id="panelSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
+            <h2>Rendszerbeállítások</h2>
+            <div class="profile-tabs" role="tablist" aria-label="Beállítások alszekciói">
+              <button type="button" role="tab" class="profile-tab" id="subTabGeneral" data-settings-tab="general" aria-selected="true">Általános &amp; Árazás</button>
+              <button type="button" role="tab" class="profile-tab" id="subTabAi" data-settings-tab="ai" aria-selected="false">AI Beállítások</button>
+              <button type="button" role="tab" class="profile-tab" id="subTabEmail" data-settings-tab="email" aria-selected="false">E-mail Sablonok</button>
+            </div>
+
+            <div id="settingsGeneral" data-settings-panel="general">
+              <form class="profile-form" id="generalForm" novalidate>
+                <div class="span-2">
+                  <label><input type="checkbox" id="setMaintenance" /> Karbantartás mód (a generálás leáll, a felhasználók udvarias üzenetet kapnak)</label>
+                </div>
+                <div>
+                  <label for="setPriceStandard">Napi tervezet ára (Ft)</label>
+                  <input id="setPriceStandard" type="number" min="1" max="100000" step="1" />
+                </div>
+                <div>
+                  <label for="setPriceAcademic">Oktatási célú tervezet ára (Ft)</label>
+                  <input id="setPriceAcademic" type="number" min="1" max="100000" step="1" />
+                </div>
+                <div>
+                  <label for="setPriceWeekly">Heti komplex csomag ára (Ft)</label>
+                  <input id="setPriceWeekly" type="number" min="1" max="100000" step="1" />
+                </div>
+                <div class="span-2">
+                  <label for="setHints">Szezonális javaslatok (vesszővel elválasztva)</label>
+                  <input id="setHints" type="text" maxlength="600" autocomplete="off" />
+                </div>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="generalSave">Mentés</button>
+                  <span class="profile-status" id="generalStatus" role="status" hidden></span>
+                  <span class="profile-error" id="generalError" role="alert" hidden></span>
+                </div>
+              </form>
+            </div>
+
+            <div id="settingsAi" data-settings-panel="ai" hidden>
+              <form class="profile-form" id="aiForm" novalidate>
+                <div class="span-2">
+                  <label for="setAiModel">AI modell</label>
+                  <select id="setAiModel"></select>
+                </div>
+                <div class="span-2">
+                  <label for="setAiPrompt">Rendszer prompt</label>
+                  <textarea id="setAiPrompt" rows="14" maxlength="8000"></textarea>
+                </div>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="aiSave">Mentés</button>
+                  <span class="profile-status" id="aiStatus" role="status" hidden></span>
+                  <span class="profile-error" id="aiError" role="alert" hidden></span>
+                </div>
+              </form>
+            </div>
+
+            <div id="settingsEmail" data-settings-panel="email" hidden>
+              <div class="admin-newsletter">
+                <form class="profile-form" id="templateForm" novalidate>
+                  <div class="span-2">
+                    <label for="tplSelect">Sablon</label>
+                    <select id="tplSelect">
+                      <option value="welcome_email">Üdvözlő e-mail</option>
+                      <option value="payment_success">Sikeres fizetés</option>
+                      <option value="password_reset">Jelszó visszaállítás</option>
+                      <option value="base_layout">Base Layout (közös keret, {{content}} helyőrzővel)</option>
+                    </select>
+                  </div>
+                  <div class="span-2">
+                    <label for="tplSubject">Tárgy</label>
+                    <input id="tplSubject" type="text" maxlength="200" autocomplete="off" />
+                  </div>
+                  <div class="span-2">
+                    <label for="tplBody">HTML tartalom</label>
+                    <textarea id="tplBody" rows="14" maxlength="100000"></textarea>
+                  </div>
+                  <div class="profile-actions">
+                    <button type="submit" class="profile-btn primary" id="tplSave">Mentés</button>
+                    <span class="profile-status" id="tplStatus" role="status" hidden></span>
+                    <span class="profile-error" id="tplError" role="alert" hidden></span>
+                  </div>
+                </form>
+                <div class="admin-preview">
+                  <h4>Élő előnézet</h4>
+                  <iframe id="tplPreview" title="E-mail sablon előnézete" sandbox="" referrerpolicy="no-referrer"></iframe>
+                </div>
+              </div>
+            </div>
           </section>
         </section>
       </main>
