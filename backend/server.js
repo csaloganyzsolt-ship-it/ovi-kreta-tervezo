@@ -22,6 +22,8 @@ const { generationError, readText, readStringArray, clampRows, normalizeTable } 
 const academicPlan = require('./services/academicPlan');
 const telemetryService = require('./services/telemetryService');
 const settingsService = require('./services/settingsService');
+const barionService = require('./services/barionService');
+const { billingStatus } = require('./services/billingStatus');
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -159,11 +161,23 @@ for (const file of SEO_FILES) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 
-// Nyilvános beállítások a frontendnek: árak, karbantartás státusz, szezonális javaslatok. A rendszerprompt és az AI-konfiguráció soha nem kerül ki.
+// Nyilvános beállítások a frontendnek: árak, karbantartás, szezonális javaslatok, az aktív cégprofil és fizetési szolgáltató. A rendszerprompt és az AI-konfiguráció soha nem kerül ki.
 app.get('/api/config', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    res.json({ success: true, ...settingsService.publicConfig(await settingsService.getSettings()) });
+    const settings = await settingsService.getSettings();
+    const env = process.env;
+    const paymentProvider = settings.payment_provider === 'stripe' ? 'stripe' : 'barion';
+    const profileType = getBillingProfile(env).type;
+    res.json({
+      success: true,
+      ...settingsService.publicConfig(settings),
+      company: { ...publicCompany(env, profileType), email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL },
+      paymentProvider,
+      barionPixelId: paymentProvider === 'barion' ? barionPixelId(env) : '',
+      stripePublishableKey: stripeService.stripePublishableKey(env, profileType),
+      stripeTestMode: stripeService.isTestMode(env)
+    });
   } catch (error) {
     logger.error('settings', error);
     res.status(error.status || 500).json({ success: false, error: 'A beállítások jelenleg nem érhetők el.' });
@@ -171,6 +185,7 @@ app.get('/api/config', async (_req, res) => {
 });
 
 // Élesben a konfiguráció a környezeti változókból jön (nincs titkos adat benne), így a Nethely-telepítéshez nem kell a config.js-t szerkeszteni.
+// A cégprofil és a fizetési szolgáltató itt csak a kezdőérték; futásidőben a frontend a /api/config alapján frissít.
 app.get('/js/config.js', (_req, res) => {
   const env = process.env;
   const config = {
@@ -189,23 +204,6 @@ app.get('/js/config.js', (_req, res) => {
   };
   res.type('application/javascript').send(`window.APP_CONFIG = ${JSON.stringify(config)};`);
 });
-
-// Csak logikai értékeket ad: titkos kulcs vagy annak töredéke sosem kerül a válaszba.
-function billingStatus(env = process.env) {
-  const profile = getBillingProfile(env);
-  return {
-    profile: profile.type,
-    companyName: profile.name,
-    vatRate: invoiceService.vatRate(env),
-    hasInvoicePrefix: invoiceService.invoicePrefix(env) !== '',
-    keys: {
-      stripePublishable: Boolean(stripeService.stripePublishableKey(env)),
-      stripeSecret: Boolean(stripeService.stripeSecretKey(env)),
-      stripeWebhook: Boolean(stripeService.stripeWebhookSecret(env)),
-      szamlazzApiKey: Boolean(invoiceService.szamlazzApiKey(env))
-    }
-  };
-}
 
 app.get('/health', (_req, res) => {
   res.json({
@@ -856,6 +854,8 @@ function turnstileWarning(env = process.env) {
 function start(port = PORT) {
   const warning = turnstileWarning(process.env);
   if (warning) console.warn(warning);
+  // Az aktív cégprofil az adatbázisból töltődik be; hiba esetén hangosan naplózunk, a környezeti változó marad a tartalék.
+  settingsService.getSettings().catch((error) => logger.error('settings', `A beállítások indítási betöltése sikertelen: ${error.message}`));
   return app.listen(port, HOST, () => {
     console.log(`OviTervező is running on ${HOST}:${port}`);
   });

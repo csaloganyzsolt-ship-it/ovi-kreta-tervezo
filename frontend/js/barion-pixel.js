@@ -1,21 +1,27 @@
-// Barion Base Pixel. Az azonosító a config.js-ből jön (APP_CONFIG.barionPixelId); hiányzó vagy érvénytelen értéknél semmit nem tölt be.
+// Barion Base Pixel. Csak akkor töltődik be, ha az aktív fizetési szolgáltató a Barion (a /api/config paymentProvider mezője);
+// az azonosító a /api/config-ból vagy a config.js-ből jön (barionPixelId). Hiányzó vagy érvénytelen értéknél semmit nem tölt be.
 (function loadBarionPixel() {
-  try {
-    const pixelId = String((window.APP_CONFIG || {}).barionPixelId || '').trim();
-    if (!/^BP-[A-Za-z0-9-]{4,60}$/.test(pixelId)) return;
-    window.bp = window.bp || function bp() {
-      (window.bp.q = window.bp.q || []).push(arguments);
-    };
-    window.bp.l = 1 * new Date();
-    window.barion_pixel_id = pixelId;
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://pixel.barion.com/bp.js';
-    document.head.appendChild(script);
-    window.bp('init', 'addBarionPixelId', pixelId);
-  } catch (error) {
-    console.warn('A Barion Pixel nem tölthető be:', error);
+  function start(config) {
+    try {
+      if (config.paymentProvider !== undefined && config.paymentProvider !== 'barion') return;
+      const pixelId = String(config.barionPixelId || '').trim();
+      if (!/^BP-[A-Za-z0-9-]{4,60}$/.test(pixelId)) return;
+      window.bp = window.bp || function bp() {
+        (window.bp.q = window.bp.q || []).push(arguments);
+      };
+      window.bp.l = 1 * new Date();
+      window.barion_pixel_id = pixelId;
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://pixel.barion.com/bp.js';
+      document.head.appendChild(script);
+      window.bp('init', 'addBarionPixelId', pixelId);
+    } catch (error) {
+      console.warn('A Barion Pixel nem tölthető be:', error);
+    }
   }
+  if (typeof window.loadRuntimeConfig === 'function') window.loadRuntimeConfig().then(start);
+  else start(window.APP_CONFIG || {});
 }());
 
 // Teljes (Full) Barion Pixel e-kereskedelmi események. Minden hívás védett: ha a Pixel le van tiltva vagy blokkolva, az oldal működése nem változik.

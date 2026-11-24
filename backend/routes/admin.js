@@ -9,6 +9,9 @@ const newsletter = require('../services/newsletterService');
 const analytics = require('../services/analyticsService');
 const mailService = require('../services/mailService');
 const settingsService = require('../services/settingsService');
+const orderService = require('../services/orderService');
+const invoiceService = require('../services/invoiceService');
+const { billingStatus } = require('../services/billingStatus');
 const logger = require('../utils/logger');
 
 const limiterOptions = { windowMs: 60 * 1000, standardHeaders: true, legacyHeaders: false, message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' } };
@@ -78,6 +81,30 @@ router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása
 }));
 
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
+// A visszaigazoló / számlaértesítő levél újraküldése: kizárólag a szerveren tárolt, fizetett rendelés vevői címére, az élőben lekért számla PDF-fel; a vevői kézbesítési számlálót nem növeli.
+router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újraküldés', async (_client, req) => {
+  const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
+  if (!order) throw new admin.AdminError('A rendelés nem található.', 404);
+  if (order.status !== 'paid') throw new admin.AdminError('Csak kifizetett rendelés értesítője küldhető újra.', 409);
+  if (!order.email) throw new admin.AdminError('A rendeléshez nem tartozik e-mail cím.', 422);
+  if (!mailService.isConfigured()) throw new admin.AdminError('Az e-mail küldés nincs beállítva (SMTP).', 503);
+  const invoicePdf = order.invoiceNumber
+    ? await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile })
+    : undefined;
+  await mailService.sendPurchaseEmail({
+    to: order.email,
+    plan: order.planKey,
+    orderNumber: order.orderNumber,
+    attachments: [],
+    invoicePdf,
+    invoiceName: order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined,
+    title: order.title,
+    planMode: order.planMode,
+    documentId: order.documentId || order.orderNumber
+  });
+  return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf) };
+}));
+router.get('/admin/billing-status', handle('Az állapotjelző lekérdezése', async () => ({ status: billingStatus(process.env) })));
 router.get('/admin/users', handle('A felhasználók lekérdezése', (client) => admin.listUsers(client)));
 
 router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: await newsletter.buildPreview(req.body) })));

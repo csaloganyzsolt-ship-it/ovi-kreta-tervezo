@@ -14,6 +14,10 @@ const logger = require('../utils/logger');
 const orders = require('../services/orderService');
 const profileService = require('../services/profileService');
 const settingsService = require('../services/settingsService');
+const { getBillingProfile } = require('../services/siteConstants');
+
+// Rendelésenként ennyiszer küldhető ki a tervezet e-mailben (kézbesítés, újraküldés ellen védve).
+const MAX_DELIVERIES = 1;
 
 // A terv tulajdonosa: bejelentkezett felhasználó (Bearer token) vagy a vásárló e-mail címe. A fizetést nem akaszthatja meg, ha ez nem menthető. A bejelentkezett felhasználót (vagy null-t) adja vissza.
 async function recordOwner(req, generationId, rawEmail) {
@@ -84,7 +88,27 @@ async function createCheckout(req, res) {
   try {
     const body = req.body || {};
     if (body.generationId) await planStore.loadPlan(String(body.generationId).slice(0, 100));
-    const session = await stripeService.createCheckoutSession({ ...body, planMode: planModeFor(body) });
+    const planMode = planModeFor(body);
+    const session = await stripeService.createCheckoutSession({ ...body, planMode });
+    // A valódi Stripe-fizetés rendelése már a indításkor megvan (állapotforrás); a mock munkamenet nem kerül az adatbázisba.
+    if (!session.mock) {
+      const user = await recordOwner(req, String(body.generationId || '').slice(0, 100), body.email);
+      await orders.createPending({
+        orderNumber: orders.orderNumberFor(session.id, new Date()),
+        sessionId: session.id,
+        provider: 'stripe',
+        providerPaymentId: session.id,
+        billingProfile: getBillingProfile().type,
+        userId: user?.id,
+        email: stripeService.parseEmail(body.email),
+        documentId: String(body.generationId || '').slice(0, 100) || undefined,
+        planMode,
+        planKey: session.plan,
+        amount: session.amountHuf,
+        title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, 200) || undefined,
+        paymentMethod: 'Stripe'
+      });
+    }
     return res.json({ success: true, ...session });
   } catch (error) {
     return sendPaymentError(res, error, 'Checkout', req);
@@ -122,6 +146,7 @@ async function applyCoupon(req, res) {
       await orders.markPaid({
         orderNumber: orders.orderNumberFor(session.id, session.created),
         userId: user?.id,
+        sessionId: session.id,
         email: user?.email || email,
         documentId: generationId,
         planMode,
@@ -220,7 +245,7 @@ async function verifyCheckout(req, res) {
       success: true,
       ...result,
       planData,
-      invoiceReady: Boolean(invoiceService.getInvoicePdf(req.params.id)),
+      invoiceReady: Boolean((await orders.getBySessionId(req.params.id))?.invoiceNumber),
       emailEnabled: mailService.isConfigured() && !result.mock
     });
   } catch (error) {
@@ -232,8 +257,10 @@ async function downloadInvoice(req, res) {
   try {
     const session = await retrieveSession(req.params.id);
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
-    const pdf = invoiceService.getInvoicePdf(req.params.id);
-    if (!pdf) return res.status(404).json({ success: false, error: 'A számla még készül vagy nem érhető el.' });
+    const order = await orders.getBySessionId(req.params.id);
+    if (!order?.invoiceNumber) return res.status(404).json({ success: false, error: 'A számla még készül vagy nem érhető el.' });
+    // Élő lekérés a Számlázz.hu-tól; a PDF csak memóriában utazik, fájlba nem kerül.
+    const pdf = await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile });
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="OviTervezo_szamla.pdf"' });
     return res.send(pdf);
   } catch (error) {
@@ -251,22 +278,29 @@ async function deliverPurchase(req, res) {
     req.logEmail = session.email;
     if (!session.paid) return res.status(402).json({ success: false, error: 'A fizetés még nem érkezett meg.' });
     if (session.mock || !mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
-    if (mailService.wasSent(id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
-    const invoicePdf = invoiceService.getInvoicePdf(id);
-    if (!invoicePdf) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
+    const order = await orders.getBySessionId(id);
+    if (!order) return res.status(404).json({ success: false, error: 'A rendelés nem található.' });
+    if (order.deliveryCount >= MAX_DELIVERIES) return res.json({ success: true, sent: false, reason: 'already_sent' });
+    if (!order.invoiceNumber) return res.status(409).json({ success: false, error: 'A számla még készül, próbáld újra.' });
     if (!session.email) return res.status(422).json({ success: false, error: 'A vásárló e-mail címe nem ismert.' });
     const attachments = mailService.sanitizeAttachments(req.body?.files);
-    await mailService.sendPurchaseEmail({
-      to: session.email,
-      plan: session.plan,
-      orderNumber: invoiceService.orderNumber(id, session.created || new Date()),
-      attachments,
-      invoicePdf,
-      title: req.body?.title,
-      planMode: requestedPlanMode(req),
-      documentId: session.generationId || id
-    });
-    mailService.markSent(id);
+    const invoicePdf = await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile });
+    if (!(await orders.claimDelivery(order.orderNumber, MAX_DELIVERIES))) return res.json({ success: true, sent: false, reason: 'already_sent' });
+    try {
+      await mailService.sendPurchaseEmail({
+        to: session.email,
+        plan: session.plan,
+        orderNumber: order.orderNumber,
+        attachments,
+        invoicePdf,
+        title: req.body?.title,
+        planMode: requestedPlanMode(req),
+        documentId: session.generationId || id
+      });
+    } catch (error) {
+      await orders.releaseDelivery(order.orderNumber).catch((e) => console.error('[orders]', e.message));
+      throw error;
+    }
     return res.json({ success: true, sent: true });
   } catch (error) {
     return sendPaymentError(res, error, 'Purchase delivery', req);
@@ -276,18 +310,23 @@ async function deliverPurchase(req, res) {
 // Kuponos kézbesítés: nincs számla, a levél a kuponnal feloldott tervezetet küldi a megadott címre (egyszer).
 async function deliverCouponPurchase(req, res, session) {
   if (!mailService.isConfigured()) return res.json({ success: true, sent: false, reason: 'smtp_not_configured' });
-  if (mailService.wasSent(session.id)) return res.json({ success: true, sent: false, reason: 'already_sent' });
+  const orderNumber = orders.orderNumberFor(session.id, session.created);
   const attachments = mailService.sanitizeAttachments(req.body?.files);
-  await mailService.sendPurchaseEmail({
-    to: session.email,
-    plan: session.plan,
-    orderNumber: session.id.slice(-10).toUpperCase(),
-    attachments,
-    title: req.body?.title,
-    planMode: session.planMode,
-    documentId: session.generationId || session.id
-  });
-  mailService.markSent(session.id);
+  if (!(await orders.claimDelivery(orderNumber, MAX_DELIVERIES))) return res.json({ success: true, sent: false, reason: 'already_sent' });
+  try {
+    await mailService.sendPurchaseEmail({
+      to: session.email,
+      plan: session.plan,
+      orderNumber: session.id.slice(-10).toUpperCase(),
+      attachments,
+      title: req.body?.title,
+      planMode: session.planMode,
+      documentId: session.generationId || session.id
+    });
+  } catch (error) {
+    await orders.releaseDelivery(orderNumber).catch((e) => console.error('[orders]', e.message));
+    throw error;
+  }
   return res.json({ success: true, sent: true, coupon: true });
 }
 
@@ -305,35 +344,66 @@ async function stripeWebhook(req, res) {
   if (session.payment_status !== 'paid') return res.json({ received: true, ignored: 'unpaid' });
 
   try {
+    await settingsService.getSettings();
     const details = session.customer_details || {};
     const address = details.address || {};
+    const profileType = event.billingProfile || session.metadata?.billingProfile || getBillingProfile().type;
+    const email = details.email || session.customer_email;
+    const customer = {
+      name: details.name,
+      email,
+      zip: address.postal_code,
+      city: address.city,
+      address: [address.line1, address.line2].filter(Boolean).join(' ')
+    };
+    const createdAt = session.created ? new Date(session.created * 1000) : new Date();
+    const amountHuf = Number.isFinite(session.amount_total) ? Math.round(session.amount_total / 100) : undefined;
+    let order = await orders.getBySessionId(session.id);
+    if (!order || order.status !== 'paid') {
+      order = await orders.markPaid({
+        orderNumber: orders.orderNumberFor(session.id, createdAt),
+        sessionId: session.id,
+        provider: 'stripe',
+        providerPaymentId: String(session.payment_intent || session.id),
+        billingProfile: profileType,
+        billing: customer,
+        email,
+        documentId: session.metadata?.generationId || undefined,
+        planMode: session.metadata?.planMode === 'academic' ? 'academic' : 'standard',
+        planKey: session.metadata?.plan,
+        amount: amountHuf,
+        title: session.metadata?.title || undefined,
+        paymentMethod: 'Stripe',
+        createdAt: createdAt.toISOString()
+      });
+      order = await orders.getBySessionId(session.id);
+    }
+    // Idempotencia: a webhook újrapróbálásakor a rendelésen már rögzített számlaszám miatt nem készül második számla.
+    if (order.invoiceNumber) return res.json({ received: true, invoice: { duplicate: true, invoiceNumber: order.invoiceNumber } });
+
     const result = await invoiceService.issueInvoice({
       orderId: session.id,
       created: session.created,
       plan: session.metadata?.plan,
-      customer: {
-        name: details.name,
-        email: details.email || session.customer_email,
-        zip: address.postal_code,
-        city: address.city,
-        address: [address.line1, address.line2].filter(Boolean).join(' ')
-      }
+      billingProfile: order.billingProfile || profileType,
+      customer
     });
-    if (!result.duplicate && !result.mock) {
+    await orders.patchOrder(order.orderNumber, result.mock
+      ? { invoiceStatus: 'mock' }
+      : { invoiceNumber: result.invoiceNumber, invoiceStatus: 'issued', invoiceIssuedAt: new Date().toISOString() });
+    if (!result.mock) {
       // Nem várjuk meg: a Google Táblázat hibája nem érintheti a Stripe válaszát és a vevőt.
-      sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, invoicePdf: invoiceService.getInvoicePdf(session.id), customer: { name: details.name, email: details.email || session.customer_email, zip: address.postal_code, city: address.city, address: [address.line1, address.line2].filter(Boolean).join(' ') } }).catch(() => {});
-    }
-    if (!result.duplicate && !result.mock) {
+      sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, invoicePdf: result.pdf, customer }).catch(() => {});
       mailService.sendAdminNotification({
-        customer: { name: details.name, email: details.email || session.customer_email },
+        customer: { name: details.name, email },
         plan: session.metadata?.plan,
         title: session.metadata?.title,
-        orderNumber: invoiceService.orderNumber(session.id, session.created ? new Date(session.created * 1000) : new Date()),
+        orderNumber: order.orderNumber,
         invoiceNumber: result.invoiceNumber,
-        invoicePdf: invoiceService.getInvoicePdf(session.id)
+        invoicePdf: result.pdf
       }).catch((error) => logger.error('email_delivery', `Rendszergazdai értesítő sikertelen: ${error.message}`, { email: session.customer_details?.email, details: { orderId: session.id } }));
     }
-    return res.json({ received: true, invoice: result });
+    return res.json({ received: true, invoice: { mock: result.mock, sandbox: result.sandbox, invoiceNumber: result.invoiceNumber } });
   } catch (error) {
     // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.
     console.error('Invoice generation failed:', error.message);

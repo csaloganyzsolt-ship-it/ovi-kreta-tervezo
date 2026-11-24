@@ -197,7 +197,7 @@
             <p class="profile-hint" id="ordersCount" role="status"></p>
             <div class="admin-table-wrap">
               <table class="admin-table" id="ordersTable">
-                <thead><tr><th>Dátum</th><th>Vevő</th><th>Csomag</th><th>Összeg</th><th>Kupon</th><th>Státusz</th><th>Számlaszám</th></tr></thead>
+                <thead><tr><th>Dátum</th><th>Vevő</th><th>Csomag</th><th>Összeg</th><th>Kupon</th><th>Státusz</th><th>Számlaszám</th><th>Művelet</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -292,6 +292,7 @@
             <div class="profile-tabs" role="tablist" aria-label="Beállítások alszekciói">
               <button type="button" role="tab" class="profile-tab" id="subTabGeneral" data-settings-tab="general" aria-selected="true">Általános &amp; Árazás</button>
               <button type="button" role="tab" class="profile-tab" id="subTabAi" data-settings-tab="ai" aria-selected="false">AI Beállítások</button>
+              <button type="button" role="tab" class="profile-tab" id="subTabBilling" data-settings-tab="billing" aria-selected="false">Számlázás &amp; fizetés</button>
               <button type="button" role="tab" class="profile-tab" id="subTabEmail" data-settings-tab="email" aria-selected="false">E-mail Sablonok</button>
             </div>
 
@@ -329,7 +330,7 @@
               <form class="profile-form" id="aiForm" novalidate>
                 <div class="span-2">
                   <label for="setAiModel">AI modell</label>
-                  <input id="setAiModel" type="text" maxlength="100" autocomplete="off" spellcheck="false" placeholder="pl. gemini-1.5-flash" />
+                  <input id="setAiModel" type="text" maxlength="100" autocomplete="off" spellcheck="false" placeholder="pl. gemini-3.1-pro-preview" />
                 </div>
                 <div class="span-2">
                   <label for="setAiPrompt">Rendszer prompt</label>
@@ -344,6 +345,37 @@
               </form>
             </div>
 
+            <div id="settingsBilling" data-settings-panel="billing" hidden>
+              <div class="profile-hint" id="billingStatusCard" role="status" aria-live="polite">
+                <strong>Szerver állapota (csak olvasható)</strong>
+                <ul id="billingStatusList"></ul>
+              </div>
+              <form class="profile-form" id="billingForm" novalidate>
+                <div>
+                  <label for="setBillingProfile">Számlázási profil</label>
+                  <select id="setBillingProfile">
+                    <option value="ev">Egyéni vállalkozás (EV)</option>
+                    <option value="kft">Kft.</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="setPaymentProvider">Aktív fizetési szolgáltató</label>
+                  <select id="setPaymentProvider">
+                    <option value="barion">Barion</option>
+                    <option value="stripe">Stripe</option>
+                  </select>
+                </div>
+                <p class="profile-hint span-2">A váltás azonnal érvényes az új fizetésekre és számlákra. A már kiállított számlák a rendelésen rögzített profil kulcsával kérhetők le.</p>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="billingSave">Mentés</button>
+                  <button type="button" class="profile-btn" data-history-key="billing_profile" id="billingHistory">Profil előzményei</button>
+                  <button type="button" class="profile-btn" data-history-key="payment_provider" id="providerHistory">Szolgáltató előzményei</button>
+                  <span class="profile-status" id="billingStatus" role="status" hidden></span>
+                  <span class="profile-error" id="billingError" role="alert" hidden></span>
+                </div>
+              </form>
+            </div>
+
             <dialog class="admin-dialog admin-history-dialog" id="historyDialog" aria-labelledby="historyTitle">
               <h3 id="historyTitle">Előzmények</h3>
               <div class="profile-field">
@@ -353,6 +385,8 @@
                   <option value="ai_config">AI beállítások (modell, rendszer prompt)</option>
                   <option value="maintenance_mode">Karbantartás mód</option>
                   <option value="seasonal_hints">Szezonális javaslatok</option>
+                  <option value="billing_profile">Számlázási profil (EV / Kft.)</option>
+                  <option value="payment_provider">Fizetési szolgáltató (Barion / Stripe)</option>
                 </select>
               </div>
               <p class="profile-error" id="historyError" role="alert" hidden></p>

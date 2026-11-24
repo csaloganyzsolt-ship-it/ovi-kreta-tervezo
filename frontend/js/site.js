@@ -156,12 +156,72 @@ function siteEscapeHtml(value) {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModals() { document.querySelectorAll('.modal-backdrop.open').forEach((m) => m.classList.remove('open')); }
 
-// A config.js company objektuma az igazságforrás; hiányzó mezőkre az egyéni vállalkozói tartalék lép.
+// A config.js company objektuma a kezdőérték, a /api/config (loadRuntimeConfig) az igazságforrás; hiányzó mezőkre az egyéni vállalkozói tartalék lép.
 function getCompany() {
   const configured = window.APP_CONFIG?.company || {};
   const company = { ...DEFAULT_COMPANY, email: DEFAULT_SUPPORT_EMAIL };
   for (const [key, value] of Object.entries(configured)) if (typeof value === 'string') company[key] = value;
   return company;
+}
+
+function siteApiBaseUrl() {
+  const configured = String(window.APP_CONFIG?.apiBaseUrl || '').trim().replace(/\/+$/, '');
+  if (configured === 'same-origin') return window.location.origin;
+  if (configured) return configured;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || !host ? 'http://localhost:4000' : '';
+}
+
+// Az aktív fizetési szolgáltató; amíg a /api/config nem érkezett meg, a Barion az alapértelmezés.
+function activePaymentProvider() {
+  return window.APP_CONFIG?.paymentProvider === 'stripe' ? 'stripe' : 'barion';
+}
+
+// A /api/config egyszer töltődik be oldalanként (az Admin Központban állított cégprofil és fizetési szolgáltató ezen át ér el a böngészőig).
+// Hiba esetén a config.js kezdőértékei maradnak, a hiba pedig a konzolban látszik.
+function loadRuntimeConfig() {
+  if (!window.__runtimeConfigPromise) {
+    window.__runtimeConfigPromise = (async () => {
+      try {
+        const response = await fetch(`${siteApiBaseUrl()}/api/config`, { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+        const config = window.APP_CONFIG = window.APP_CONFIG || {};
+        if (data.company && typeof data.company === 'object') config.company = { ...(config.company || {}), ...data.company };
+        config.paymentProvider = data.paymentProvider === 'stripe' ? 'stripe' : 'barion';
+        config.barionPixelId = String(data.barionPixelId || '');
+        if (data.stripePublishableKey !== undefined) config.stripePublishableKey = data.stripePublishableKey;
+        if (data.stripeTestMode !== undefined && config.company) config.company.stripeTestMode = data.stripeTestMode;
+      } catch (error) {
+        console.error('A /api/config nem tölthető be, a config.js kezdőértékei maradnak:', error.message);
+      }
+      return window.APP_CONFIG || {};
+    })();
+  }
+  return window.__runtimeConfigPromise;
+}
+
+function renderFooterCompany() {
+  const company = getCompany();
+  const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  fill('footerCompanyName', company.name);
+  fill('footerTaxId', company.taxId);
+  fill('footerRegLabel', company.regLabel);
+  fill('footerRegNo', company.regNo);
+  fill('footerAddress', company.address);
+  fill('footerCourt', company.court);
+  const courtRow = document.getElementById('footerCourtRow');
+  if (courtRow) courtRow.hidden = !company.court;
+  const mail = document.getElementById('footerEmail');
+  if (mail) { mail.textContent = company.email; mail.href = `mailto:${company.email}`; }
+}
+
+// Stripe módban a Barion jelzései (logócsík, trust badge, fizetés gomb) teljesen rejtettek, helyettük a kártyás Stripe-jelvény látszik; Barion módban fordítva.
+function applyPaymentProvider() {
+  const isBarion = activePaymentProvider() === 'barion';
+  document.querySelectorAll('[data-barion-strip], [data-barion-badge], [data-barion-only]').forEach((el) => { el.hidden = !isBarion; });
+  document.querySelectorAll('[data-stripe-badge], [data-stripe-only]').forEach((el) => { el.hidden = isBarion; });
+  document.dispatchEvent(new CustomEvent('ovi:payment-provider', { detail: { provider: activePaymentProvider() } }));
 }
 
 function openLegalModal(key) {
@@ -190,19 +250,9 @@ function initSite() {
   const toggle = document.getElementById('themeToggle');
   if (toggle) toggle.addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
-  const company = getCompany();
-  const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-  fill('footerCompanyName', company.name);
-  fill('footerTaxId', company.taxId);
-  fill('footerRegLabel', company.regLabel);
-  fill('footerRegNo', company.regNo);
-  fill('footerAddress', company.address);
-  fill('footerCourt', company.court);
-  const courtRow = document.getElementById('footerCourtRow');
-  if (courtRow) courtRow.hidden = !company.court;
-  const email = company.email;
-  const mail = document.getElementById('footerEmail');
-  if (mail) { mail.textContent = email; mail.href = `mailto:${email}`; }
+  renderFooterCompany();
+  applyPaymentProvider();
+  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); });
   document.addEventListener('click', (event) => {
     const sample = event.target.closest('[data-sample-modal]');
     if (sample) { event.preventDefault(); openModal('sampleModal'); return; }

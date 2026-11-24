@@ -49,19 +49,20 @@ test('invoice XML escapes input and splits VAT', () => {
   assert.match(xml, /<nettoErtek>307<\/nettoErtek>/);
 });
 
-test('invoice is issued once per Stripe session', async () => {
-  const store = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inv-')), 's.json');
-  const env = { SZAMLAZZ_KEY: 'key', INVOICE_STORE_PATH: store };
+test('issueInvoice keeps no state: the PDF is only returned in memory and a retry asks Számlázz.hu again', async () => {
+  const env = { SZAMLAZZ_KEY: 'key' };
   let calls = 0;
   const fetch = async () => { calls += 1; return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-2025-1']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 test') }; };
   const order = { orderId: 'cs_test_1', plan: 'daily', customer: { email: 'a@b.hu' } };
-  assert.equal((await invoiceService.issueInvoice(order, { env, fetch })).invoiceNumber, 'E-2025-1');
-  assert.equal((await invoiceService.issueInvoice(order, { env, fetch })).duplicate, true);
+  const first = await invoiceService.issueInvoice(order, { env, fetch });
+  assert.equal(first.invoiceNumber, 'E-2025-1');
+  assert.match(first.pdf.toString(), /^%PDF/);
   assert.equal(calls, 1);
+  assert.equal(require('node:fs').existsSync(path.join(__dirname, '..', 'data')), false, 'nem jön létre helyi data/ mappa');
 });
 
 test('invoice errors from Számlázz.hu are surfaced', async () => {
-  const env = { SZAMLAZZ_KEY: 'key', INVOICE_STORE_PATH: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inv-')), 's.json') };
+  const env = { SZAMLAZZ_KEY: 'key' };
   const fetch = async () => ({ ok: true, headers: new Map([['szlahu_error', 'Hib%C3%A1s']]) });
   await assert.rejects(invoiceService.issueInvoice({ orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env, fetch }), /Hibás/);
 });
@@ -161,6 +162,9 @@ test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a profo
 
 test('footer and legal modals use the real company data without placeholders', async (t) => {
   const window = await loadLockedApp(t);
+  // A Stripe jelvény csak Stripe módban látszik; Barion módban rejtett marad.
+  assert.ok(window.document.querySelector('[data-stripe-badge]').hidden);
+  window.document.querySelectorAll('[data-stripe-badge]').forEach((node) => node.remove());
   const footer = window.document.getElementById('siteFooter').textContent;
   assert.match(footer, /68274568-1-28/);
   assert.match(footer, /EV nyilvántartási szám: 51507048/);
@@ -199,9 +203,8 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
 
 test('signed checkout.session.completed webhook issues the invoice with the new line item', async () => {
   const Stripe = require('stripe');
-  const store = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wh-')), 's.json');
   const saved = {};
-  const set = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test', SZAMLAZZ_KEY: 'k', INVOICE_STORE_PATH: store, SZAMLAZZ_SANDBOX: 'false' };
+  const set = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test', SZAMLAZZ_KEY: 'k', SZAMLAZZ_SANDBOX: 'false' };
   for (const [k, v] of Object.entries(set)) { saved[k] = process.env[k]; process.env[k] = v; }
   const realFetch = global.fetch;
   let sentXml = '';
@@ -218,7 +221,7 @@ test('signed checkout.session.completed webhook issues the invoice with the new 
   try {
     const payload = JSON.stringify({
       id: 'evt_1', object: 'event', type: 'checkout.session.completed',
-      data: { object: { id: 'cs_test_wh', payment_status: 'paid', metadata: { plan: 'daily' }, customer_details: { name: 'Teszt', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } }
+      data: { object: { id: 'cs_test_wh', payment_status: 'paid', amount_total: 39000, metadata: { plan: 'daily' }, customer_details: { name: 'Teszt', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } }
     });
     const header = Stripe.webhooks.generateTestHeaderString({ payload, secret: 'whsec_test' });
     const response = await realFetch(`http://127.0.0.1:${port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': header }, body: payload });
@@ -266,15 +269,20 @@ test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async
   assert.match(mock.url, /^http:\/\/localhost:4000\/tervezo\.html\?payment=success&session_id=cs_mock_/);
 });
 
-test('invoice request disables Számlázz.hu mailing and asks for the PDF; the PDF is kept per session', async () => {
+test('invoice request disables Számlázz.hu mailing and asks for the PDF; the PDF is fetched live by invoice number', async () => {
   const xml = invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'cs_test_9', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
   assert.match(xml, /<szamlaLetoltes>true<\/szamlaLetoltes>/);
   assert.match(xml, /<sendEmail>false<\/sendEmail>/);
-  const env = { SZAMLAZZ_KEY: 'k', INVOICE_STORE_PATH: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-')), 's.json') };
-  const fetch = async () => ({ ok: true, headers: new Map([['szlahu_szamlaszam', 'E-7']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 invoice') });
-  await invoiceService.issueInvoice({ orderId: 'cs_test_9', plan: 'daily', customer: { email: 'a@b.hu' } }, { env, fetch });
-  assert.match(invoiceService.getInvoicePdf('cs_test_9', env).toString(), /^%PDF/);
-  assert.equal(invoiceService.getInvoicePdf('cs_test_other', env), null);
+  const env = { SZAMLAZZ_KEY: 'k' };
+  let form;
+  const fetch = async (url, options) => { form = options.body; return { ok: true, headers: new Map(), arrayBuffer: async () => Buffer.from('%PDF-1.4 invoice') }; };
+  const pdf = await invoiceService.fetchInvoicePdf({ invoiceNumber: 'E-7' }, { env, fetch });
+  assert.match(pdf.toString(), /^%PDF/);
+  const request = await form.get('action-szamla_agent_pdf').text();
+  assert.match(request, /<szamlaszam>E-7<\/szamlaszam>/);
+  assert.match(request, /<szamlaagentkulcs>k<\/szamlaagentkulcs>/);
+  const failing = async () => ({ ok: true, headers: new Map([['szlahu_error', 'Nincs%20ilyen']]) });
+  await assert.rejects(invoiceService.fetchInvoicePdf({ invoiceNumber: 'E-8' }, { env, fetch: failing }), /Nincs ilyen/);
 });
 
 test('one combined purchase email carries the plan files and the invoice PDF', async () => {
@@ -1107,4 +1115,31 @@ test('tervezo.html loads the planner scripts in order and the single static list
   } finally {
     server.close();
   }
+});
+
+test('in Stripe mode the Barion strip, badge and button are hidden and only the Stripe card payment is offered', async (t) => {
+  const window = await loadLockedApp(t);
+  const { document } = window;
+  window.APP_CONFIG.paymentProvider = 'stripe';
+  window.applyPaymentProvider();
+  for (const node of document.querySelectorAll('[data-barion-strip], [data-barion-badge], [data-barion-only]')) assert.equal(node.hidden || node.style.display === 'none', true, `${node.outerHTML.slice(0, 60)} rejtett`);
+  for (const node of document.querySelectorAll('[data-stripe-badge], [data-stripe-only]')) assert.equal(node.hidden, false);
+
+  window.APP_CONFIG.paymentProvider = 'barion';
+  window.applyPaymentProvider();
+  for (const node of document.querySelectorAll('[data-barion-only]')) assert.equal(node.hidden, false);
+  for (const node of document.querySelectorAll('[data-stripe-badge]')) assert.equal(node.hidden, true);
+});
+
+test('orderService.claimDelivery hands out a delivery only up to the limit, release gives it back', async () => {
+  const orders = require('../backend/services/orderService');
+  orders.resetMemory();
+  await orders.markPaid({ orderNumber: 'OVI-CLAIM', sessionId: 'cs_claim', provider: 'stripe', billingProfile: 'ev', email: 'a@b.hu', planMode: 'standard', planKey: 'daily', amount: 390 });
+  assert.equal(await orders.claimDelivery('OVI-CLAIM', 1), true);
+  assert.equal(await orders.claimDelivery('OVI-CLAIM', 1), false, 'a második kézbesítés elutasítva');
+  assert.equal((await orders.getByOrderNumber('OVI-CLAIM')).deliveryCount, 1);
+  await orders.releaseDelivery('OVI-CLAIM');
+  assert.equal(await orders.claimDelivery('OVI-CLAIM', 1), true, 'sikertelen küldés után újrapróbálható');
+  assert.equal(await orders.claimDelivery('OVI-NINCS', 1), false);
+  orders.resetMemory();
 });

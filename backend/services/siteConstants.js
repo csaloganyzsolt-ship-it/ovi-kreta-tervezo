@@ -58,13 +58,22 @@ const BILLING_PROFILES = Object.freeze({
   })
 });
 
-function getBillingProfile(env = process.env) {
-  return BILLING_PROFILES[env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev'];
+// Az Admin Központban (system_settings.billing_profile) beállított aktív profil; a settingsService tölti. Beállítás nélkül a BILLING_PROFILE környezeti változó (tartalék) dönt.
+let activeProfileType = null;
+
+function setActiveBillingProfile(type) {
+  activeProfileType = type === 'ev' || type === 'kft' ? type : null;
+}
+
+// A második paraméterrel (rendelésen rögzített profil) a profil kifejezetten megadható, pl. a számla kiállításakor.
+function getBillingProfile(env = process.env, type) {
+  const forced = type === 'ev' || type === 'kft' ? type : null;
+  return BILLING_PROFILES[forced || activeProfileType || (env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev')];
 }
 
 // A frontendnek átadott (nem titkos) cégadatok; a build scriptek és a /config.js is ezt használja.
-function publicCompany(env = process.env) {
-  const { type, name, taxId, regLabel, regNo, court, address, vatNote } = getBillingProfile(env);
+function publicCompany(env = process.env, profileType) {
+  const { type, name, taxId, regLabel, regNo, court, address, vatNote } = getBillingProfile(env, profileType);
   return { type, name, taxId, regLabel, regNo, court, address, vatNote };
 }
 
@@ -88,6 +97,7 @@ module.exports = {
   DEFAULT_BARION_PIXEL_ID,
   BILLING_PROFILES,
   getBillingProfile,
+  setActiveBillingProfile,
   publicCompany,
   CONTENT_SECURITY_POLICY,
   PAGES,

@@ -212,8 +212,11 @@ function checkoutFormReady() {
 }
 
 function syncCheckoutButtons() {
-  const button = document.getElementById('checkoutBarion');
-  if (button) button.disabled = !checkoutFormReady();
+  const ready = checkoutFormReady();
+  for (const id of ['checkoutBarion', 'checkoutStripe']) {
+    const button = document.getElementById(id);
+    if (button) button.disabled = !ready;
+  }
 }
 
 // A Számlázz.hu számlához kötelező vevői adatok; hiányos vagy túl rövid érték esetén null.
@@ -295,6 +298,31 @@ async function startBarionCheckout() {
     } else {
       errorEl.textContent = 'Hiba történt a fizetés indításakor. Kérjük, frissítsd az oldalt (F5), és próbáld újra!';
     }
+  } finally {
+    syncCheckoutButtons();
+  }
+}
+
+// Stripe fizetés (csak ha az Admin Központban Stripe az aktív szolgáltató): a szerver Checkout Sessiont hoz létre, a böngésző a Stripe által adott címre megy.
+async function startStripeCheckout() {
+  if (activePaymentProvider() !== 'stripe') return;
+  const form = readCheckoutForm();
+  if (!form) return;
+  const errorEl = document.getElementById('checkoutError');
+  document.getElementById('checkoutStripe').disabled = true;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    if (!/^https:\/\/checkout\.stripe\.com\//.test(String(data.url || '')) && !data.mock) throw new Error('A Stripe érvénytelen fizetési címet adott vissza.');
+    localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
+    redirectTo(data.url);
+  } catch (error) {
+    errorEl.textContent = `Hiba történt a fizetés indításakor: ${error.message}`;
   } finally {
     syncCheckoutButtons();
   }

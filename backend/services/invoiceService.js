@@ -1,7 +1,5 @@
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
 const { PRODUCTS } = require('./stripeService');
 
 const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
@@ -40,18 +38,19 @@ function today(date = new Date()) {
 }
 
 // Alapértelmezetten nincs előtag: a Számlázz.hu alapértelmezett számlatömbje használatos.
-function invoicePrefix(env = process.env) {
-  return String(env.SZAMLAZZ_INVOICE_PREFIX ?? getBillingProfile(env).invoicePrefix).trim();
+// A profileType (a rendelésen rögzített profil) megadása nélkül az aktív profil (Admin Központ, tartalék: BILLING_PROFILE) érvényes.
+function invoicePrefix(env = process.env, profileType) {
+  return String(env.SZAMLAZZ_INVOICE_PREFIX ?? getBillingProfile(env, profileType).invoicePrefix).trim();
 }
 
 // ÁFA-kulcs: a profilé (AAM vagy 27), SZAMLAZZ_VAT_RATE felülírhatja.
-function vatRate(env = process.env) {
-  return String(env.SZAMLAZZ_VAT_RATE || getBillingProfile(env).vatRate).trim();
+function vatRate(env = process.env, profileType) {
+  return String(env.SZAMLAZZ_VAT_RATE || getBillingProfile(env, profileType).vatRate).trim();
 }
 
 // Profilfüggő Agent kulcs; a közös SZAMLAZZ_API_KEY (és a régi SZAMLAZZ_KEY) tartalék.
-function szamlazzApiKey(env = process.env) {
-  const specific = getBillingProfile(env).type === 'kft' ? env.SZAMLAZZ_API_KEY_KFT : env.SZAMLAZZ_API_KEY_EV;
+function szamlazzApiKey(env = process.env, profileType) {
+  const specific = getBillingProfile(env, profileType).type === 'kft' ? env.SZAMLAZZ_API_KEY_KFT : env.SZAMLAZZ_API_KEY_EV;
   return String(specific || env.SZAMLAZZ_API_KEY || env.SZAMLAZZ_KEY || '').trim();
 }
 
@@ -62,19 +61,20 @@ function orderNumber(orderId, created = new Date()) {
   return `OVI-${ymd}-${String(orderId || '').slice(-6).toUpperCase()}`;
 }
 
-function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent }, env = process.env, date = new Date()) {
+function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent, billingProfile }, env = process.env, date = new Date()) {
   const product = PRODUCTS[plan];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
   // Kuponos fizetésnél a számla a ténylegesen fizetett (kedvezményes) összegről szól.
   const gross = Number.isInteger(amountHuf) && amountHuf > 0 ? amountHuf : product.amountHuf;
   const itemName = couponPercent ? `${product.invoiceName} (kupon: -${couponPercent}%)` : product.invoiceName;
-  const vatKey = vatRate(env);
+  const vatKey = vatRate(env, billingProfile);
+  const prefix = invoicePrefix(env, billingProfile);
   const { net, vat } = splitGross(gross, vatKey);
   const day = today(date);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
-    <szamlaagentkulcs>${escapeXml(szamlazzApiKey(env))}</szamlaagentkulcs>
+    <szamlaagentkulcs>${escapeXml(szamlazzApiKey(env, billingProfile))}</szamlaagentkulcs>
     <eszamla>true</eszamla>
     <szamlaLetoltes>true</szamlaLetoltes>
     <valaszVerzio>1</valaszVerzio>
@@ -88,7 +88,7 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
     <rendelesSzam>${escapeXml(orderNumber(orderId, created ?? date))}</rendelesSzam>
-${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</szamlaszamElotag>\n` : ''}    <dijbekero>false</dijbekero>
+${prefix ? `    <szamlaszamElotag>${escapeXml(prefix)}</szamlaszamElotag>\n` : ''}    <dijbekero>false</dijbekero>
     <fizetve>true</fizetve>
   </fejlec>
   <elado>
@@ -119,59 +119,51 @@ ${invoicePrefix(env) ? `    <szamlaszamElotag>${escapeXml(invoicePrefix(env))}</
 </xmlszamla>`;
 }
 
-function storePath(env = process.env) {
-  return env.INVOICE_STORE_PATH || path.join(__dirname, '..', '..', 'data', 'invoiced-sessions.json');
+const PDF_MAGIC = '%PDF';
+
+function szamlazzError(response) {
+  const message = response.headers.get('szlahu_error');
+  if (response.ok && !message) return null;
+  const code = response.headers.get('szlahu_error_code');
+  return new Error(`Számlázz.hu hiba${code ? ` (${code})` : ''}: ${decodeURIComponent((message || `HTTP ${response.status}`).replace(/\+/g, ' '))}`);
 }
 
-function storageDir(env = process.env) {
-  return path.dirname(storePath(env));
+// A már kiállított számla PDF-je élőben, a Számlázz.hu Agent API-ból (action-szamla_agent_pdf); fájlba nem kerül, a hívó csak memóriában kapja meg.
+// A kulcs a rendelésen rögzített számlázási profilhoz tartozik, így profilváltás után is a kiállító cég kulcsával kérdezünk.
+async function fetchInvoicePdf({ invoiceNumber, billingProfile }, deps = {}) {
+  const env = deps.env || process.env;
+  const fetchImpl = deps.fetch || fetch;
+  const number = String(invoiceNumber || '').trim();
+  if (!number) throw new Error('A rendeléshez nem tartozik számlaszám.');
+  const key = szamlazzApiKey(env, billingProfile);
+  if (!key) throw new Error(`A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_${getBillingProfile(env, billingProfile).type === 'kft' ? 'KFT' : 'EV'} vagy a közös SZAMLAZZ_API_KEY), a számla nem kérhető le.`);
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<xmlszamlapdf xmlns="http://www.szamlazz.hu/xmlszamlapdf" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamlapdf https://www.szamlazz.hu/szamla/docs/xsds/agentpdf/xmlszamlapdf.xsd">
+  <szamlaagentkulcs>${escapeXml(key)}</szamlaagentkulcs>
+  <szamlaszam>${escapeXml(number)}</szamlaszam>
+  <valaszVerzio>1</valaszVerzio>
+</xmlszamlapdf>`;
+  const form = new FormData();
+  form.append('action-szamla_agent_pdf', new Blob([xml], { type: 'text/xml' }), 'invoice-pdf.xml');
+  const response = await fetchImpl(SZAMLAZZ_URL, { method: 'POST', body: form });
+  const failure = szamlazzError(response);
+  if (failure) throw failure;
+  const pdf = Buffer.from(await response.arrayBuffer());
+  if (pdf.subarray(0, 4).toString() !== PDF_MAGIC) throw new Error('A Számlázz.hu válasza nem PDF, a számla nem érhető el.');
+  return pdf;
 }
 
-function invoicePdfPath(orderId, env = process.env) {
-  const id = String(orderId || '');
-  if (!/^[A-Za-z0-9_]{6,200}$/.test(id)) throw new Error('Érvénytelen fizetési azonosító.');
-  return path.join(storageDir(env), 'invoices', `${id}.pdf`);
-}
-
-// A Számlázz.hu a kért PDF-et a válasz törzsében adja vissza; fizetési sessionhöz társítva fájlban tartjuk.
-function getInvoicePdf(orderId, env = process.env) {
-  try {
-    return fs.readFileSync(invoicePdfPath(orderId, env));
-  } catch (_error) {
-    return null;
-  }
-}
-
-function saveInvoicePdf(orderId, pdf, env) {
-  const file = invoicePdfPath(orderId, env);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, pdf);
-}
-
-function readStore(env) {
-  try {
-    return JSON.parse(fs.readFileSync(storePath(env), 'utf8'));
-  } catch (_error) {
-    return {};
-  }
-}
-
-function writeStore(env, data) {
-  const file = storePath(env);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
-
-// Ugyanarra a Stripe fizetésre (a webhook újrapróbálkozásai miatt) csak egyszer állítunk ki számlát.
+// A számlát a hívó csak egyszer kéri (az idempotenciát az `orders` tábla invoice_number mezője adja). Az order.billingProfile a rendelésen rögzített profil.
+// Visszatérés: { mock, invoiceNumber, pdf } – a PDF puffer csak memóriában utazik a levélküldőhöz / Sheets-hez, soha nem kerül lemezre.
 async function issueInvoice(order, deps = {}) {
   const env = deps.env || process.env;
   const fetchImpl = deps.fetch || fetch;
-  const issued = readStore(env);
-  if (issued[order.orderId]) return { duplicate: true, invoiceNumber: issued[order.orderId] };
+  const profileType = order.billingProfile;
 
-  if (!szamlazzApiKey(env)) {
+  if (!szamlazzApiKey(env, profileType)) {
     if (env.NODE_ENV === 'production') {
-      throw new Error(`A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_${getBillingProfile(env).type === 'kft' ? 'KFT' : 'EV'} vagy a közös SZAMLAZZ_API_KEY; aktív profil: ${getBillingProfile(env).type}), a számla nem állítható ki.`);
+      const type = getBillingProfile(env, profileType).type;
+      throw new Error(`A Számlázz.hu Agent kulcs nincs beállítva (SZAMLAZZ_API_KEY_${type === 'kft' ? 'KFT' : 'EV'} vagy a közös SZAMLAZZ_API_KEY; aktív profil: ${type}), a számla nem állítható ki.`);
     }
     console.warn(`[Számlázz.hu mock] Számla nem készült (nincs Agent kulcs): ${order.orderId} → ${order.customer.email}`);
     return { mock: true };
@@ -181,26 +173,13 @@ async function issueInvoice(order, deps = {}) {
   const form = new FormData();
   form.append('action-xmlagentxmlfile', new Blob([buildInvoiceXml(order, env)], { type: 'text/xml' }), 'invoice.xml');
   const response = await fetchImpl(SZAMLAZZ_URL, { method: 'POST', body: form });
-  const errorMessage = response.headers.get('szlahu_error');
-  if (!response.ok || errorMessage) {
-    const code = response.headers.get('szlahu_error_code');
-    throw new Error(`Számlázz.hu hiba${code ? ` (${code})` : ''}: ${decodeURIComponent((errorMessage || `HTTP ${response.status}`).replace(/\+/g, ' '))}`);
-  }
+  const failure = szamlazzError(response);
+  if (failure) throw failure;
   const invoiceNumber = response.headers.get('szlahu_szamlaszam') || 'ismeretlen';
-  issued[order.orderId] = invoiceNumber;
-  writeStore(env, issued);
-  const pdf = Buffer.from(await response.arrayBuffer());
-  if (pdf.subarray(0, 4).toString() === '%PDF') {
-    // A számla már kiállt, ezért a PDF mentési hibája nem dobhat hibát (a webhook újrapróbálása duplikátumot adna).
-    try {
-      saveInvoicePdf(order.orderId, pdf, env);
-    } catch (error) {
-      console.error(`A számla PDF mentése sikertelen (${order.orderId}):`, error.message);
-    }
-  } else {
-    console.warn(`A Számlázz.hu válasza nem PDF (${order.orderId}), a számla letöltése nem érhető el.`);
-  }
-  return { mock: false, sandbox: isSandbox(env), invoiceNumber };
+  const body = Buffer.from(await response.arrayBuffer());
+  const hasPdf = body.subarray(0, 4).toString() === PDF_MAGIC;
+  if (!hasPdf) console.warn(`A Számlázz.hu válasza nem PDF (${order.orderId}); a számla a letöltéskor élőben kérhető le.`);
+  return { mock: false, sandbox: isSandbox(env), invoiceNumber, pdf: hasPdf ? body : null };
 }
 
-module.exports = { orderNumber, invoicePrefix, vatRate, szamlazzApiKey, storageDir, getInvoicePdf, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, escapeXml, splitGross };
+module.exports = { orderNumber, invoicePrefix, vatRate, szamlazzApiKey, supportEmail, isSandbox, buildInvoiceXml, issueInvoice, fetchInvoicePdf, escapeXml, splitGross };

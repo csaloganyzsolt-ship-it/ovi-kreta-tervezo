@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { supportEmail, storageDir } = require('./invoiceService');
+const { supportEmail } = require('./invoiceService');
 const { SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
 const { stripeSecretKey } = require('./stripeService');
 const settingsService = require('./settingsService');
@@ -21,26 +21,6 @@ const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.zip']);
 
 function isConfigured(env = process.env) {
   return Boolean(String(env.SMTP_HOST || '').trim());
-}
-
-function safeSessionId(sessionId) {
-  const id = String(sessionId || '');
-  if (!/^[A-Za-z0-9_]{6,200}$/.test(id)) throw new Error('Érvénytelen fizetési azonosító.');
-  return id;
-}
-
-function sentMarker(sessionId, env) {
-  return path.join(storageDir(env), 'invoices', `${safeSessionId(sessionId)}.sent`);
-}
-
-function wasSent(sessionId, env = process.env) {
-  return fs.existsSync(sentMarker(sessionId, env));
-}
-
-function markSent(sessionId, env = process.env) {
-  const file = sentMarker(sessionId, env);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, new Date().toISOString());
 }
 
 // A kliensből érkező mellékleteket szigorúan szűrjük: csak pdf/docx/zip, tiszta fájlnévvel és méretkorláttal.
@@ -458,8 +438,6 @@ module.exports = {
   isConfigured,
   sanitizeAttachments,
   sendPurchaseEmail,
-  wasSent,
-  markSent,
   feedbackSecret,
   createFeedbackSignature,
   verifyFeedbackSignature,

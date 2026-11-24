@@ -4,11 +4,14 @@
 // A beállítások 5 percig gyorsítótárban élnek; az admin módosítása azonnal frissíti a gyorsítótárat.
 // Adatbázis-kliens nélkül (teszt, helyi fejlesztés) a beégetett alapértékek érvényesek; konfigurált, de hibázó adatbázisnál a hiba nem rejtődik el.
 const supabase = require('./supabaseService');
+const { setActiveBillingProfile } = require('./siteConstants');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SYSTEM_PROMPT = require('./defaultSystemPrompt');
 const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const isValidModelName = (value) => typeof value === 'string' && MODEL_NAME_PATTERN.test(value);
+const BILLING_PROFILE_TYPES = Object.freeze(['ev', 'kft']);
+const PAYMENT_PROVIDERS = Object.freeze(['barion', 'stripe']);
 const PRICE_TIERS = Object.freeze(['standard', 'academic', 'weekly']);
 const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'password_reset']);
 const MAX_PRICE_HUF = 100000;
@@ -24,6 +27,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     system_prompt: DEFAULT_SYSTEM_PROMPT
   }),
   maintenance_mode: false,
+  billing_profile: process.env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev',
+  payment_provider: 'barion',
   seasonal_hints: Object.freeze(['őszi falevelek gyűjtése', 'Márton-napi lámpáskészítés', 'farsangi mulatság'])
 });
 
@@ -57,6 +62,8 @@ function normalizeRows(rows) {
     out[row.key] = row.key === 'pricing' || row.key === 'ai_config' ? { ...out[row.key], ...(row.value && typeof row.value === 'object' ? row.value : {}) } : row.value;
   }
   out.maintenance_mode = out.maintenance_mode === true;
+  if (!BILLING_PROFILE_TYPES.includes(out.billing_profile)) out.billing_profile = defaults().billing_profile;
+  if (!PAYMENT_PROVIDERS.includes(out.payment_provider)) out.payment_provider = defaults().payment_provider;
   if (!Array.isArray(out.seasonal_hints)) out.seasonal_hints = defaults().seasonal_hints;
   return out;
 }
@@ -70,7 +77,11 @@ function dbError(message, error) {
 async function fetchSettings(client) {
   const { data, error } = await client.from('system_settings').select('key, value');
   if (error) throw dbError('A rendszerbeállítások nem olvashatók', error);
-  return normalizeRows(data);
+  const settings = normalizeRows(data);
+  // Csak a ténylegesen elmentett érték írja felül a BILLING_PROFILE környezeti változót.
+  const stored = (data || []).find((row) => row?.key === 'billing_profile');
+  setActiveBillingProfile(stored ? settings.billing_profile : null);
+  return settings;
 }
 
 // Gyorsítótárazott lekérés. Lejárt gyorsítótárnál újratölt; ha az adatbázis hibázik, a hiba felszínre kerül (nincs csendes tartalék).
@@ -92,6 +103,7 @@ function peek() {
 }
 
 function invalidate() {
+  setActiveBillingProfile(null);
   cache = null;
   cachedAt = 0;
   templateCache = null;
@@ -108,6 +120,8 @@ function publicConfig(settings) {
   return {
     pricing: { ...settings.pricing },
     maintenance_mode: settings.maintenance_mode === true,
+    billing_profile: settings.billing_profile,
+    payment_provider: settings.payment_provider,
     seasonal_hints: [...settings.seasonal_hints]
   };
 }
@@ -165,6 +179,14 @@ function validatePatch(patch, current) {
     if (typeof patch.maintenance_mode !== 'boolean') throw new SettingsError('A karbantartás mód igaz/hamis érték legyen.');
     updates.maintenance_mode = patch.maintenance_mode;
   }
+  if ('billing_profile' in patch) {
+    if (!BILLING_PROFILE_TYPES.includes(patch.billing_profile)) throw new SettingsError('A számlázási profil „ev” vagy „kft” lehet.');
+    updates.billing_profile = patch.billing_profile;
+  }
+  if ('payment_provider' in patch) {
+    if (!PAYMENT_PROVIDERS.includes(patch.payment_provider)) throw new SettingsError('A fizetési szolgáltató „barion” vagy „stripe” lehet.');
+    updates.payment_provider = patch.payment_provider;
+  }
   if ('seasonal_hints' in patch) updates.seasonal_hints = parseHints(patch.seasonal_hints);
   if (!Object.keys(updates).length) throw new SettingsError('Nincs módosítandó beállítás.');
   return updates;
@@ -178,6 +200,7 @@ async function updateSettings(client, patch) {
   if (error) throw dbError('A beállítások mentése sikertelen', error);
   cache = normalizeRows([...Object.entries(current).map(([key, value]) => ({ key, value })), ...rows]);
   cachedAt = Date.now();
+  if ('billing_profile' in updates) setActiveBillingProfile(updates.billing_profile);
   return cache;
 }
 
@@ -245,7 +268,7 @@ function composeEmail(templates, id, values = {}) {
 }
 
 module.exports = {
-  isValidModelName, PRICE_TIERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
+  isValidModelName, PRICE_TIERS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
   getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, resolveAiModel,
   listTemplates, listHistory, updateTemplate, getTemplates, fillPlaceholders, composeEmail
 };

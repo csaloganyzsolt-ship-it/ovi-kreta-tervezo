@@ -12,6 +12,7 @@ const supabase = require('../backend/services/supabaseService');
 const mailService = require('../backend/services/mailService');
 const stripeService = require('../backend/services/stripeService');
 const invoiceService = require('../backend/services/invoiceService');
+const orders = require('../backend/services/orderService');
 const barionService = require('../backend/services/barionService');
 
 const PAYMENT_ID = '4a1b2c3d4e5f60718293a4b5c6d7e8f9';
@@ -29,16 +30,24 @@ function fakeSupabase(seed = {}) {
       // A rendszerbeállítások és e-mail sablonok táblái üresek: az alapértékek érvényesek.
       if (name === 'system_settings' || name === 'email_templates') return { select: async () => ({ data: [], error: null }) };
       const filters = [];
+      let pendingUpdate = null;
       const matching = () => tables[name].filter((row) => filters.every(([column, value]) => readPath(row, column) === value));
       const builder = {
         select() { return builder; },
         eq(column, value) { filters.push([column, value]); return builder; },
+        update(fields) { pendingUpdate = fields; return builder; },
         maybeSingle() {
           if (failures[name]) return Promise.resolve({ data: null, error: { message: failures[name] } });
           return Promise.resolve({ data: matching()[0] || null, error: null });
         },
-        // head-count lekérdezés: await builder
+        // head-count lekérdezés vagy update: await builder
         then(resolve, reject) {
+          if (pendingUpdate) {
+            if (failures[`${name}.update`]) return Promise.resolve({ data: null, error: { message: failures[`${name}.update`] } }).then(resolve, reject);
+            const rows = matching();
+            rows.forEach((row) => Object.assign(row, pendingUpdate));
+            return Promise.resolve({ data: rows.map((row) => ({ ...row })), error: null }).then(resolve, reject);
+          }
           return Promise.resolve(failures[name] ? { count: null, error: { message: failures[name] } } : { count: matching().length, error: null }).then(resolve, reject);
         },
         insert(row) {
@@ -51,7 +60,7 @@ function fakeSupabase(seed = {}) {
           const key = options?.onConflict || 'document_id';
           const existing = tables[name].find((item) => item[key] === row[key]);
           if (existing) Object.assign(existing, row);
-          else tables[name].push({ created_at: new Date().toISOString(), ...row });
+          else tables[name].push({ created_at: new Date().toISOString(), ...(name === 'orders' ? { delivery_count: 0 } : {}), ...row });
           return Promise.resolve({ error: null });
         }
       };
@@ -235,8 +244,8 @@ test('a 100% coupon unlocks the plan, skips Stripe and invoicing and logs one re
   assert.equal(document.data.meta.coupon_session.id, data.sessionId);
   assert.equal(client.tables.orders.length, 1);
   assert.deepEqual(
-    { ...client.tables.orders[0], created_at: undefined },
-    { created_at: undefined, order_number: client.tables.orders[0].order_number, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 0, coupon_code: 'OVI100', payment_method: 'Kupon', status: 'paid' }
+    { ...client.tables.orders[0], created_at: undefined, updated_at: undefined, paid_at: undefined, delivery_count: undefined },
+    { created_at: undefined, updated_at: undefined, paid_at: undefined, delivery_count: undefined, session_id: data.sessionId, order_number: client.tables.orders[0].order_number, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 0, coupon_code: 'OVI100', payment_method: 'Kupon', status: 'paid' }
   );
 
   // max_uses=1 már elfogyott, de ugyanaz a terv ugyanazt a munkamenetet kapja, és nem kerül második sor a statisztikába.
@@ -390,13 +399,14 @@ test('after a 50% coupon the Barion payment starts with the reduced amount, the 
   assert.equal(transaction.Items[0].UnitPrice, 195);
   assert.equal(transaction.Items[0].ItemTotal, 195);
   assert.match(transaction.Items[0].Name, /kupon: -50%/);
-  const record = barionService.getRecord(started.sessionId);
-  assert.deepEqual({ amountHuf: record.amountHuf, listPriceHuf: record.listPriceHuf, couponCode: record.couponCode }, { amountHuf: 195, listPriceHuf: 390, couponCode: 'OVI50' });
+  const record = await orders.getBySessionId(started.sessionId);
+  assert.deepEqual({ amountHuf: record.amount, listPriceHuf: record.listPrice, couponCode: record.couponCode }, { amountHuf: 195, listPriceHuf: 390, couponCode: 'OVI50' });
   assert.equal(client.tables.coupon_redemptions.length, 0, 'fizetés előtt nincs statisztikai sor');
   assert.equal(client.tables.orders.length, 1);
+  const pendingRow = client.tables.orders[0];
   assert.deepEqual(
-    { ...client.tables.orders[0], created_at: undefined, order_number: undefined },
-    { created_at: undefined, order_number: undefined, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 195, coupon_code: 'OVI50', payment_method: 'Barion', status: 'pending' },
+    { user_email: pendingRow.user_email, document_id: pendingRow.document_id, plan_mode: pendingRow.plan_mode, plan_key: pendingRow.plan_key, amount: pendingRow.amount, coupon_code: pendingRow.coupon_code, payment_method: pendingRow.payment_method, status: pendingRow.status, provider: pendingRow.provider, provider_payment_id: pendingRow.provider_payment_id, billing_profile: pendingRow.billing_profile, list_price: pendingRow.list_price, coupon_percent: pendingRow.coupon_percent },
+    { user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 195, coupon_code: 'OVI50', payment_method: 'Barion', status: 'pending', provider: 'barion', provider_payment_id: PAYMENT_ID, billing_profile: 'ev', list_price: 390, coupon_percent: 50 },
     'a fizetés indításakor függőben lévő rendelés jön létre'
   );
 

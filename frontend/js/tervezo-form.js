@@ -219,11 +219,6 @@ function getBlacklist() {
   return document.querySelector('[data-field="blacklist"]')?.value.trim() || '';
 }
 
-function getRequestedModel() {
-  // A prémium generálás le van tiltva: mindig a rögzített modell megy a szervernek.
-  return 'gemini-3.1-pro-preview';
-}
-
 // Rarely used settings stay collapsed unless they already hold a non-default value.
 function syncAdvancedSettingsOpenState() {
   const details = document.getElementById('advancedSettings');
@@ -1189,7 +1184,6 @@ function buildGenerationPayload() {
     fridayClosingType: getFridayClosingType(),
     availableTools: getAvailableTools(),
     blacklist: getBlacklist(),
-    requestedModel: getRequestedModel(),
     planMode,
     planKind: selectedDuration === 'Heti' ? 'weekly' : 'daily',
     studentName: planMode === 'academic' ? (document.querySelector('input[data-field="student-name"]')?.value.trim() || '') : '',

@@ -324,7 +324,7 @@ test('a missing key in production gives a clear error naming the active profile 
   );
   assert.throws(() => stripeService.constructWebhookEvent('{}', 'sig', { env }), /STRIPE_WEBHOOK_SECRET_EV.*aktív profil: ev/);
   await assert.rejects(
-    invoiceService.issueInvoice({ orderId: 'cs_x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env: { ...env, INVOICE_STORE_PATH: path.join(require('node:os').tmpdir(), `inv-${Date.now()}.json`) }, fetch: async () => { throw new Error('nem hívható'); } }),
+    invoiceService.issueInvoice({ orderId: 'cs_x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env: { ...env }, fetch: async () => { throw new Error('nem hívható'); } }),
     /SZAMLAZZ_API_KEY_EV.*aktív profil: ev/
   );
 });
@@ -360,13 +360,17 @@ test('/health reports the active billing profile with booleans only and never le
 
   let { body } = await health();
   assert.equal(body.ok, true);
-  assert.deepEqual(body.billing, {
+  assert.deepEqual({ ...body.billing, modes: undefined, profiles: undefined }, {
     profile: 'ev',
     companyName: 'Csalogány Zsolt egyéni vállalkozó',
     vatRate: 'AAM',
     hasInvoicePrefix: false,
+    modes: undefined,
+    profiles: undefined,
     keys: { stripePublishable: false, stripeSecret: false, stripeWebhook: false, szamlazzApiKey: false }
   });
+  assert.deepEqual(Object.keys(body.billing.modes).sort(), ['barion', 'stripe', 'szamlazz']);
+  for (const type of ['ev', 'kft']) for (const value of Object.values(body.billing.profiles[type])) assert.equal(typeof value, 'boolean');
 
   Object.assign(process.env, ALL_KEYS, { BILLING_PROFILE: 'ev', SZAMLAZZ_INVOICE_PREFIX: 'ABC' });
   let result = await health();
@@ -393,10 +397,9 @@ test('EV webhook end to end: _EV keys, AAM, net = gross, no prefix, retry after 
   const saved = { ...process.env };
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
   for (const key of Object.keys(process.env)) if (/^(STRIPE_|SZAMLAZZ_|BILLING_PROFILE)/.test(key)) delete process.env[key];
-  const store = path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'ev-')), 's.json');
   Object.assign(process.env, {
     BILLING_PROFILE: 'ev', STRIPE_SECRET_KEY_EV: 'sk_test_ev', STRIPE_WEBHOOK_SECRET_EV: 'whsec_ev', SZAMLAZZ_API_KEY_EV: 'agent-ev',
-    STRIPE_SECRET_KEY_KFT: 'sk_test_kft', STRIPE_WEBHOOK_SECRET_KFT: 'whsec_kft', SZAMLAZZ_API_KEY_KFT: 'agent-kft', INVOICE_STORE_PATH: store
+    STRIPE_SECRET_KEY_KFT: 'sk_test_kft', STRIPE_WEBHOOK_SECRET_KFT: 'whsec_kft', SZAMLAZZ_API_KEY_KFT: 'agent-kft'
   });
   const instance = app.listen(0, '127.0.0.1');
   await once(instance, 'listening');
@@ -414,12 +417,15 @@ test('EV webhook end to end: _EV keys, AAM, net = gross, no prefix, retry after 
   t.after(() => { global.fetch = realFetch; });
 
   const post = (secret, plan, id) => {
-    const payload = JSON.stringify({ id: `evt_${id}`, object: 'event', type: 'checkout.session.completed', data: { object: { id, payment_status: 'paid', metadata: { plan }, customer_details: { name: 'Vevő', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } } });
+    const payload = JSON.stringify({ id: `evt_${id}`, object: 'event', type: 'checkout.session.completed', data: { object: { id, payment_status: 'paid', amount_total: (plan === 'daily' ? 390 : 890) * 100, metadata: { plan }, customer_details: { name: 'Vevő', email: 'vevo@example.com', address: { postal_code: '1111', city: 'Bp', line1: 'Fő u. 1' } } } } });
     const signature = Stripe.webhooks.generateTestHeaderString({ payload, secret });
     return realFetch(`http://127.0.0.1:${instance.address().port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': signature }, body: payload });
   };
 
-  assert.equal((await post('whsec_kft', 'daily', 'cs_test_wrongkey')).status, 400, 'a Kft. webhook titka nem fogadható el EV profilnál');
+  assert.equal((await post('whsec_ungessable', 'daily', 'cs_test_badsig')).status, 400, 'ismeretlen titkú webhook elutasítva');
+  assert.equal((await post('whsec_kft', 'daily', 'cs_test_kftprofile')).status, 200, 'a másik profil titkával érkezett esemény is elfogadott');
+  assert.match(xml, /<szamlaagentkulcs>agent-kft<\/szamlaagentkulcs>/, 'a számla a webhook profiljának kulcsával készül');
+  assert.match(xml, /<afakulcs>27<\/afakulcs>/);
 
   for (const [plan, gross] of [['daily', 390], ['weekly_detailed', 890]]) {
     const response = await post('whsec_ev', plan, `cs_test_${plan}`);

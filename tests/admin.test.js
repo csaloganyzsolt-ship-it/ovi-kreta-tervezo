@@ -380,6 +380,63 @@ test('GET /api/admin/orders joins the buyer name, filters by status and searches
   assert.equal((await call(base, '/api/admin/orders?status=hamis', { token: 'token-admin' })).status, 400);
 });
 
+test('guest orders show the buyer name from the stored billing data', async (t) => {
+  const order = (n, extra) => ({ order_number: `OVI-${n}`, user_id: null, user_email: `vevo${n}@example.com`, document_id: `gen_${n}`, plan_mode: 'standard', plan_key: 'daily', amount: 390, coupon_code: null, payment_method: 'Barion', status: 'paid', invoice_number: `OVITE-2026-${n}`, created_at: ago(n), ...extra });
+  useAdminEnv(t, fakeAdmin({
+    profiles: [...adminProfiles().slice(0, 1), profile(ALICE, { billing_name: 'Alice Óvoda Kft.', full_name: 'Alice' })],
+    orders: [order(1, { billing: { name: 'Vendég Vevő Bt.' } }), order(2, { user_id: ALICE.id, billing: { name: 'Mást ír a rendelés' } }), order(3)]
+  }));
+  const base = await listen(t);
+  const { orders } = await (await call(base, '/api/admin/orders', { token: 'token-admin' })).json();
+  assert.deepEqual(orders.map((o) => o.name), ['Vendég Vevő Bt.', 'Alice Óvoda Kft.', '']);
+});
+
+test('POST /api/admin/orders/:orderNumber/resend re-sends the mail only to the stored address, with a live invoice PDF', async (t) => {
+  const row = (extra) => ({ order_number: 'OVI-R1', session_id: 'barion_r1', user_id: null, user_email: 'vevo@example.com', document_id: 'gen_r', plan_mode: 'standard', plan_key: 'daily', amount: 390, payment_method: 'Barion', status: 'paid', invoice_number: 'OVITE-2026-9', billing_profile: 'ev', delivery_count: 1, created_at: ago(1), ...extra });
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [row(), row({ order_number: 'OVI-R2', status: 'pending' })] }));
+  const saved = { SMTP_HOST: process.env.SMTP_HOST, SZAMLAZZ_API_KEY_EV: process.env.SZAMLAZZ_API_KEY_EV };
+  process.env.SMTP_HOST = 'smtp.invalid.example';
+  process.env.SZAMLAZZ_API_KEY_EV = 'agent-ev';
+  const realFetch = global.fetch;
+  const pdfRequests = [];
+  global.fetch = async (url, options) => {
+    if (String(url).includes('szamlazz.hu')) { pdfRequests.push(await options.body.get('action-szamla_agent_pdf').text()); return new Response(Buffer.from('%PDF-1.4 x'), { status: 200 }); }
+    return realFetch(url, options);
+  };
+  t.after(() => { global.fetch = realFetch; for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  const base = await listen(t);
+  mailService.mockOutbox.length = 0;
+
+  const response = await call(base, '/api/admin/orders/OVI-R1/resend', { token: 'token-admin', method: 'POST', body: { email: 'masik@example.com' } });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true, sent: true, to: 'vevo@example.com', invoiceAttached: true });
+  assert.equal(mailService.mockOutbox.length, 1);
+  assert.equal(mailService.mockOutbox[0].to, 'vevo@example.com', 'a kliens által küldött cím nem számít');
+  assert.match(pdfRequests[0], /<szamlaszam>OVITE-2026-9<\/szamlaszam>/);
+  assert.equal(client.db.orders[0].delivery_count, 1, 'az admin újraküldés nem használja el a vevői kézbesítést');
+
+  assert.equal((await call(base, '/api/admin/orders/OVI-R2/resend', { token: 'token-admin', method: 'POST' })).status, 409, 'fizetetlen rendeléshez nem megy levél');
+  assert.equal((await call(base, '/api/admin/orders/OVI-NINCS/resend', { token: 'token-admin', method: 'POST' })).status, 404);
+  assert.equal((await call(base, '/api/admin/orders/OVI-R1/resend', { method: 'POST' })).status, 401);
+});
+
+test('GET /api/admin/billing-status reports modes and key presence per profile without leaking secrets', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const saved = { SZAMLAZZ_API_KEY_KFT: process.env.SZAMLAZZ_API_KEY_KFT, BARION_TEST_MODE: process.env.BARION_TEST_MODE };
+  process.env.SZAMLAZZ_API_KEY_KFT = 'titkos-kft-kulcs';
+  process.env.BARION_TEST_MODE = 'true';
+  t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/billing-status', { token: 'token-admin' });
+  const text = await response.text();
+  const { status } = JSON.parse(text);
+  assert.equal(response.status, 200);
+  assert.equal(status.modes.barion, 'test');
+  assert.equal(status.profiles.kft.szamlazzApiKey, true);
+  assert.equal(text.includes('titkos-kft-kulcs'), false);
+  assert.equal((await call(base, '/api/admin/billing-status')).status, 401);
+});
+
 test('GET /api/admin/users lists registrations with confirmation and subscription state and never exposes tokens', async (t) => {
   useAdminEnv(t, fakeAdmin(statsTables()));
   const base = await listen(t);
@@ -629,7 +686,8 @@ async function loadPage(t, { page = 'admin.html', session = SESSION, routes = {}
         const parsed = new URL(url);
         const method = options.method || 'GET';
         const body = options.body ? JSON.parse(options.body) : null;
-        state.fetches.push({ path: parsed.pathname, query: parsed.search, method, body, headers: options.headers || {} });
+        // A site.js futásidőben lekéri a nyilvános konfigot; ez nem admin adatkérés.
+        if (parsed.pathname !== '/api/config') state.fetches.push({ path: parsed.pathname, query: parsed.search, method, body, headers: options.headers || {} });
         const handler = routes[parsed.pathname];
         const [data, status = 200] = handler ? [].concat(handler(method, body, parsed.searchParams)) : [{ success: false, error: 'nincs ilyen' }, 404];
         return { ok: status < 400, status, json: async () => data };

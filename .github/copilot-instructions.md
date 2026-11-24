@@ -9,7 +9,8 @@ Az **OviTervező** (`ovitervezo.hu`, üzemeltető: Csalogány Zsolt egyéni vál
   4. `academic_daily` – Oktatási célú (hallgatói/egyetemi) napi foglalkozási terv (A4 álló, percre bontott 3 oszlopos táblázat, szakirodalmi hivatkozásokkal)
   5. `academic_weekly` – Oktatási célú egyhetes tematikus terv (A4 fekvő, 7 oszlopos mátrix)
 - **Árazás és AI-beállítások:** Nem beégetett konstansokból, hanem a Supabase `system_settings` táblából töltődnek be (`GET /api/config`, `backend/services/settingsService.js`).
-- **Fizetés és számlázás:** Elsődleges fizetési mód a **Barion** (másodlagos/fallback: Stripe), automatikus e-számla kiállítás a **Számlázz.hu** API-n keresztül.
+- **Fizetés és számlázás:** Az aktív fizetési szolgáltató (**Barion** vagy **Stripe**) és a számlázási profil (**EV** vagy **Kft.**) az Admin Központból váltható (`system_settings.payment_provider`, `system_settings.billing_profile`; `.env`: `BILLING_PROFILE` csak tartalék). A profilfüggő kulcsok: `SZAMLAZZ_API_KEY_EV/KFT`, `BARION_POS_KEY_EV/KFT`, `STRIPE_*_EV/KFT`. Automatikus e-számla a **Számlázz.hu** Agent API-n keresztül.
+- **Állapotforrás – nincs helyi tárolás:** A rendelések, fizetési állapotok, számlaszámok és kézbesítési számlálók kizárólag a Supabase `orders` táblában élnek (`backend/services/orderService.js`; idempotencia: `provider_payment_id`, `invoice_number`, `delivery_count`). Helyi `data/` mappa és számla-PDF fájl nincs: a PDF-et a `GET /api/invoice/:id` élőben kéri le a Számlázz.hu-tól (`action-szamla_agent_pdf`) és memóriából streameli. Séma: `supabase/migrations/20261127090000_orders_payments_billing.sql`.
 - **Nyelv és tilalmak:** Minden felhasználói felület, hibaüzenet, e-mail és dokumentumszöveg magyar nyelvű. A generált tervezetekben és az új kódban TILOS a régi munkanév (`OviKréta`) vagy külső elektronikus naplórendszerek nevének használata.
 
 ## 2. Mappaszerkezet és architektúra

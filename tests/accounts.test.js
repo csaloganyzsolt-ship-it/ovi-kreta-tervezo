@@ -643,7 +643,8 @@ async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.
       window.fetch = async (url, options = {}) => {
         const path = new URL(url).pathname;
         const method = options.method || 'GET';
-        state.fetches.push({ path, method, headers: options.headers || {}, body: options.body });
+        // A site.js futásidőben lekéri a nyilvános konfigot; ez nem számít account API-hívásnak.
+        if (path !== '/api/config') state.fetches.push({ path, method, headers: options.headers || {}, body: options.body });
         const json = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
         if (routes[path]) return json(...[].concat(routes[path](method, options.body ? JSON.parse(options.body) : null)));
         if (path === '/api/config') return json({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false, seasonal_hints: ['őszi falevelek gyűjtése'] });

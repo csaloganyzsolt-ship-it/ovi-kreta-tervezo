@@ -345,7 +345,7 @@ test('the summary checklist lists every setting, including the new ones', async 
   assert.equal(text.includes('Kimeneti forma:'), false);
   assert.equal(text.includes('Generálási beállítások'), false);
   assert.equal(doc.querySelector('#premiumQuality'), null);
-  assert.equal(window.getRequestedModel(), 'gemini-3.1-pro-preview');
+  assert.equal(typeof window.getRequestedModel, 'undefined');
 });
 
 test('new fields reach the payload, survive a draft round trip and are cleared by the clean slate button', async (t) => {
@@ -363,7 +363,7 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   assert.equal(payload.kindergartenProfile, 'Zöld Óvoda');
   assert.equal(payload.iktEnabled, true);
   assert.equal(payload.iktCustomApp, 'Bee-Bot szőnyeg');
-  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
+  assert.equal('requestedModel' in payload, false, 'a modellt a szerver választja az admin beállításból');
   const draft = window.collectDraftState();
   window.clearDraftState();
   payload = window.buildGenerationPayload();
@@ -372,7 +372,7 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   assert.equal(payload.kindergartenProfile, '');
   assert.equal(payload.iktEnabled, false);
   assert.equal(payload.iktCustomApp, '');
-  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
+  assert.equal('requestedModel' in payload, false, 'a modellt a szerver választja az admin beállításból');
   window.applyDraftState(draft);
   payload = window.buildGenerationPayload();
   assert.equal(payload.availableTools, 'xilofon');
@@ -380,7 +380,7 @@ test('new fields reach the payload, survive a draft round trip and are cleared b
   assert.equal(payload.kindergartenProfile, 'Zöld Óvoda');
   assert.equal(payload.iktEnabled, true);
   assert.equal(payload.iktCustomApp, 'Bee-Bot szőnyeg');
-  assert.equal(payload.requestedModel, 'gemini-3.1-pro-preview');
+  assert.equal('requestedModel' in payload, false, 'a modellt a szerver választja az admin beállításból');
   assert.equal(doc.querySelector('#advancedSettings').open, true);
 });
 

@@ -9,6 +9,8 @@ const server = require('../backend/server');
 const planStore = require('../backend/services/planStore');
 const barionService = require('../backend/services/barionService');
 const mailService = require('../backend/services/mailService');
+const orders = require('../backend/services/orderService');
+const settingsService = require('../backend/services/settingsService');
 
 const POS_KEY = 'pos-key-very-secret';
 const PAYMENT_ID = '4a1b2c3d4e5f60718293a4b5c6d7e8f9';
@@ -35,7 +37,7 @@ function setEnv(t, values) {
 // Barion + Számlázz.hu csapda: minden külső hívás ide fut be, valódi hálózat nélkül.
 function stubExternal(t, { start, state, invoice } = {}) {
   const realFetch = global.fetch;
-  const calls = { start: [], state: [], invoice: 0, invoiceXml: [], sheets: [] };
+  const calls = { start: [], state: [], invoice: 0, pdfFetch: 0, invoiceXml: [], sheets: [] };
   global.fetch = async (url, options = {}) => {
     const target = new URL(url);
     if (/^api(\.test)?\.barion\.com$/.test(target.hostname)) {
@@ -52,6 +54,10 @@ function stubExternal(t, { start, state, invoice } = {}) {
       }
     }
     if (target.hostname === 'www.szamlazz.hu') {
+      if (options.body.get('action-szamla_agent_pdf')) {
+        calls.pdfFetch += 1;
+        return new Response(Buffer.from('%PDF-1.4 barion teszt'), { status: 200 });
+      }
       calls.invoice += 1;
       const xml = await options.body.get('action-xmlagentxmlfile').text();
       calls.invoiceXml.push(xml);
@@ -69,16 +75,15 @@ function stubExternal(t, { start, state, invoice } = {}) {
 }
 
 function barionEnv(t, extra = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovi-barion-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  orders.resetMemory();
+  settingsService.invalidate();
   setEnv(t, {
     BARION_POS_KEY_EV: POS_KEY, BARION_POS_KEY: undefined, BARION_TEST_MODE: 'true', BARION_PAYEE_EMAIL: 'bolt@ovitervezo.hu',
     FRONTEND_URL: 'https://ovitervezo.hu', BACKEND_URL: 'https://api.ovitervezo.test', BILLING_PROFILE: undefined,
-    SZAMLAZZ_API_KEY_EV: 'agent-key', SZAMLAZZ_API_KEY: undefined, SZAMLAZZ_KEY: undefined, INVOICE_STORE_PATH: path.join(dir, 'invoiced-sessions.json'),
+    SZAMLAZZ_API_KEY_EV: 'agent-key', SZAMLAZZ_API_KEY: undefined, SZAMLAZZ_KEY: undefined,
     SMTP_HOST: undefined, GOOGLE_SHEETS_WEBHOOK_URL: undefined, ADMIN_NOTIFICATION_EMAIL: undefined,
     ...extra
   });
-  return dir;
 }
 
 const succeeded = (total, sessionId, extra = {}) => ({ PaymentId: PAYMENT_ID, PaymentRequestId: sessionId, Status: 'Succeeded', Total: total, Currency: 'HUF', Errors: [], ...extra });
@@ -130,8 +135,8 @@ test('checkout-barion starts a Barion payment with the stored plan mode price, t
   assert.equal(body.Transactions[0].Items[0].ItemTotal, 390);
   assert.match(body.Transactions[0].Items[0].Name, /OviTervező/);
 
-  const stored = barionService.getRecord(data.sessionId);
-  assert.deepEqual({ paymentId: stored.paymentId, generationId: stored.generationId, paid: stored.paid, amountHuf: stored.amountHuf }, { paymentId: PAYMENT_ID, generationId: 'gen_barion_std', paid: false, amountHuf: 390 });
+  const stored = await orders.getBySessionId(data.sessionId);
+  assert.deepEqual({ paymentId: stored.providerPaymentId, generationId: stored.documentId, status: stored.status, provider: stored.provider, amountHuf: stored.amount }, { paymentId: PAYMENT_ID, generationId: 'gen_barion_std', status: 'pending', provider: 'barion', amountHuf: 390 });
   assert.deepEqual(stored.billing, BILLING, 'a számlázási adatok a documentId mellett tárolódnak');
   assert.equal(JSON.stringify(body).includes('Minta Óvoda'), false, 'a számlázási adat nem megy a Barionnak');
 });
@@ -142,7 +147,7 @@ test('checkout-barion trims and sanitizes the billing fields before storing them
   stubExternal(t);
   const base = await listen(t);
   const { data } = await startBarion(base, { billing: { name: '  Minta   <b>Kft</b>\n', zip: ' 9021 ', city: '  Győr ', address: 'Fő u. 1.\t', extra: 'x' } });
-  assert.deepEqual(barionService.getRecord(data.sessionId).billing, { name: 'Minta b Kft /b', zip: '9021', city: 'Győr', address: 'Fő u. 1.' });
+  assert.deepEqual((await orders.getBySessionId(data.sessionId)).billing, { name: 'Minta b Kft /b', zip: '9021', city: 'Győr', address: 'Fő u. 1.' });
 });
 
 test('checkout-barion charges 690 Ft for an academic plan from the stored plan, whatever the client claims, and 890 Ft for the weekly package', async (t) => {
@@ -245,9 +250,9 @@ test('the webhook asks Barion for the state, unlocks the document, issues the Ba
   assert.deepEqual({ key: calls.state[0].key, paymentId: calls.state[0].paymentId }, { key: POS_KEY, paymentId: PAYMENT_ID });
   assert.match(calls.state[0].url, /^https:\/\/api\.test\.barion\.com\/v2\/Payment\/GetPaymentState\?/);
 
-  const stored = barionService.getRecord(session.sessionId);
-  assert.equal(stored.paid, true);
-  assert.equal(stored.unlocked, true);
+  const stored = await orders.getBySessionId(session.sessionId);
+  assert.equal(stored.status, 'paid');
+  assert.ok(stored.paidAt);
   assert.equal(stored.invoiceNumber, 'OVITE-2026-77');
   assert.equal(calls.invoice, 1);
   const xml = calls.invoiceXml[0];
@@ -269,7 +274,7 @@ test('the webhook asks Barion for the state, unlocks the document, issues the Ba
   ]);
   for (const response of again) assert.equal(response.status, 200);
   assert.equal(calls.invoice, 1);
-  assert.equal(barionService.getRecord(session.sessionId).invoiceNumber, 'OVITE-2026-77');
+  assert.equal((await orders.getBySessionId(session.sessionId)).invoiceNumber, 'OVITE-2026-77');
 });
 
 test('concurrent first callbacks still issue exactly one invoice', async (t) => {
@@ -355,7 +360,7 @@ test('a failing Google Sheets webhook or admin mail never breaks the Barion call
   const session = await paidSession(t, base, holder);
   const hook = await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
   assert.equal(hook.status, 200);
-  assert.equal(barionService.getRecord(session.sessionId).invoiceNumber, 'OVITE-2026-77');
+  assert.equal((await orders.getBySessionId(session.sessionId)).invoiceNumber, 'OVITE-2026-77');
 });
 
 test('without SMTP the Barion callback still succeeds and sends no mail, and in NODE_ENV=test no real mail leaves', async (t) => {
@@ -424,7 +429,7 @@ test('the webhook ignores unknown and malformed payments, refuses a mismatching 
   holder.current = () => succeeded(1, session.sessionId);
   const mismatch = await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
   assert.equal(mismatch.status, 409);
-  assert.equal(barionService.getRecord(session.sessionId).paid, false);
+  assert.equal((await orders.getBySessionId(session.sessionId)).status, 'pending');
   holder.current = () => ({ ...succeeded(390, 'barion_masik_kereses') });
   assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 409, 'más PaymentRequestId nem fogadható el');
   holder.current = () => ({ ...succeeded(390, session.sessionId), Currency: 'EUR' });
@@ -434,7 +439,7 @@ test('the webhook ignores unknown and malformed payments, refuses a mismatching 
   holder.current = () => ({ status: 500, json: { Errors: [{ ErrorCode: 'InternalError', Title: 'Valami hiba' }] } });
   const down = await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
   assert.equal(down.status, 502, 'nem 2xx: a Barion újrapróbálja');
-  assert.equal(barionService.getRecord(session.sessionId).paid, false);
+  assert.equal((await orders.getBySessionId(session.sessionId)).status, 'pending');
 });
 
 test('a failed invoice keeps the paid document unlocked, makes the webhook retry, and the retry issues the invoice once', async (t) => {
@@ -452,16 +457,16 @@ test('a failed invoice keeps the paid document unlocked, makes the webhook retry
 
   const first = await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
   assert.ok(first.status >= 500, 'a Barion újrapróbálja');
-  const record = barionService.getRecord(session.sessionId);
-  assert.equal(record.paid, true);
-  assert.equal(record.invoiceNumber, undefined);
+  const record = await orders.getBySessionId(session.sessionId);
+  assert.equal(record.status, 'paid');
+  assert.equal(record.invoiceNumber, null);
   const status = await (await fetch(`${base}/api/checkout-session/${session.sessionId}`)).json();
   assert.equal(status.paid, true, 'a kifizetett terv a számlázási hiba miatt sem záródik vissza');
   assert.equal(status.invoiceReady, false);
 
   invoiceFails = false;
   assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 200);
-  assert.equal(barionService.getRecord(session.sessionId).invoiceNumber, 'OVITE-2026-78');
+  assert.equal((await orders.getBySessionId(session.sessionId)).invoiceNumber, 'OVITE-2026-78');
   assert.equal((await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID })).status, 200);
   assert.equal(calls.invoice, 3, 'két sikertelen (webhook, státuszlekérdezés) és egy sikeres számlázási kísérlet');
 });
@@ -469,9 +474,9 @@ test('a failed invoice keeps the paid document unlocked, makes the webhook retry
 // ---------- Kézbesítés és számla Barion munkamenettel ----------
 
 test('after a Barion payment the frontend delivery sends the files with the invoice to the payer, once', async (t) => {
-  const dir = barionEnv(t, { SMTP_HOST: 'smtp.invalid.example' });
+  barionEnv(t, { SMTP_HOST: 'smtp.invalid.example' });
   const holder = {};
-  stubExternal(t, { state: () => holder.current() });
+  const calls = stubExternal(t, { state: () => holder.current() });
   const base = await listen(t);
   const session = await paidSession(t, base, holder);
   await post(base, '/api/webhook/barion', { paymentId: PAYMENT_ID });
@@ -491,7 +496,9 @@ test('after a Barion payment the frontend delivery sends the files with the invo
   const invoice = await fetch(`${base}/api/invoice/${session.sessionId}`);
   assert.equal(invoice.status, 200);
   assert.equal(invoice.headers.get('content-type'), 'application/pdf');
-  assert.ok(fs.existsSync(path.join(dir, 'invoices', `${session.sessionId}.pdf`)));
+  assert.match((await invoice.arrayBuffer()).byteLength > 0 ? 'pdf' : '', /pdf/);
+  assert.ok(calls.pdfFetch >= 1, 'a számla PDF-et élőben, a Számlázz.hu-tól kéri le, nem fájlból');
+  assert.equal((await orders.getBySessionId(session.sessionId)).deliveryCount, 1);
 });
 
 test('delivery is refused for an unpaid Barion payment and the invoice is not downloadable', async (t) => {

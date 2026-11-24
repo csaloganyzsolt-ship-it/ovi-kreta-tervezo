@@ -310,15 +310,34 @@
       fillTable('ordersTable', data.orders.map((order) => {
         const buyer = el('span');
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
+        const resend = el('button', 'profile-btn', 'Újraküldés');
+        resend.type = 'button';
+        resend.disabled = order.status !== 'paid' || !order.email;
+        resend.addEventListener('click', () => resendOrder(order, resend));
         return [
           formatDate(order.createdAt), buyer, PLAN_LABELS[order.planKey] || order.planKey || '–', formatAmount(order.amount),
-          order.couponCode || '–', ORDER_STATUS_LABELS[order.status] || order.status, order.invoiceNumber || '–'
+          order.couponCode || '–', ORDER_STATUS_LABELS[order.status] || order.status, order.invoiceNumber || '–', resend
         ];
-      }), 7, 'Nincs a szűrésnek megfelelő rendelés.');
+      }), 8, 'Nincs a szűrésnek megfelelő rendelés.');
       byId('ordersCount').textContent = `${data.orders.length} rendelés${data.truncated ? ' (a lista csonkolt, szűkítsd a keresést)' : ''}`;
     } catch (error) {
       if (request !== ordersRequest) return;
       setText('ordersError', `A rendelések nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
+  // A visszaigazoló / számlaértesítő levél újraküldése a vevő rendelésen tárolt címére (a számla PDF-jét a szerver élőben kéri le).
+  async function resendOrder(order, button) {
+    if (!window.confirm(`Újraküldöd a visszaigazoló levelet (${order.orderNumber}) ide: ${order.email}?`)) return;
+    setText('ordersError', '');
+    button.disabled = true;
+    try {
+      const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/resend`, { method: 'POST', body: {} });
+      setText('ordersCount', `Elküldve: ${result.to}${result.invoiceAttached ? ' (számlával)' : ''}.`);
+    } catch (error) {
+      setText('ordersError', `Az újraküldés sikertelen: ${errorMessage(error)}`);
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -506,8 +525,34 @@
       byId('setHints').value = settings.seasonal_hints.join('; ');
       byId('setAiModel').value = settings.ai_config.model;
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
+      byId('setBillingProfile').value = settings.billing_profile || 'ev';
+      byId('setPaymentProvider').value = settings.payment_provider || 'barion';
     } catch (error) {
       flash('generalStatus', 'generalError', `A beállítások nem tölthetők be: ${errorMessage(error)}`, true);
+    }
+    loadBillingStatus();
+  }
+
+  const MODE_LABELS = { test: 'TESZT mód', sandbox: 'SANDBOX (teszt) mód', live: 'ÉLES mód' };
+
+  // Csak olvasható állapotkártya: a szerver logikai értékeket ad (kulcsok jelenléte, éles/teszt mód), titkos adatot nem.
+  async function loadBillingStatus() {
+    const list = byId('billingStatusList');
+    try {
+      const { status } = await api('/api/admin/billing-status');
+      const yes = (value) => (value ? 'beállítva' : 'HIÁNYZIK');
+      const lines = [
+        `Barion: ${MODE_LABELS[status.modes.barion]}`,
+        `Számlázz.hu: ${MODE_LABELS[status.modes.szamlazz]}`,
+        `Stripe: ${MODE_LABELS[status.modes.stripe]}`
+      ];
+      for (const [type, label] of [['ev', 'EV'], ['kft', 'Kft.']]) {
+        const keys = status.profiles[type];
+        lines.push(`${label} kulcsok – Számlázz.hu: ${yes(keys.szamlazzApiKey)}; Barion POS: ${yes(keys.barionPosKey)}; Stripe titkos: ${yes(keys.stripeSecret)}, nyilvános: ${yes(keys.stripePublishable)}, webhook: ${yes(keys.stripeWebhook)}`);
+      }
+      list.replaceChildren(...lines.map((line) => el('li', '', line)));
+    } catch (error) {
+      list.replaceChildren(el('li', '', `Az állapot nem tölthető be: ${errorMessage(error)}`));
     }
   }
 
@@ -535,6 +580,11 @@
   const saveAi = (event) => saveSettings(event, () => ({
     ai_config: { model: byId('setAiModel').value, system_prompt: byId('setAiPrompt').value }
   }), { status: 'aiStatus', error: 'aiError', button: 'aiSave' });
+
+  const saveBilling = (event) => saveSettings(event, () => ({
+    billing_profile: byId('setBillingProfile').value,
+    payment_provider: byId('setPaymentProvider').value
+  }), { status: 'billingStatus', error: 'billingError', button: 'billingSave' });
 
   // Módosítási napló: csak olvasható, a régi érték kijelölhető és másolható.
   async function openHistory(key) {
@@ -657,6 +707,7 @@
     document.querySelectorAll('[data-settings-tab]').forEach((tab) => tab.addEventListener('click', () => activateSettingsTab(tab.dataset.settingsTab)));
     byId('generalForm').addEventListener('submit', saveGeneral);
     byId('aiForm').addEventListener('submit', saveAi);
+    byId('billingForm').addEventListener('submit', saveBilling);
     document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
     byId('historyKey').addEventListener('change', () => openHistory());
     byId('historyClose').addEventListener('click', () => byId('historyDialog').close());

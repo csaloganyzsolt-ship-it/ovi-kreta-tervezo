@@ -27,21 +27,22 @@ class PaymentError extends Error {
   }
 }
 
-// Profilfüggő kulcsok: BILLING_PROFILE szerint a *_EV / *_KFT változat, ennek hiányában a közös név.
-function profileSuffix(env) {
-  return getBillingProfile(env).type === 'kft' ? 'KFT' : 'EV';
+// Profilfüggő kulcsok: az aktív profil (Admin Központ, tartalékként a BILLING_PROFILE) szerint a *_EV / *_KFT változat, ennek hiányában a közös név.
+// A profileType megadásával (pl. a rendelésen rögzített profil) a kulcs kifejezetten az adott profilhoz oldódik fel.
+function profileSuffix(env, profileType) {
+  return getBillingProfile(env, profileType).type === 'kft' ? 'KFT' : 'EV';
 }
 
-function stripeSecretKey(env = process.env) {
-  return String(env[`STRIPE_SECRET_KEY_${profileSuffix(env)}`] || env.STRIPE_SECRET_KEY || '').trim();
+function stripeSecretKey(env = process.env, profileType) {
+  return String(env[`STRIPE_SECRET_KEY_${profileSuffix(env, profileType)}`] || env.STRIPE_SECRET_KEY || '').trim();
 }
 
-function stripeWebhookSecret(env = process.env) {
-  return String(env[`STRIPE_WEBHOOK_SECRET_${profileSuffix(env)}`] || env.STRIPE_WEBHOOK_SECRET || '').trim();
+function stripeWebhookSecret(env = process.env, profileType) {
+  return String(env[`STRIPE_WEBHOOK_SECRET_${profileSuffix(env, profileType)}`] || env.STRIPE_WEBHOOK_SECRET || '').trim();
 }
 
-function stripePublishableKey(env = process.env) {
-  return String(env[`STRIPE_PUBLISHABLE_KEY_${profileSuffix(env)}`] || env.STRIPE_PUBLISHABLE_KEY || '').trim();
+function stripePublishableKey(env = process.env, profileType) {
+  return String(env[`STRIPE_PUBLISHABLE_KEY_${profileSuffix(env, profileType)}`] || env.STRIPE_PUBLISHABLE_KEY || '').trim();
 }
 
 // Hibaüzenethez: pontosan melyik változót kell megadni az aktív profilhoz.
@@ -95,9 +96,9 @@ function toStripeAmount(amountHuf) {
 let cachedClient = null;
 let cachedKey = '';
 
-function getClient(env = process.env, deps = {}) {
+function getClient(env = process.env, deps = {}, profileType) {
   if (deps.client) return deps.client;
-  const key = stripeSecretKey(env);
+  const key = stripeSecretKey(env, profileType);
   if (!cachedClient || cachedKey !== key) {
     const Stripe = require('stripe');
     cachedClient = new Stripe(key);
@@ -141,7 +142,7 @@ async function createCheckoutSession({ plan, email, generationId, title, planMod
         product_data: { name: product.invoiceName, description: product.invoiceName }
       }
     }],
-    metadata: { plan: product.key, planMode: product.planMode, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
+    metadata: { plan: product.key, planMode: product.planMode, billingProfile: getBillingProfile(env).type, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
     success_url: `${baseUrl}/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/tervezo.html?payment=cancel`
   });
@@ -167,21 +168,36 @@ async function retrieveCheckoutSession(sessionId, deps = {}) {
     plan: session.metadata?.plan || null,
     generationId: session.metadata?.generationId || null,
     created: session.created || null,
-    email: session.customer_details?.email || session.customer_email || null
+    email: session.customer_details?.email || session.customer_email || null,
+    provider: 'stripe',
+    billingProfile: session.metadata?.billingProfile || null,
+    amountHuf: Number.isFinite(session.amount_total) ? Math.round(session.amount_total / 100) : null
   };
 }
 
+// Az aláírást az aktív profil titkával, ennek sikertelensége esetén a másik profil saját titkával ellenőrizzük
+// (profilváltás után a korábban indított fizetések webhookja még a régi fiókból érkezik). A siker a `billingProfile` mezőt is megadja.
 function constructWebhookEvent(rawBody, signature, deps = {}) {
   const env = deps.env || process.env;
-  const secret = stripeWebhookSecret(env);
-  if (!isLive(env) || !secret) {
-    throw new PaymentError(`A Stripe webhook nincs beállítva (${keyName('STRIPE_SECRET_KEY', env)} / ${keyName('STRIPE_WEBHOOK_SECRET', env)}, aktív profil: ${getBillingProfile(env).type}).`, 503);
+  const active = getBillingProfile(env).type;
+  const other = active === 'kft' ? 'ev' : 'kft';
+  const candidates = [{ type: active, secret: stripeWebhookSecret(env, active) }];
+  const otherSecret = String(env[`STRIPE_WEBHOOK_SECRET_${other === 'kft' ? 'KFT' : 'EV'}`] || '').trim();
+  if (otherSecret) candidates.push({ type: other, secret: otherSecret });
+  if (!isLive(env) || !candidates[0].secret) {
+    throw new PaymentError(`A Stripe webhook nincs beállítva (${keyName('STRIPE_SECRET_KEY', env)} / ${keyName('STRIPE_WEBHOOK_SECRET', env)}, aktív profil: ${active}).`, 503);
   }
-  try {
-    return getClient(env, deps).webhooks.constructEvent(rawBody, signature, secret);
-  } catch (error) {
-    throw new PaymentError(`Érvénytelen Stripe aláírás: ${error.message}`, 400);
+  let lastError;
+  for (const candidate of candidates) {
+    try {
+      const event = getClient(env, deps).webhooks.constructEvent(rawBody, signature, candidate.secret);
+      event.billingProfile = candidate.type;
+      return event;
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw new PaymentError(`Érvénytelen Stripe aláírás: ${lastError.message}`, 400);
 }
 
 module.exports = {

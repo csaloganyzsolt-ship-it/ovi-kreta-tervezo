@@ -94,6 +94,7 @@ function initFooterAndModals() {
     document.getElementById(id).addEventListener(eventName, syncCheckoutButtons);
   }
   document.getElementById('checkoutBarion').addEventListener('click', startBarionCheckout);
+  document.getElementById('checkoutStripe').addEventListener('click', startStripeCheckout);
   document.getElementById('couponApply').addEventListener('click', applyCouponCode);
   // Enterre a kuponkód érvényesül, nem indul el a fizetés.
   document.getElementById('couponCode').addEventListener('keydown', (event) => {

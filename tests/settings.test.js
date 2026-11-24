@@ -11,6 +11,7 @@ const barionService = require('../backend/services/barionService');
 const mailService = require('../backend/services/mailService');
 const invoiceService = require('../backend/services/invoiceService');
 const { productFor } = require('../backend/services/pricing');
+const { getBillingProfile } = require('../backend/services/siteConstants');
 
 const DB_PRICING = { standard: 555, academic: 777, weekly: 1999 };
 const TEMPLATE_ROWS = [
@@ -20,12 +21,39 @@ const TEMPLATE_ROWS = [
   { id: 'password_reset', subject: 'Jelszó', body_html: '<p>{{action_url}}</p>' }
 ];
 
+// Minimális orders tábla: select/eq/maybeSingle, upsert és update/eq/select.
+function ordersTable(rows) {
+  const filters = [];
+  let patch = null;
+  const matching = () => rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+  const builder = {
+    select() { return builder; },
+    eq(column, value) { filters.push([column, value]); return builder; },
+    update(fields) { patch = fields; return builder; },
+    maybeSingle: async () => ({ data: matching()[0] || null, error: null }),
+    then(resolve, reject) {
+      const found = matching();
+      if (patch) found.forEach((row) => Object.assign(row, patch));
+      return Promise.resolve({ data: found.map((row) => ({ ...row })), error: null }).then(resolve, reject);
+    },
+    async upsert(row, options) {
+      const key = options?.onConflict || 'order_number';
+      const existing = rows.find((item) => item[key] === row[key]);
+      if (existing) Object.assign(existing, row); else rows.push({ delivery_count: 0, ...row });
+      return { error: null };
+    },
+    async insert(row) { rows.push({ ...row }); return { error: null }; }
+  };
+  return builder;
+}
+
 // Mockolt Supabase kliens: system_settings és email_templates táblák, minden más írás elnyelt.
 function fakeDb(t, { settings = {}, templates = TEMPLATE_ROWS, failSettings = false } = {}) {
-  const store = { system_settings: { ...settings }, email_templates: Object.fromEntries(templates.map((row) => [row.id, { ...row }])) };
+  const store = { orders: [], system_settings: { ...settings }, email_templates: Object.fromEntries(templates.map((row) => [row.id, { ...row }])) };
   const calls = { settingsReads: 0, upserts: [] };
   const client = {
     from(table) {
+      if (table === 'orders') return ordersTable(store.orders);
       return {
         select() {
           if (table === 'system_settings') {
@@ -62,11 +90,9 @@ async function listen(t) {
 }
 
 function paymentEnv(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovi-settings-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return {
     NODE_ENV: 'test', BARION_POS_KEY_EV: 'pos-key', BARION_TEST_MODE: 'true', BARION_PAYEE_EMAIL: 'bolt@ovitervezo.hu',
-    FRONTEND_URL: 'https://ovitervezo.hu', BACKEND_URL: 'https://api.ovitervezo.test', INVOICE_STORE_PATH: path.join(dir, 'store.json')
+    FRONTEND_URL: 'https://ovitervezo.hu', BACKEND_URL: 'https://api.ovitervezo.test'
   };
 }
 
@@ -204,9 +230,52 @@ test('GET /api/config exposes only public data and never the system prompt', asy
   const response = await fetch(`${base}/api/config`);
   const data = await response.json();
   assert.equal(response.status, 200);
-  assert.deepEqual(data, { success: true, pricing: DB_PRICING, maintenance_mode: true, seasonal_hints: ['hó', 'szél'] });
+  assert.deepEqual(
+    { success: data.success, pricing: data.pricing, maintenance_mode: data.maintenance_mode, seasonal_hints: data.seasonal_hints },
+    { success: true, pricing: DB_PRICING, maintenance_mode: true, seasonal_hints: ['hó', 'szél'] }
+  );
   assert.equal(JSON.stringify(data).includes('TITKOS'), false);
+  assert.equal('ai_config' in data, false);
   assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('GET /api/config follows the admin billing profile and payment provider (EV/Kft., Barion/Stripe)', async (t) => {
+  const saved = { BARION_PIXEL_ID: process.env.BARION_PIXEL_ID, STRIPE_PUBLISHABLE_KEY_EV: process.env.STRIPE_PUBLISHABLE_KEY_EV, STRIPE_PUBLISHABLE_KEY_KFT: process.env.STRIPE_PUBLISHABLE_KEY_KFT, STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY };
+  Object.assign(process.env, { BARION_PIXEL_ID: 'BP-Teszt-123456', STRIPE_PUBLISHABLE_KEY_EV: 'pk_test_ev', STRIPE_PUBLISHABLE_KEY_KFT: 'pk_test_kft' });
+  delete process.env.STRIPE_PUBLISHABLE_KEY;
+  t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  const store = fakeDb(t, { settings: { pricing: DB_PRICING } }).store;
+  const base = await listen(t);
+  const read = async () => { settingsService.invalidate(); return (await fetch(`${base}/api/config`)).json(); };
+
+  let data = await read();
+  assert.deepEqual([data.billing_profile, data.payment_provider, data.paymentProvider], ['ev', 'barion', 'barion']);
+  assert.equal(data.company.type, 'ev');
+  assert.equal(data.company.court, '');
+  assert.equal(data.barionPixelId, 'BP-Teszt-123456');
+  assert.equal(data.stripePublishableKey, 'pk_test_ev');
+
+  store.system_settings.billing_profile = 'kft';
+  store.system_settings.payment_provider = 'stripe';
+  data = await read();
+  assert.deepEqual([data.billing_profile, data.paymentProvider], ['kft', 'stripe']);
+  assert.equal(data.company.type, 'kft');
+  assert.ok(data.company.court, 'a Kft. cégbíróságot is mutat');
+  assert.equal(data.barionPixelId, '', 'Stripe módban nincs Barion Pixel azonosító');
+  assert.equal(data.stripePublishableKey, 'pk_test_kft', 'az aktív profil kulcsa');
+  assert.equal(JSON.stringify(data).includes('sk_'), false);
+});
+
+test('billing_profile and payment_provider are validated, saved and switch the active profile immediately', async (t) => {
+  fakeDb(t, { settings: { pricing: DB_PRICING } });
+  const client = supabase.getClient();
+  assert.equal(settingsService.DEFAULT_SETTINGS.payment_provider, 'barion');
+  await assert.rejects(settingsService.updateSettings(client, { billing_profile: 'bt' }), /billing_profile|profil/i);
+  await assert.rejects(settingsService.updateSettings(client, { payment_provider: 'paypal' }), /payment_provider|szolgáltató/i);
+  const updated = await settingsService.updateSettings(client, { billing_profile: 'kft', payment_provider: 'stripe' });
+  assert.deepEqual([updated.billing_profile, updated.payment_provider], ['kft', 'stripe']);
+  assert.equal(getBillingProfile({}).type, 'kft', 'az admin által mentett profil az env fölött áll');
+  assert.equal(getBillingProfile({}, 'ev').type, 'ev', 'a rendelésen tárolt profil mindig erősebb');
 });
 
 // ---------- 4. E-mail sablonok ----------

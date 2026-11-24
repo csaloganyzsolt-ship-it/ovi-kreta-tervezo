@@ -255,7 +255,7 @@ async function createSupportCoupon(client, body = {}, now = Date.now()) {
 
 // ---------- Rendelések ----------
 
-const ORDER_COLUMNS = 'order_number, user_id, user_email, document_id, plan_mode, plan_key, amount, coupon_code, payment_method, status, invoice_number, created_at';
+const ORDER_COLUMNS = 'order_number, user_id, user_email, document_id, plan_mode, plan_key, amount, coupon_code, payment_method, status, invoice_number, billing, created_at';
 
 async function fetchProfiles(client, ids, columns) {
   const unique = [...new Set(ids.filter(Boolean))];
@@ -268,7 +268,7 @@ async function fetchProfiles(client, ids, columns) {
   return rows;
 }
 
-// A rendelésekhez nem tartozik névoszlop: a vevő neve a profiljából (számlázási név, ennek hiányában teljes név) származik.
+// A regisztrált vevő neve a profiljából (számlázási név, ennek hiányában teljes név), a vendégé a rendelés számlázási adataiból (billing.name) származik.
 async function listOrders(client, { status, q } = {}) {
   const wantedStatus = String(status || '').trim();
   if (wantedStatus && !ORDER_STATUSES.includes(wantedStatus)) throw validationError('Ismeretlen rendelési státusz.');
@@ -284,7 +284,7 @@ async function listOrders(client, { status, q } = {}) {
     orderNumber: row.order_number,
     createdAt: row.created_at,
     email: row.user_email || '',
-    name: names.get(String(row.user_id)) || '',
+    name: names.get(String(row.user_id)) || String(row.billing?.name || ''),
     planKey: row.plan_key || '',
     planMode: row.plan_mode || '',
     amount: Number(row.amount) || 0,
