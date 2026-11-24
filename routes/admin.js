@@ -91,6 +91,10 @@ router.get('/admin/newsletter/campaigns', handle('A kampányok lekérdezése', (
 router.get('/admin/settings', handle('A beállítások lekérdezése', async () => ({
   settings: await settingsService.getSettings({ force: true })
 })));
+router.get('/admin/settings/history/:key', handle('Az előzmények lekérdezése', async (client, req) => ({
+  key: req.params.key,
+  history: await settingsService.listHistory(client, req.params.key)
+})));
 router.patch('/admin/settings', handle('A beállítások mentése', async (client, req) => {
   const settings = await settingsService.updateSettings(client, req.body);
   logger.info('admin_settings', 'Rendszerbeállítások módosítva', { details: { keys: Object.keys(req.body || {}), admin: req.user?.email } });

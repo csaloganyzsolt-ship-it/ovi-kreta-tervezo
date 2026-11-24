@@ -34,7 +34,7 @@ function seedTemplateRows() {
 }
 
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), system_settings_history: [], ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {
@@ -1037,4 +1037,47 @@ test('GET /api/admin/newsletter/campaigns/:id extracts subject, heading, body an
   assert.deepEqual((await response.json()).campaign, { id, subject: 'Tárgy', heading: 'Új & jó', bodyHtml: '<p>Szia <b>ovis</b>!</p>', ctaText: 'Megnézem', ctaUrl: 'https://ovitervezo.hu/tervezo.html' });
   assert.equal((await call(base, '/api/admin/newsletter/campaigns/22222222-2222-4222-8222-222222222222', { token: 'token-admin' })).status, 404);
   assert.equal((await call(base, '/api/admin/newsletter/campaigns/nem-id', { token: 'token-admin' })).status, 404);
+});
+
+test('GET /api/admin/settings/history/:key returns the change log newest first, only for admins', async (t) => {
+  const rows = [
+    { id: 'a', setting_key: 'pricing', old_value: { standard: 390 }, new_value: { standard: 400 }, changed_at: '2026-11-01T10:00:00Z' },
+    { id: 'b', setting_key: 'pricing', old_value: { standard: 400 }, new_value: { standard: 450 }, changed_at: '2026-11-03T10:00:00Z' },
+    { id: 'c', setting_key: 'ai_config', old_value: { model: 'x' }, new_value: { model: 'y' }, changed_at: '2026-11-02T10:00:00Z' }
+  ];
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_settings_history: rows }));
+  const base = await listen(t);
+  assert.equal((await call(base, '/api/admin/settings/history/pricing')).status, 401);
+  assert.equal((await call(base, '/api/admin/settings/history/pricing', { token: 'token-alice' })).status, 403);
+  const ok = await call(base, '/api/admin/settings/history/pricing', { token: 'token-admin' });
+  assert.equal(ok.status, 200);
+  const data = await ok.json();
+  assert.equal(data.key, 'pricing');
+  assert.deepEqual(data.history.map((entry) => entry.id), ['b', 'a']);
+  assert.deepEqual(data.history[0].oldValue, { standard: 400 });
+  assert.deepEqual(data.history[0].newValue, { standard: 450 });
+  assert.equal((await call(base, '/api/admin/settings/history/nincs-ilyen', { token: 'token-admin' })).status, 404);
+});
+
+test('the history migration logs value changes with an AFTER UPDATE trigger and keeps the table service-only', () => {
+  const sql = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'supabase', 'migrations', '20261126100000_system_settings_history.sql'), 'utf8');
+  assert.match(sql, /create table if not exists public\.system_settings_history/);
+  for (const column of ['id uuid', 'setting_key text', 'old_value jsonb', 'new_value jsonb', 'changed_at timestamptz']) assert.ok(sql.includes(column), column);
+  assert.match(sql, /after update on public\.system_settings/);
+  assert.match(sql, /new\.value is distinct from old\.value/);
+  assert.match(sql, /alter table public\.system_settings_history enable row level security/);
+  assert.match(sql, /revoke all on public\.system_settings_history from anon, authenticated/);
+});
+
+test('the real-settings SQL overwrites the model, the prompt and the templates with upserts', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'supabase', 'migrations');
+  const sql = fs.readFileSync(path.join(dir, '20261126110000_update_real_settings.sql'), 'utf8');
+  assert.match(sql, /on conflict \(key\) do update/);
+  assert.match(sql, /on conflict \(id\) do update/);
+  assert.match(sql, /'model', 'gemini-3\.1-pro-preview'/);
+  assert.equal(sql.includes('gpt-4o'), false);
+  for (const id of ['base_layout', 'payment_success', 'welcome_email', 'password_reset']) assert.ok(sql.includes(`('${id}'`), id);
+  assert.ok(fs.readdirSync(dir).indexOf('20261126100000_system_settings_history.sql') < fs.readdirSync(dir).indexOf('20261126110000_update_real_settings.sql'));
 });

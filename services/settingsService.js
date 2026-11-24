@@ -189,6 +189,17 @@ async function listTemplates(client) {
   return (data || []).filter((row) => TEMPLATE_IDS.includes(row.id)).map((row) => ({ id: row.id, subject: row.subject || '', bodyHtml: row.body_html || '' }));
 }
 
+const HISTORY_LIMIT = 50;
+
+// A módosítási napló (system_settings_history, trigger tölti), időrendben csökkenve.
+async function listHistory(client, key) {
+  if (!(key in DEFAULT_SETTINGS)) throw new SettingsError('Ismeretlen beállítás.', 404);
+  const { data, error } = await client.from('system_settings_history').select('id, setting_key, old_value, new_value, changed_at')
+    .eq('setting_key', key).order('changed_at', { ascending: false }).limit(HISTORY_LIMIT);
+  if (error) throw dbError('A beállítás előzményei nem olvashatók', error);
+  return (data || []).map((row) => ({ id: row.id, key: row.setting_key, oldValue: row.old_value, newValue: row.new_value, changedAt: row.changed_at }));
+}
+
 async function updateTemplate(client, id, body = {}) {
   if (!TEMPLATE_IDS.includes(id)) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
   const subject = typeof body.subject === 'string' ? body.subject.replace(/[\r\n]+/g, ' ').trim() : null;
@@ -236,5 +247,5 @@ function composeEmail(templates, id, values = {}) {
 module.exports = {
   isValidModelName, PRICE_TIERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
   getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, resolveAiModel,
-  listTemplates, updateTemplate, getTemplates, fillPlaceholders, composeEmail
+  listTemplates, listHistory, updateTemplate, getTemplates, fillPlaceholders, composeEmail
 };

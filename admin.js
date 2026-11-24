@@ -536,6 +536,37 @@
     ai_config: { model: byId('setAiModel').value, system_prompt: byId('setAiPrompt').value }
   }), { status: 'aiStatus', error: 'aiError', button: 'aiSave' });
 
+  // Módosítási napló: csak olvasható, a régi érték kijelölhető és másolható.
+  async function openHistory(key) {
+    const select = byId('historyKey');
+    if (key) select.value = key;
+    setText('historyError', '');
+    byId('historyList').replaceChildren();
+    byId('historyEmpty').hidden = true;
+    const dialog = byId('historyDialog');
+    if (!dialog.open) dialog.showModal();
+    try {
+      const { history } = await api(`/api/admin/settings/history/${encodeURIComponent(select.value)}`);
+      byId('historyEmpty').hidden = history.length > 0;
+      byId('historyList').replaceChildren(...history.map((entry) => {
+        const item = el('li');
+        const when = el('time', '', new Date(entry.changedAt).toLocaleString('hu-HU'));
+        when.dateTime = entry.changedAt;
+        item.append(when);
+        for (const [label, value] of [['Korábbi érték', entry.oldValue], ['Új érték', entry.newValue]]) {
+          item.append(el('div', '', label + ':'));
+          const area = el('textarea');
+          area.readOnly = true;
+          area.value = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+          item.append(area);
+        }
+        return item;
+      }));
+    } catch (error) {
+      setText('historyError', `Az előzmények nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
   function showTemplate() {
     const template = templates[byId('tplSelect').value];
     byId('tplSubject').value = template?.subject || '';
@@ -626,6 +657,9 @@
     document.querySelectorAll('[data-settings-tab]').forEach((tab) => tab.addEventListener('click', () => activateSettingsTab(tab.dataset.settingsTab)));
     byId('generalForm').addEventListener('submit', saveGeneral);
     byId('aiForm').addEventListener('submit', saveAi);
+    document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
+    byId('historyKey').addEventListener('change', () => openHistory());
+    byId('historyClose').addEventListener('click', () => byId('historyDialog').close());
     byId('templateForm').addEventListener('submit', saveTemplate);
     byId('tplSelect').addEventListener('change', showTemplate);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
