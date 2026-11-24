@@ -83,7 +83,8 @@ insert into public.email_templates (id, subject, body_html) values
 <tr><td style="background:#f6f7f7;padding:18px 28px;border-top:1px solid #e6eae8;font-size:12px;line-height:1.6;color:#7a8480;">
 {{unsubscribe_link}}
 <strong>Kibocsátó:</strong> {{company_legal}}.<br>
-<a href="{{site_url}}" style="color:#7a8480;">{{site_url}}</a>
+<a href="{{site_url}}" style="color:#7a8480;">Adatkezelési tájékoztató</a> · <a href="{{site_url}}" style="color:#7a8480;">ÁSZF</a> – <a href="{{site_url}}" style="color:#7a8480;">{{site_url}}</a><br>
+Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
 </td></tr>
 </table></td></tr></table></body></html>$tpl$),
   ('welcome_email', 'Erősítsd meg az OviTervező fiókodat!', $tpl$<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Szia és üdvözlünk az OviTervezőben!</h1>
@@ -96,11 +97,11 @@ insert into public.email_templates (id, subject, body_html) values
   ('payment_success', 'OviTervező – a megvásárolt tervezet és az e-számla', $tpl$<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
 <p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – és köszönjük az elhivatott munkát, amellyel nap mint nap a gyerekek mellett áll.</p>
 <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#2d3b36;">Reméljük, hogy a kész tervezet sok időt spórol Önnek, így több jut a legfontosabbra: a közös játékra és felfedezésre.</p>
-{{title_block}}
+<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> {{topic}}</p>
 {{plan_type_block}}
-{{order_block}}
+<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>{{orderId}}</strong></p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;">
-<div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek (tervezet és e-számla)</div>
+<div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek</div>
 <table role="presentation" cellpadding="0" cellspacing="0">{{attachments_rows}}</table>
 </td></tr></table>
 <p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#5b6b64;background:#f6f7f7;border-radius:10px;padding:10px 14px;">Tipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.</p>

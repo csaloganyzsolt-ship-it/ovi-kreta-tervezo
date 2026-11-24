@@ -140,7 +140,7 @@ test('settings updates are validated', async (t) => {
   const client = supabase.getClient();
   await assert.rejects(settingsService.updateSettings(client, { pricing: { standard: -5 } }), /ár egész szám/);
   await assert.rejects(settingsService.updateSettings(client, { pricing: { vip: 100 } }), /Ismeretlen csomag/);
-  await assert.rejects(settingsService.updateSettings(client, { ai_config: { model: 'nincs-ilyen' } }), /Nem támogatott modell/);
+  await assert.rejects(settingsService.updateSettings(client, { ai_config: { model: 'rossz modell!' } }), /Érvénytelen modellnév/);
   await assert.rejects(settingsService.updateSettings(client, { maintenance_mode: 'igen' }), /igaz\/hamis/);
   await assert.rejects(settingsService.updateSettings(client, { rendszer: 1 }), /Ismeretlen beállítás/);
 });
@@ -182,18 +182,18 @@ test('callGemini sends the configured system prompt and the supported model', as
   await callGemini('kérés', { model: 'gemini-2.5-flash', systemPrompt: 'Egyedi admin prompt.' }, { env: { GEMINI_API_KEY: 'k' }, fetch });
   assert.match(request.url, /models\/gemini-2\.5-flash:/);
   assert.match(request.body.systemInstruction.parts[0].text, /^Egyedi admin prompt\./);
-  await assert.rejects(callGemini('kérés', { model: 'gpt-4o-mini' }, { env: { GEMINI_API_KEY: 'k' }, fetch }), /Nem támogatott modell/);
+  await assert.rejects(callGemini('kérés', { model: 'rossz modell!' }, { env: { GEMINI_API_KEY: 'k' }, fetch }), /Érvénytelen modellnév/);
 });
 
-test('the AI model comes from the settings and an unsupported one falls back loudly', () => {
+test('the AI model comes from the settings and a malformed name falls back loudly', () => {
   assert.equal(settingsService.resolveAiModel({ ai_config: { model: 'gemini-2.5-pro' } }, 'x'), 'gemini-2.5-pro');
   const warn = console.warn;
   const warnings = [];
   console.warn = (message) => warnings.push(message);
   try {
-    assert.equal(settingsService.resolveAiModel({ ai_config: { model: 'gpt-4o-mini' } }, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
+    assert.equal(settingsService.resolveAiModel({ ai_config: { model: 'rossz modell!' } }, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
   } finally { console.warn = warn; }
-  assert.match(warnings[0], /nem támogatott/);
+  assert.match(warnings[0], /érvénytelen/);
 });
 
 // ---------- 3. Publikus konfiguráció ----------
@@ -322,4 +322,31 @@ test('the newsletter preview and the payment e-mail use the same base_layout fro
   assert.ok(sent[0].html.includes('Kibocsátó:') && sent[0].html.includes('Mellékletek') && sent[0].html.includes('OVI-9'));
   assert.equal(sent[0].html.includes('Leiratkozás'), false, 'a fizetési levélben nincs leiratkozó mondat');
   assert.equal(sent[0].html.includes('{{'), false);
+});
+
+test('the AI model is a free text field: any valid model name is accepted, malformed ones are rejected', async (t) => {
+  fakeDb(t);
+  const client = supabase.getClient();
+  const saved = await settingsService.updateSettings(client, { ai_config: { model: 'gemini-1.5-flash' } });
+  assert.equal(saved.ai_config.model, 'gemini-1.5-flash');
+  assert.equal(settingsService.resolveAiModel(saved, 'x'), 'gemini-1.5-flash');
+  await assert.rejects(settingsService.updateSettings(client, { ai_config: { model: 'a/b?key=1' } }), /Érvénytelen modellnév/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+  assert.match(html, /<input id="setAiModel" type="text"/);
+});
+
+test('the real payment_success and base_layout carry the original structure and placeholders', async () => {
+  const templates = migrationTemplates();
+  const layout = templates.base_layout.bodyHtml;
+  for (const needle of ['#d8f0e3', 'OT', 'Kibocsátó:', '{{company_legal}}', 'Adatkezelési tájékoztató', 'ÁSZF', '{{site_url}}', '#f6f7f7']) assert.ok(layout.includes(needle), needle);
+  const pay = templates.payment_success.bodyHtml;
+  for (const needle of ['Kedves Kolléganő!', '{{topic}}', 'Rendelésszám: <strong>{{orderId}}', 'Mellékletek', '{{attachments_rows}}', 'Tipp:', 'Új tervezet készítése', '{{feedback_block}}']) assert.ok(pay.includes(needle), needle);
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF'), title: 'Őszi <erdő>', orderNumber: 'OVI-77' }, { env: { NODE_ENV: 'test' }, transport, templates });
+  const html = sent[0].html;
+  assert.match(html, /Tervezet témája:<\/strong> Őszi &lt;erdő&gt;/);
+  assert.match(html, /Rendelésszám: <strong>OVI-77/);
+  assert.ok(html.includes('Tervezet Word</strong> (.docx) formátumban') && html.includes('Tervezet PDF</strong> formátumban') && html.includes('ertekeles.html?rating=5'));
+  assert.equal(html.includes('{{'), false);
 });

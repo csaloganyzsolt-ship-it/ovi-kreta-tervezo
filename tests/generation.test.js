@@ -146,7 +146,7 @@ test('Gemini requests default to the fast model and use Argon only when explicit
   assert.deepEqual(normalizeResponse(output).kidolgozas_tablazat, plan.kidolgozas_tablazat);
   assert.equal(calls.length, 1);
   assert.equal(new URL(calls[0].url).pathname, '/v1beta/models/gemini-3.1-pro-preview:generateContent');
-  await assert.rejects(callGemini(buildPrompt(makePayload()), { model: 'gemini-4-argon' }), /Nem támogatott modell/);
+  await assert.rejects(callGemini(buildPrompt(makePayload()), { model: 'rossz modell!' }), /Érvénytelen modellnév/);
   assert.equal(calls.length, 1);
   const body = JSON.parse(calls[0].options.body);
   assert.equal(body.generationConfig.responseMimeType, 'application/json');

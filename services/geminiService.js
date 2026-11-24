@@ -2,7 +2,7 @@
 
 const FAST_MODEL = 'gemini-3.1-pro-preview';
 const PREMIUM_MODEL = 'gemini-3.1-pro-preview';
-const { AI_MODELS } = require('./settingsService');
+const { isValidModelName } = require('./settingsService');
 
 function generationError(message, status = 502) {
   const error = new Error(message);
@@ -34,8 +34,8 @@ async function callGemini(prompt, {
   maxRetries = 2,
   retryDelayMs = (process.env.GEMINI_RETRY_DELAY_MS ? Number(process.env.GEMINI_RETRY_DELAY_MS) : (process.env.NODE_ENV === 'test' ? 10 : 2000))
 } = {}, deps = {}) {
-  if (!AI_MODELS.includes(model)) {
-    throw generationError(`Nem támogatott modell: ${model}.`, 400);
+  if (!isValidModelName(model)) {
+    throw generationError(`Érvénytelen modellnév: ${String(model).slice(0, 60)}.`, 400);
   }
   const env = deps.env || process.env;
   const apiKey = env.GEMINI_API_KEY;

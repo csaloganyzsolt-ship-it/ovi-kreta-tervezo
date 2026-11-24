@@ -290,6 +290,8 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
         ...built.parts,
         planLabel: escapeHtml(planLabelOf(plan)),
         invoiceText: invoicePdf ? ' Az e-számlát is mellékeltük PDF-ben.' : '',
+        topic: escapeHtml(cleanTitle || '–'),
+        orderId: escapeHtml(orderNumber || '–'),
         title_block: cleanTitle ? `<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> ${escapeHtml(cleanTitle)}</p>` : '',
         plan_type_block: planMode === 'academic' ? '<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Tervezet típusa: <strong>Oktatási célú tervezet</strong></p>' : '',
         order_block: orderNumber ? `<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>${escapeHtml(orderNumber)}</strong></p>` : ''

@@ -7,7 +7,8 @@ const supabase = require('./supabaseService');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SYSTEM_PROMPT = require('./defaultSystemPrompt');
-const AI_MODELS = Object.freeze(['gemini-3.1-pro-preview', 'gemini-2.5-pro', 'gemini-2.5-flash']);
+const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const isValidModelName = (value) => typeof value === 'string' && MODEL_NAME_PATTERN.test(value);
 const PRICE_TIERS = Object.freeze(['standard', 'academic', 'weekly']);
 const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'password_reset']);
 const MAX_PRICE_HUF = 100000;
@@ -111,11 +112,11 @@ function publicConfig(settings) {
   };
 }
 
-// Az AI-modell a beállításból jön; nem támogatott érték hangos figyelmeztetéssel a szerver alapmodelljére esik vissza.
+// Az AI-modell a beállításból jön (szabad szöveg); érvénytelen név hangos figyelmeztetéssel a szerver alapmodelljére esik vissza.
 function resolveAiModel(settings, fallbackModel) {
   const model = settings?.ai_config?.model;
-  if (AI_MODELS.includes(model)) return model;
-  console.warn(`[settings] A beállított AI-modell (${String(model).slice(0, 60)}) nem támogatott, a ${fallbackModel} használt.`);
+  if (isValidModelName(model)) return model;
+  console.warn(`[settings] A beállított AI-modell (${String(model).slice(0, 60)}) érvénytelen, a ${fallbackModel} használt.`);
   return fallbackModel;
 }
 
@@ -156,7 +157,7 @@ function validatePatch(patch, current) {
     if (!source || typeof source !== 'object' || Array.isArray(source)) throw new SettingsError('Az AI-beállítás JSON objektum legyen.');
     const model = 'model' in source ? source.model : current.ai_config.model;
     const prompt = 'system_prompt' in source ? source.system_prompt : current.ai_config.system_prompt;
-    if (!AI_MODELS.includes(model)) throw new SettingsError(`Nem támogatott modell. Elfogadott: ${AI_MODELS.join(', ')}.`);
+    if (!isValidModelName(model)) throw new SettingsError('Érvénytelen modellnév. Betűk, számok, pont, kötőjel és alsóvonás használható (pl. gemini-1.5-flash).');
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > MAX_PROMPT_LENGTH) throw new SettingsError(`A rendszerprompt kötelező, legfeljebb ${MAX_PROMPT_LENGTH} karakter.`);
     updates.ai_config = { model, system_prompt: prompt.trim() };
   }
@@ -233,7 +234,7 @@ function composeEmail(templates, id, values = {}) {
 }
 
 module.exports = {
-  AI_MODELS, PRICE_TIERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
+  isValidModelName, PRICE_TIERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
   getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, resolveAiModel,
   listTemplates, updateTemplate, getTemplates, fillPlaceholders, composeEmail
 };

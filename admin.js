@@ -498,20 +498,13 @@
 
   async function loadSettings() {
     try {
-      const { settings, aiModels } = await api('/api/admin/settings');
+      const { settings } = await api('/api/admin/settings');
       byId('setMaintenance').checked = settings.maintenance_mode === true;
       byId('setPriceStandard').value = settings.pricing.standard;
       byId('setPriceAcademic').value = settings.pricing.academic;
       byId('setPriceWeekly').value = settings.pricing.weekly;
       byId('setHints').value = settings.seasonal_hints.join('; ');
-      const select = byId('setAiModel');
-      const models = aiModels.includes(settings.ai_config.model) ? aiModels : [settings.ai_config.model, ...aiModels];
-      select.replaceChildren(...models.map((model) => {
-        const option = el('option', '', aiModels.includes(model) ? model : `${model} (nem támogatott – válassz másikat)`);
-        option.value = model;
-        return option;
-      }));
-      select.value = settings.ai_config.model;
+      byId('setAiModel').value = settings.ai_config.model;
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
     } catch (error) {
       flash('generalStatus', 'generalError', `A beállítások nem tölthetők be: ${errorMessage(error)}`, true);
