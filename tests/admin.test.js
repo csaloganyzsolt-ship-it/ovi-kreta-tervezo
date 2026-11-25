@@ -34,7 +34,7 @@ function seedTemplateRows() {
 }
 
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), system_settings_history: [], ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), system_settings: [], system_settings_history: [], ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {
@@ -702,7 +702,7 @@ async function loadPage(t, { page = 'admin.html', session = SESSION, routes = {}
   return { window: dom.window, document: dom.window.document, state };
 }
 
-const STATS = { success: true, stats: { revenue: { total: 12340, last30Days: 4560 }, paidOrders: 25, registeredUsers: 42, confirmedSubscribers: 17, documents: { total: 80, unlocked: 30, breakdown: { standard: 40, academic: 25, weekly: 15 }, conversionRate: 37.5 } } };
+const STATS = { success: true, stats: { revenue: { total: 12340, last30Days: 4560 }, paidOrders: 25, registeredUsers: 42, confirmedSubscribers: 17, documents: { total: 80, unlocked: 30, breakdown: { standard: 40, academic: 25, weekly: 15 }, conversionRate: 37.5 } }, dailyGeneration: { day: '2026-01-02', count: 7, cap: 250, source: 'settings' } };
 const ME = () => [{ success: true, isAdmin: true }];
 const hidden = (document, id) => document.getElementById(id).hidden;
 const redirected = (state) => state.errors.some((message) => /navigation/i.test(message));
@@ -725,7 +725,8 @@ test('admin.js: a guest or a non-admin is redirected at once and no admin data i
 });
 
 test('admin.js: the admin sees the overview with KPI cards and the document analytics', async (t) => {
-  const { document, state } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS] } });
+  const links = { cloudflare: 'https://dash.cloudflare.com/', google_analytics: 'https://analytics.google.com/', search_console: 'https://search.google.com/search-console', barion: 'https://secure.barion.com/', szamlazz: 'http://nem-https.example' };
+  const { document, state } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS], '/api/admin/settings': () => [{ success: true, settings: { external_links: links } }] } });
   assert.ok(!redirected(state));
   assert.equal(hidden(document, 'adminApp'), false);
   assert.equal(hidden(document, 'adminLoading'), true);
@@ -739,7 +740,10 @@ test('admin.js: the admin sees the overview with KPI cards and the document anal
   assert.equal(text('docTotal'), '80');
   assert.deepEqual(['docStandard', 'docAcademic', 'docWeekly'].map(text), ['40', '25', '15']);
   assert.equal(text('docConversion'), '37,5%');
-  assert.equal(document.querySelectorAll('.admin-tools-list a[target="_blank"][rel~="noopener"]').length, 5);
+  assert.equal(document.querySelectorAll('.admin-tools-list a[target="_blank"][rel~="noopener"]').length, 4, 'csak az érvényes https:// linkek jelennek meg');
+  assert.equal(document.getElementById('adminTools').hidden, false);
+  assert.equal(text('kpiDailyCap'), '7 / 250');
+  assert.equal(document.querySelectorAll('.admin-card-grid .admin-card table').length, 3, 'a Top táblák kártyákban vannak');
 });
 
 test('admin.js: coupon form posts the new coupon and the switch patches the active flag', async (t) => {
@@ -874,6 +878,12 @@ test('admin.js: the users tab lists registrations and exports only confirmed sub
   await tick();
   assert.equal(document.querySelectorAll('#usersTable tbody tr').length, 3);
   assert.match(document.getElementById('usersCount').textContent, /3 regisztrált.*1 megerősített/);
+  assert.equal(document.getElementById('nlSubject'), document.querySelector('#panelNewsletter #nlSubject'), 'a hírlevél űrlap a saját fülén van');
+  assert.equal(document.querySelector('#panelUsers #nlSubject'), null);
+  document.getElementById('tabNewsletter').click();
+  await tick();
+  assert.equal(document.getElementById('panelNewsletter').hidden, false);
+  assert.equal(document.getElementById('panelUsers').hidden, true);
   assert.match(document.querySelector('#campaignsTable tbody').textContent, /Őszi hírlevél.*12 \(Összes feliratkozó\).*11.*1.*admin@example\.com/);
   assert.equal(document.getElementById('nlPreview').srcdoc, '<html><body>ELŐNÉZET</body></html>');
 
@@ -1138,4 +1148,82 @@ test('the real-settings SQL overwrites the model, the prompt and the templates w
   assert.equal(sql.includes('gpt-4o'), false);
   for (const id of ['base_layout', 'payment_success', 'welcome_email', 'password_reset']) assert.ok(sql.includes(`('${id}'`), id);
   assert.ok(fs.readdirSync(dir).indexOf('20261126100000_system_settings_history.sql') < fs.readdirSync(dir).indexOf('20261126110000_update_real_settings.sql'));
+});
+
+test('GET /api/admin/orders/:orderNumber/invoice streams the live Számlázz.hu PDF for paid orders only and stores nothing', async (t) => {
+  const row = (extra) => ({ order_number: 'OVI-I1', session_id: 'barion_i1', user_id: null, user_email: 'vevo@example.com', plan_mode: 'standard', plan_key: 'daily', amount: 390, payment_method: 'Barion', status: 'paid', invoice_number: 'OVITE-2026-9', billing_profile: 'ev', created_at: ago(1), ...extra });
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [row(), row({ order_number: 'OVI-I2', status: 'pending', invoice_number: null }), row({ order_number: 'OVI-I3', invoice_number: null })] }));
+  const saved = process.env.SZAMLAZZ_API_KEY_EV;
+  process.env.SZAMLAZZ_API_KEY_EV = 'agent-ev';
+  const realFetch = global.fetch;
+  let pdfCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).includes('szamlazz.hu')) { pdfCalls += 1; return new Response(Buffer.from('%PDF-1.4 admin'), { status: 200 }); }
+    return realFetch(url, options);
+  };
+  t.after(() => { global.fetch = realFetch; if (saved === undefined) delete process.env.SZAMLAZZ_API_KEY_EV; else process.env.SZAMLAZZ_API_KEY_EV = saved; });
+  const base = await listen(t);
+
+  const ok = await call(base, '/api/admin/orders/OVI-I1/invoice', { token: 'token-admin' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('content-type'), 'application/pdf');
+  assert.match(ok.headers.get('content-disposition'), /OVITE-2026-9\.pdf/);
+  assert.equal(Buffer.from(await ok.arrayBuffer()).toString(), '%PDF-1.4 admin');
+  assert.equal(pdfCalls, 1);
+  assert.equal((await call(base, '/api/admin/orders/OVI-I2/invoice', { token: 'token-admin' })).status, 409);
+  assert.equal((await call(base, '/api/admin/orders/OVI-I3/invoice', { token: 'token-admin' })).status, 409, 'számlaszám nélkül nincs letöltés');
+  assert.equal((await call(base, '/api/admin/orders/OVI-NINCS/invoice', { token: 'token-admin' })).status, 404);
+  assert.equal((await call(base, '/api/admin/orders/OVI-I1/invoice')).status, 401);
+  assert.equal(pdfCalls, 1);
+});
+
+test('admin.html: the settings tab has four prices, cap, announcement bar, external links, and the template list has the feedback request', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
+  for (const id of ['setPriceDaily', 'setPriceWeekly', 'setPriceAcademicDaily', 'setPriceAcademicWeekly', 'setDailyCap', 'setAnnouncementEnabled', 'setAnnouncementText', 'setLinkCloudflare', 'setLinkGoogleAnalytics', 'setLinkSearchConsole', 'setLinkBarion', 'setLinkSzamlazz', 'tabNewsletter', 'panelNewsletter']) {
+    assert.ok(html.includes(`id="${id}"`), id);
+  }
+  for (const key of ['daily_generation_cap', 'announcement_bar', 'external_links']) assert.ok(html.includes(`value="${key}"`), `${key} előzmény`);
+  assert.ok(html.includes('value="feedback_request"') && html.includes('value="payment_success"'));
+});
+
+test('admin.js: the settings form saves four prices, the cap and the announcement; the links form saves only https URLs and refreshes the toolbar', async (t) => {
+  const settings = { maintenance_mode: false, pricing: { daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }, daily_generation_cap: 250, announcement_bar: { enabled: false, text: '' }, seasonal_hints: [], ai_config: { model: 'gemini-3.1-pro-preview', system_prompt: 'x' }, billing_profile: 'ev', payment_provider: 'barion', external_links: { cloudflare: '', google_analytics: '', search_console: '', barion: '', szamlazz: '' } };
+  const patches = [];
+  const { document } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/billing-status': () => [{ success: true, status: { modes: { barion: 'test', szamlazz: 'sandbox', stripe: 'live' }, profiles: { ev: { szamlazzApiKey: true, barionPosKey: true, stripeSecret: true, stripePublishable: true, stripeWebhook: true }, kft: { szamlazzApiKey: false, barionPosKey: false, stripeSecret: false, stripePublishable: false, stripeWebhook: false } } } }],
+      '/api/admin/settings': (method, body) => {
+        if (method === 'PATCH') { patches.push(body); return [{ success: true, settings: { ...settings, ...body } }]; }
+        return [{ success: true, settings, dailyGeneration: { day: 'x', count: 3, cap: 250, source: 'settings' } }];
+      }
+    }
+  });
+  assert.equal(document.getElementById('adminTools').hidden, true, 'link nélkül a sáv rejtett');
+  document.getElementById('tabSettings').click();
+  await tick();
+  assert.equal(document.getElementById('setPriceAcademicDaily').value, '690');
+  assert.equal(document.getElementById('setDailyCap').value, '250');
+  assert.match(document.getElementById('dailyCapInfo').textContent, /3 generálás \/ 250/);
+  assert.equal(document.querySelectorAll('#billingStatusList .admin-status-card').length, 5);
+
+  document.getElementById('setPriceDaily').value = '400';
+  document.getElementById('setDailyCap').value = '300';
+  document.getElementById('setAnnouncementEnabled').checked = true;
+  document.getElementById('setAnnouncementText').value = 'Akció!';
+  document.getElementById('generalForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.deepEqual(patches[0].pricing, { daily: 400, weekly: 890, academic_daily: 690, academic_weekly: 690 });
+  assert.equal(patches[0].daily_generation_cap, 300);
+  assert.deepEqual(patches[0].announcement_bar, { enabled: true, text: 'Akció!' });
+
+  document.getElementById('setLinkBarion').value = 'https://secure.barion.com/';
+  document.getElementById('linksForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.equal(patches[1].external_links.barion, 'https://secure.barion.com/');
+  const anchors = document.querySelectorAll('.admin-tools-list a[target="_blank"][rel~="noopener"]');
+  assert.equal(anchors.length, 1);
+  assert.equal(anchors[0].href, 'https://secure.barion.com/');
+  assert.equal(document.getElementById('adminTools').hidden, false);
 });

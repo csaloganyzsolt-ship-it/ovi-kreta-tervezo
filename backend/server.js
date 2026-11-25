@@ -577,34 +577,8 @@ const generateLimiter = rateLimit({
 
 const activeGenerationsByIp = new Set();
 
-// Szerverszintű napi generálási plafon: IP-váltogatással sem szállhat el a Gemini-költség.
-const DEFAULT_DAILY_GENERATION_CAP = 250;
-const dailyGenerations = { day: '', count: 0 };
-
-function dailyGenerationCap(env = process.env) {
-  const configured = Number(env.DAILY_GENERATION_CAP);
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_DAILY_GENERATION_CAP;
-}
-
-function reserveDailyGeneration(env = process.env, now = new Date()) {
-  const day = now.toISOString().slice(0, 10);
-  if (dailyGenerations.day !== day) {
-    dailyGenerations.day = day;
-    dailyGenerations.count = 0;
-  }
-  if (dailyGenerations.count >= dailyGenerationCap(env)) return false;
-  dailyGenerations.count += 1;
-  return true;
-}
-
-function releaseDailyGeneration() {
-  if (dailyGenerations.count > 0) dailyGenerations.count -= 1;
-}
-
-function resetDailyGenerations() {
-  dailyGenerations.day = '';
-  dailyGenerations.count = 0;
-}
+// A napi generálási plafon és számláló a services/generationCap.js-ben él (az admin áttekintés is innen olvassa).
+const { DEFAULT_DAILY_GENERATION_CAP, dailyGenerationCap, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations } = require('./services/generationCap');
 
 async function verifyTurnstileToken(token, ip, env = process.env) {
   const secretKey = String(env.TURNSTILE_SECRET_KEY || '').trim();

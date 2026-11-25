@@ -12,8 +12,13 @@ const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const isValidModelName = (value) => typeof value === 'string' && MODEL_NAME_PATTERN.test(value);
 const BILLING_PROFILE_TYPES = Object.freeze(['ev', 'kft']);
 const PAYMENT_PROVIDERS = Object.freeze(['barion', 'stripe']);
-const PRICE_TIERS = Object.freeze(['standard', 'academic', 'weekly']);
-const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'password_reset']);
+const PRICE_TIERS = Object.freeze(['daily', 'weekly', 'academic_daily', 'academic_weekly']);
+const LINK_KEYS = Object.freeze(['cloudflare', 'google_analytics', 'search_console', 'barion', 'szamlazz']);
+const DEFAULT_DAILY_GENERATION_CAP = 250;
+const MAX_DAILY_GENERATION_CAP = 100000;
+const MAX_ANNOUNCEMENT_LENGTH = 200;
+const MAX_LINK_LENGTH = 500;
+const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'feedback_request', 'password_reset']);
 const MAX_PRICE_HUF = 100000;
 const MAX_HINTS = 12;
 const MAX_HINT_LENGTH = 120;
@@ -21,7 +26,16 @@ const MAX_PROMPT_LENGTH = 8000;
 const MAX_TEMPLATE_LENGTH = 100000;
 
 const DEFAULT_SETTINGS = Object.freeze({
-  pricing: Object.freeze({ standard: 390, academic: 690, weekly: 890 }),
+  pricing: Object.freeze({ daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }),
+  daily_generation_cap: DEFAULT_DAILY_GENERATION_CAP,
+  announcement_bar: Object.freeze({ enabled: false, text: '' }),
+  external_links: Object.freeze({
+    cloudflare: 'https://dash.cloudflare.com/',
+    google_analytics: 'https://analytics.google.com/',
+    search_console: 'https://search.google.com/search-console',
+    barion: 'https://secure.barion.com/',
+    szamlazz: 'https://www.szamlazz.hu/szamla/login'
+  }),
   ai_config: Object.freeze({
     model: 'gemini-3.1-pro-preview',
     system_prompt: DEFAULT_SYSTEM_PROMPT
@@ -54,13 +68,43 @@ function defaults() {
   return clone(DEFAULT_SETTINGS);
 }
 
+const OBJECT_SETTINGS = Object.freeze(['pricing', 'ai_config', 'announcement_bar', 'external_links']);
+
+// A régi 3 szintű árazás (standard / academic / weekly) a 4 csomagos alakra képeződik; az új kulcsok előnyben vannak.
+function migrateLegacyPricing(source) {
+  const value = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+  const mapped = {};
+  if ('standard' in value) mapped.daily = value.standard;
+  if ('weekly' in value) mapped.weekly = value.weekly;
+  if ('academic' in value) { mapped.academic_daily = value.academic; mapped.academic_weekly = value.academic; }
+  const out = { ...mapped };
+  for (const tier of PRICE_TIERS) if (tier in value) out[tier] = value[tier];
+  return out;
+}
+
+function isValidHttpsUrl(value) {
+  if (typeof value !== 'string' || !value || value.length > MAX_LINK_LENGTH) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 // A hiányzó vagy hibás kulcsok alapértéket kapnak; az adatbázis tartalma így sem tud érvénytelen alakot adni.
 function normalizeRows(rows) {
   const out = defaults();
   for (const row of rows || []) {
     if (!row || !(row.key in out)) continue;
-    out[row.key] = row.key === 'pricing' || row.key === 'ai_config' ? { ...out[row.key], ...(row.value && typeof row.value === 'object' ? row.value : {}) } : row.value;
+    const value = row.key === 'pricing' ? migrateLegacyPricing(row.value) : row.value;
+    out[row.key] = OBJECT_SETTINGS.includes(row.key) ? { ...out[row.key], ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) } : row.value;
   }
+  for (const tier of PRICE_TIERS) if (!Number.isInteger(out.pricing[tier]) || out.pricing[tier] < 1) out.pricing[tier] = DEFAULT_SETTINGS.pricing[tier];
+  out.pricing = Object.fromEntries(PRICE_TIERS.map((tier) => [tier, out.pricing[tier]]));
+  if (!Number.isInteger(out.daily_generation_cap) || out.daily_generation_cap < 1 || out.daily_generation_cap > MAX_DAILY_GENERATION_CAP) out.daily_generation_cap = DEFAULT_DAILY_GENERATION_CAP;
+  out.announcement_bar = { enabled: out.announcement_bar.enabled === true, text: typeof out.announcement_bar.text === 'string' ? out.announcement_bar.text : '' };
+  out.external_links = Object.fromEntries(LINK_KEYS.map((key) => [key, isValidHttpsUrl(out.external_links[key]) ? out.external_links[key] : '']));
   out.maintenance_mode = out.maintenance_mode === true;
   if (!BILLING_PROFILE_TYPES.includes(out.billing_profile)) out.billing_profile = defaults().billing_profile;
   if (!PAYMENT_PROVIDERS.includes(out.payment_provider)) out.payment_provider = defaults().payment_provider;
@@ -110,15 +154,22 @@ function invalidate() {
   templateCachedAt = 0;
 }
 
+// Az árak nem változnak a 4 kategóriára állításkor: a heti alapcsomag a „Napi ovis”, a heti részletes (komplex) csomag a „Heti ovis” árat használja.
 function pricingTierFor(productKey) {
-  if (productKey === 'weekly_detailed') return 'weekly';
-  if (String(productKey).startsWith('academic_')) return 'academic';
-  return 'standard';
+  if (productKey === 'weekly') return 'daily';
+  return productKey === 'weekly_detailed' ? 'weekly' : String(productKey);
+}
+
+// A napi plafon a beállításból jön (érvénytelen vagy hiányzó értéknél 250).
+function dailyGenerationCapOf(settings) {
+  const cap = settings?.daily_generation_cap;
+  return Number.isInteger(cap) && cap > 0 ? cap : DEFAULT_DAILY_GENERATION_CAP;
 }
 
 function publicConfig(settings) {
   return {
     pricing: { ...settings.pricing },
+    announcement_bar: { ...settings.announcement_bar },
     maintenance_mode: settings.maintenance_mode === true,
     billing_profile: settings.billing_profile,
     payment_provider: settings.payment_provider,
@@ -187,6 +238,37 @@ function validatePatch(patch, current) {
     if (!PAYMENT_PROVIDERS.includes(patch.payment_provider)) throw new SettingsError('A fizetési szolgáltató „barion” vagy „stripe” lehet.');
     updates.payment_provider = patch.payment_provider;
   }
+  if ('daily_generation_cap' in patch) {
+    const raw = typeof patch.daily_generation_cap === 'string' && patch.daily_generation_cap.trim() !== '' ? Number(patch.daily_generation_cap) : patch.daily_generation_cap;
+    if (!Number.isInteger(raw) || raw < 1 || raw > MAX_DAILY_GENERATION_CAP) throw new SettingsError(`A napi generálási plafon egész szám legyen 1 és ${MAX_DAILY_GENERATION_CAP} között.`);
+    updates.daily_generation_cap = raw;
+  }
+  if ('announcement_bar' in patch) {
+    const source = patch.announcement_bar;
+    if (!source || typeof source !== 'object' || Array.isArray(source)) throw new SettingsError('Az akciós sáv JSON objektum legyen.');
+    const enabled = 'enabled' in source ? source.enabled : current.announcement_bar.enabled;
+    const rawText = 'text' in source ? source.text : current.announcement_bar.text;
+    if (typeof enabled !== 'boolean') throw new SettingsError('Az akciós sáv bekapcsolása igaz/hamis érték legyen.');
+    if (typeof rawText !== 'string') throw new SettingsError('Az akciós sáv szövege szöveg legyen.');
+    const text = rawText.replace(/\s+/g, ' ').trim();
+    if (text.length > MAX_ANNOUNCEMENT_LENGTH) throw new SettingsError(`Az akciós sáv szövege legfeljebb ${MAX_ANNOUNCEMENT_LENGTH} karakter lehet.`);
+    if (enabled && !text) throw new SettingsError('Bekapcsolt akciós sávhoz szöveg megadása kötelező.');
+    updates.announcement_bar = { enabled, text };
+  }
+  if ('external_links' in patch) {
+    const source = patch.external_links;
+    if (!source || typeof source !== 'object' || Array.isArray(source)) throw new SettingsError('A külső linkek JSON objektum legyenek.');
+    const extra = Object.keys(source).filter((key) => !LINK_KEYS.includes(key));
+    if (extra.length) throw new SettingsError(`Ismeretlen link: ${extra.slice(0, 3).join(', ')}.`);
+    updates.external_links = {};
+    for (const key of LINK_KEYS) {
+      const value = key in source ? source[key] : current.external_links[key];
+      const url = typeof value === 'string' ? value.trim() : null;
+      if (url === null) throw new SettingsError(`A(z) ${key} link szöveg legyen.`);
+      if (url && !isValidHttpsUrl(url)) throw new SettingsError(`A(z) ${key} link érvényes https:// címet tartalmazzon (legfeljebb ${MAX_LINK_LENGTH} karakter).`);
+      updates.external_links[key] = url;
+    }
+  }
   if ('seasonal_hints' in patch) updates.seasonal_hints = parseHints(patch.seasonal_hints);
   if (!Object.keys(updates).length) throw new SettingsError('Nincs módosítandó beállítás.');
   return updates;
@@ -206,10 +288,26 @@ async function updateSettings(client, patch) {
 
 // ---------- E-mail sablonok ----------
 
+// Az értékeléskérő blokk alapértelmezett sablonja ({{stars}}: a csillag-linkek, {{feedback_url}}: az 5 csillagos link); a mentett sablon felülírja.
+const DEFAULT_FEEDBACK_REQUEST_HTML = `<div style="margin:22px 0 0;padding:16px 18px;background:#f9fbf9;border:1px solid #d9ebe0;border-radius:14px;text-align:center;">
+<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#4a5953;font-weight:600;">Hogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:</p>
+<div style="display:inline-block;text-align:center;">
+{{stars}}
+</div>
+</div>`;
+const DEFAULT_TEMPLATES = Object.freeze({
+  feedback_request: Object.freeze({ id: 'feedback_request', subject: 'Értékeléskérő blokk (a kézbesítő levélben)', bodyHtml: DEFAULT_FEEDBACK_REQUEST_HTML })
+});
+
 async function listTemplates(client) {
   const { data, error } = await client.from('email_templates').select('id, subject, body_html');
   if (error) throw dbError('Az e-mail sablonok nem olvashatók', error);
-  return (data || []).filter((row) => TEMPLATE_IDS.includes(row.id)).map((row) => ({ id: row.id, subject: row.subject || '', bodyHtml: row.body_html || '' }));
+  const rows = (data || []).filter((row) => TEMPLATE_IDS.includes(row.id)).map((row) => ({ id: row.id, subject: row.subject || '', bodyHtml: row.body_html || '' }));
+  // A még nem mentett, de beépített alapértékkel rendelkező sablon is szerkeszthető.
+  for (const [id, fallback] of Object.entries(DEFAULT_TEMPLATES)) {
+    if (!rows.some((row) => row.id === id)) rows.push({ ...fallback });
+  }
+  return rows;
 }
 
 const HISTORY_LIMIT = 50;
@@ -231,6 +329,7 @@ async function updateTemplate(client, id, body = {}) {
   if (subject.length > 200) throw new SettingsError('A tárgy legfeljebb 200 karakter lehet.');
   if (!bodyHtml.trim() || bodyHtml.length > MAX_TEMPLATE_LENGTH) throw new SettingsError(`A HTML-szöveg kötelező, legfeljebb ${MAX_TEMPLATE_LENGTH} karakter.`);
   if (id === 'base_layout' && !bodyHtml.includes('{{content}}')) throw new SettingsError('A base_layout sablonnak tartalmaznia kell a {{content}} helyőrzőt.');
+  if (id === 'feedback_request' && !/\{\{\s*(stars|feedback_url)\s*\}\}/.test(bodyHtml)) throw new SettingsError('Az értékeléskérő sablonnak tartalmaznia kell a {{stars}} vagy a {{feedback_url}} helyőrzőt.');
   const { error } = await client.from('email_templates').upsert({ id, subject, body_html: bodyHtml }, { onConflict: 'id' });
   if (error) throw dbError('Az e-mail sablon mentése sikertelen', error);
   templateCache = null;
@@ -268,7 +367,7 @@ function composeEmail(templates, id, values = {}) {
 }
 
 module.exports = {
-  isValidModelName, PRICE_TIERS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, CACHE_TTL_MS, SettingsError,
-  getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, resolveAiModel,
+  isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
+  getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveAiModel,
   listTemplates, listHistory, updateTemplate, getTemplates, fillPlaceholders, composeEmail
 };

@@ -190,6 +190,7 @@ function loadRuntimeConfig() {
         if (data.company && typeof data.company === 'object') config.company = { ...(config.company || {}), ...data.company };
         config.paymentProvider = data.paymentProvider === 'stripe' ? 'stripe' : 'barion';
         config.barionPixelId = String(data.barionPixelId || '');
+        if (data.announcement_bar && typeof data.announcement_bar === 'object') config.announcementBar = { enabled: data.announcement_bar.enabled === true, text: String(data.announcement_bar.text || '') };
         if (data.stripePublishableKey !== undefined) config.stripePublishableKey = data.stripePublishableKey;
         if (data.stripeTestMode !== undefined && config.company) config.company.stripeTestMode = data.stripeTestMode;
       } catch (error) {
@@ -224,6 +225,23 @@ function applyPaymentProvider() {
   document.dispatchEvent(new CustomEvent('ovi:payment-provider', { detail: { provider: activePaymentProvider() } }));
 }
 
+// Főoldali akciós sáv (Admin Központ › Beállítások): csak a <body data-announcement-bar> oldalon, csak bekapcsolva és kitöltött szöveggel; a szöveg textContent-tel kerül ki.
+function renderAnnouncementBar() {
+  const existing = document.getElementById('announcementBar');
+  const bar = window.APP_CONFIG?.announcementBar;
+  const text = bar?.enabled === true ? String(bar.text || '').trim() : '';
+  if (!document.body.hasAttribute('data-announcement-bar') || !text) {
+    existing?.remove();
+    return;
+  }
+  const el = existing || document.createElement('div');
+  el.id = 'announcementBar';
+  el.className = 'announcement-bar';
+  el.setAttribute('role', 'status');
+  el.textContent = text;
+  if (!existing) document.body.insertBefore(el, document.body.firstChild);
+}
+
 function openLegalModal(key) {
   const [title, items] = LEGAL_TEXTS[key];
   document.getElementById('legalModalTitle').textContent = title;
@@ -252,7 +270,7 @@ function initSite() {
 
   renderFooterCompany();
   applyPaymentProvider();
-  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); });
+  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); });
   document.addEventListener('click', (event) => {
     const sample = event.target.closest('[data-sample-modal]');
     if (sample) { event.preventDefault(); openModal('sampleModal'); return; }

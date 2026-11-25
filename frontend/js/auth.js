@@ -233,6 +233,18 @@
     return data;
   }
 
+  // Bináris (pl. PDF) válasz hitelesített lekérése; hiba esetén a szerver JSON hibaüzenetét dobja.
+  async function apiBlob(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (state.token) headers['Authorization'] = ['Bearer', state.token].join(' ');
+    const response = await fetch(`${apiBaseUrl()}${path}`, { ...options, headers });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    return response.blob();
+  }
+
   async function signOut(scope = 'global') {
     if (!state.client) return;
     const { error } = await state.client.auth.signOut({ scope });
@@ -245,6 +257,7 @@
     getAccessToken: () => state.token,
     ready,
     apiFetch,
+    apiBlob,
     signOut,
     openModal: openAuthModal
   };

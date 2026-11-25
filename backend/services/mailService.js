@@ -126,6 +126,8 @@ function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, has
 
   let feedbackBlock = '';
   let textFeedbackBlock = '';
+  let feedbackStars = '';
+  let feedbackLink = '';
   const sig = to ? createFeedbackSignature(to, env) : '';
   if (to && sig) {
     const docParam = documentId ? `&documentId=${encodeURIComponent(documentId)}` : '';
@@ -133,7 +135,8 @@ function buildEmailContent({ planLabel, withInvoice, title, orderNumber, to, has
     const starsHtml = [1, 2, 3, 4, 5].map((r) =>
       `<a href="${feedbackUrl(r)}" title="${r} csillag" style="display:inline-block;padding:2px 6px;text-decoration:none;font-size:26px;line-height:1;color:#f59e0b;">⭐</a>`
     ).join('');
-
+    feedbackStars = starsHtml;
+    feedbackLink = feedbackUrl(5);
     feedbackBlock = `
 <div style="margin:22px 0 0;padding:16px 18px;background:#f9fbf9;border:1px solid #d9ebe0;border-radius:14px;text-align:center;">
 <p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#4a5953;font-weight:600;">Hogy sikerült a tervezet? Kattints a csillagokra, és írd meg 1 percben a véleményed:</p>
@@ -203,6 +206,8 @@ Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
     attachments_rows: `${fileItems}${invoiceItem}`,
     invoiceText,
     feedback_block: feedbackBlock,
+    feedback_stars: feedbackStars,
+    feedback_url: feedbackLink,
     site_url: site
   };
   return { text, html, parts };
@@ -267,9 +272,14 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
     const templates = deps.templates !== undefined ? deps.templates : await settingsService.getTemplates();
     if (templates) {
       const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      // A szerkeszthető értékeléskérő sablon csak aláírt (érvényes FEEDBACK_SECRET-es) linkekkel jelenik meg.
+      const feedbackBlock = templates.feedback_request && built.parts.feedback_stars
+        ? settingsService.fillPlaceholders(templates.feedback_request.bodyHtml, { stars: built.parts.feedback_stars, feedback_url: escapeHtml(built.parts.feedback_url) })
+        : built.parts.feedback_block;
       const composed = settingsService.composeEmail(templates, 'payment_success', {
         ...layoutValues(env),
         ...built.parts,
+        feedback_block: feedbackBlock,
         planLabel: escapeHtml(planLabelOf(plan)),
         invoiceText: invoicePdf ? ' Az e-számlát is mellékeltük PDF-ben.' : '',
         topic: escapeHtml(cleanTitle || '–'),

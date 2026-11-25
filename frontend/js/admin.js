@@ -118,7 +118,11 @@
     try {
       const analyticsPeriod = byId('analyticsPeriod').value;
       const params = analyticsPeriod ? `?analytics_period=${analyticsPeriod}` : '';
-      const { stats, analytics } = await api(`/api/admin/stats${params}`);
+      const { stats, analytics, dailyGeneration } = await api(`/api/admin/stats${params}`);
+      if (dailyGeneration) {
+        byId('kpiDailyCap').textContent = `${dailyGeneration.count} / ${dailyGeneration.cap}`;
+        byId('kpiDailyCapNote').textContent = dailyGeneration.source === 'env' ? 'A plafont a DAILY_GENERATION_CAP környezeti változó felülírja.' : 'Ebben a szerverpéldányban, UTC-napra számolva.';
+      }
       byId('kpiRevenueTotal').textContent = formatAmount(stats.revenue.total);
       byId('kpiRevenue30').textContent = formatAmount(stats.revenue.last30Days);
       byId('kpiOrders').textContent = String(stats.paidOrders);
@@ -314,15 +318,42 @@
         resend.type = 'button';
         resend.disabled = order.status !== 'paid' || !order.email;
         resend.addEventListener('click', () => resendOrder(order, resend));
+        const invoice = el('button', 'profile-btn', 'Számla letöltése');
+        invoice.type = 'button';
+        invoice.disabled = order.status !== 'paid' || !order.invoiceNumber;
+        invoice.addEventListener('click', () => downloadOrderInvoice(order, invoice));
+        const actions = el('span', 'admin-actions');
+        actions.append(invoice, resend);
         return [
           formatDate(order.createdAt), buyer, PLAN_LABELS[order.planKey] || order.planKey || '–', formatAmount(order.amount),
-          order.couponCode || '–', ORDER_STATUS_LABELS[order.status] || order.status, order.invoiceNumber || '–', resend
+          order.couponCode || '–', ORDER_STATUS_LABELS[order.status] || order.status, order.invoiceNumber || '–', actions
         ];
       }), 8, 'Nincs a szűrésnek megfelelő rendelés.');
       byId('ordersCount').textContent = `${data.orders.length} rendelés${data.truncated ? ' (a lista csonkolt, szűkítsd a keresést)' : ''}`;
     } catch (error) {
       if (request !== ordersRequest) return;
       setText('ordersError', `A rendelések nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
+  // A számla PDF-et a szerver élőben kéri a Számlázz.hu-tól; a böngésző csak letölti, nem tárolódik sehol.
+  async function downloadOrderInvoice(order, button) {
+    setText('ordersError', '');
+    button.disabled = true;
+    try {
+      const blob = await auth.apiBlob(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/invoice`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${order.invoiceNumber || order.orderNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setText('ordersError', `A számla nem tölthető le: ${errorMessage(error)}`);
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -515,18 +546,68 @@
     setText(errorId, isError ? message : '');
   }
 
-  async function loadSettings() {
+  const LINK_FIELDS = [
+    ['cloudflare', 'setLinkCloudflare', 'Cloudflare Analytics'],
+    ['google_analytics', 'setLinkGoogleAnalytics', 'Google Analytics'],
+    ['search_console', 'setLinkSearchConsole', 'Google Search Console'],
+    ['barion', 'setLinkBarion', 'Barion'],
+    ['szamlazz', 'setLinkSzamlazz', 'Számlázz.hu']
+  ];
+
+  function isHttpsUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && Boolean(url.hostname);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  // Csak a kitöltött, érvényes https:// hivatkozások jelennek meg, új lapon nyílva.
+  function renderToolLinks(links = {}) {
+    const list = byId('adminToolsList');
+    const anchors = LINK_FIELDS.filter(([key]) => isHttpsUrl(links[key])).map(([key, , label]) => {
+      const link = el('a', 'profile-btn', label);
+      link.href = links[key];
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      return link;
+    });
+    list.replaceChildren(...anchors);
+    byId('adminTools').hidden = anchors.length === 0;
+  }
+
+  async function loadToolLinks() {
     try {
       const { settings } = await api('/api/admin/settings');
+      renderToolLinks(settings.external_links);
+    } catch (error) {
+      byId('adminTools').hidden = true;
+      console.error('A külső linkek nem tölthetők be:', error);
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      const { settings, dailyGeneration } = await api('/api/admin/settings');
       byId('setMaintenance').checked = settings.maintenance_mode === true;
-      byId('setPriceStandard').value = settings.pricing.standard;
-      byId('setPriceAcademic').value = settings.pricing.academic;
+      byId('setPriceDaily').value = settings.pricing.daily;
       byId('setPriceWeekly').value = settings.pricing.weekly;
+      byId('setPriceAcademicDaily').value = settings.pricing.academic_daily;
+      byId('setPriceAcademicWeekly').value = settings.pricing.academic_weekly;
+      byId('setDailyCap').value = settings.daily_generation_cap;
+      byId('dailyCapInfo').textContent = dailyGeneration
+        ? `Ma eddig: ${dailyGeneration.count} generálás / ${dailyGeneration.cap} plafon${dailyGeneration.source === 'env' ? ' (a DAILY_GENERATION_CAP környezeti változó felülírja a beállítást)' : ''}.`
+        : '';
+      byId('setAnnouncementEnabled').checked = settings.announcement_bar?.enabled === true;
+      byId('setAnnouncementText').value = settings.announcement_bar?.text || '';
       byId('setHints').value = settings.seasonal_hints.join('; ');
       byId('setAiModel').value = settings.ai_config.model;
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
       byId('setBillingProfile').value = settings.billing_profile || 'ev';
       byId('setPaymentProvider').value = settings.payment_provider || 'barion';
+      for (const [key, id] of LINK_FIELDS) byId(id).value = settings.external_links?.[key] || '';
+      renderToolLinks(settings.external_links);
     } catch (error) {
       flash('generalStatus', 'generalError', `A beállítások nem tölthetők be: ${errorMessage(error)}`, true);
     }
@@ -535,24 +616,30 @@
 
   const MODE_LABELS = { test: 'TESZT mód', sandbox: 'SANDBOX (teszt) mód', live: 'ÉLES mód' };
 
-  // Csak olvasható állapotkártya: a szerver logikai értékeket ad (kulcsok jelenléte, éles/teszt mód), titkos adatot nem.
+  function statusCard(title, value, tone, detail) {
+    const card = el('article', `admin-status-card ${tone}`);
+    card.append(el('span', 'admin-status-title', title), el('strong', 'admin-status-value', value));
+    if (detail) card.append(el('span', 'admin-status-detail', detail));
+    return card;
+  }
+
+  // Csak olvasható állapotkártyák: a szerver logikai értékeket ad (kulcsok jelenléte, éles/teszt mód), titkos adatot nem.
   async function loadBillingStatus() {
     const list = byId('billingStatusList');
     try {
       const { status } = await api('/api/admin/billing-status');
-      const yes = (value) => (value ? 'beállítva' : 'HIÁNYZIK');
-      const lines = [
-        `Barion: ${MODE_LABELS[status.modes.barion]}`,
-        `Számlázz.hu: ${MODE_LABELS[status.modes.szamlazz]}`,
-        `Stripe: ${MODE_LABELS[status.modes.stripe]}`
-      ];
+      const modeCard = (title, mode) => statusCard(title, MODE_LABELS[mode] || mode, mode === 'live' ? 'ok' : 'warn');
+      const keyLine = (label, value) => `${label}: ${value ? '✓ beállítva' : '✗ HIÁNYZIK'}`;
+      const cards = [modeCard('Barion', status.modes.barion), modeCard('Számlázz.hu', status.modes.szamlazz), modeCard('Stripe', status.modes.stripe)];
       for (const [type, label] of [['ev', 'EV'], ['kft', 'Kft.']]) {
         const keys = status.profiles[type];
-        lines.push(`${label} kulcsok – Számlázz.hu: ${yes(keys.szamlazzApiKey)}; Barion POS: ${yes(keys.barionPosKey)}; Stripe titkos: ${yes(keys.stripeSecret)}, nyilvános: ${yes(keys.stripePublishable)}, webhook: ${yes(keys.stripeWebhook)}`);
+        const complete = keys.szamlazzApiKey && keys.barionPosKey && keys.stripeSecret && keys.stripePublishable && keys.stripeWebhook;
+        const detail = [keyLine('Számlázz.hu', keys.szamlazzApiKey), keyLine('Barion POS', keys.barionPosKey), keyLine('Stripe titkos', keys.stripeSecret), keyLine('Stripe nyilvános', keys.stripePublishable), keyLine('Stripe webhook', keys.stripeWebhook)].join('\n');
+        cards.push(statusCard(`${label} kulcsok`, complete ? 'Teljes' : 'Hiányos', complete ? 'ok' : 'warn', detail));
       }
-      list.replaceChildren(...lines.map((line) => el('li', '', line)));
+      list.replaceChildren(...cards);
     } catch (error) {
-      list.replaceChildren(el('li', '', `Az állapot nem tölthető be: ${errorMessage(error)}`));
+      list.replaceChildren(el('p', 'profile-error', `Az állapot nem tölthető be: ${errorMessage(error)}`));
     }
   }
 
@@ -562,7 +649,9 @@
     const button = byId(ids.button);
     button.disabled = true;
     try {
-      await api('/api/admin/settings', { method: 'PATCH', body: patchBuilder() });
+      const patch = patchBuilder();
+      const { settings } = await api('/api/admin/settings', { method: 'PATCH', body: patch });
+      if (patch.external_links) renderToolLinks(settings?.external_links || patch.external_links);
       flash(ids.status, ids.error, 'Mentve. A változás azonnal érvényes.', false);
     } catch (error) {
       flash(ids.status, ids.error, errorMessage(error), true);
@@ -573,9 +662,20 @@
 
   const saveGeneral = (event) => saveSettings(event, () => ({
     maintenance_mode: byId('setMaintenance').checked,
-    pricing: { standard: Number(byId('setPriceStandard').value), academic: Number(byId('setPriceAcademic').value), weekly: Number(byId('setPriceWeekly').value) },
+    pricing: {
+      daily: Number(byId('setPriceDaily').value),
+      weekly: Number(byId('setPriceWeekly').value),
+      academic_daily: Number(byId('setPriceAcademicDaily').value),
+      academic_weekly: Number(byId('setPriceAcademicWeekly').value)
+    },
+    daily_generation_cap: Number(byId('setDailyCap').value),
+    announcement_bar: { enabled: byId('setAnnouncementEnabled').checked, text: byId('setAnnouncementText').value },
     seasonal_hints: byId('setHints').value
   }), { status: 'generalStatus', error: 'generalError', button: 'generalSave' });
+
+  const saveLinks = (event) => saveSettings(event, () => ({
+    external_links: Object.fromEntries(LINK_FIELDS.map(([key, id]) => [key, byId(id).value.trim()]))
+  }), { status: 'linksStatus', error: 'linksError', button: 'linksSave' });
 
   const saveAi = (event) => saveSettings(event, () => ({
     ai_config: { model: byId('setAiModel').value, system_prompt: byId('setAiPrompt').value }
@@ -672,7 +772,8 @@
     overview: [loadStats],
     coupons: [loadCoupons],
     orders: [loadOrders],
-    users: [loadUsers, loadCampaigns, refreshPreview],
+    users: [loadUsers],
+    newsletter: [loadCampaigns, refreshPreview],
     logs: [loadLogs],
     settings: [loadSettings, loadTemplates]
   };
@@ -708,6 +809,7 @@
     byId('generalForm').addEventListener('submit', saveGeneral);
     byId('aiForm').addEventListener('submit', saveAi);
     byId('billingForm').addEventListener('submit', saveBilling);
+    byId('linksForm').addEventListener('submit', saveLinks);
     document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
     byId('historyKey').addEventListener('change', () => openHistory());
     byId('historyClose').addEventListener('click', () => byId('historyDialog').close());
@@ -715,6 +817,7 @@
     byId('tplSelect').addEventListener('change', showTemplate);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
+    loadToolLinks();
   }
 
   function deny() {

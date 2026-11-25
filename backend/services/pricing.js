@@ -1,7 +1,7 @@
 'use strict';
 
 // Egyetlen árforrás (bruttó Ft; az egyéni vállalkozó AAM számláján nettó = bruttó): a Stripe, a számlázás és a jövőbeli Barion is innen számol.
-// Az óvodai (standard) tervezet 390/890 Ft, az oktatási célú (academic) tervezet napi és heti formában is 690 Ft.
+// 4 árkategória (system_settings -> pricing): daily (a heti alapcsomag is), weekly (a heti részletes csomag), academic_daily, academic_weekly.
 const settingsService = require('./settingsService');
 
 const STANDARD_NAME = 'OviTervező – Online szoftverhasználati díj';

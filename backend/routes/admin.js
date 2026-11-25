@@ -12,6 +12,7 @@ const settingsService = require('../services/settingsService');
 const orderService = require('../services/orderService');
 const invoiceService = require('../services/invoiceService');
 const { billingStatus } = require('../services/billingStatus');
+const { dailyGenerationStatus } = require('../services/generationCap');
 const logger = require('../utils/logger');
 
 const limiterOptions = { windowMs: 60 * 1000, standardHeaders: true, legacyHeaders: false, message: { success: false, error: 'Túl sok kérés. Kérjük, várj egy percet.' } };
@@ -45,6 +46,12 @@ function handle(context, action) {
 const router = express.Router();
 router.use('/admin', adminLimiter, requireAdmin);
 
+// A mai generálások száma a plafon mellett (a beállítások előbb töltődnek be, hogy a plafon friss legyen).
+async function currentDailyGeneration() {
+  await settingsService.getSettings();
+  return dailyGenerationStatus(process.env);
+}
+
 // A requireAdmin már mindkét feltételt ellenőrizte; ha ide eljutott a kérés, a felhasználó admin.
 router.get('/admin/me', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -60,7 +67,8 @@ router.get('/admin/stats', handle('A statisztika lekérdezése', async (client, 
   
   return { 
     stats,
-    analytics: analyticsStats
+    analytics: analyticsStats,
+    dailyGeneration: await currentDailyGeneration()
   };
 }));
 
@@ -105,6 +113,16 @@ router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újrak�
   return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf) };
 }));
 router.get('/admin/billing-status', handle('Az állapotjelző lekérdezése', async () => ({ status: billingStatus(process.env) })));
+// A számla PDF-et élőben, memóriában kéri le a Számlázz.hu-tól és streameli; nincs fájlmentés.
+router.get('/admin/orders/:orderNumber/invoice', handle('A számla letöltése', async (_client, req, res) => {
+  const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
+  if (!order) throw new admin.AdminError('A rendelés nem található.', 404);
+  if (order.status !== 'paid' || !order.invoiceNumber) throw new admin.AdminError('A rendeléshez nem tartozik letölthető számla.', 409);
+  const pdf = await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${String(order.invoiceNumber).replace(/[^A-Za-z0-9._-]/g, '_')}.pdf"`);
+  res.send(pdf);
+}));
 router.get('/admin/users', handle('A felhasználók lekérdezése', (client) => admin.listUsers(client)));
 
 router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: await newsletter.buildPreview(req.body) })));
@@ -116,7 +134,8 @@ router.get('/admin/newsletter/campaigns', handle('A kampányok lekérdezése', (
 
 // Rendszerbeállítások (árak, AI, karbantartás, szezonális javaslatok) és e-mail sablonok.
 router.get('/admin/settings', handle('A beállítások lekérdezése', async () => ({
-  settings: await settingsService.getSettings({ force: true })
+  settings: await settingsService.getSettings({ force: true }),
+  dailyGeneration: await currentDailyGeneration()
 })));
 router.get('/admin/settings/history/:key', handle('Az előzmények lekérdezése', async (client, req) => ({
   key: req.params.key,
@@ -140,7 +159,7 @@ router.post('/admin/email-templates/preview', handle('Az előnézet készítése
   const saved = Object.fromEntries((await settingsService.listTemplates(client)).map((row) => [row.id, row]));
   const edited = { id: body.id, subject: String(body.subject || '').slice(0, 200), bodyHtml: String(body.bodyHtml || '').slice(0, 100000) };
   const templates = { ...saved, [body.id]: edited };
-  const sample = { ...mailService.layoutValues(process.env, { logoSrc: newsletter.logoDataUriOf(), unsubscribeUrl: body.id === 'payment_success' ? '' : 'https://ovitervezo.hu/leiratkozas.html?token=minta' }), content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', plan_type_block: '', topic: 'Őszi erdő', orderId: 'OVI-261124-ABC123', feedback_block: '', attachments_rows: '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr>', action_url: 'https://ovitervezo.hu/' };
+  const sample = { ...mailService.layoutValues(process.env, { logoSrc: newsletter.logoDataUriOf(), unsubscribeUrl: ['payment_success', 'feedback_request'].includes(body.id) ? '' : 'https://ovitervezo.hu/leiratkozas.html?token=minta' }), content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', plan_type_block: '', topic: 'Őszi erdő', orderId: 'OVI-261124-ABC123', feedback_block: '', feedback_stars: '<span style="font-size:26px;color:#f59e0b;">⭐⭐⭐⭐⭐</span>', feedback_url: 'https://ovitervezo.hu/ertekeles.html', attachments_rows: '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr>', action_url: 'https://ovitervezo.hu/' };
   return { html: settingsService.composeEmail(templates, body.id, sample).html };
 }));
 

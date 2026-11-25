@@ -13,7 +13,7 @@ const invoiceService = require('../backend/services/invoiceService');
 const { productFor } = require('../backend/services/pricing');
 const { getBillingProfile } = require('../backend/services/siteConstants');
 
-const DB_PRICING = { standard: 555, academic: 777, weekly: 1999 };
+const DB_PRICING = { daily: 555, weekly: 1999, academic_daily: 777, academic_weekly: 888 };
 const TEMPLATE_ROWS = [
   { id: 'base_layout', subject: 'Keret', body_html: '<html><body><div class="keret">{{content}}</div></body></html>' },
   { id: 'payment_success', subject: 'Köszönjük a fizetést!', body_html: '<h1>DB-s sablon</h1><p>{{planLabel}}{{invoiceText}}</p>{{title_block}}{{order_block}}' },
@@ -132,14 +132,20 @@ test('payment takes the price from system_settings and ignores any client-suppli
   assert.match(invoiceService.buildInvoiceXml({ ...invoices[0], orderId: 'x', created: 1 }, env), />555</);
 });
 
-test('package prices follow the three tiers of system_settings', async (t) => {
+test('package prices follow the four tiers of system_settings', async (t) => {
   fakeDb(t, { settings: { pricing: DB_PRICING } });
   await settingsService.getSettings({ force: true });
   assert.equal(productFor('daily', 'standard').amountHuf, 555);
-  assert.equal(productFor('weekly', 'standard').amountHuf, 555);
-  assert.equal(productFor('weekly_detailed', 'standard').amountHuf, 1999);
+  assert.equal(productFor('weekly', 'standard').amountHuf, 555, 'a heti alapcsomag a napi árat használja');
+  assert.equal(productFor('weekly_detailed', 'standard').amountHuf, 1999, 'a heti részletes csomag a heti árat használja');
   assert.equal(productFor('daily', 'academic').amountHuf, 777);
-  assert.equal(productFor('academic_weekly', 'standard').amountHuf, 777);
+  assert.equal(productFor('academic_weekly', 'standard').amountHuf, 888);
+});
+
+test('a legacy {standard, academic, weekly} pricing row is migrated to the four tiers', async (t) => {
+  fakeDb(t, { settings: { pricing: { standard: 450, academic: 700, weekly: 950 } } });
+  const settings = await settingsService.getSettings({ force: true });
+  assert.deepEqual(settings.pricing, { daily: 450, weekly: 950, academic_daily: 700, academic_weekly: 700 });
 });
 
 test('the settings cache refreshes after 5 minutes or immediately after an admin update', async (t) => {
@@ -155,17 +161,18 @@ test('the settings cache refreshes after 5 minutes or immediately after an admin
   assert.equal(calls.settingsReads, 2, '5 perc után újratölt');
   Date.now = realNow;
 
-  const updated = await settingsService.updateSettings(supabase.getClient(), { pricing: { standard: 450 } });
-  assert.equal(updated.pricing.standard, 450);
-  assert.equal(settingsService.peek().pricing.standard, 450, 'a módosítás azonnal érvényes');
-  assert.equal(store.system_settings.pricing.standard, 450);
+  const updated = await settingsService.updateSettings(supabase.getClient(), { pricing: { daily: 450 } });
+  assert.equal(updated.pricing.daily, 450);
+  assert.equal(settingsService.peek().pricing.daily, 450, 'a módosítás azonnal érvényes');
+  assert.equal(store.system_settings.pricing.daily, 450);
 });
 
 test('settings updates are validated', async (t) => {
   fakeDb(t);
   const client = supabase.getClient();
-  await assert.rejects(settingsService.updateSettings(client, { pricing: { standard: -5 } }), /ár egész szám/);
+  await assert.rejects(settingsService.updateSettings(client, { pricing: { daily: -5 } }), /ár egész szám/);
   await assert.rejects(settingsService.updateSettings(client, { pricing: { vip: 100 } }), /Ismeretlen csomag/);
+  await assert.rejects(settingsService.updateSettings(client, { pricing: { standard: 100 } }), /Ismeretlen csomag/);
   await assert.rejects(settingsService.updateSettings(client, { ai_config: { model: 'rossz modell!' } }), /Érvénytelen modellnév/);
   await assert.rejects(settingsService.updateSettings(client, { maintenance_mode: 'igen' }), /igaz\/hamis/);
   await assert.rejects(settingsService.updateSettings(client, { rendszer: 1 }), /Ismeretlen beállítás/);
@@ -410,4 +417,63 @@ test('the real payment_success and base_layout carry the original structure and 
   assert.match(html, /Rendelésszám: <strong>OVI-77/);
   assert.ok(html.includes('Tervezet Word</strong> (.docx) formátumban') && html.includes('Tervezet PDF</strong> formátumban') && html.includes('ertekeles.html?rating=5'));
   assert.equal(html.includes('{{'), false);
+});
+
+test('external_links accept only empty or valid https URLs and are validated per key', async (t) => {
+  fakeDb(t);
+  const client = supabase.getClient();
+  const saved = await settingsService.updateSettings(client, { external_links: { cloudflare: 'https://dash.cloudflare.com/x', barion: '' } });
+  assert.equal(saved.external_links.cloudflare, 'https://dash.cloudflare.com/x');
+  assert.equal(saved.external_links.barion, '');
+  assert.deepEqual(Object.keys(saved.external_links).sort(), [...settingsService.LINK_KEYS].sort());
+  for (const bad of ['http://example.com', 'javascript:alert(1)', 'https://user:pw@example.com', 'nem url', `https://example.com/${'a'.repeat(600)}`]) {
+    await assert.rejects(settingsService.updateSettings(client, { external_links: { szamlazz: bad } }), /link/, bad.slice(0, 30));
+  }
+  await assert.rejects(settingsService.updateSettings(client, { external_links: { ismeretlen: 'https://example.com' } }), /Ismeretlen link/);
+});
+
+test('daily_generation_cap is validated and drives the server cap unless the env variable overrides it', async (t) => {
+  fakeDb(t, { settings: { daily_generation_cap: 40 } });
+  await settingsService.getSettings({ force: true });
+  const generationCap = require('../backend/services/generationCap');
+  assert.equal(generationCap.dailyGenerationCap({}), 40, 'az admin érték');
+  assert.equal(generationCap.dailyGenerationCap({ DAILY_GENERATION_CAP: '7' }), 7, 'az env felülírja');
+  assert.equal(generationCap.dailyGenerationStatus({}).cap, 40);
+  assert.equal(generationCap.dailyGenerationStatus({ DAILY_GENERATION_CAP: '7' }).source, 'env');
+  const client = supabase.getClient();
+  await assert.rejects(settingsService.updateSettings(client, { daily_generation_cap: 0 }), /plafon/);
+  await assert.rejects(settingsService.updateSettings(client, { daily_generation_cap: 1.5 }), /plafon/);
+  const saved = await settingsService.updateSettings(client, { daily_generation_cap: '300' });
+  assert.equal(saved.daily_generation_cap, 300);
+  invalidateForDefaults();
+  assert.equal(settingsService.dailyGenerationCapOf({}), 250, 'hiányzó érték: 250');
+});
+
+function invalidateForDefaults() { settingsService.invalidate(); }
+
+test('announcement_bar is validated and GET /api/config returns it with the four prices', async (t) => {
+  fakeDb(t);
+  const client = supabase.getClient();
+  await assert.rejects(settingsService.updateSettings(client, { announcement_bar: { enabled: true, text: '  ' } }), /szöveg/);
+  await assert.rejects(settingsService.updateSettings(client, { announcement_bar: { enabled: 'igen', text: 'x' } }), /igaz\/hamis/);
+  await assert.rejects(settingsService.updateSettings(client, { announcement_bar: { enabled: true, text: 'x'.repeat(201) } }), /200/);
+  await settingsService.updateSettings(client, { announcement_bar: { enabled: true, text: 'Őszi <b>akció</b>' }, pricing: { academic_daily: 800 } });
+  const base = await listen(t);
+  const data = await (await fetch(`${base}/api/config`)).json();
+  assert.deepEqual(data.announcement_bar, { enabled: true, text: 'Őszi <b>akció</b>' });
+  assert.deepEqual(Object.keys(data.pricing).sort(), ['academic_daily', 'academic_weekly', 'daily', 'weekly']);
+  assert.equal(data.pricing.academic_daily, 800);
+  assert.equal('external_links' in data, false, 'a külső linkek nem publikusak');
+  assert.equal('daily_generation_cap' in data, false);
+});
+
+test('the feedback_request template is listed with a default, editable and needs a feedback placeholder', async (t) => {
+  fakeDb(t);
+  const client = supabase.getClient();
+  const list = await settingsService.listTemplates(client);
+  const feedback = list.find((template) => template.id === 'feedback_request');
+  assert.ok(feedback, 'alapértelmezett sablon');
+  assert.ok(feedback.bodyHtml.includes('{{stars}}'));
+  await assert.rejects(settingsService.updateTemplate(client, 'feedback_request', { subject: 'x', bodyHtml: '<p>Nincs helyőrző</p>' }), /\{\{/);
+  await settingsService.updateTemplate(client, 'feedback_request', { subject: 'x', bodyHtml: '<p>Értékelj: {{stars}}</p>' });
 });

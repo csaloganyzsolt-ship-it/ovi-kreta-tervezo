@@ -35,22 +35,17 @@
             </div>
           </div>
 
-          <nav class="admin-tools" aria-labelledby="adminToolsTitle">
+          <nav class="admin-tools" id="adminTools" aria-labelledby="adminToolsTitle" hidden>
             <h2 id="adminToolsTitle">Külső statisztikák &amp; Eszközök</h2>
-            <div class="admin-tools-list">
-              <a class="profile-btn" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare Analytics</a>
-              <a class="profile-btn" href="https://analytics.google.com/" target="_blank" rel="noopener noreferrer">Google Analytics</a>
-              <a class="profile-btn" href="https://search.google.com/search-console" target="_blank" rel="noopener noreferrer">Google Search Console</a>
-              <a class="profile-btn" href="https://secure.barion.com/" target="_blank" rel="noopener noreferrer">Barion</a>
-              <a class="profile-btn" href="https://www.szamlazz.hu/szamla/login" target="_blank" rel="noopener noreferrer">Számlázz.hu</a>
-            </div>
+            <div class="admin-tools-list" id="adminToolsList"></div>
           </nav>
 
           <div class="profile-tabs" role="tablist" aria-label="Admin menü">
-            <button type="button" role="tab" class="profile-tab" id="tabOverview" data-admin-tab="overview" aria-selected="true" aria-controls="panelOverview">Áttekintés &amp; Statisztika</button>
+            <button type="button" role="tab" class="profile-tab" id="tabOverview" data-admin-tab="overview" aria-selected="true" aria-controls="panelOverview">Áttekintés</button>
             <button type="button" role="tab" class="profile-tab" id="tabCoupons" data-admin-tab="coupons" aria-selected="false" aria-controls="panelCoupons">Kuponkezelő</button>
             <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
-            <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók &amp; Hírlevél</button>
+            <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók</button>
+            <button type="button" role="tab" class="profile-tab" id="tabNewsletter" data-admin-tab="newsletter" aria-selected="false" aria-controls="panelNewsletter">Hírlevél</button>
             <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
             <button type="button" role="tab" class="profile-tab" id="tabSettings" data-admin-tab="settings" aria-selected="false" aria-controls="panelSettings">Beállítások</button>
           </div>
@@ -64,6 +59,7 @@
               <div class="admin-kpi"><span class="admin-kpi-label">Sikeres rendelések</span><strong class="admin-kpi-value" id="kpiOrders">–</strong></div>
               <div class="admin-kpi"><span class="admin-kpi-label">Regisztrált felhasználók</span><strong class="admin-kpi-value" id="kpiUsers">–</strong></div>
               <div class="admin-kpi"><span class="admin-kpi-label">Megerősített hírlevél-feliratkozók</span><strong class="admin-kpi-value" id="kpiSubscribers">–</strong></div>
+              <div class="admin-kpi"><span class="admin-kpi-label">Mai generálások / napi szerverplafon</span><strong class="admin-kpi-value" id="kpiDailyCap">–</strong><span class="admin-kpi-note" id="kpiDailyCapNote"></span></div>
             </div>
             <h3>Tervezetek elemzése</h3>
             <div class="admin-kpis" id="docGrid">
@@ -100,23 +96,36 @@
               <div class="admin-kpi"><span class="admin-kpi-label">Asztali gép (%)</span><strong class="admin-kpi-value" id="deviceDesktop">–</strong></div>
             </div>
 
-            <h3>Top témakörök</h3>
-            <table class="admin-table" id="topicsTable">
-              <thead><tr><th>Témakör</th><th>Lekérdezések</th></tr></thead>
-              <tbody></tbody>
-            </table>
-
-            <h3>Top korcsoportok</h3>
-            <table class="admin-table" id="ageGroupsTable">
-              <thead><tr><th>Korcsoport</th><th>Lekérdezések</th></tr></thead>
-              <tbody></tbody>
-            </table>
-
-            <h3>Top forgalmi források</h3>
-            <table class="admin-table" id="referrersTable">
-              <thead><tr><th>Referrer domain</th><th>Kattintások</th></tr></thead>
-              <tbody></tbody>
-            </table>
+            <h3>Népszerű témák, korcsoportok és forgalmi források</h3>
+            <div class="admin-card-grid">
+              <article class="admin-card">
+                <h4>Top témakörök</h4>
+                <div class="admin-table-wrap">
+                  <table class="admin-table" id="topicsTable">
+                    <thead><tr><th>Témakör</th><th>Lekérdezések</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </article>
+              <article class="admin-card">
+                <h4>Top korcsoportok</h4>
+                <div class="admin-table-wrap">
+                  <table class="admin-table" id="ageGroupsTable">
+                    <thead><tr><th>Korcsoport</th><th>Lekérdezések</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </article>
+              <article class="admin-card">
+                <h4>Top forgalmi források</h4>
+                <div class="admin-table-wrap">
+                  <table class="admin-table" id="referrersTable">
+                    <thead><tr><th>Referrer domain</th><th>Kattintások</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
           </section>
 
           <section class="profile-panel" id="panelCoupons" role="tabpanel" aria-labelledby="tabCoupons" hidden>
@@ -205,7 +214,7 @@
           </section>
 
           <section class="profile-panel" id="panelUsers" role="tabpanel" aria-labelledby="tabUsers" hidden>
-            <h2>Felhasználók &amp; Hírlevélküldő</h2>
+            <h2>Felhasználók</h2>
             <div class="admin-filters">
               <p class="profile-hint" id="usersCount" role="status"></p>
               <button type="button" class="profile-btn" id="usersExport">Feliratkozók CSV exportja</button>
@@ -219,7 +228,10 @@
             <p class="profile-error" id="usersError" role="alert" hidden></p>
             <p class="profile-status admin-support-result" id="supportResult" role="status" hidden></p>
             <p class="profile-error" id="supportError" role="alert" hidden></p>
+          </section>
 
+          <section class="profile-panel" id="panelNewsletter" role="tabpanel" aria-labelledby="tabNewsletter" hidden>
+            <h2>Hírlevél</h2>
             <h3>Hírlevél küldése</h3>
             <div class="admin-newsletter">
               <form class="profile-form" id="newsletterForm" novalidate>
@@ -293,6 +305,7 @@
               <button type="button" role="tab" class="profile-tab" id="subTabGeneral" data-settings-tab="general" aria-selected="true">Általános &amp; Árazás</button>
               <button type="button" role="tab" class="profile-tab" id="subTabAi" data-settings-tab="ai" aria-selected="false">AI Beállítások</button>
               <button type="button" role="tab" class="profile-tab" id="subTabBilling" data-settings-tab="billing" aria-selected="false">Számlázás &amp; fizetés</button>
+              <button type="button" role="tab" class="profile-tab" id="subTabLinks" data-settings-tab="links" aria-selected="false">Külső linkek</button>
               <button type="button" role="tab" class="profile-tab" id="subTabEmail" data-settings-tab="email" aria-selected="false">E-mail Sablonok</button>
             </div>
 
@@ -302,17 +315,32 @@
                   <label><input type="checkbox" id="setMaintenance" /> Karbantartás mód (a generálás leáll, a felhasználók udvarias üzenetet kapnak)</label>
                 </div>
                 <div>
-                  <label for="setPriceStandard">Napi tervezet ára (Ft)</label>
-                  <input id="setPriceStandard" type="number" min="1" max="100000" step="1" />
+                  <label for="setPriceDaily">Napi ovis tervezet ára (Ft) – a heti alapcsomagra is érvényes</label>
+                  <input id="setPriceDaily" type="number" min="1" max="100000" step="1" />
                 </div>
                 <div>
-                  <label for="setPriceAcademic">Oktatási célú tervezet ára (Ft)</label>
-                  <input id="setPriceAcademic" type="number" min="1" max="100000" step="1" />
-                </div>
-                <div>
-                  <label for="setPriceWeekly">Heti komplex csomag ára (Ft)</label>
+                  <label for="setPriceWeekly">Heti ovis csomag ára (Ft) – a heti komplex (részletes) csomag</label>
                   <input id="setPriceWeekly" type="number" min="1" max="100000" step="1" />
                 </div>
+                <div>
+                  <label for="setPriceAcademicDaily">Egyetemi napi terv ára (Ft)</label>
+                  <input id="setPriceAcademicDaily" type="number" min="1" max="100000" step="1" />
+                </div>
+                <div>
+                  <label for="setPriceAcademicWeekly">Egyetemi heti terv ára (Ft)</label>
+                  <input id="setPriceAcademicWeekly" type="number" min="1" max="100000" step="1" />
+                </div>
+                <div>
+                  <label for="setDailyCap">Napi szerverplafon (generálás / nap)</label>
+                  <input id="setDailyCap" type="number" min="1" max="100000" step="1" />
+                  <p class="profile-hint" id="dailyCapInfo" role="status"></p>
+                </div>
+                <fieldset class="span-2 admin-announcement">
+                  <legend>Főoldali akciós sáv</legend>
+                  <label><input type="checkbox" id="setAnnouncementEnabled" /> Megjelenítés a főoldalon</label>
+                  <label for="setAnnouncementText">Szöveg (legfeljebb 200 karakter)</label>
+                  <input id="setAnnouncementText" type="text" maxlength="200" autocomplete="off" placeholder="pl. Őszi akció: minden tervezet 20% kedvezménnyel!" />
+                </fieldset>
                 <div class="span-2">
                   <label for="setHints">Szezonális javaslatok (pontosvesszővel ; elválasztva – a javaslatokon belül használható vessző)</label>
                   <input id="setHints" type="text" maxlength="1200" autocomplete="off" placeholder="Őszi termések gyűjtése, falevelek préselése; Márton-napi lámpás;" />
@@ -346,9 +374,9 @@
             </div>
 
             <div id="settingsBilling" data-settings-panel="billing" hidden>
-              <div class="profile-hint" id="billingStatusCard" role="status" aria-live="polite">
-                <strong>Szerver állapota (csak olvasható)</strong>
-                <ul id="billingStatusList"></ul>
+              <div id="billingStatusCard" role="status" aria-live="polite">
+                <h3>Szerver állapota (csak olvasható)</h3>
+                <div class="admin-status-grid" id="billingStatusList"></div>
               </div>
               <form class="profile-form" id="billingForm" novalidate>
                 <div>
@@ -376,12 +404,32 @@
               </form>
             </div>
 
+            <div id="settingsLinks" data-settings-panel="links" hidden>
+              <form class="profile-form" id="linksForm" novalidate>
+                <p class="profile-hint span-2">Az Admin Központ tetején csak a kitöltött, érvényes https:// hivatkozások jelennek meg (új lapon nyílnak). Üresen hagyva a link eltűnik.</p>
+                <div class="span-2"><label for="setLinkCloudflare">Cloudflare Analytics</label><input id="setLinkCloudflare" type="url" maxlength="500" autocomplete="off" placeholder="https://dash.cloudflare.com/" /></div>
+                <div class="span-2"><label for="setLinkGoogleAnalytics">Google Analytics</label><input id="setLinkGoogleAnalytics" type="url" maxlength="500" autocomplete="off" placeholder="https://analytics.google.com/" /></div>
+                <div class="span-2"><label for="setLinkSearchConsole">Google Search Console</label><input id="setLinkSearchConsole" type="url" maxlength="500" autocomplete="off" placeholder="https://search.google.com/search-console" /></div>
+                <div class="span-2"><label for="setLinkBarion">Barion</label><input id="setLinkBarion" type="url" maxlength="500" autocomplete="off" placeholder="https://secure.barion.com/" /></div>
+                <div class="span-2"><label for="setLinkSzamlazz">Számlázz.hu</label><input id="setLinkSzamlazz" type="url" maxlength="500" autocomplete="off" placeholder="https://www.szamlazz.hu/szamla/login" /></div>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="linksSave">Mentés</button>
+                  <button type="button" class="profile-btn" data-history-key="external_links" id="linksHistory">Előzmények</button>
+                  <span class="profile-status" id="linksStatus" role="status" hidden></span>
+                  <span class="profile-error" id="linksError" role="alert" hidden></span>
+                </div>
+              </form>
+            </div>
+
             <dialog class="admin-dialog admin-history-dialog" id="historyDialog" aria-labelledby="historyTitle">
               <h3 id="historyTitle">Előzmények</h3>
               <div class="profile-field">
                 <label for="historyKey">Beállítás</label>
                 <select id="historyKey">
-                  <option value="pricing">Árazás</option>
+                  <option value="pricing">Árazás (4 csomag)</option>
+                  <option value="daily_generation_cap">Napi szerverplafon</option>
+                  <option value="announcement_bar">Főoldali akciós sáv</option>
+                  <option value="external_links">Külső linkek</option>
                   <option value="ai_config">AI beállítások (modell, rendszer prompt)</option>
                   <option value="maintenance_mode">Karbantartás mód</option>
                   <option value="seasonal_hints">Szezonális javaslatok</option>
@@ -402,7 +450,8 @@
                     <label for="tplSelect">Sablon</label>
                     <select id="tplSelect">
                       <option value="welcome_email">Üdvözlő e-mail</option>
-                      <option value="payment_success">Sikeres fizetés</option>
+                      <option value="payment_success">Kézbesítő levél (sikeres fizetés, számlával)</option>
+                      <option value="feedback_request">Értékeléskérő blokk (a kézbesítő levélben, {{stars}} helyőrzővel)</option>
                       <option value="password_reset">Jelszó visszaállítás</option>
                       <option value="base_layout">Base Layout (közös keret, {{content}} helyőrzővel)</option>
                     </select>

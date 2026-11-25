@@ -447,3 +447,31 @@ test('EV webhook end to end: _EV keys, AAM, net = gross, no prefix, retry after 
   failNext = false;
   assert.equal((await post('whsec_ev', 'daily', 'cs_test_failing')).status, 200, 'a Stripe újrapróbálása után kiállítja a számlát');
 });
+
+test('index.html shows the announcement bar from /api/config as plain text only when enabled, and only on the landing page', async (t) => {
+  const make = async (page, announcement) => {
+    const dom = new JSDOM(readPage(page), {
+      url: 'http://localhost:8000',
+      runScripts: 'dangerously',
+      beforeParse(window) {
+        window.scrollTo = () => {};
+        window.APP_CONFIG = { apiBaseUrl: 'same-origin' };
+        window.fetch = async () => Response.json({ success: true, paymentProvider: 'barion', announcement_bar: announcement });
+      }
+    });
+    t.after(() => dom.window.close());
+    if (dom.window.document.readyState === 'loading') await new Promise((resolve) => dom.window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    return dom.window.document;
+  };
+  const on = await make('index.html', { enabled: true, text: 'Őszi <b>akció</b>' });
+  const bar = on.getElementById('announcementBar');
+  assert.ok(bar && bar.classList.contains('announcement-bar'));
+  assert.equal(bar.textContent, 'Őszi <b>akció</b>');
+  assert.equal(bar.querySelector('b'), null, 'nincs HTML injektálás');
+  assert.equal((await make('index.html', { enabled: false, text: 'Rejtett' })).getElementById('announcementBar'), null);
+  assert.equal((await make('tervezo.html', { enabled: true, text: 'Nem itt' })).getElementById('announcementBar'), null);
+  const css = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'styles.css'), 'utf8');
+  assert.match(css, /\.announcement-bar\s*\{/);
+  assert.match(css, /\[data-theme="dark"\] \.announcement-bar/);
+});

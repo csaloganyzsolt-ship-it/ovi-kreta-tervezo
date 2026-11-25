@@ -119,7 +119,7 @@ function initFooterAndModals() {
 // A nyilvános beállítások (árak, karbantartás, szezonális javaslatok) betöltése. Hiba esetén a felület hangosan jelez, nincs kamu adat.
 function applyPublicConfig(config) {
   const prices = config.pricing || {};
-  const byKind = { daily: prices.standard, weekly: prices.standard, weekly_detailed: prices.weekly, academic_daily: prices.academic, academic_weekly: prices.academic };
+  const byKind = { daily: prices.daily, weekly: prices.daily, weekly_detailed: prices.weekly, academic_daily: prices.academic_daily, academic_weekly: prices.academic_weekly };
   Object.entries(byKind).forEach(([kind, price]) => {
     if (Number.isInteger(price) && price > 0) PAYWALL_PRICES[kind] = price;
   });
