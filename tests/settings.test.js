@@ -15,6 +15,7 @@ const { productFor } = require('../backend/services/pricing');
 const { getBillingProfile } = require('../backend/services/siteConstants');
 
 const DB_PRICING = { daily: 555, weekly: 1999, academic_daily: 777, academic_weekly: 888 };
+const PACKAGE_FILE = { filename: 'tervezet.docx', content: Buffer.from('docx') };
 const TEMPLATE_ROWS = [
   { id: 'base_layout', subject: 'Keret', body_html: '<html><body><div class="keret">{{content}}</div></body></html>' },
   { id: 'payment_success', subject: 'Köszönjük a fizetést!', body_html: '<h1>DB-s sablon</h1><p>{{planLabel}}{{invoiceText}}</p>{{title_block}}{{order_block}}' },
@@ -343,10 +344,10 @@ test('the purchase e-mail is composed from the payment_success template inside t
   const sent = [];
   const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
   const templates = Object.fromEntries(TEMPLATE_ROWS.map((row) => [row.id, { id: row.id, subject: row.subject, bodyHtml: row.body_html }]));
-  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF'), title: 'Őszi <erdő>', orderNumber: 'OVI-1' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates });
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [PACKAGE_FILE], invoicePdf: Buffer.from('%PDF'), title: 'Őszi <erdő>', orderNumber: 'OVI-1' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates });
   assert.equal(sent[0].subject, 'Köszönjük a fizetést!');
   assert.match(sent[0].html, /<div class="keret"><h1>DB-s sablon<\/h1>/);
-  assert.match(sent[0].html, /napi tervezet Az e-számlát is mellékeltük/);
+  assert.match(sent[0].html, /napi tervezet A számlát is mellékeltük/);
   assert.match(sent[0].html, /Őszi &lt;erdő&gt;/, 'a változók escape-eltek');
   assert.match(sent[0].html, /Rendelésszám: <strong>OVI-1/);
   assert.equal(sent[0].html.includes('{{'), false);
@@ -356,7 +357,7 @@ test('the e-mail sender reads the templates from the database', async (t) => {
   fakeDb(t);
   const sent = [];
   const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
-  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF') }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport });
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [PACKAGE_FILE], invoicePdf: Buffer.from('%PDF') }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport });
   assert.match(sent[0].html, /class="keret"/);
   assert.equal(sent[0].subject, 'Köszönjük a fizetést!');
 });
@@ -438,7 +439,7 @@ test('the newsletter preview and the payment e-mail use the same base_layout fro
   assert.ok(preview.includes('data:image/png;base64,') && preview.includes('leiratkozas.html?token='));
   const sent = [];
   const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
-  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF'), title: 'Erdő', orderNumber: 'OVI-9' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport });
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [PACKAGE_FILE], invoicePdf: Buffer.from('%PDF'), title: 'Erdő', orderNumber: 'OVI-9' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport });
   assert.ok(sent[0].html.includes('Kibocsátó:') && sent[0].html.includes('Mellékletek') && sent[0].html.includes('OVI-9'));
   assert.equal(sent[0].html.includes('Leiratkozás'), false, 'a fizetési levélben nincs leiratkozó mondat');
   assert.equal(sent[0].html.includes('{{'), false);
@@ -463,7 +464,7 @@ test('the real payment_success and base_layout carry the original structure and 
   for (const needle of ['Kedves Kolléganő!', '{{topic}}', 'Rendelésszám: <strong>{{orderId}}', 'Mellékletek', '{{attachments_rows}}', 'Tipp:', 'Új tervezet készítése', '{{feedback_block}}']) assert.ok(pay.includes(needle), needle);
   const sent = [];
   const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
-  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], invoicePdf: Buffer.from('%PDF'), title: 'Őszi <erdő>', orderNumber: 'OVI-77' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates });
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [PACKAGE_FILE], invoicePdf: Buffer.from('%PDF'), title: 'Őszi <erdő>', orderNumber: 'OVI-77' }, { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates });
   const html = sent[0].html;
   assert.match(html, /Tervezet témája:<\/strong> Őszi &lt;erdő&gt;/);
   assert.match(html, /Rendelésszám: <strong>OVI-77/);

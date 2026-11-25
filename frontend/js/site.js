@@ -129,7 +129,7 @@ const LEGAL_TEXTS = {
 <ul>
 <li>A számlát a {{COMPANY_NAME}} állítja ki a jogszabályoknak megfelelően a Számlázz.hu (KBOSS.hu Kft.) rendszerén keresztül.</li>
 <li>A fizetés jóváhagyását követően a rendszer azonnal kiállítja az elektronikus számlát (e-számlát).</li>
-<li>Az e-számla PDF formátumban automatikusan megérkezik a vásárláskor megadott e-mail címedre, a megrendelt tervezet Word és PDF fájljaival együtt.</li>
+<li>A számla PDF formátumban automatikusan megérkezik a vásárláskor megadott e-mail címedre, a megrendelt tervezet Word és PDF fájljaival együtt.</li>
 <li>Kérjük, fizetéskor ügyelj a számlázási adatok és az e-mail cím pontos megadására, mert a számla kiállítása teljesen automatizált.</li>
 </ul>
 <h3>4. Kérdés, számlamódosítás, segítségnyújtás</h3>

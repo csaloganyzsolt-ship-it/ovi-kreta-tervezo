@@ -28,7 +28,7 @@ function splitGross(grossHuf, vatRate) {
   return { net, vat: grossHuf - net };
 }
 
-// A SZAMLAZZ_SANDBOX csak jelzés (teszt üzem): a bizonylat ilyenkor is rendes e-számla, nem díjbekérő.
+// A SZAMLAZZ_SANDBOX csak jelzés (teszt üzem): a bizonylat ilyenkor is rendes számla, nem díjbekérő.
 function isSandbox(env = process.env) {
   return String(env.SZAMLAZZ_SANDBOX || '').toLowerCase() === 'true';
 }

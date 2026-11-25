@@ -298,13 +298,12 @@ test('the Stripe button is gone: the only payment button is the Barion one, next
   const window = await loadPlanner(t);
   const { document } = window;
   const barion = document.getElementById('checkoutBarion');
-  assert.equal(barion.textContent.trim(), 'Fizetés Barionnal (Bankkártya)');
+  assert.match(barion.textContent.trim(), /^Tovább a fizetéshez/);
   assert.equal(barion.type, 'button');
   assert.equal(document.getElementById('checkoutSubmit'), null);
   const form = document.getElementById('checkoutForm');
   assert.equal(form.querySelector('button[type="submit"]'), null, 'nincs elküldő gomb az űrlapon');
-  assert.doesNotMatch(form.textContent, /Tovább a fizetéshez/);
-  assert.deepEqual(Array.from(barion.parentElement.querySelectorAll('button')).map((button) => button.textContent.trim()), ['Fizetés Barionnal (Bankkártya)', 'Fizetés bankkártyával (Stripe)', 'Mégse']);
+  assert.deepEqual(Array.from(barion.parentElement.querySelectorAll('button')).map((button) => button.textContent.trim().replace(/ –.*$/, '')), ['Tovább a fizetéshez', 'Tovább a fizetéshez', 'Mégse']);
   assert.equal(document.getElementById('checkoutStripe').hidden, true, 'a Stripe gomb csak Stripe módban látszik');
   assert.equal(document.getElementById('couponApply').textContent.trim(), 'Érvényesítés');
 });

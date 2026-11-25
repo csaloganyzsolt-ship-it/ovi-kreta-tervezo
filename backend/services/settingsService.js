@@ -18,7 +18,10 @@ const DEFAULT_DAILY_GENERATION_CAP = 250;
 const MAX_DAILY_GENERATION_CAP = 100000;
 const MAX_ANNOUNCEMENT_LENGTH = 200;
 const MAX_LINK_LENGTH = 500;
-const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'feedback_request', 'password_reset']);
+// Beépített rendszersablonok: nem törölhetők. Az ezeken kívüli azonosítók az Adminban létrehozott egyedi sablonok.
+const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_success', 'feedback_request', 'password_reset', 'invoice_only']);
+const CUSTOM_TEMPLATE_ID = /^[a-z][a-z0-9_]{2,39}$/;
+const MAX_TEMPLATE_NAME_LENGTH = 80;
 const MAX_PRICE_HUF = 100000;
 const MAX_HINTS = 12;
 const MAX_HINT_LENGTH = 120;
@@ -329,17 +332,44 @@ const DEFAULT_FEEDBACK_REQUEST_HTML = `<div style="margin:22px 0 0;padding:16px 
 {{stars}}
 </div>
 </div>`;
+// A „Csak számla küldése” levél: csak a számla PDF mellékletével, tervezet-melléklet és Word-tipp nélkül ({{invoiceNumber}}, {{topic}}, {{orderId}}, {{site_url}}).
+const DEFAULT_INVOICE_ONLY_SUBJECT = 'Számlája elkészült – OviTervező ({{invoiceNumber}})';
+const DEFAULT_INVOICE_ONLY_HTML = `<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
+<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – mellékelten küldjük a vásárlásáról kiállított számlát PDF formátumban.</p>
+<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Megrendelés témája:</strong> {{topic}}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;font-size:14px;line-height:1.7;color:#2d3b36;">
+<div>Rendelésszám: <strong>{{orderId}}</strong></div>
+<div>Számlaszám: <strong>{{invoiceNumber}}</strong></div>
+<div style="margin-top:6px;color:#1f5f52;font-weight:600;">📎 Csatolmány: Számla (PDF)</div>
+</td></tr></table>
+<p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#5b6b64;background:#f6f7f7;border-radius:10px;padding:10px 14px;">A számla elektronikus úton továbbított, nyomtatás nélkül is könyvelhető bizonylat. Kérjük, őrizze meg saját nyilvántartása számára.</p>
+<p style="margin:20px 0;text-align:center;"><a href="{{site_url}}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">Új tervezet készítése</a></p>
+<p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
+<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>
+<p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk!</p>`;
 const DEFAULT_TEMPLATES = Object.freeze({
-  feedback_request: Object.freeze({ id: 'feedback_request', subject: 'Értékeléskérő blokk (a kézbesítő levélben)', bodyHtml: DEFAULT_FEEDBACK_REQUEST_HTML })
+  feedback_request: Object.freeze({ id: 'feedback_request', subject: 'Értékeléskérő blokk (a kézbesítő levélben)', bodyHtml: DEFAULT_FEEDBACK_REQUEST_HTML }),
+  invoice_only: Object.freeze({ id: 'invoice_only', subject: DEFAULT_INVOICE_ONLY_SUBJECT, bodyHtml: DEFAULT_INVOICE_ONLY_HTML })
 });
 
+// A name / is_system oszlopokat a 20261201090000 migráció adja; nélkülük a kód a régi sémával is működik.
+function isMissingColumn(error) {
+  return error?.code === '42703' || error?.code === 'PGRST204' || /column .*(does not exist|schema cache)|could not find the/i.test(String(error?.message || ''));
+}
+
+function templateRow(row) {
+  const custom = !TEMPLATE_IDS.includes(row.id);
+  return { id: row.id, name: row.name || '', subject: row.subject || '', bodyHtml: row.body_html || '', custom, hasDefault: row.id in DEFAULT_TEMPLATES };
+}
+
 async function listTemplates(client) {
-  const { data, error } = await client.from('email_templates').select('id, subject, body_html');
-  if (error) throw dbError('Az e-mail sablonok nem olvashatók', error);
-  const rows = (data || []).filter((row) => TEMPLATE_IDS.includes(row.id)).map((row) => ({ id: row.id, subject: row.subject || '', bodyHtml: row.body_html || '' }));
+  let result = await client.from('email_templates').select('id, subject, body_html, name');
+  if (result.error && isMissingColumn(result.error)) result = await client.from('email_templates').select('id, subject, body_html');
+  if (result.error) throw dbError('Az e-mail sablonok nem olvashatók', result.error);
+  const rows = (result.data || []).map(templateRow);
   // A még nem mentett, de beépített alapértékkel rendelkező sablon is szerkeszthető.
   for (const [id, fallback] of Object.entries(DEFAULT_TEMPLATES)) {
-    if (!rows.some((row) => row.id === id)) rows.push({ ...fallback });
+    if (!rows.some((row) => row.id === id)) rows.push({ ...fallback, name: '', custom: false, hasDefault: true });
   }
   return rows;
 }
@@ -355,8 +385,7 @@ async function listHistory(client, key) {
   return (data || []).map((row) => ({ id: row.id, key: row.setting_key, oldValue: row.old_value, newValue: row.new_value, changedAt: row.changed_at }));
 }
 
-async function updateTemplate(client, id, body = {}) {
-  if (!TEMPLATE_IDS.includes(id)) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
+function validateTemplateContent(id, body) {
   const subject = typeof body.subject === 'string' ? body.subject.replace(/[\r\n]+/g, ' ').trim() : null;
   const bodyHtml = typeof body.bodyHtml === 'string' ? body.bodyHtml : null;
   if (subject === null || bodyHtml === null) throw new SettingsError('A tárgy és a HTML-szöveg megadása kötelező.');
@@ -364,10 +393,75 @@ async function updateTemplate(client, id, body = {}) {
   if (!bodyHtml.trim() || bodyHtml.length > MAX_TEMPLATE_LENGTH) throw new SettingsError(`A HTML-szöveg kötelező, legfeljebb ${MAX_TEMPLATE_LENGTH} karakter.`);
   if (id === 'base_layout' && !bodyHtml.includes('{{content}}')) throw new SettingsError('A base_layout sablonnak tartalmaznia kell a {{content}} helyőrzőt.');
   if (id === 'feedback_request' && !/\{\{\s*(stars|feedback_url)\s*\}\}/.test(bodyHtml)) throw new SettingsError('Az értékeléskérő sablonnak tartalmaznia kell a {{stars}} vagy a {{feedback_url}} helyőrzőt.');
-  const { error } = await client.from('email_templates').upsert({ id, subject, body_html: bodyHtml }, { onConflict: 'id' });
-  if (error) throw dbError('Az e-mail sablon mentése sikertelen', error);
+  return { subject, bodyHtml };
+}
+
+function validateTemplateName(value) {
+  const name = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+  if (!name || name.length > MAX_TEMPLATE_NAME_LENGTH) throw new SettingsError(`A sablon megjelenített neve kötelező, legfeljebb ${MAX_TEMPLATE_NAME_LENGTH} karakter.`);
+  return name;
+}
+
+// Mentés a bővített sémával; ha a name / is_system oszlop még nincs meg (migráció előtt), a tartalom ezek nélkül is elmentődik.
+async function saveTemplateRow(client, row, { insertOnly = false } = {}) {
+  const write = (payload) => (insertOnly
+    ? client.from('email_templates').insert(payload)
+    : client.from('email_templates').upsert(payload, { onConflict: 'id' }));
+  let { error } = await write(row);
+  if (error && isMissingColumn(error)) {
+    const { name: _name, is_system: _system, ...legacy } = row;
+    ({ error } = await write(legacy));
+  }
+  if (error) {
+    if (insertOnly && (error.code === '23505' || /duplicate key/i.test(error.message || ''))) throw new SettingsError('Ilyen azonosítójú sablon már létezik.', 409);
+    throw dbError('Az e-mail sablon mentése sikertelen', error);
+  }
+}
+
+async function updateTemplate(client, id, body = {}) {
+  const custom = !TEMPLATE_IDS.includes(id);
+  if (custom && (!CUSTOM_TEMPLATE_ID.test(id) || !(await listTemplates(client)).some((row) => row.id === id))) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
+  const { subject, bodyHtml } = validateTemplateContent(id, body);
+  const row = { id, subject, body_html: bodyHtml };
+  const result = { id, subject, bodyHtml };
+  if (custom && 'name' in body) {
+    row.name = validateTemplateName(body.name);
+    result.name = row.name;
+  }
+  await saveTemplateRow(client, row);
   templateCache = null;
-  return { id, subject, bodyHtml };
+  return { ...result, custom, hasDefault: id in DEFAULT_TEMPLATES };
+}
+
+// Új egyedi sablon: kisbetűs azonosító (slug), a rendszersablonok azonosítói foglaltak.
+async function createTemplate(client, body = {}) {
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  if (!CUSTOM_TEMPLATE_ID.test(id)) throw new SettingsError('Az azonosító 3–40 karakter lehet: kisbetű, szám és alsó vonás, betűvel kezdődően.');
+  if (TEMPLATE_IDS.includes(id)) throw new SettingsError('Ez az azonosító egy beépített rendszersablonhoz tartozik.', 409);
+  const name = validateTemplateName(body.name);
+  const { subject, bodyHtml } = validateTemplateContent(id, body);
+  await saveTemplateRow(client, { id, name, subject, body_html: bodyHtml, is_system: false }, { insertOnly: true });
+  templateCache = null;
+  return { id, name, subject, bodyHtml, custom: true, hasDefault: false };
+}
+
+// Csak egyedi sablon törölhető; a rendszersablon alapértékre állítható vissza.
+async function deleteTemplate(client, id) {
+  if (TEMPLATE_IDS.includes(id)) throw new SettingsError('A rendszersablon nem törölhető, csak alapértékre állítható vissza.', 409);
+  if (!CUSTOM_TEMPLATE_ID.test(String(id)) || !(await listTemplates(client)).some((row) => row.id === id)) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
+  const { error } = await client.from('email_templates').delete().eq('id', id);
+  if (error) throw dbError('Az e-mail sablon törlése sikertelen', error);
+  templateCache = null;
+  return { id };
+}
+
+// A beépített alapértékkel rendelkező rendszersablon (jelenleg: invoice_only, feedback_request) visszaállítása.
+async function resetTemplate(client, id) {
+  const fallback = DEFAULT_TEMPLATES[id];
+  if (!fallback) throw new SettingsError('Ennek a sablonnak nincs beépített alapértéke.', 409);
+  await saveTemplateRow(client, { id, subject: fallback.subject, body_html: fallback.bodyHtml });
+  templateCache = null;
+  return { ...fallback, name: '', custom: false, hasDefault: true };
 }
 
 // A kiküldéshez használt sablonok (5 perces gyorsítótár); kliens nélkül null, a hívó a beépített levelet használja.
@@ -403,5 +497,5 @@ function composeEmail(templates, id, values = {}) {
 module.exports = {
   isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
   getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
-  listTemplates, listHistory, updateTemplate, getTemplates, fillPlaceholders, composeEmail
+  listTemplates, listHistory, updateTemplate, createTemplate, deleteTemplate, resetTemplate, DEFAULT_TEMPLATES, getTemplates, fillPlaceholders, composeEmail
 };

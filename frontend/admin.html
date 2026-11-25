@@ -493,13 +493,31 @@
                 <form class="profile-form" id="templateForm" novalidate>
                   <div class="span-2">
                     <label for="tplSelect">Sablon</label>
-                    <select id="tplSelect">
-                      <option value="welcome_email">Üdvözlő e-mail</option>
-                      <option value="payment_success">Kézbesítő levél (sikeres fizetés, számlával)</option>
-                      <option value="feedback_request">Értékeléskérő blokk (a kézbesítő levélben, {{stars}} helyőrzővel)</option>
-                      <option value="password_reset">Jelszó visszaállítás</option>
-                      <option value="base_layout">Base Layout (közös keret, {{content}} helyőrzővel)</option>
-                    </select>
+                    <div class="admin-template-picker">
+                      <select id="tplSelect">
+                        <optgroup label="Rendszersablonok">
+                          <option value="welcome_email">Üdvözlő e-mail</option>
+                          <option value="payment_success">Kézbesítő levél (sikeres fizetés, számlával)</option>
+                          <option value="invoice_only">Csak számla küldése (csak a számla PDF-fel)</option>
+                          <option value="feedback_request">Értékeléskérő blokk (a kézbesítő levélben, {{stars}} helyőrzővel)</option>
+                          <option value="password_reset">Jelszó visszaállítás</option>
+                          <option value="base_layout">Base Layout (közös keret, {{content}} helyőrzővel)</option>
+                        </optgroup>
+                        <optgroup label="Egyedi sablonok" id="tplCustomGroup" hidden></optgroup>
+                      </select>
+                      <button type="button" class="profile-btn" id="tplNew">+ Új sablon</button>
+                    </div>
+                  </div>
+                  <div class="span-2 admin-template-new" id="tplCreateFields" hidden>
+                    <div>
+                      <label for="tplNewId">Azonosító (slug)</label>
+                      <input id="tplNewId" type="text" maxlength="40" autocomplete="off" placeholder="pl. husveti_koszonto" pattern="[a-z][a-z0-9_]{2,39}" />
+                      <small>3–40 karakter: kisbetű, szám, alsó vonás; betűvel kezdődjön.</small>
+                    </div>
+                    <div>
+                      <label for="tplNewName">Megjelenített név</label>
+                      <input id="tplNewName" type="text" maxlength="80" autocomplete="off" placeholder="pl. Húsvéti köszöntő" />
+                    </div>
                   </div>
                   <div class="span-2">
                     <label for="tplSubject">Tárgy</label>
@@ -508,9 +526,14 @@
                   <div class="span-2">
                     <label for="tplBody">HTML tartalom</label>
                     <textarea id="tplBody" rows="14" maxlength="100000"></textarea>
+                    <div class="admin-template-vars" id="tplVars" aria-label="Használható helyőrzők"></div>
                   </div>
                   <div class="profile-actions">
                     <button type="submit" class="profile-btn primary" id="tplSave">Mentés</button>
+                    <button type="button" class="profile-btn" id="tplSkeleton">Alap OviTervező váz betöltése</button>
+                    <button type="button" class="profile-btn" id="tplReset" hidden>Alapértékre állítás</button>
+                    <button type="button" class="profile-btn danger" id="tplDelete" hidden>Sablon törlése</button>
+                    <button type="button" class="profile-btn" id="tplCancelNew" hidden>Mégse</button>
                     <span class="profile-status" id="tplStatus" role="status" hidden></span>
                     <span class="profile-error" id="tplError" role="alert" hidden></span>
                   </div>

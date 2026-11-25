@@ -581,7 +581,7 @@
             <div class="trust-badges">
               <span class="trust-badge" data-barion-badge>🔒 Barion Payment – biztonságos bankkártyás fizetés</span>
               <span class="trust-badge" data-stripe-badge hidden>🔒 Stripe – biztonságos bankkártyás fizetés</span>
-              <span class="trust-badge">🧾 Számlázz.hu – automatikus e-számla</span>
+              <span class="trust-badge">🧾 Számlázz.hu – automatikus számla</span>
             </div>
             <div class="barion-strip" data-barion-strip>
               <picture class="barion-pic barion-pic-light">
@@ -675,9 +675,6 @@
           <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
           <h2 id="checkoutTitle">Teljes tervezet és letöltés feloldása</h2>
           <p id="checkoutTestNote" class="modal-test-strip" hidden>Teszt üzemmód – a fizetés a Barion tesztkörnyezetében történik, valódi terhelés nem történik.</p>
-          <p id="checkoutSummary" class="modal-note"></p>
-          <p class="modal-note" id="checkoutDeliveryNote">A sikeres fizetés után a tervezet azonnal letölthető (PDF, Word), az e-számlát pedig a megadott e-mail címre küldjük, és a felületen is letölthető.</p>
-          <p class="modal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
           <label for="checkoutEmail"><strong>Számlázási e-mail cím</strong></label>
           <input id="checkoutEmail" type="email" autocomplete="email" placeholder="pelda@email.hu" required />
           <label for="billingName"><strong>Számlázási név</strong> <span class="field-hint">(cégnév vagy magánszemély neve)</span></label>
@@ -709,9 +706,10 @@
             <div id="couponStatus" class="modal-note" role="status"></div>
           </div>
           <div id="checkoutError" class="modal-error" role="alert"></div>
+          <p id="checkoutSummary" class="checkout-total"></p>
           <div class="modal-actions">
-            <button type="button" class="barion-btn" id="checkoutBarion" data-barion-only disabled>Fizetés Barionnal (Bankkártya)</button>
-            <button type="button" class="barion-btn" id="checkoutStripe" data-stripe-only hidden disabled>Fizetés bankkártyával (Stripe)</button>
+            <button type="button" class="barion-btn" id="checkoutBarion" data-barion-only disabled>Tovább a fizetéshez</button>
+            <button type="button" class="barion-btn" id="checkoutStripe" data-stripe-only hidden disabled>Tovább a fizetéshez</button>
             <button type="button" data-close-modal>Mégse</button>
           </div>
           <div class="barion-strip" data-barion-strip>
@@ -726,6 +724,7 @@
               <img class="barion-logo" src="assets/Barion%20adatok/png/Dark/Large-nobg-dark.png" alt="Barion Payment – biztonságos fizetés: Barion, Mastercard, Visa, Apple Pay, Google Pay" />
             </picture>
           </div>
+          <p class="checkout-legal-note" id="checkoutWithdrawalNote">Digitális tartalom: a szolgáltatás a sikeres fizetést követően azonnal megkezdődik, ezzel a 14 napos elállási jog a 45/2014. Korm. rendelet szerint elvész.</p>
         </form>
       </div>
     </div>

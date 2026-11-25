@@ -172,7 +172,8 @@ test('the coupon purchase e-mail has no invoice text or attachment, the Stripe o
   const free = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: false, orderNumber: 'ABC123' }, {});
   assert.doesNotMatch(free.html + free.text, /e-számla/i);
   const paid = mailService.buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true }, {});
-  assert.match(paid.text, /e-számlát/i);
+  assert.match(paid.text, /számlát/i);
+  assert.doesNotMatch(paid.html + paid.text, /e-számla/i);
 });
 
 // ---------- Frontend: kuponmező és feloldás ----------

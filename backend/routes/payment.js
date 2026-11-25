@@ -309,6 +309,7 @@ async function deliverPurchase(req, res) {
         orderNumber: order.orderNumber,
         attachments,
         invoicePdf,
+        invoiceNumber: order.invoiceNumber,
         title: req.body?.title,
         planMode: requestedPlanMode(req),
         documentId: session.generationId || id

@@ -322,16 +322,21 @@
         issue.disabled = Boolean(blocked);
         issue.title = blocked || 'Pótlólagos számlakiállítás a Számlázz.hu-n';
         if (!freeOrder) issue.addEventListener('click', () => issueOrderInvoice(order, issue));
-        const resend = el('button', 'profile-btn', 'Kiküldés e-mailben');
+        const resend = el('button', 'profile-btn', 'Csomag küldése');
         resend.type = 'button';
         resend.disabled = order.status !== 'paid' || !order.email;
         resend.addEventListener('click', () => resendOrder(order, resend));
+        const sendInvoice = el('button', 'profile-btn', 'Számla küldése');
+        sendInvoice.type = 'button';
+        sendInvoice.disabled = order.status !== 'paid' || !order.email || !order.invoiceNumber;
+        sendInvoice.title = sendInvoice.disabled ? 'Kifizetett, számlával rendelkező rendelés vevői címére küldhető' : 'Csak a számla PDF kiküldése a vevőnek';
+        sendInvoice.addEventListener('click', () => sendOrderInvoice(order, sendInvoice));
         const invoice = el('button', 'profile-btn', 'Számla letöltése');
         invoice.type = 'button';
         invoice.disabled = order.status !== 'paid' || !order.invoiceNumber;
         invoice.addEventListener('click', () => downloadOrderInvoice(order, invoice));
         const actions = el('span', 'admin-actions');
-        actions.append(issue, resend, invoice);
+        actions.append(issue, sendInvoice, resend, invoice);
         const status = el('span');
         status.textContent = ORDER_STATUS_LABELS[order.status] || order.status;
         if (order.status === 'paid' && order.lastError) {
@@ -456,6 +461,22 @@
     } catch (error) {
       setText('ordersError', `Az újraküldés sikertelen: ${errorMessage(error)}`);
       showToast(`Az újraküldés sikertelen: ${errorMessage(error)}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // Csak a számla PDF-et küldi ki a vevőnek (alapértelmezett sablon: invoice_only).
+  async function sendOrderInvoice(order, button) {
+    if (!window.confirm(`Kiküldöd a számlát (${order.invoiceNumber}) ide: ${order.email}?`)) return;
+    setText('ordersError', '');
+    button.disabled = true;
+    try {
+      const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/send-invoice`, { method: 'POST', body: {} });
+      showToast(`A számla elküldve: ${result.to}.`);
+    } catch (error) {
+      setText('ordersError', `A számla küldése sikertelen: ${errorMessage(error)}`);
+      showToast(`A számla küldése sikertelen: ${errorMessage(error)}`, true);
     } finally {
       button.disabled = false;
     }
@@ -823,17 +844,86 @@
     }
   }
 
+  let creatingTemplate = false;
+
+  const TEMPLATE_VARIABLES = ['topic', 'orderId', 'invoiceNumber', 'planLabel', 'invoiceText', 'site_url', 'logo_src', 'company_legal', 'content', 'stars', 'feedback_url', 'attachments_rows', 'unsubscribe_link'];
+  const BASE_SKELETON = `<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
+<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Ide írhatja a levél szövegét.</p>
+<p style="margin:20px 0;text-align:center;"><a href="{{site_url}}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">Új tervezet készítése</a></p>
+<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>`;
+
+  function renderTemplateVariables() {
+    const box = byId('tplVars');
+    box.textContent = '';
+    box.append(el('span', '', 'Használható helyőrzők (kattintásra beszúrja): '));
+    TEMPLATE_VARIABLES.forEach((name) => {
+      const chip = el('button', '', `{{${name}}}`);
+      chip.type = 'button';
+      chip.addEventListener('click', () => {
+        const area = byId('tplBody');
+        const start = area.selectionStart ?? area.value.length;
+        const end = area.selectionEnd ?? start;
+        area.value = `${area.value.slice(0, start)}{{${name}}}${area.value.slice(end)}`;
+        area.focus();
+        area.setSelectionRange(start + name.length + 4, start + name.length + 4);
+        refreshTemplatePreview();
+      });
+      box.append(chip);
+    });
+  }
+
+  function renderCustomTemplateOptions(selected) {
+    const group = byId('tplCustomGroup');
+    group.textContent = '';
+    const customs = Object.values(templates).filter((row) => row.custom);
+    customs.forEach((row) => {
+      const option = el('option', '', `${row.name || row.id} (${row.id})`);
+      option.value = row.id;
+      group.append(option);
+    });
+    group.hidden = customs.length === 0;
+    const select = byId('tplSelect');
+    if (selected && templates[selected]) select.value = selected;
+  }
+
+  function setTemplateMode(creating) {
+    creatingTemplate = creating;
+    byId('tplCreateFields').hidden = !creating;
+    byId('tplCancelNew').hidden = !creating;
+    byId('tplNew').hidden = creating;
+    byId('tplSelect').disabled = creating;
+    byId('tplSave').textContent = creating ? 'Sablon létrehozása' : 'Mentés';
+    const template = templates[byId('tplSelect').value];
+    byId('tplDelete').hidden = creating || !template?.custom;
+    byId('tplReset').hidden = creating || !template?.hasDefault;
+  }
+
   function showTemplate() {
     const template = templates[byId('tplSelect').value];
     byId('tplSubject').value = template?.subject || '';
     byId('tplBody').value = template?.bodyHtml || '';
+    setTemplateMode(false);
+    refreshTemplatePreview();
+  }
+
+  function startNewTemplate() {
+    flash('tplStatus', 'tplError', '', false);
+    byId('tplNewId').value = '';
+    byId('tplNewName').value = '';
+    byId('tplSubject').value = '';
+    byId('tplBody').value = '';
+    setTemplateMode(true);
+    byId('tplNewId').focus();
     refreshTemplatePreview();
   }
 
   async function loadTemplates() {
     try {
       const { templates: rows } = await api('/api/admin/email-templates');
+      const current = byId('tplSelect').value;
       templates = Object.fromEntries(rows.map((row) => [row.id, row]));
+      renderCustomTemplateOptions(current);
+      renderTemplateVariables();
       showTemplate();
     } catch (error) {
       flash('tplStatus', 'tplError', `A sablonok nem tölthetők be: ${errorMessage(error)}`, true);
@@ -842,7 +932,9 @@
 
   async function refreshTemplatePreview() {
     try {
-      const { html } = await api('/api/admin/email-templates/preview', { method: 'POST', body: { id: byId('tplSelect').value, subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
+      // Új sablonnál a mentett kézbesítő levél keretébe illesztett, még el nem mentett tartalom látszik.
+      const id = creatingTemplate ? 'payment_success' : byId('tplSelect').value;
+      const { html } = await api('/api/admin/email-templates/preview', { method: 'POST', body: { id, subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
       byId('tplPreview').srcdoc = html;
       setText('tplError', '');
     } catch (error) {
@@ -853,18 +945,61 @@
   async function saveTemplate(event) {
     event.preventDefault();
     flash('tplStatus', 'tplError', '', false);
-    const id = byId('tplSelect').value;
     const button = byId('tplSave');
     button.disabled = true;
     try {
+      if (creatingTemplate) {
+        const { template } = await api('/api/admin/email-templates', { method: 'POST', body: { id: byId('tplNewId').value.trim(), name: byId('tplNewName').value, subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
+        templates[template.id] = template;
+        renderCustomTemplateOptions(template.id);
+        showTemplate();
+        flash('tplStatus', 'tplError', 'Az új sablon létrejött.', false);
+        return;
+      }
+      const id = byId('tplSelect').value;
       const { template } = await api(`/api/admin/email-templates/${encodeURIComponent(id)}`, { method: 'PATCH', body: { subject: byId('tplSubject').value, bodyHtml: byId('tplBody').value } });
-      templates[id] = template;
+      templates[id] = { ...templates[id], ...template };
       flash('tplStatus', 'tplError', 'A sablon mentve.', false);
     } catch (error) {
       flash('tplStatus', 'tplError', errorMessage(error), true);
     } finally {
       button.disabled = false;
     }
+  }
+
+  async function deleteTemplate() {
+    const id = byId('tplSelect').value;
+    const template = templates[id];
+    if (!template?.custom || !window.confirm(`Biztosan törlöd az egyedi sablont: ${template.name || id}?`)) return;
+    try {
+      await api(`/api/admin/email-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      delete templates[id];
+      renderCustomTemplateOptions('welcome_email');
+      byId('tplSelect').value = 'welcome_email';
+      showTemplate();
+      showToast('Az egyedi sablon törölve.');
+    } catch (error) {
+      flash('tplStatus', 'tplError', `A sablon nem törölhető: ${errorMessage(error)}`, true);
+    }
+  }
+
+  async function resetTemplate() {
+    const id = byId('tplSelect').value;
+    if (!templates[id]?.hasDefault || !window.confirm('Visszaállítod a sablont a beépített alapértékre? A módosításaid elvesznek.')) return;
+    try {
+      const { template } = await api(`/api/admin/email-templates/${encodeURIComponent(id)}/reset`, { method: 'POST', body: {} });
+      templates[id] = { ...templates[id], ...template };
+      showTemplate();
+      flash('tplStatus', 'tplError', 'A sablon az alapértékre állt vissza.', false);
+    } catch (error) {
+      flash('tplStatus', 'tplError', errorMessage(error), true);
+    }
+  }
+
+  function loadSkeleton() {
+    if (byId('tplBody').value.trim() && !window.confirm('Felülírod a jelenlegi HTML tartalmat az alap OviTervező vázzal?')) return;
+    byId('tplBody').value = BASE_SKELETON;
+    refreshTemplatePreview();
   }
 
   function activateSettingsTab(name) {
@@ -923,6 +1058,11 @@
     byId('historyClose').addEventListener('click', () => byId('historyDialog').close());
     byId('templateForm').addEventListener('submit', saveTemplate);
     byId('tplSelect').addEventListener('change', showTemplate);
+    byId('tplNew').addEventListener('click', startNewTemplate);
+    byId('tplCancelNew').addEventListener('click', showTemplate);
+    byId('tplDelete').addEventListener('click', deleteTemplate);
+    byId('tplReset').addEventListener('click', resetTemplate);
+    byId('tplSkeleton').addEventListener('click', loadSkeleton);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
     byId('failedOrdersOpen').addEventListener('click', () => { byId('ordersStatus').value = 'paid'; activateTab('orders'); });

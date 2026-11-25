@@ -90,11 +90,13 @@ router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása
 
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
 // A visszaigazoló / számlaértesítő levél újraküldése: kizárólag a szerveren tárolt, fizetett rendelés vevői címére, az élőben lekért számla PDF-fel; a vevői kézbesítési számlálót nem növeli.
-router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újraküldés', async (_client, req) => {
+// A vevőnek szóló levél kiküldése a szerveren tárolt, fizetett rendelés címére; a számla PDF-et élőben kéri le a Számlázz.hu-tól. A vevői kézbesítési számlálót nem növeli.
+async function sendOrderMail(req, { requireInvoice, templateId }) {
   const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
   if (!order) throw new admin.AdminError('A rendelés nem található.', 404);
   if (order.status !== 'paid') throw new admin.AdminError('Csak kifizetett rendelés értesítője küldhető újra.', 409);
   if (!order.email) throw new admin.AdminError('A rendeléshez nem tartozik e-mail cím.', 422);
+  if (requireInvoice && !order.invoiceNumber) throw new admin.AdminError('A rendeléshez még nincs számla, előbb állítsd ki.', 409);
   if (!mailService.isConfigured()) throw new admin.AdminError('Az e-mail küldés nincs beállítva (SMTP).', 503);
   const invoicePdf = order.invoiceNumber
     ? await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile })
@@ -107,17 +109,28 @@ router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újrak�
       attachments: [],
       invoicePdf,
       invoiceName: order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined,
+      invoiceNumber: order.invoiceNumber,
       title: order.title,
       planMode: order.planMode,
-      documentId: order.documentId || order.orderNumber
+      documentId: order.documentId || order.orderNumber,
+      templateId
     });
   } catch (error) {
+    if (error.status && error.status < 500) throw new admin.AdminError(error.message, error.status);
     await orderService.recordError(order.orderNumber, 'Kézbesítés', error.message);
     throw error;
   }
   await orderService.clearError(order.orderNumber, 'Kézbesítés');
-  return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf) };
+  return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf), template: invoicePdf ? (templateId || 'invoice_only') : 'payment_success' };
+}
+
+router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újraküldés', (_client, req) => sendOrderMail(req, { requireInvoice: false })));
+// Csak a számla PDF kiküldése (opcionális templateId: rendszer- vagy egyedi sablon, alapértelmezetten invoice_only).
+router.post('/admin/orders/:orderNumber/send-invoice', sendLimiter, handle('A számla küldése', (_client, req) => {
+  const templateId = req.body?.templateId === undefined || req.body?.templateId === '' ? undefined : String(req.body.templateId).slice(0, 40);
+  return sendOrderMail(req, { requireInvoice: true, templateId });
 }));
+
 // Pótlólagos számlakiállítás: csak kifizetett, még számla nélküli rendeléshez (duplán nem állít ki). A kapott számlaszám az orders.invoice_number mezőbe kerül, a hibamező törlődik.
 router.post('/admin/orders/:orderNumber/issue-invoice', sendLimiter, handle('A számla kiállítása', async (_client, req) => {
   const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
@@ -170,14 +183,29 @@ router.patch('/admin/email-templates/:id', handle('Az e-mail sablon mentése', a
   logger.info('admin_settings', 'E-mail sablon módosítva', { details: { id: template.id, admin: req.user?.email } });
   return { template };
 }));
+router.post('/admin/email-templates', handle('Az e-mail sablon létrehozása', async (client, req, res) => {
+  const template = await settingsService.createTemplate(client, req.body);
+  logger.info('admin_settings', 'Egyedi e-mail sablon létrehozva', { details: { id: template.id, admin: req.user?.email } });
+  res.status(201).json({ success: true, template });
+}));
+router.post('/admin/email-templates/:id/reset', handle('A sablon alapértékre állítása', async (client, req) => {
+  const template = await settingsService.resetTemplate(client, req.params.id);
+  logger.info('admin_settings', 'E-mail sablon alapértékre állítva', { details: { id: template.id, admin: req.user?.email } });
+  return { template };
+}));
+router.delete('/admin/email-templates/:id', handle('Az e-mail sablon törlése', async (client, req) => {
+  const result = await settingsService.deleteTemplate(client, req.params.id);
+  logger.info('admin_settings', 'Egyedi e-mail sablon törölve', { details: { id: result.id, admin: req.user?.email } });
+  return { deleted: result.id };
+}));
 // Élő előnézet: a mentés nélküli szerkesztett tartalom a mentett base_layout-ba (vagy a szerkesztett base_layoutba) illesztve, mintaadatokkal.
 router.post('/admin/email-templates/preview', handle('Az előnézet készítése', async (client, req) => {
   const body = req.body || {};
-  if (!settingsService.TEMPLATE_IDS.includes(body.id)) throw new settingsService.SettingsError('Ismeretlen e-mail sablon.', 404);
   const saved = Object.fromEntries((await settingsService.listTemplates(client)).map((row) => [row.id, row]));
+  if (!saved[body.id]) throw new settingsService.SettingsError('Ismeretlen e-mail sablon.', 404);
   const edited = { id: body.id, subject: String(body.subject || '').slice(0, 200), bodyHtml: String(body.bodyHtml || '').slice(0, 100000) };
   const templates = { ...saved, [body.id]: edited };
-  const sample = { ...mailService.layoutValues(process.env, { logoSrc: newsletter.logoDataUriOf(), unsubscribeUrl: ['payment_success', 'feedback_request'].includes(body.id) ? '' : 'https://ovitervezo.hu/leiratkozas.html?token=minta' }), content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' Az e-számlát is mellékeltük.', title_block: '', order_block: '', plan_type_block: '', topic: 'Őszi erdő', orderId: 'OVI-261124-ABC123', feedback_block: '', feedback_stars: '<span style="font-size:26px;color:#f59e0b;">⭐⭐⭐⭐⭐</span>', feedback_url: 'https://ovitervezo.hu/ertekeles.html', attachments_rows: '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr>', action_url: 'https://ovitervezo.hu/' };
+  const sample = { ...mailService.layoutValues(process.env, { logoSrc: newsletter.logoDataUriOf(), unsubscribeUrl: ['payment_success', 'feedback_request', 'invoice_only'].includes(body.id) ? '' : 'https://ovitervezo.hu/leiratkozas.html?token=minta' }), content: '<p style="margin:0;color:#5b6b64;">Ide kerül a kiválasztott sablon tartalma.</p>', planLabel: 'napi tervezet', invoiceText: ' A számlát is mellékeltük.', title_block: '', order_block: '', plan_type_block: '', topic: 'Őszi erdő', orderId: 'OVI-261124-ABC123', invoiceNumber: 'OVI-2026-123', feedback_block: '', feedback_stars: '<span style="font-size:26px;color:#f59e0b;">⭐⭐⭐⭐⭐</span>', feedback_url: 'https://ovitervezo.hu/ertekeles.html', attachments_rows: '<tr><td style="padding:6px 0;font-size:15px;color:#2d3b36;">📄 <strong>Tervezet Word</strong> (.docx) formátumban</td></tr>', action_url: 'https://ovitervezo.hu/' };
   return { html: settingsService.composeEmail(templates, body.id, sample).html };
 }));
 

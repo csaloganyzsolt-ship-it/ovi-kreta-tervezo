@@ -412,7 +412,7 @@ test('POST /api/admin/orders/:orderNumber/resend re-sends the mail only to the s
 
   const response = await call(base, '/api/admin/orders/OVI-R1/resend', { token: 'token-admin', method: 'POST', body: { email: 'masik@example.com' } });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { success: true, sent: true, to: 'vevo@example.com', invoiceAttached: true });
+  assert.deepEqual(await response.json(), { success: true, sent: true, to: 'vevo@example.com', invoiceAttached: true, template: 'invoice_only' });
   assert.equal(mailService.mockOutbox.length, 1);
   assert.equal(mailService.mockOutbox[0].to, 'vevo@example.com', 'a kliens által küldött cím nem számít');
   assert.match(pdfRequests[0], /<szamlaszam>OVITE-2026-9<\/szamlaszam>/);
@@ -946,8 +946,8 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
   assert.ok(rows[0].querySelector('.admin-order-error'));
   assert.equal(rows[1].querySelector('.admin-order-error'), null);
   const labels = (row) => [...row.querySelectorAll('button')].map((b) => [b.textContent, b.disabled]);
-  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Kiküldés e-mailben', false], ['Számla letöltése', true]]);
-  assert.deepEqual(labels(rows[1]), [['Számla kiállítása', true], ['Kiküldés e-mailben', false], ['Számla letöltése', false]]);
+  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Számla küldése', true], ['Csomag küldése', false], ['Számla letöltése', true]]);
+  assert.deepEqual(labels(rows[1]), [['Számla kiállítása', true], ['Számla küldése', false], ['Csomag küldése', false], ['Számla letöltése', false]]);
 
   rows[0].querySelector('button').click();
   await tick();

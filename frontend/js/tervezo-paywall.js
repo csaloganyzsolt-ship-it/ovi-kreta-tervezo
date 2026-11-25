@@ -348,6 +348,12 @@ function renderCheckoutPrice() {
   document.getElementById('checkoutSummary').textContent = discount
     ? `${PLAN_LABELS[kind]} – ${discount.finalPrice} Ft (eredeti ár: ${PAYWALL_PRICES[kind]} Ft)`
     : `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
+  // A fizetendő (kuponnal csökkentett) összeg a fizetés gombon is látszik, hogy az ár egyértelmű maradjon.
+  const payLabel = `Tovább a fizetéshez – ${discount ? discount.finalPrice : PAYWALL_PRICES[kind]} Ft`;
+  for (const id of ['checkoutBarion', 'checkoutStripe']) {
+    const button = document.getElementById(id);
+    if (button) button.textContent = payLabel;
+  }
   document.getElementById('couponStatus').textContent = discount ? discountMessage(discount) : '';
 }
 

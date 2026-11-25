@@ -2401,7 +2401,20 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .check-all-btn { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; }
 .check-all-btn:hover, .check-all-btn:focus-visible { filter: brightness(.92); }
 
+.checkout-total { margin: 12px 0 4px; font-weight: 700; font-size: 16px; color: var(--text, inherit); }
+.checkout-legal-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: #8a948f; background: none; padding: 0; text-align: center; }
+[data-theme="dark"] .checkout-legal-note { color: #8e9a95; }
 .admin-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.admin-template-picker { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-template-picker select { flex: 1 1 260px; min-width: 0; }
+.admin-template-new { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; border: 1px dashed var(--primary); border-radius: 12px; }
+.admin-template-new[hidden] { display: none; }
+.admin-template-new small { display: block; margin-top: 4px; color: var(--muted, #5b6b64); font-size: 12px; }
+@media (max-width: 700px) { .admin-template-new { grid-template-columns: 1fr; } }
+.admin-template-vars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.admin-template-vars button { padding: 2px 8px; border: 1px solid var(--border, #cfe8da); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.admin-template-vars button:hover { border-color: var(--primary); }
+.profile-btn.danger { background: #c0392b; border-color: #c0392b; color: #fff; }
 .admin-switch.admin-danger { background: #fdecec; border-color: #d64545; color: #a12626; }
 .admin-dialog { border: 1px solid var(--border, #d9ebe0); border-radius: 16px; padding: 20px; max-width: min(480px, 94vw); }
 .admin-history-dialog { max-width: min(760px, 96vw); width: 100%; }
