@@ -77,6 +77,19 @@ function sendPaymentError(res, error, context, req) {
   return res.status(status).json({ success: false, ...(error.code === 'INVALID_COUPON' ? { code: error.code } : {}), error: error.message });
 }
 
+// Kézbesítési hiba a fizetett rendelésen: a hiba rögzül, a riasztás ugyanarra a hibára csak egyszer megy ki a hibariasztási címre.
+async function recordDeliveryFailure(order, error, req) {
+  const firstTime = await orders.recordError(order.orderNumber, 'Kézbesítés', error.message);
+  if (!firstTime) return;
+  mailService.sendAdminErrorAlert({
+    operation: 'Kézbesítés (vevői e-mail)',
+    error,
+    email: order.email || req?.logEmail,
+    documentId: order.documentId,
+    details: { orderNumber: order.orderNumber }
+  }).catch((e) => console.warn('Admin error alert failed:', e.message));
+}
+
 // A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri.
 function planModeFor(body = {}) {
   const stored = body.generationId ? planStore.getPlan(String(body.generationId)) : null;
@@ -299,8 +312,10 @@ async function deliverPurchase(req, res) {
       });
     } catch (error) {
       await orders.releaseDelivery(order.orderNumber).catch((e) => console.error('[orders]', e.message));
+      await recordDeliveryFailure(order, error, req);
       throw error;
     }
+    await orders.clearError(order.orderNumber, 'Kézbesítés');
     return res.json({ success: true, sent: true });
   } catch (error) {
     return sendPaymentError(res, error, 'Purchase delivery', req);
@@ -391,6 +406,7 @@ async function stripeWebhook(req, res) {
     await orders.patchOrder(order.orderNumber, result.mock
       ? { invoiceStatus: 'mock' }
       : { invoiceNumber: result.invoiceNumber, invoiceStatus: 'issued', invoiceIssuedAt: new Date().toISOString() });
+    if (!result.mock) await orders.clearError(order.orderNumber, 'Számlázás');
     if (!result.mock) {
       // Nem várjuk meg: a Google Táblázat hibája nem érintheti a Stripe válaszát és a vevőt.
       sheetsService.recordPurchase({ session, invoiceNumber: result.invoiceNumber, invoicePdf: result.pdf, customer }).catch(() => {});
@@ -405,16 +421,20 @@ async function stripeWebhook(req, res) {
     }
     return res.json({ received: true, invoice: { mock: result.mock, sandbox: result.sandbox, invoiceNumber: result.invoiceNumber } });
   } catch (error) {
-    // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben.
+    // 500: a Stripe újrapróbálja, így a sikertelen számlázás nem vész el csendben. A rendelés fizetett marad, a hiba rögzül, a riasztás ugyanarra a hibára csak egyszer megy.
     console.error('Invoice generation failed:', error.message);
     logger.error('barion_payment', `Számlázás sikertelen (Stripe webhook): ${error.message}`, { email: session.customer_details?.email || session.customer_email, details: { orderId: session.id } });
-    mailService.sendAdminErrorAlert({
-      operation: 'Számlázás (Stripe webhook)',
-      error,
-      email: session.customer_details?.email || session.customer_email,
-      documentId: session.metadata?.generationId || session.id,
-      details: { orderId: session.id, plan: session.metadata?.plan }
-    }).catch((e) => console.warn('Admin error alert failed:', e.message));
+    const failedOrderNumber = orders.orderNumberFor(session.id, session.created ? new Date(session.created * 1000) : new Date());
+    const firstTime = await orders.recordError(failedOrderNumber, 'Számlázás', error.message);
+    if (firstTime) {
+      mailService.sendAdminErrorAlert({
+        operation: 'Számlázás (Stripe webhook)',
+        error,
+        email: session.customer_details?.email || session.customer_email,
+        documentId: session.metadata?.generationId || session.id,
+        details: { orderId: session.id, orderNumber: failedOrderNumber, plan: session.metadata?.plan }
+      }).catch((e) => console.warn('Admin error alert failed:', e.message));
+    }
     return res.status(500).json({ success: false, error: error.message });
   }
 }

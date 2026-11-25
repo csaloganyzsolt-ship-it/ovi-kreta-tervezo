@@ -256,6 +256,7 @@ async function createSupportCoupon(client, body = {}, now = Date.now()) {
 // ---------- Rendelések ----------
 
 const ORDER_COLUMNS = 'order_number, user_id, user_email, document_id, plan_mode, plan_key, amount, coupon_code, payment_method, status, invoice_number, billing, created_at';
+const ORDER_ERROR_COLUMNS = `${ORDER_COLUMNS}, last_error, last_error_at`;
 
 async function fetchProfiles(client, ids, columns) {
   const unique = [...new Set(ids.filter(Boolean))];
@@ -272,11 +273,13 @@ async function fetchProfiles(client, ids, columns) {
 async function listOrders(client, { status, q } = {}) {
   const wantedStatus = String(status || '').trim();
   if (wantedStatus && !ORDER_STATUSES.includes(wantedStatus)) throw validationError('Ismeretlen rendelési státusz.');
-  const rows = await fetchAll(() => {
-    let query = client.from('orders').select(ORDER_COLUMNS);
+  const load = (columns) => fetchAll(() => {
+    let query = client.from('orders').select(columns);
     if (wantedStatus) query = query.eq('status', wantedStatus);
     return query.order('created_at', { ascending: false });
   }, 'A rendelések lekérdezése sikertelen', MAX_ORDER_ROWS);
+  // A hibamezők (last_error) a migráció előtt még hiányozhatnak: ilyenkor hibamegjelenítés nélkül, de működik a lista.
+  const rows = await load(ORDER_ERROR_COLUMNS).catch(() => load(ORDER_COLUMNS));
 
   const profiles = await fetchProfiles(client, rows.map((row) => row.user_id), 'id, full_name, billing_name');
   const names = new Map(profiles.map((profile) => [String(profile.id), profile.billing_name || profile.full_name || '']));
@@ -292,6 +295,8 @@ async function listOrders(client, { status, q } = {}) {
     paymentMethod: row.payment_method || '',
     status: row.status,
     invoiceNumber: row.invoice_number || '',
+    lastError: row.last_error || '',
+    lastErrorAt: row.last_error_at || null,
     documentId: row.document_id || ''
   }));
 
@@ -299,7 +304,7 @@ async function listOrders(client, { status, q } = {}) {
   const filtered = needle
     ? orders.filter((order) => [order.orderNumber, order.email, order.name, order.couponCode, order.invoiceNumber, order.documentId].some((value) => String(value).toLowerCase().includes(needle)))
     : orders;
-  return { orders: filtered, truncated: rows.length >= MAX_ORDER_ROWS };
+  return { orders: filtered, truncated: rows.length >= MAX_ORDER_ROWS, failedCount: orders.filter((order) => order.status === 'paid' && order.lastError).length };
 }
 
 // ---------- Felhasználók ----------

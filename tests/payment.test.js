@@ -440,19 +440,20 @@ test('generation disables the button, shows progress text, scrolls to the loader
   assert.equal(button.textContent, 'Tervezet elkészítése');
 });
 
-test('invoice prefix is omitted by default and only set from SZAMLAZZ_INVOICE_PREFIX', () => {
+test('the Számlázz.hu XML never carries a prefix or order number element, even when a prefix env is set (numbering is the account default)', () => {
   const base = { orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } };
-  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k' }), /szamlaszamElotag/);
-  assert.doesNotMatch(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'OVITE' }), /szamlaszamElotag/);
-  assert.match(invoiceService.buildInvoiceXml(base, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_INVOICE_PREFIX: 'ABC' }), /<szamlaszamElotag>ABC<\/szamlaszamElotag>/);
+  for (const env of [{ SZAMLAZZ_KEY: 'k' }, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'OVITE' }, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_INVOICE_PREFIX: 'ABC' }]) {
+    const xml = invoiceService.buildInvoiceXml(base, env);
+    assert.doesNotMatch(xml, /szamlaszamElotag|szamlaElotag|rendelesSzam|rendelesszam/i);
+  }
 });
 
-test('invoice shows a short friendly order number instead of the Stripe session id', () => {
+test('invoice number order id stays internal: the XML has no OVI order number, the friendly number is still generated for our database', () => {
   const sessionId = 'cs_live_a1oHW2xOQfzz8abc7TTU12';
   const created = Date.UTC(2026, 10, 8, 12) / 1000;
   assert.equal(invoiceService.orderNumber(sessionId, created), 'OVI-261108-7TTU12');
   const xml = invoiceService.buildInvoiceXml({ orderId: sessionId, created, plan: 'daily', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
-  assert.match(xml, /<rendelesSzam>OVI-261108-7TTU12<\/rendelesSzam>/);
+  assert.doesNotMatch(xml, /OVI-261108|rendelesSzam/);
   assert.doesNotMatch(xml, /cs_live_/);
   const { buildEmailContent } = require('../backend/services/mailService');
   const mail = buildEmailContent({ planLabel: 'napi tervezet', withInvoice: true, orderNumber: 'OVI-261108-7TTU12' }, {});

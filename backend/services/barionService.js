@@ -264,15 +264,20 @@ async function issueOrderInvoice(order, deps, env) {
       ? { invoiceStatus: 'mock' }
       : { invoiceNumber: result.invoiceNumber, invoiceStatus: 'issued', invoiceIssuedAt: new Date().toISOString() });
     if (!result.mock) notifyPurchase(order, result.invoiceNumber, result.pdf, deps);
+    if (!result.mock) await orders.clearError(order.orderNumber, 'Számlázás');
   } catch (invoiceErr) {
     logger.error('barion_payment', `Számlázás sikertelen: ${invoiceErr.message}`, { email: order.email, details: { sessionId: order.sessionId, plan: order.planKey } });
-    mailService.sendAdminErrorAlert({
-      operation: 'Számlázás (Barion fizetés)',
-      error: invoiceErr,
-      email: order.email,
-      documentId: order.documentId || order.sessionId,
-      details: { sessionId: order.sessionId, plan: order.planKey }
-    }, { env }).catch((e) => console.warn('Admin error alert failed:', e.message));
+    // A rendelés fizetett marad; a hiba a rendelésen is rögzül, a riasztás ugyanarra a hibára csak egyszer megy ki.
+    const firstTime = await orders.recordError(order.orderNumber, 'Számlázás', invoiceErr.message);
+    if (firstTime) {
+      mailService.sendAdminErrorAlert({
+        operation: 'Számlázás (Barion fizetés)',
+        error: invoiceErr,
+        email: order.email,
+        documentId: order.documentId || order.sessionId,
+        details: { sessionId: order.sessionId, orderNumber: order.orderNumber, plan: order.planKey }
+      }, { env }).catch((e) => console.warn('Admin error alert failed:', e.message));
+    }
     if (!order.invoiceNumber) await orders.patchOrder(order.orderNumber, { invoiceStatus: 'failed' }).catch(() => {});
     throw invoiceErr;
   }

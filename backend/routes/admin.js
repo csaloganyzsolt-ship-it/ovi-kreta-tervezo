@@ -99,18 +99,36 @@ router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újrak�
   const invoicePdf = order.invoiceNumber
     ? await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile })
     : undefined;
-  await mailService.sendPurchaseEmail({
-    to: order.email,
-    plan: order.planKey,
-    orderNumber: order.orderNumber,
-    attachments: [],
-    invoicePdf,
-    invoiceName: order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined,
-    title: order.title,
-    planMode: order.planMode,
-    documentId: order.documentId || order.orderNumber
-  });
+  try {
+    await mailService.sendPurchaseEmail({
+      to: order.email,
+      plan: order.planKey,
+      orderNumber: order.orderNumber,
+      attachments: [],
+      invoicePdf,
+      invoiceName: order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined,
+      title: order.title,
+      planMode: order.planMode,
+      documentId: order.documentId || order.orderNumber
+    });
+  } catch (error) {
+    await orderService.recordError(order.orderNumber, 'Kézbesítés', error.message);
+    throw error;
+  }
+  await orderService.clearError(order.orderNumber, 'Kézbesítés');
   return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf) };
+}));
+// Pótlólagos számlakiállítás: csak kifizetett, még számla nélküli rendeléshez (duplán nem állít ki). A kapott számlaszám az orders.invoice_number mezőbe kerül, a hibamező törlődik.
+router.post('/admin/orders/:orderNumber/issue-invoice', sendLimiter, handle('A számla kiállítása', async (_client, req) => {
+  const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
+  if (!order) throw new admin.AdminError('A rendelés nem található.', 404);
+  try {
+    const { invoiceNumber } = await orderService.issueInvoiceForOrder(order);
+    return { invoiceNumber };
+  } catch (error) {
+    if (error.status && error.status < 500) throw new admin.AdminError(error.message, error.status);
+    throw new admin.AdminError(`A számla kiállítása sikertelen: ${error.message}`, 424);
+  }
 }));
 router.get('/admin/billing-status', handle('Az állapotjelző lekérdezése', async () => ({ status: billingStatus(process.env) })));
 // A számla PDF-et élőben, memóriában kéri le a Számlázz.hu-tól és streameli; nincs fájlmentés.

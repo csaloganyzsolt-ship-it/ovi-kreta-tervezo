@@ -894,6 +894,40 @@ test('admin.js: the users tab lists registrations and exports only confirmed sub
   assert.ok(lines[1].startsWith('Alice;alice@example.com;'));
 });
 
+test('admin.js: failed paid orders show a red banner and error text, with separate issue-invoice, e-mail and download buttons', async (t) => {
+  const orders = [
+    { orderNumber: 'OVI-F1', createdAt: ago(1), email: 'a@example.com', name: 'A', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: '', lastError: 'Számlázás: Számlázz.hu hiba (8): emelt díjcsomag' },
+    { orderNumber: 'OVI-F2', createdAt: ago(2), email: 'b@example.com', name: 'B', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: 'E-1', lastError: '' }
+  ];
+  const { document, state } = await loadPage(t, {
+    confirm: true,
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/orders': () => [{ success: true, truncated: false, failedCount: 1, orders }],
+      '/api/admin/orders/OVI-F1/issue-invoice': () => [{ success: true, invoiceNumber: 'E-2' }]
+    }
+  });
+  await tick();
+  const banner = document.getElementById('failedOrdersBanner');
+  assert.equal(banner.hidden, false);
+  assert.match(banner.textContent, /1 kifizetett rendelésnél[\s\S]*OVI-F1[\s\S]*emelt díjcsomag/);
+
+  document.getElementById('tabOrders').click();
+  await tick();
+  const rows = document.querySelectorAll('#ordersTable tbody tr');
+  assert.match(rows[0].textContent, /Hiba: Számlázás: Számlázz\.hu hiba \(8\)/);
+  assert.ok(rows[0].querySelector('.admin-order-error'));
+  assert.equal(rows[1].querySelector('.admin-order-error'), null);
+  const labels = (row) => [...row.querySelectorAll('button')].map((b) => [b.textContent, b.disabled]);
+  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Kiküldés e-mailben', false], ['Számla letöltése', true]]);
+  assert.deepEqual(labels(rows[1]), [['Számla kiállítása', true], ['Kiküldés e-mailben', false], ['Számla letöltése', false]]);
+
+  rows[0].querySelector('button').click();
+  await tick();
+  assert.ok(state.fetches.some((f) => f.path === '/api/admin/orders/OVI-F1/issue-invoice' && f.method === 'POST'));
+});
+
 test('admin.js: the newsletter editor refreshes the live preview, asks for confirmation and sends the payload', async (t) => {
   const { document, window, state } = await loadPage(t, {
     routes: {
@@ -1148,6 +1182,70 @@ test('the real-settings SQL overwrites the model, the prompt and the templates w
   assert.equal(sql.includes('gpt-4o'), false);
   for (const id of ['base_layout', 'payment_success', 'welcome_email', 'password_reset']) assert.ok(sql.includes(`('${id}'`), id);
   assert.ok(fs.readdirSync(dir).indexOf('20261126100000_system_settings_history.sql') < fs.readdirSync(dir).indexOf('20261126110000_update_real_settings.sql'));
+});
+
+test('POST /api/admin/orders/:orderNumber/issue-invoice issues a missing invoice once, stores the account-numbered invoice number, clears the error and records failures', async (t) => {
+  const row = (extra) => ({ order_number: 'OVI-N1', session_id: 'barion_n1', user_id: null, user_email: 'vevo@example.com', plan_mode: 'standard', plan_key: 'daily', amount: 390, payment_method: 'Barion', status: 'paid', invoice_number: null, billing: { name: 'Vevő Vera' }, billing_profile: 'ev', last_error: 'Számlázás: régi hiba', last_error_at: ago(1), created_at: ago(1), ...extra });
+  const orders = [row(), row({ order_number: 'OVI-N2', status: 'pending' }), row({ order_number: 'OVI-N3', invoice_number: 'ABC-1', last_error: null })];
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders }));
+  const saved = process.env.SZAMLAZZ_API_KEY_EV;
+  process.env.SZAMLAZZ_API_KEY_EV = 'agent-ev';
+  const realFetch = global.fetch;
+  const xmls = [];
+  let fail = false;
+  global.fetch = async (url, options) => {
+    if (!String(url).includes('szamlazz.hu')) return realFetch(url, options);
+    xmls.push(await options.body.get('action-xmlagentxmlfile').text());
+    return fail ? new Response('', { status: 200, headers: { szlahu_error: 'Hiba+tortent', szlahu_error_code: '8' } }) : new Response(Buffer.from('%PDF-1.4 n'), { status: 200, headers: { szlahu_szamlaszam: 'E-2026-77' } });
+  };
+  t.after(() => { global.fetch = realFetch; if (saved === undefined) delete process.env.SZAMLAZZ_API_KEY_EV; else process.env.SZAMLAZZ_API_KEY_EV = saved; });
+  const base = await listen(t);
+  const issue = (number, token = 'token-admin') => call(base, `/api/admin/orders/${number}/issue-invoice`, { token, method: 'POST' });
+
+  assert.equal((await issue('OVI-N1', null)).status, 401);
+  assert.equal((await issue('OVI-N2')).status, 409, 'fizetetlen rendeléshez nincs számla');
+  assert.equal((await issue('OVI-N3')).status, 409, 'meglévő számlaszám mellett nincs dupla számla');
+  assert.equal((await issue('OVI-NINCS')).status, 404);
+  assert.equal(xmls.length, 0);
+
+  const ok = await issue('OVI-N1');
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { success: true, invoiceNumber: 'E-2026-77' });
+  assert.doesNotMatch(xmls[0], /rendelesSzam|szamlaszamElotag/i);
+  assert.equal(orders[0].invoice_number, 'E-2026-77');
+  assert.equal(orders[0].order_number, 'OVI-N1', 'a belső rendelésazonosító megmarad');
+  assert.equal(orders[0].last_error, null, 'siker után a hibamező törlődik');
+  assert.equal((await issue('OVI-N1')).status, 409, 'második kattintásra nem készül újabb számla');
+  assert.equal(xmls.length, 1);
+
+  orders.push(row({ order_number: 'OVI-N4', last_error: null }));
+  fail = true;
+  const failed = await issue('OVI-N4');
+  assert.equal(failed.status, 424);
+  assert.match((await failed.json()).error, /Hiba tortent/);
+  assert.match(orders[3].last_error, /^Számlázás: .*Hiba tortent/);
+  assert.equal(orders[3].status, 'paid', 'a rendelés fizetett marad');
+  assert.ok(orders[3].last_error_at);
+  const listed = await (await call(base, '/api/admin/orders', { token: 'token-admin' })).json();
+  assert.equal(listed.failedCount, 1);
+  assert.match(listed.orders.find((o) => o.orderNumber === 'OVI-N4').lastError, /Hiba tortent/);
+});
+
+test('GET /api/admin/orders still lists orders when the last_error columns are not migrated yet', async (t) => {
+  const row = { order_number: 'OVI-M1', user_id: null, user_email: 'v@example.com', plan_key: 'daily', amount: 390, status: 'paid', invoice_number: null, created_at: ago(1) };
+  const fake = fakeAdmin({ profiles: adminProfiles(), orders: [row] });
+  const guarded = { ...fake, from(table) {
+    const builder = fake.from(table);
+    if (table !== 'orders') return builder;
+    return { ...builder, select(columns) { return String(columns).includes('last_error') ? { range: async () => ({ data: null, error: { message: 'column orders.last_error does not exist' } }), eq() { return this; }, order() { return this; } } : builder.select(columns); } };
+  } };
+  useAdminEnv(t, guarded);
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/orders', { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.orders.length, 1);
+  assert.equal(data.orders[0].lastError, '');
 });
 
 test('GET /api/admin/orders/:orderNumber/invoice streams the live Számlázz.hu PDF for paid orders only and stores nothing', async (t) => {

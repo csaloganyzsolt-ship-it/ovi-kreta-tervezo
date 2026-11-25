@@ -2337,6 +2337,10 @@ html[data-theme="dark"] .announcement-bar { background: var(--soft); color: var(
 html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-page { max-width: 1100px; margin: 0 auto; padding: 18px 18px 40px; }
 .admin-page [hidden] { display: none !important; }
+.admin-order-error { color: #c0392b; font-weight: 600; font-size: 0.85rem; overflow-wrap: anywhere; }
+[data-theme="dark"] .admin-order-error, [data-theme="dark"] .admin-alert-banner { color: #ff8f84; }
+.admin-alert-banner { margin: 0 0 16px; padding: 14px 16px; border: 1px solid #c0392b; border-left-width: 6px; border-radius: 14px; background: rgba(192, 57, 43, 0.08); color: #8e2a20; }
+.admin-alert-banner ul { margin: 8px 0 10px; padding-left: 20px; overflow-wrap: anywhere; }
 .admin-tools { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--mint); }
 .admin-tools h2 { margin: 0 0 10px; font-size: 1rem; }
 .admin-tools-list { display: flex; gap: 8px; flex-wrap: wrap; }

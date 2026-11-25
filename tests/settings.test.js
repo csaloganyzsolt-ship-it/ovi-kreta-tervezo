@@ -9,6 +9,7 @@ const supabase = require('../backend/services/supabaseService');
 const settingsService = require('../backend/services/settingsService');
 const barionService = require('../backend/services/barionService');
 const mailService = require('../backend/services/mailService');
+const orderService = require('../backend/services/orderService');
 const invoiceService = require('../backend/services/invoiceService');
 const { productFor } = require('../backend/services/pricing');
 const { getBillingProfile } = require('../backend/services/siteConstants');
@@ -130,6 +131,57 @@ test('payment takes the price from system_settings and ignores any client-suppli
   });
   assert.equal(invoices[0].amountHuf, 555, 'ugyanez az összeg megy a számlázóhoz');
   assert.match(invoiceService.buildInvoiceXml({ ...invoices[0], orderId: 'x', created: 1 }, env), />555</);
+});
+
+test('a paid Barion order whose invoice fails stays paid, stores the exact error, alerts once, and the retry clears the error', async (t) => {
+  fakeDb(t, { settings: {} });
+  orderService.resetMemory();
+  const env = paymentEnv(t);
+  const sent = [];
+  const fetch = async (url, options = {}) => {
+    const target = new URL(url);
+    if (target.pathname === '/v2/Payment/Start') {
+      const body = JSON.parse(options.body);
+      sent.push(body);
+      return Response.json({ PaymentId: 'fedcba9876543210fedcba9876543210', PaymentRequestId: body.PaymentRequestId, Status: 'Prepared', GatewayUrl: 'https://secure.test.barion.com/Pay?id=fedcba9876543210fedcba9876543210', Errors: [] });
+    }
+    return Response.json({ PaymentId: 'fedcba9876543210fedcba9876543210', PaymentRequestId: sent[0].PaymentRequestId, Status: 'Succeeded', Total: sent[0].Transactions[0].Total, Currency: 'HUF', Errors: [] });
+  };
+  const alerts = t.mock.method(mailService, 'sendAdminErrorAlert', async () => ({ sent: true }));
+  const started = await barionService.startPayment({ plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing: BILLING, generationId: 'gen_err_1', title: 'Teszt' }, { env, fetch });
+  const orderNumber = orderService.orderNumberFor(started.sessionId || sent[0].PaymentRequestId);
+
+  const failing = { env, fetch, issueInvoice: async () => { throw new Error('Számlázz.hu hiba (8): emelt díjcsomag szükséges'); } };
+  await assert.rejects(barionService.handleCallback('fedcba9876543210fedcba9876543210', failing), /emelt díjcsomag/);
+  const failed = await orderService.getBySessionId(sent[0].PaymentRequestId);
+  assert.equal(failed.status, 'paid', 'a rendelés fizetett marad');
+  assert.match(failed.lastError, /^Számlázás: Számlázz\.hu hiba \(8\): emelt díjcsomag szükséges$/);
+  assert.ok(failed.lastErrorAt);
+  assert.equal(alerts.mock.callCount(), 1);
+
+  await assert.rejects(barionService.handleCallback('fedcba9876543210fedcba9876543210', failing), /emelt díjcsomag/);
+  assert.equal(alerts.mock.callCount(), 1, 'ugyanarra a hibára webhook-ismétlődéskor nincs újabb riasztás');
+
+  await barionService.handleCallback('fedcba9876543210fedcba9876543210', { env, fetch, issueInvoice: async () => ({ invoiceNumber: 'E-2026-5', pdf: Buffer.from('%PDF') }) });
+  const fixed = await orderService.getBySessionId(sent[0].PaymentRequestId);
+  assert.equal(fixed.invoiceNumber, 'E-2026-5');
+  assert.equal(fixed.lastError, null, 'sikeres pótlás törli a hibát');
+  assert.ok(orderNumber);
+});
+
+test('orderService error recording never throws and dedupes alerts per order and message', async (t) => {
+  fakeDb(t, { settings: {} });
+  orderService.resetMemory();
+  await orderService.upsertOrder({ orderNumber: 'OVI-E1', amount: 390, status: 'paid' });
+  assert.equal(await orderService.recordError('OVI-E1', 'Kézbesítés', 'SMTP down'), true);
+  assert.equal(await orderService.recordError('OVI-E1', 'Kézbesítés', 'SMTP down'), false);
+  assert.equal(await orderService.recordError('OVI-E1', 'Kézbesítés', 'más hiba'), true);
+  assert.equal((await orderService.getByOrderNumber('OVI-E1')).lastError, 'Kézbesítés: más hiba');
+  await orderService.clearError('OVI-E1', 'Számlázás');
+  assert.equal((await orderService.getByOrderNumber('OVI-E1')).lastError, 'Kézbesítés: más hiba', 'más fajta hibát nem töröl');
+  await orderService.clearError('OVI-E1', 'Kézbesítés');
+  assert.equal((await orderService.getByOrderNumber('OVI-E1')).lastError, null);
+  await assert.doesNotReject(orderService.recordError('OVI-NINCS', 'Számlázás', 'x'));
 });
 
 test('package prices follow the four tiers of system_settings', async (t) => {

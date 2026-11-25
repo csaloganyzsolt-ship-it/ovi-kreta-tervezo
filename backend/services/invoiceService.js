@@ -68,7 +68,6 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
   const gross = Number.isInteger(amountHuf) && amountHuf > 0 ? amountHuf : product.amountHuf;
   const itemName = couponPercent ? `${product.invoiceName} (kupon: -${couponPercent}%)` : product.invoiceName;
   const vatKey = vatRate(env, billingProfile);
-  const prefix = invoicePrefix(env, billingProfile);
   const { net, vat } = splitGross(gross, vatKey);
   const day = today(date);
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -87,8 +86,7 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${escapeXml(invoiceNote(env))}</megjegyzes>
-    <rendelesSzam>${escapeXml(orderNumber(orderId, created ?? date))}</rendelesSzam>
-${prefix ? `    <szamlaszamElotag>${escapeXml(prefix)}</szamlaszamElotag>\n` : ''}    <dijbekero>false</dijbekero>
+    <dijbekero>false</dijbekero>
     <fizetve>true</fizetve>
   </fejlec>
   <elado>

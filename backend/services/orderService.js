@@ -20,7 +20,13 @@ const FIELDS = Object.freeze({
   documentSynced: 'document_synced', createdAt: 'created_at'
 });
 const ALL_COLUMNS = [...Object.values(FIELDS), 'updated_at'].join(', ');
+// Hibamezők: külön kezelve, hogy a kód a migráció (last_error, last_error_at) lefuttatása előtt is működjön.
+const ERROR_COLUMNS = 'last_error, last_error_at';
 const memory = new Map();
+const alertedErrors = new Map();
+let errorColumns = null;
+
+const isMissingErrorColumn = (error) => /last_error/.test(String(error?.message || ''));
 
 // A számlán és a levelekben is szereplő rendelésszám (OVI-ÉÉHHNN-XXXXXX).
 function orderNumberFor(sessionId, created = new Date()) {
@@ -46,6 +52,8 @@ function fromRow(row) {
   order.deliveryCount = Number(row.delivery_count) || 0;
   order.redemptionLogged = row.redemption_logged === true;
   order.documentSynced = row.document_synced === true;
+  order.lastError = row.last_error || null;
+  order.lastErrorAt = row.last_error_at || null;
   return order;
 }
 
@@ -61,6 +69,8 @@ function storage() {
 
 function resetMemory() {
   memory.clear();
+  alertedErrors.clear();
+  errorColumns = null;
 }
 
 function memoryInsert(row) {
@@ -108,9 +118,58 @@ async function findOrder(column, value) {
   if (!needle) return null;
   const client = storage();
   if (!client) return fromRow([...memory.values()].find((row) => row[column] === needle));
-  const { data, error } = await client.from('orders').select(ALL_COLUMNS).eq(column, needle).maybeSingle();
+  const read = (columns) => client.from('orders').select(columns).eq(column, needle).maybeSingle();
+  let { data, error } = await read(errorColumns === false ? ALL_COLUMNS : `${ALL_COLUMNS}, ${ERROR_COLUMNS}`);
+  if (error && errorColumns !== false && isMissingErrorColumn(error)) {
+    errorColumns = false;
+    ({ data, error } = await read(ALL_COLUMNS));
+  } else if (!error) {
+    errorColumns = errorColumns ?? true;
+  }
   if (error) throw new Error(`A rendelés lekérdezése sikertelen: ${error.message}`);
   return fromRow(data);
+}
+
+// Fizetett rendelés számlázási/kézbesítési hibájának rögzítése (a rendelés fizetett marad). Soha nem dob: ha az oszlop még nincs meg, csak naplózza.
+// Visszatérés: true, ha erről a hibáról még nem ment riasztás (ugyanarra a rendelésre és hibaüzenetre webhook-ismétlődéskor nem küldünk újabb levelet).
+async function recordError(orderNumber, kind, message) {
+  const text = `${kind}: ${String(message || 'ismeretlen hiba').slice(0, 500)}`;
+  const firstTime = alertedErrors.get(orderNumber) !== text;
+  alertedErrors.set(orderNumber, text);
+  try {
+    const existing = await getByOrderNumber(orderNumber).catch(() => null);
+    if (existing?.lastError === text) return false;
+    await patchError(orderNumber, { last_error: text, last_error_at: new Date().toISOString() });
+  } catch (error) {
+    console.error(`[orders] A hiba nem menthető (${orderNumber}):`, error.message);
+  }
+  return firstTime;
+}
+
+// Sikeres újrapróbálkozás után a hibamező törlése; a prefix csak az adott fajta hibát törli (Számlázás / Kézbesítés).
+async function clearError(orderNumber, kind) {
+  alertedErrors.delete(orderNumber);
+  try {
+    const existing = await getByOrderNumber(orderNumber);
+    if (!existing?.lastError || (kind && !existing.lastError.startsWith(`${kind}:`))) return;
+    await patchError(orderNumber, { last_error: null, last_error_at: null });
+  } catch (error) {
+    console.error(`[orders] A hibamező nem törölhető (${orderNumber}):`, error.message);
+  }
+}
+
+async function patchError(orderNumber, fields) {
+  const client = storage();
+  if (!client) {
+    if (memory.has(orderNumber)) memoryInsert({ order_number: orderNumber, ...fields });
+    return;
+  }
+  const { error } = await client.from('orders').update({ ...fields, updated_at: new Date().toISOString() }).eq('order_number', orderNumber);
+  if (error) {
+    if (isMissingErrorColumn(error)) errorColumns = false;
+    throw new Error(error.message);
+  }
+  errorColumns = true;
 }
 
 const getByOrderNumber = (orderNumber) => findOrder('order_number', orderNumber);
@@ -163,6 +222,34 @@ async function releaseDelivery(orderNumber) {
   return patchOrder(orderNumber, { deliveryCount: current.deliveryCount - 1 });
 }
 
+// Pótlólagos számlakiállítás egy kifizetett, még számla nélküli rendelésnél (admin). Duplán nem állít ki; siker esetén törli a hibamezőt, hiba esetén rögzíti.
+async function issueInvoiceForOrder(order, deps = {}) {
+  if (order.status !== 'paid') throw Object.assign(new Error('Csak kifizetett rendeléshez állítható ki számla.'), { status: 409 });
+  if (order.invoiceNumber) throw Object.assign(new Error(`A rendeléshez már tartozik számla (${order.invoiceNumber}).`), { status: 409 });
+  if (!Number.isInteger(order.amount) || order.amount <= 0) throw Object.assign(new Error('Ingyenes (kuponos) rendeléshez nem készül számla.'), { status: 409 });
+  const billing = order.billing || {};
+  const created = Date.parse(order.createdAt);
+  try {
+    const result = await (deps.issueInvoice || invoiceService.issueInvoice)({
+      orderId: order.sessionId || order.orderNumber,
+      created: Math.floor((Number.isFinite(created) ? created : Date.now()) / 1000),
+      plan: order.planKey,
+      amountHuf: order.amount,
+      couponPercent: order.couponPercent || undefined,
+      paymentMethod: order.paymentMethod || undefined,
+      billingProfile: order.billingProfile || undefined,
+      customer: { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
+    }, { env: deps.env, fetch: deps.fetch });
+    if (result.mock || !result.invoiceNumber) throw new Error('A Számlázz.hu Agent kulcs nincs beállítva, a számla nem állítható ki.');
+    await patchOrder(order.orderNumber, { invoiceNumber: result.invoiceNumber, invoiceStatus: 'issued', invoiceIssuedAt: new Date().toISOString() });
+    await clearError(order.orderNumber, 'Számlázás');
+    return { invoiceNumber: result.invoiceNumber, pdf: result.pdf };
+  } catch (error) {
+    await recordError(order.orderNumber, 'Számlázás', error.message);
+    throw error;
+  }
+}
+
 function summarize(row) {
   return {
     orderNumber: row.order_number,
@@ -197,5 +284,5 @@ async function listUserOrders(user) {
 
 module.exports = {
   orderNumberFor, createPending, markPaid, markClosed, listUserOrders,
-  upsertOrder, patchOrder, getByOrderNumber, getBySessionId, getByProviderPaymentId, claimDelivery, releaseDelivery, resetMemory
+  upsertOrder, patchOrder, getByOrderNumber, getBySessionId, getByProviderPaymentId, claimDelivery, releaseDelivery, recordError, clearError, issueInvoiceForOrder, resetMemory
 };

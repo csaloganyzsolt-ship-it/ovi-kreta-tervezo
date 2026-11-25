@@ -311,10 +311,15 @@
       const data = await api(`/api/admin/orders${params.toString() ? `?${params}` : ''}`);
       if (request !== ordersRequest) return;
       lastOrders = data.orders;
+      renderFailedOrdersBanner(data.orders);
       fillTable('ordersTable', data.orders.map((order) => {
         const buyer = el('span');
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
-        const resend = el('button', 'profile-btn', 'Újraküldés');
+        const issue = el('button', 'profile-btn primary', 'Számla kiállítása');
+        issue.type = 'button';
+        issue.disabled = order.status !== 'paid' || Boolean(order.invoiceNumber) || !(order.amount > 0);
+        issue.addEventListener('click', () => issueOrderInvoice(order, issue));
+        const resend = el('button', 'profile-btn', 'Kiküldés e-mailben');
         resend.type = 'button';
         resend.disabled = order.status !== 'paid' || !order.email;
         resend.addEventListener('click', () => resendOrder(order, resend));
@@ -323,16 +328,62 @@
         invoice.disabled = order.status !== 'paid' || !order.invoiceNumber;
         invoice.addEventListener('click', () => downloadOrderInvoice(order, invoice));
         const actions = el('span', 'admin-actions');
-        actions.append(invoice, resend);
+        actions.append(issue, resend, invoice);
+        const status = el('span');
+        status.textContent = ORDER_STATUS_LABELS[order.status] || order.status;
+        if (order.status === 'paid' && order.lastError) {
+          const failure = el('span', 'admin-order-error');
+          failure.textContent = `Hiba: ${order.lastError}`;
+          status.append(el('br'), failure);
+        }
         return [
           formatDate(order.createdAt), buyer, PLAN_LABELS[order.planKey] || order.planKey || '–', formatAmount(order.amount),
-          order.couponCode || '–', ORDER_STATUS_LABELS[order.status] || order.status, order.invoiceNumber || '–', actions
+          order.couponCode || '–', status, order.invoiceNumber || '–', actions
         ];
       }), 8, 'Nincs a szűrésnek megfelelő rendelés.');
       byId('ordersCount').textContent = `${data.orders.length} rendelés${data.truncated ? ' (a lista csonkolt, szűkítsd a keresést)' : ''}`;
     } catch (error) {
       if (request !== ordersRequest) return;
       setText('ordersError', `A rendelések nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
+  // Felső figyelmeztető sáv: kifizetett, de számlázási/kézbesítési hibás rendelések (a rendelés fizetett marad, a hiba a szerveren rögzült).
+  function renderFailedOrdersBanner(orders) {
+    const failed = orders.filter((order) => order.status === 'paid' && order.lastError);
+    const banner = byId('failedOrdersBanner');
+    banner.hidden = failed.length === 0;
+    byId('failedOrdersTitle').textContent = `${failed.length} kifizetett rendelésnél elbukott a számlázás vagy a kézbesítés`;
+    const list = byId('failedOrdersList');
+    list.replaceChildren(...failed.slice(0, 5).map((order) => {
+      const item = el('li');
+      item.textContent = `${order.orderNumber} – ${order.lastError}`;
+      return item;
+    }));
+  }
+
+  async function loadFailedOrdersBanner() {
+    try {
+      const data = await api('/api/admin/orders?status=paid');
+      renderFailedOrdersBanner(data.orders || []);
+    } catch (_error) {
+      byId('failedOrdersBanner').hidden = true;
+    }
+  }
+
+  // Pótlólagos számlakiállítás: a szerver kiállítja a számlát a Számlázz.hu-n, és elmenti a számlaszámot (duplán nem állít ki).
+  async function issueOrderInvoice(order, button) {
+    if (!window.confirm(`Kiállítod a számlát a(z) ${order.orderNumber} rendelésre?`)) return;
+    setText('ordersError', '');
+    button.disabled = true;
+    try {
+      const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/issue-invoice`, { method: 'POST', body: {} });
+      setText('ordersCount', `Számla kiállítva: ${result.invoiceNumber}.`);
+      await loadOrders();
+      loadFailedOrdersBanner();
+    } catch (error) {
+      setText('ordersError', `A számla kiállítása sikertelen: ${errorMessage(error)}`);
+      button.disabled = false;
     }
   }
 
@@ -833,6 +884,8 @@
     byId('tplSelect').addEventListener('change', showTemplate);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
+    byId('failedOrdersOpen').addEventListener('click', () => { byId('ordersStatus').value = 'paid'; activateTab('orders'); });
+    loadFailedOrdersBanner();
     loadToolLinks();
   }
 

@@ -93,7 +93,7 @@ test('invoice XML has no prefix element in either profile unless SZAMLAZZ_INVOIC
     assert.equal(invoiceService.invoicePrefix({ BILLING_PROFILE: profile }), '');
   }
   const custom = invoiceService.buildInvoiceXml(order('daily'), { SZAMLAZZ_KEY: 'k', BILLING_PROFILE: 'kft', SZAMLAZZ_INVOICE_PREFIX: 'CSB' });
-  assert.match(custom, /<szamlaszamElotag>CSB<\/szamlaszamElotag>/);
+  assert.doesNotMatch(custom, /szamlaszamElotag|CSB/);
 });
 
 test('Számlázz.hu Agent key follows the active profile with shared fallbacks', () => {
