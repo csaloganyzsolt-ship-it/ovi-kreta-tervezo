@@ -21,7 +21,9 @@ const TOKENS = { 'token-admin': ADMIN, 'token-alice': ALICE, 'token-bob': BOB, '
 
 const TOKEN_OF = { [ADMIN.id]: 'a0000000-0000-4000-8000-000000000001', [ALICE.id]: 'a0000000-0000-4000-8000-000000000002', [BOB.id]: 'a0000000-0000-4000-8000-000000000003', [NEWBIE.id]: 'a0000000-0000-4000-8000-000000000004', [CAROL.id]: 'a0000000-0000-4000-8000-000000000005' };
 
-const profile = (u, extra = {}) => ({ id: u.id, email: u.email.toLowerCase(), full_name: '', billing_name: '', is_admin: false, newsletter_subscribed: false, newsletter_subscribed_at: null, newsletter_token: TOKEN_OF[u.id], ...extra });
+const profile = (u, extra = {}) => ({ id: u.id, email: u.email.toLowerCase(), full_name: '', billing_name: '', is_admin: false, ...extra });
+// Hírlevél-sor (egyetlen forrás: newsletter_subscribers, kulcs a kisbetűs e-mail); a token a felhasználóhoz tartozó rögzített UUID.
+const sub = (u, subscribed, extra = {}) => ({ email: u.email.toLowerCase(), user_id: u.id, name: '', newsletter_token: TOKEN_OF[u.id], subscribed, subscribed_at: subscribed ? '2026-01-01T00:00:00Z' : null, unsubscribed_at: null, ...extra });
 
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
@@ -34,7 +36,7 @@ function seedTemplateRows() {
 }
 
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_guests: [], email_templates: seedTemplateRows(), system_settings: [], system_settings_history: [], ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_subscribers: [], email_templates: seedTemplateRows(), system_settings: [], system_settings_history: [], ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {
@@ -219,11 +221,12 @@ function statsTables() {
   const doc = (id, mode, duration, unlocked) => ({ document_id: id, plan_mode: mode, unlocked, data: { plan: { request: { duration } } } });
   return {
     profiles: [
-      ...adminProfiles().map((row) => (row.id === ALICE.id ? { ...row, newsletter_subscribed: true } : row)),
-      profile(BOB, { newsletter_subscribed: false }),
-      profile(NEWBIE, { newsletter_subscribed: true }),
-      profile(CAROL, { newsletter_subscribed: true })
+      ...adminProfiles(),
+      profile(BOB),
+      profile(NEWBIE),
+      profile(CAROL)
     ],
+    newsletter_subscribers: [sub(ALICE, true), sub(BOB, false), sub(NEWBIE, true), sub(CAROL, true)],
     orders: [
       { order_number: 'O1', amount: 390, status: 'paid', created_at: ago(5) },
       { order_number: 'O2', amount: 890, status: 'paid', created_at: ago(40) },
@@ -459,11 +462,12 @@ function newsletterTables() {
   return {
     profiles: [
       profile(ADMIN, { is_admin: true }),
-      profile(ALICE, { newsletter_subscribed: true, full_name: 'Alice' }),
-      profile(BOB, { newsletter_subscribed: false }),
-      profile(NEWBIE, { newsletter_subscribed: true }),
-      profile(CAROL, { newsletter_subscribed: true })
-    ]
+      profile(ALICE, { full_name: 'Alice' }),
+      profile(BOB),
+      profile(NEWBIE),
+      profile(CAROL)
+    ],
+    newsletter_subscribers: [sub(ADMIN, false), sub(ALICE, true), sub(BOB, false), sub(NEWBIE, true), sub(CAROL, true)]
   };
 }
 
@@ -894,6 +898,28 @@ test('admin.js: the users tab lists registrations and exports only confirmed sub
   assert.ok(lines[1].startsWith('Alice;alice@example.com;'));
 });
 
+test('admin.js: a free coupon order shows a 0 Ft / Kupon label instead of a disabled invoice button', async (t) => {
+  const orders = [
+    { orderNumber: 'OVI-K1', createdAt: ago(1), email: 'k@example.com', name: 'K', planKey: 'daily', amount: 0, couponCode: 'TEST100', paymentMethod: 'Kupon', status: 'paid', invoiceNumber: '', lastError: '' },
+    { orderNumber: 'OVI-P1', createdAt: ago(2), email: 'p@example.com', name: 'P', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: '', lastError: '' }
+  ];
+  const { document } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/orders': () => [{ success: true, truncated: false, failedCount: 0, orders }]
+    }
+  });
+  await tick();
+  document.getElementById('tabOrders').click();
+  await tick();
+  const rows = document.querySelectorAll('#ordersTable tbody tr');
+  assert.equal(rows[0].querySelector('.admin-free-label').textContent, '0 Ft / Kupon');
+  assert.ok(![...rows[0].querySelectorAll('button')].some((b) => b.textContent === 'Számla kiállítása'));
+  const paid = [...rows[1].querySelectorAll('button')].find((b) => b.textContent === 'Számla kiállítása');
+  assert.equal(paid.disabled, false);
+});
+
 test('admin.js: failed paid orders show a red banner and error text, with separate issue-invoice, e-mail and download buttons', async (t) => {
   const orders = [
     { orderNumber: 'OVI-F1', createdAt: ago(1), email: 'a@example.com', name: 'A', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: '', lastError: 'Számlázás: Számlázz.hu hiba (8): emelt díjcsomag' },
@@ -1061,13 +1087,12 @@ test('POST /api/admin/support/coupon creates a single-use SORRY-XXXXXX 100% coup
   assert.ok(client.db.system_logs.some((row) => row.context === 'admin_support' && row.user_email === 'panasz@example.com'));
 });
 
-test('newsletter to all subscribers merges active guests, deduplicated by e-mail, with the guest token', async (t) => {
+test('newsletter to all subscribers includes active guests (rows without user_id) with their own token, once per e-mail', async (t) => {
   const tables = newsletterTables();
-  tables.newsletter_guests = [
-    { email: 'vendeg@example.com', newsletter_token: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', unsubscribed: false },
-    { email: 'alice@example.com', newsletter_token: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', unsubscribed: false },
-    { email: 'kilepett@example.com', newsletter_token: 'ffffffff-ffff-4fff-8fff-ffffffffffff', unsubscribed: true }
-  ];
+  tables.newsletter_subscribers.push(
+    { email: 'vendeg@example.com', user_id: null, name: 'Vendég', newsletter_token: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', subscribed: true },
+    { email: 'kilepett@example.com', user_id: null, name: '', newsletter_token: 'ffffffff-ffff-4fff-8fff-ffffffffffff', subscribed: false }
+  );
   useAdminEnv(t, fakeAdmin(tables));
   const sent = captureMail(t);
   const base = await listen(t);
@@ -1079,7 +1104,8 @@ test('newsletter to all subscribers merges active guests, deduplicated by e-mail
   const guest = sent.find((m) => m.to === 'vendeg@example.com');
   assert.ok(guest.html.includes('token=dddddddd-dddd-4ddd-8ddd-dddddddddddd'));
   const alice = sent.find((m) => m.to === 'alice@example.com');
-  assert.ok(!alice.html.includes('eeeeeeee-eeee'), 'a regisztrált profil tokenje az erősebb');
+  assert.ok(alice.html.includes(`token=${TOKEN_OF[ALICE.id]}`), 'a regisztrált felhasználó a saját tokenjét kapja');
+  assert.ok(!sent.some((m) => m.to === 'kilepett@example.com'), 'a leiratkozott vendég kimarad');
 });
 
 test('PATCH /api/admin/coupons/:code edits valid_until (clearable), max_uses and note', async (t) => {
@@ -1307,7 +1333,8 @@ test('admin.js: the settings form saves four prices, the cap and the announcemen
   assert.equal(document.getElementById('setPriceAcademicDaily').value, '690');
   assert.equal(document.getElementById('setDailyCap').value, '250');
   assert.match(document.getElementById('dailyCapInfo').textContent, /3 generálás \/ 250/);
-  assert.equal(document.querySelectorAll('#billingStatusList .admin-status-card').length, 5);
+  assert.equal(document.querySelectorAll('#billingStatusList .admin-status-card').length, 6);
+  assert.match(document.getElementById('billingStatusList').textContent, /Supabase adatbázis\s*HIÁNYZIK/);
 
   document.getElementById('setPriceDaily').value = '400';
   document.getElementById('setDailyCap').value = '300';

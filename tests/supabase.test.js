@@ -218,6 +218,37 @@ test('a failed Supabase save is logged and a failed read surfaces as an error', 
 
 // ---------- 100%-os kupon ----------
 
+test('a failing orders write fails the coupon request with a 5xx and leaves the plan locked instead of swallowing the error', async (t) => {
+  const client = useSupabase(t, fakeSupabase({ coupons: [couponRow({ code: 'OVI100', discount_percent: 100, max_uses: 5 })] }));
+  client.failures['orders.upsert'] = 'orders tábla hiányzik';
+  setEnv(t, { PAYWALL_ENABLED: 'true' });
+  trapPaymentProviders(t);
+  const base = await listen(t);
+  const id = seedPlan();
+
+  const response = await post(base, '/api/apply-coupon', applyBody(id, { code: 'OVI100' }));
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.success, false);
+  assert.equal(planStore.getDocumentState(id).unlocked, false, 'a mentetlen rendelés után a terv nem marad feloldva');
+  assert.equal(client.tables.documents.find((row) => row.document_id === id)?.unlocked, false, 'az adatbázisban sem');
+});
+
+test('a failing documents write fails the coupon request and leaves the order table untouched', async (t) => {
+  const client = useSupabase(t, fakeSupabase({ coupons: [couponRow({ code: 'OVI100', discount_percent: 100, max_uses: 5 })] }));
+  setEnv(t, { PAYWALL_ENABLED: 'true' });
+  trapPaymentProviders(t);
+  const base = await listen(t);
+  const id = seedPlan();
+  await new Promise((resolve) => setImmediate(resolve));
+  client.failures['documents.upsert'] = 'documents tábla hiányzik';
+
+  const response = await post(base, '/api/apply-coupon', applyBody(id, { code: 'OVI100' }));
+  assert.equal(response.status, 500);
+  assert.equal(client.tables.orders.length, 0);
+  assert.equal(planStore.getDocumentState(id).unlocked, false);
+});
+
 test('a 100% coupon unlocks the plan, skips Stripe and invoicing and logs one redemption row, even when repeated', async (t) => {
   const client = useSupabase(t, fakeSupabase({ coupons: [couponRow({ code: 'OVI100', discount_percent: 100, max_uses: 1 })] }));
   setEnv(t, { PAYWALL_ENABLED: 'true' });

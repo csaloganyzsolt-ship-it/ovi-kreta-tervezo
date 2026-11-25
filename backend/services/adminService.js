@@ -4,6 +4,7 @@
 // A hibák AdminError-ként érkeznek: a 4xx üzenete a kliensnek szól, az 5xx részleteit az útvonal naplózza, de nem adja ki.
 const crypto = require('node:crypto');
 const { CODE_PATTERN, normalizeCode } = require('./coupons');
+const { normalizeEmail } = require('../utils/email');
 
 class AdminError extends Error {
   constructor(message, status = 500) {
@@ -59,7 +60,7 @@ async function getStats(client, now = Date.now()) {
     fetchAll(() => client.from('orders').select('order_number, amount, created_at').eq('status', 'paid').order('order_number', { ascending: true }), 'A rendelések lekérdezése sikertelen'),
     fetchAll(() => client.from('documents').select('document_id, plan_mode, unlocked, request:data->plan->request').order('document_id', { ascending: true }), 'A tervezetek lekérdezése sikertelen'),
     listAuthUsers(client),
-    fetchAll(() => client.from('profiles').select('id').eq('newsletter_subscribed', true).order('id', { ascending: true }), 'A feliratkozók lekérdezése sikertelen')
+    fetchAll(() => client.from('newsletter_subscribers').select('email, user_id').eq('subscribed', true).order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen')
   ]);
 
   const since = now - 30 * DAY_MS;
@@ -79,7 +80,7 @@ async function getStats(client, now = Date.now()) {
     revenue: { total: sum(orders, (o) => o.amount), last30Days: sum(recent, (o) => o.amount) },
     paidOrders: orders.length,
     registeredUsers: authUsers.length,
-    confirmedSubscribers: subscribed.filter((row) => confirmedIds.has(String(row.id))).length,
+    confirmedSubscribers: subscribed.filter((row) => row.user_id && confirmedIds.has(String(row.user_id))).length,
     documents: {
       total: documents.length,
       unlocked,
@@ -240,7 +241,7 @@ function supportCode() {
 
 // Kárpótlási kupon: egyszer használatos, 100%-os; a címzett e-mail címe a megjegyzésben marad, hogy az admin a kuponlistában is lássa, kié.
 async function createSupportCoupon(client, body = {}, now = Date.now()) {
-  const email = String(body.email || '').trim().toLowerCase();
+  const email = normalizeEmail(body.email);
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) throw validationError('Érvényes felhasználói e-mail cím szükséges.');
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
@@ -310,21 +311,25 @@ async function listOrders(client, { status, q } = {}) {
 // ---------- Felhasználók ----------
 
 async function listUsers(client) {
-  const [authUsers, profiles] = await Promise.all([
+  const [authUsers, profiles, subscriptions] = await Promise.all([
     listAuthUsers(client),
-    fetchAll(() => client.from('profiles').select('id, email, full_name, billing_name, newsletter_subscribed, newsletter_subscribed_at').order('id', { ascending: true }), 'A profilok lekérdezése sikertelen')
+    fetchAll(() => client.from('profiles').select('id, email, full_name, billing_name').order('id', { ascending: true }), 'A profilok lekérdezése sikertelen'),
+    fetchAll(() => client.from('newsletter_subscribers').select('email, subscribed, subscribed_at').order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen')
   ]);
   const byId = new Map(profiles.map((profile) => [String(profile.id), profile]));
+  const byEmail = new Map(subscriptions.map((row) => [normalizeEmail(row.email), row]));
   const users = authUsers.map((user) => {
     const profile = byId.get(String(user.id)) || {};
+    const email = normalizeEmail(user.email || profile.email);
+    const subscription = byEmail.get(email);
     return {
       id: String(user.id),
-      email: String(user.email || profile.email || '').toLowerCase(),
+      email,
       name: profile.full_name || profile.billing_name || '',
       createdAt: user.created_at || null,
       confirmed: isConfirmed(user),
-      subscribed: profile.newsletter_subscribed === true,
-      subscribedAt: profile.newsletter_subscribed_at || null
+      subscribed: subscription?.subscribed === true,
+      subscribedAt: subscription?.subscribed_at || null
     };
   });
   users.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

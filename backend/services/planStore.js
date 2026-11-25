@@ -1,6 +1,8 @@
 'use strict';
 
 const supabase = require('./supabaseService');
+const logger = require('../utils/logger');
+const { normalizeEmail } = require('../utils/email');
 
 const VOCAB = [
   'a', 'et', 'in', 'ut', 'ad', 'ex', 'de',
@@ -223,7 +225,10 @@ function planModeOf(plan) {
 // A Supabase `documents` tábla: document_id (PK), plan_mode, unlocked, data (jsonb: { plan, meta }), user_id (uuid), user_email (text), created_at, updated_at.
 async function persist(id, entry) {
   const client = supabase.getClient();
-  if (!client) return;
+  if (!client) {
+    if (process.env.NODE_ENV === 'test') return;
+    throw Object.assign(new Error(`A tervezet mentése nem lehetséges: a Supabase nincs beállítva (${id}).`), { status: 503 });
+  }
   const { error } = await client.from('documents').upsert({
     document_id: id,
     plan_mode: planModeOf(entry.plan),
@@ -238,7 +243,7 @@ async function persist(id, entry) {
 }
 
 function normalizeOwnerEmail(value) {
-  const email = String(value || '').trim().toLowerCase();
+  const email = normalizeEmail(value);
   return email && email.length <= 254 ? email : '';
 }
 
@@ -265,7 +270,10 @@ function savePlan(id, plan, owner) {
   plans.delete(key);
   plans.set(key, entry);
   trimPlans();
-  return persist(key, entry).catch((error) => console.error('[supabase]', error.message));
+  return persist(key, entry).catch((error) => {
+    console.error('[supabase]', error.message);
+    logger.error('planStore', error.message, { documentId: key }, entry.userEmail);
+  });
 }
 
 // Szerver-újraindítás után a memóriából hiányzó tervet a Supabase-ből tölti vissza; hiba esetén dob, nem tér vissza csendben null-lal.
@@ -299,9 +307,17 @@ function getDocumentState(id) {
 async function updateDocument(id, { unlocked, meta } = {}) {
   if (!(await loadPlan(id))) return false;
   const entry = readEntry(id);
+  const before = { unlocked: entry.unlocked, meta: entry.meta };
   if (unlocked !== undefined) entry.unlocked = unlocked === true;
   if (meta) entry.meta = { ...entry.meta, ...meta };
-  await persist(String(id), entry);
+  try {
+    await persist(String(id), entry);
+  } catch (error) {
+    // Sikertelen mentés után a memória ne maradjon feloldott állapotban.
+    entry.unlocked = before.unlocked;
+    entry.meta = before.meta;
+    throw error;
+  }
   return true;
 }
 

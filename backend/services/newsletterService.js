@@ -8,6 +8,7 @@ const mailService = require('./mailService');
 const settingsService = require('./settingsService');
 const { supportEmail } = require('./invoiceService');
 const { AdminError, fetchAll, listAuthUsers, isConfirmed } = require('./adminService');
+const { normalizeEmail } = require('../utils/email');
 
 const SITE = 'https://ovitervezo.hu';
 const UNSUBSCRIBE_PLACEHOLDER = '{{UNSUBSCRIBE_URL}}';
@@ -193,7 +194,7 @@ async function buildPreview(body = {}, env = process.env, deps = {}) {
 
 function parseEmailList(value) {
   const list = Array.isArray(value) ? value : String(value || '').split(/[\s,;]+/);
-  const emails = [...new Set(list.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean))];
+  const emails = [...new Set(list.map((item) => normalizeEmail(item)).filter(Boolean))];
   if (!emails.length) throw new AdminError('Adj meg legalább egy e-mail címet.', 400);
   if (emails.length > MAX_CUSTOM_RECIPIENTS) throw new AdminError(`Egyszerre legfeljebb ${MAX_CUSTOM_RECIPIENTS} egyedi cím adható meg.`, 400);
   const invalid = emails.filter((email) => !EMAIL_PATTERN.test(email));
@@ -201,54 +202,38 @@ function parseEmailList(value) {
   return emails;
 }
 
-// GDPR: hírlevelet csak az kap, aki feliratkozott (newsletter_subscribed = true) ÉS megerősítette az e-mail címét (auth.users.email_confirmed_at).
+// GDPR: hírlevelet csak az kap, aki feliratkozott (subscribed = true). A fiókhoz kötött (user_id) sorhoz megerősített e-mail cím is kell (auth.users.email_confirmed_at);
+// a vendég sor (user_id nélkül) a fizetéskor adott külön hozzájárulás.
 async function subscribedRecipients(client) {
-  const [profiles, authUsers] = await Promise.all([
-    fetchAll(() => client.from('profiles').select('id, email, newsletter_token').eq('newsletter_subscribed', true).order('id', { ascending: true }), 'A feliratkozók lekérdezése sikertelen'),
+  const [rows, authUsers] = await Promise.all([
+    fetchAll(() => client.from('newsletter_subscribers').select('email, user_id, newsletter_token').eq('subscribed', true).order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen'),
     listAuthUsers(client)
   ]);
   const confirmed = new Map(authUsers.filter(isConfirmed).map((user) => [String(user.id), user]));
   const recipients = [];
   const skipped = [];
-  for (const profile of profiles) {
-    const user = confirmed.get(String(profile.id));
-    const email = String(user?.email || '').trim().toLowerCase();
-    if (!user || !email || !profile.newsletter_token) {
-      skipped.push({ email: String(profile.email || '').toLowerCase(), reason: 'nincs megerősített e-mail cím' });
+  for (const row of rows) {
+    const email = normalizeEmail(row.email);
+    if (!email || !row.newsletter_token) continue;
+    if (row.user_id && !confirmed.has(String(row.user_id))) {
+      skipped.push({ email, reason: 'nincs megerősített e-mail cím' });
       continue;
     }
-    recipients.push({ email, token: String(profile.newsletter_token) });
+    recipients.push({ email, token: String(row.newsletter_token) });
   }
-  // A vendég feliratkozók (fizetéskor, hozzájárulással) a regisztráltak mellé kerülnek; e-mail alapján deduplikálunk, a regisztrált profil token-je az erősebb.
-  const guests = await fetchAll(() => client.from('newsletter_guests').select('email, newsletter_token').eq('unsubscribed', false).order('email', { ascending: true }), 'A vendég feliratkozók lekérdezése sikertelen');
-  const seen = new Set(recipients.map((recipient) => recipient.email));
-  const skippedEmails = new Set(skipped.map((entry) => entry.email));
-  for (const guest of guests) {
-    const email = String(guest.email || '').trim().toLowerCase();
-    if (!email || !guest.newsletter_token || seen.has(email)) continue;
-    // Ha ugyanezen a címen van regisztrált, de leiratkozott vagy meg nem erősített profil, a vendég-bejegyzés akkor is érvényes külön hozzájárulás.
-    seen.add(email);
-    skippedEmails.delete(email);
-    recipients.push({ email, token: String(guest.newsletter_token) });
-  }
-  return { recipients, skipped: skipped.filter((entry) => skippedEmails.has(entry.email)) };
+  return { recipients, skipped };
 }
 
 async function customRecipients(client, emails) {
-  const { data, error } = await client.from('profiles').select('email, newsletter_subscribed, newsletter_token').in('email', emails);
+  const { data, error } = await client.from('newsletter_subscribers').select('email, newsletter_token, subscribed').in('email', emails);
   if (error) throw new AdminError(`A címzettek lekérdezése sikertelen: ${error.message}`, 500);
-  const byEmail = new Map((data || []).map((profile) => [String(profile.email).toLowerCase(), profile]));
-  const guestResult = await client.from('newsletter_guests').select('email, newsletter_token, unsubscribed').in('email', emails);
-  if (guestResult.error) throw new AdminError(`A címzettek lekérdezése sikertelen: ${guestResult.error.message}`, 500);
-  const guestByEmail = new Map((guestResult.data || []).map((guest) => [String(guest.email).toLowerCase(), guest]));
+  const byEmail = new Map((data || []).map((row) => [normalizeEmail(row.email), row]));
   const recipients = [];
   const skipped = [];
   for (const email of emails) {
-    const profile = byEmail.get(email);
-    const guest = guestByEmail.get(email);
-    if (profile?.newsletter_subscribed === true && profile.newsletter_token) recipients.push({ email, token: String(profile.newsletter_token) });
-    else if (guest && guest.unsubscribed !== true && guest.newsletter_token) recipients.push({ email, token: String(guest.newsletter_token) });
-    else if (!profile && !guest) recipients.push({ email, token: null });
+    const row = byEmail.get(email);
+    if (row?.subscribed === true && row.newsletter_token) recipients.push({ email, token: String(row.newsletter_token) });
+    else if (!row) recipients.push({ email, token: null });
     else skipped.push({ email, reason: 'leiratkozott vagy nem iratkozott fel' });
   }
   return { recipients, skipped };
@@ -257,7 +242,7 @@ async function customRecipients(client, emails) {
 async function resolveRecipients(client, { recipients: mode, emails }, admin) {
   if (!RECIPIENT_MODES.includes(mode)) throw new AdminError('Ismeretlen címzett-választás.', 400);
   if (mode === 'test') {
-    const { data, error } = await client.from('profiles').select('newsletter_token').eq('id', admin.id).maybeSingle();
+    const { data, error } = await client.from('newsletter_subscribers').select('newsletter_token').eq('email', normalizeEmail(admin.email)).maybeSingle();
     if (error) throw new AdminError(`A profil lekérdezése sikertelen: ${error.message}`, 500);
     return { recipients: [{ email: admin.email, token: data?.newsletter_token ? String(data.newsletter_token) : null }], skipped: [] };
   }

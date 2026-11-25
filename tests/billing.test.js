@@ -360,15 +360,18 @@ test('/health reports the active billing profile with booleans only and never le
 
   let { body } = await health();
   assert.equal(body.ok, true);
-  assert.deepEqual({ ...body.billing, modes: undefined, profiles: undefined }, {
+  assert.deepEqual({ ...body.billing, modes: undefined, profiles: undefined, supabase: undefined }, {
     profile: 'ev',
     companyName: 'Csalogány Zsolt egyéni vállalkozó',
     vatRate: 'AAM',
     hasInvoicePrefix: false,
     modes: undefined,
     profiles: undefined,
+    supabase: undefined,
     keys: { stripePublishable: false, stripeSecret: false, stripeWebhook: false, szamlazzApiKey: false }
   });
+  assert.deepEqual(Object.keys(body.billing.supabase).sort(), ['connected', 'keySet', 'keySource', 'urlSet']);
+  assert.equal(body.billing.supabase.connected, false);
   assert.deepEqual(Object.keys(body.billing.modes).sort(), ['barion', 'stripe', 'szamlazz']);
   for (const type of ['ev', 'kft']) for (const value of Object.values(body.billing.profiles[type])) assert.equal(typeof value, 'boolean');
 

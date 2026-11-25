@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 const logger = require('./utils/logger');
+const supabase = require('./services/supabaseService');
 const { createApiLimiter, DEFAULT_GENERATE_LIMIT } = require('./utils/rateLimits');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -828,6 +829,9 @@ function turnstileWarning(env = process.env) {
 function start(port = PORT) {
   const warning = turnstileWarning(process.env);
   if (warning) console.warn(warning);
+  const db = supabase.connectionStatus(process.env);
+  if (db.connected) console.log(`Supabase kapcsolat: AKTÍV (kulcs: ${db.keySource}).`);
+  else console.error(`Supabase kapcsolat: HIÁNYZIK (SUPABASE_URL: ${db.urlSet ? 'van' : 'nincs'}, titkos kulcs: ${db.keySet ? 'van' : 'nincs'}). Rendelések és tervezetek mentése nem lehetséges!`);
   // Az aktív cégprofil az adatbázisból töltődik be; hiba esetén hangosan naplózunk, a környezeti változó marad a tartalék.
   settingsService.getSettings().catch((error) => logger.error('settings', `A beállítások indítási betöltése sikertelen: ${error.message}`));
   return app.listen(port, HOST, () => {

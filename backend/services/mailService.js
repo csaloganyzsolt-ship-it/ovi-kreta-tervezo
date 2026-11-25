@@ -7,6 +7,7 @@ const { supportEmail } = require('./invoiceService');
 const { SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
 const { stripeSecretKey } = require('./stripeService');
 const settingsService = require('./settingsService');
+const { normalizeEmail } = require('../utils/email');
 
 const MAX_TOTAL_BYTES = 18 * 1024 * 1024;
 const LOGO_CID = 'ovitervezo-logo';
@@ -88,7 +89,7 @@ function feedbackSecret(env = process.env) {
 }
 
 function createFeedbackSignature(email, env = process.env) {
-  const normalized = String(email || '').trim().toLowerCase();
+  const normalized = normalizeEmail(email);
   const secret = feedbackSecret(env);
   if (!secret) return '';
   return crypto.createHmac('sha256', secret).update(normalized).digest('hex');

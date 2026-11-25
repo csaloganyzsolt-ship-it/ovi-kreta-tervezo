@@ -1,6 +1,7 @@
 'use strict';
 
 const supabase = require('./supabaseService');
+const { normalizeEmail } = require('../utils/email');
 
 class AuthError extends Error {
   constructor(message, status, code) {
@@ -9,10 +10,6 @@ class AuthError extends Error {
     this.status = status;
     this.code = code;
   }
-}
-
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
 }
 
 function bearerToken(req) {

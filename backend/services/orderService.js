@@ -5,6 +5,7 @@
 // Supabase nélkül (teszt, helyi fejlesztés) memóriabeli tábla működik, mint a tervezeteknél; élesben (NODE_ENV=production) kliens nélkül 503-as hiba van, nincs csendes tartalék.
 const supabase = require('./supabaseService');
 const invoiceService = require('./invoiceService');
+const { normalizeEmail } = require('../utils/email');
 
 const STATUSES = new Set(['pending', 'paid', 'failed', 'cancelled']);
 const LIST_COLUMNS = 'order_number, document_id, plan_mode, plan_key, amount, coupon_code, payment_method, status, invoice_number, created_at';
@@ -39,7 +40,7 @@ function toRow(order) {
   for (const [field, column] of Object.entries(FIELDS)) {
     let value = order[field];
     if (value === undefined || value === '') continue;
-    if (field === 'email' && value !== null) value = String(value).trim().toLowerCase();
+    if (field === 'email' && value !== null) value = normalizeEmail(value);
     row[column] = value;
   }
   return row;
@@ -57,14 +58,12 @@ function fromRow(row) {
   return order;
 }
 
-// Kliens, vagy null (memóriabeli tábla). Élesben kliens nélkül hiba.
+// Kliens, vagy null (memóriabeli tábla, KIZÁRÓLAG NODE_ENV=test alatt). Egyébként kliens nélkül 503.
 function storage() {
   const client = supabase.getClient();
   if (client) return client;
-  if (process.env.NODE_ENV === 'production') {
-    throw Object.assign(new Error('A rendelések tárolása nincs beállítva (SUPABASE_URL / SUPABASE_SECRET_KEY).'), { status: 503 });
-  }
-  return null;
+  if (process.env.NODE_ENV === 'test') return null;
+  throw Object.assign(new Error('A rendelések tárolása nincs beállítva (SUPABASE_URL / SUPABASE_SECRET_KEY).'), { status: 503 });
 }
 
 function resetMemory() {

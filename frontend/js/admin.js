@@ -315,12 +315,13 @@
       fillTable('ordersTable', data.orders.map((order) => {
         const buyer = el('span');
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
-        const issue = el('button', 'profile-btn primary', 'Számla kiállítása');
+        const freeOrder = order.status === 'paid' && !(order.amount > 0);
+        const issue = freeOrder ? el('span', 'admin-free-label', '0 Ft / Kupon') : el('button', 'profile-btn primary', 'Számla kiállítása');
         issue.type = 'button';
         const blocked = invoiceBlockReason(order);
         issue.disabled = Boolean(blocked);
         issue.title = blocked || 'Pótlólagos számlakiállítás a Számlázz.hu-n';
-        issue.addEventListener('click', () => issueOrderInvoice(order, issue));
+        if (!freeOrder) issue.addEventListener('click', () => issueOrderInvoice(order, issue));
         const resend = el('button', 'profile-btn', 'Kiküldés e-mailben');
         resend.type = 'button';
         resend.disabled = order.status !== 'paid' || !order.email;
@@ -725,6 +726,9 @@
       const modeCard = (title, mode) => statusCard(title, MODE_LABELS[mode] || mode, mode === 'live' ? 'ok' : 'warn');
       const keyLine = (label, value) => `${label}: ${value ? '✓ beállítva' : '✗ HIÁNYZIK'}`;
       const cards = [modeCard('Barion', status.modes.barion), modeCard('Számlázz.hu', status.modes.szamlazz), modeCard('Stripe', status.modes.stripe)];
+      const db = status.supabase || {};
+      cards.push(statusCard('Supabase adatbázis', db.connected ? 'Kapcsolódva' : 'HIÁNYZIK', db.connected ? 'ok' : 'warn',
+        [keyLine('SUPABASE_URL', db.urlSet), keyLine('Titkos kulcs', db.keySet), db.keySource ? `Forrás: ${db.keySource}` : ''].filter(Boolean).join(' · ')));
       for (const [type, label] of [['ev', 'EV'], ['kft', 'Kft.']]) {
         const keys = status.profiles[type];
         const complete = keys.szamlazzApiKey && keys.barionPosKey && keys.stripeSecret && keys.stripePublishable && keys.stripeWebhook;

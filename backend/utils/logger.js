@@ -1,6 +1,7 @@
 'use strict';
 
 const supabase = require('../services/supabaseService');
+const { normalizeEmail } = require('./email');
 
 const LEVELS = ['info', 'warning', 'error'];
 const MAX_MESSAGE = 1000;
@@ -35,7 +36,7 @@ async function log(level, context, message, { details, email } = {}) {
       context: clip(context, 100),
       message: text,
       details: sanitizeDetails(details),
-      user_email: email ? clip(email, 254).toLowerCase() : null
+      user_email: email ? normalizeEmail(clip(email, 254)) : null
     });
     if (error) throw new Error(error.message);
     return true;

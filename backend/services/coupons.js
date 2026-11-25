@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const supabase = require('./supabaseService');
 const planStore = require('./planStore');
 const { PaymentError } = require('./stripeService');
+const { normalizeEmail } = require('../utils/email');
 
 // Belső kuponok (Supabase nélkül, pl. tesztben): a kódok a backend konfigurációjából jönnek (COUPON_CODES, vesszővel elválasztott 100%-os kódok).
 // Beállítás nélkül egyetlen kód él: TEST100. Üres COUPON_CODES kikapcsolja a kuponokat.
@@ -83,7 +84,7 @@ async function logRedemption({ code, email, generationId, planMode, originalPric
   if (!client) return false;
   const { error } = await client.from('coupon_redemptions').insert({
     coupon_code: normalizeCode(code),
-    user_email: email,
+    user_email: normalizeEmail(email) || null,
     document_id: generationId,
     plan_mode: planMode,
     original_price: originalPrice,

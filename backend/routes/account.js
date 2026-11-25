@@ -129,6 +129,7 @@ async function unsubscribeNewsletter(req, res) {
 
 async function listOrders(req, res) {
   try {
+    await profileService.claimGuestRecordsSafe(req.user);
     return res.json({ success: true, orders: await orderService.listUserOrders(req.user) });
   } catch (error) {
     return sendAccountError(res, error, 'A rendelések lekérdezése');

@@ -153,8 +153,9 @@ async function applyCoupon(req, res) {
     }
 
     const session = await coupons.redeem({ code: coupon.code, generationId, email, plan: product.key, planMode, originalPrice: product.amountHuf });
-    await planStore.updateDocument(generationId, { unlocked: true, meta: { coupon: { code: coupon.code, plan: product.key, planMode, ...discount }, coupon_session: session } });
-    // A rendelés rögzítése nem akaszthatja meg a már beváltott kupont; a hiba hangosan naplózódik.
+    // Először a documents sor mentődik (feloldva), majd az orders; bármelyik hibája 5xx-ként kerül vissza, és a terv nem marad feloldva.
+    const unlockMeta = { coupon: { code: coupon.code, plan: product.key, planMode, ...discount }, coupon_session: session };
+    await planStore.updateDocument(generationId, { unlocked: true, meta: unlockMeta });
     try {
       await orders.markPaid({
         orderNumber: orders.orderNumberFor(session.id, session.created),
@@ -169,7 +170,9 @@ async function applyCoupon(req, res) {
         paymentMethod: 'Kupon'
       });
     } catch (error) {
-      console.error('[orders]', error.message);
+      await planStore.updateDocument(generationId, { unlocked: false }).catch((rollbackError) => logger.error('coupon', `A feloldás visszavonása sikertelen: ${rollbackError.message}`));
+      logger.error('coupon', `A kuponos rendelés mentése sikertelen: ${error.message}`, { email, details: { generationId } });
+      throw Object.assign(new Error(`A rendelés mentése sikertelen: ${error.message}`), { status: error.status || 500 });
     }
     return res.json({
       success: true,

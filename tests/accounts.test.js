@@ -22,7 +22,7 @@ function docRow(id, overrides = {}) {
 
 // Mockolt Supabase kliens: auth.getUser(token) és a documents tábla használt lekérdezés-láncai (select/update/upsert, eq/is/in, order, limit).
 function fakeAccounts(documents = [], extra = {}) {
-  const tables = { documents, profiles: [], orders: [], deleted_accounts_archive: [], newsletter_guests: [], ...extra };
+  const tables = { documents, profiles: [], orders: [], deleted_accounts_archive: [], newsletter_subscribers: [], ...extra };
   const failures = {};
   const calls = { getUser: [], deleteUser: [] };
   const read = (row, column) => (column === 'request' ? row.data?.plan?.request : row[column]);
@@ -66,6 +66,7 @@ function fakeAccounts(documents = [], extra = {}) {
         delete() { removing = true; return builder; },
         eq(column, value) { filters.push((row) => read(row, column) === value); return builder; },
         is(column, value) { filters.push((row) => (row[column] ?? null) === value); return builder; },
+        not(column, operator, value) { filters.push((row) => (row[column] ?? null) !== value); return builder; },
         in(column, values) { filters.push((row) => values.includes(row[column])); return builder; },
         lt(column, value) { filters.push((row) => String(row[column]) < String(value)); return builder; },
         single() {
@@ -1280,37 +1281,43 @@ test('starting a Barion payment writes the billing data back into the logged-in 
 const TOKEN_ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TOKEN_BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const newsletterProfiles = () => [
-  { id: ALICE.id, email: ALICE.email, full_name: 'Kovács Anna', is_admin: false, newsletter_subscribed: false, newsletter_subscribed_at: null, newsletter_token: TOKEN_ALICE },
-  { id: BOB.id, email: BOB.email, full_name: 'Bob', is_admin: false, newsletter_subscribed: true, newsletter_subscribed_at: '2026-01-01T00:00:00Z', newsletter_token: TOKEN_BOB }
+  { id: ALICE.id, email: ALICE.email, full_name: 'Kovács Anna', is_admin: false },
+  { id: BOB.id, email: BOB.email, full_name: 'Bob', is_admin: false }
 ];
+const newsletterSubscribers = () => [
+  { email: ALICE.email.toLowerCase(), user_id: ALICE.id, name: 'Kovács Anna', newsletter_token: TOKEN_ALICE, subscribed: false, subscribed_at: null, unsubscribed_at: null },
+  { email: BOB.email.toLowerCase(), user_id: BOB.id, name: 'Bob', newsletter_token: TOKEN_BOB, subscribed: true, subscribed_at: '2026-01-01T00:00:00Z', unsubscribed_at: null }
+];
+const newsletterFixtures = () => ({ profiles: newsletterProfiles(), newsletter_subscribers: newsletterSubscribers() });
 
 test('POST /api/newsletter/subscribe needs a login, subscribes only the caller once and shows up in the profile', async (t) => {
   relaxLimits(t);
-  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  const client = useClient(t, fakeAccounts([], newsletterFixtures()));
   const base = await listen(t);
-  const row = (id) => client.tables.profiles.find((item) => item.id === id);
+  const row = (id) => client.tables.newsletter_subscribers.find((item) => item.user_id === id);
 
   assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST' })).status, 401);
-  assert.equal(row(ALICE.id).newsletter_subscribed, false);
+  assert.equal(row(ALICE.id).subscribed, false);
   const before = (await (await call(base, '/api/profile', { token: 'token-alice' })).json()).profile;
   assert.equal(before.newsletter_subscribed, false);
 
   const response = await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { success: true, newsletter_subscribed: true });
-  assert.equal(row(ALICE.id).newsletter_subscribed, true);
-  const subscribedAt = row(ALICE.id).newsletter_subscribed_at;
+  assert.equal(row(ALICE.id).subscribed, true);
+  const subscribedAt = row(ALICE.id).subscribed_at;
   assert.ok(Date.now() - new Date(subscribedAt).getTime() < 60 * 1000, 'a feliratkozás ideje be van állítva');
   assert.equal(row(ALICE.id).newsletter_token, TOKEN_ALICE, 'a token nem változik');
-  assert.equal(row(BOB.id).newsletter_subscribed_at, '2026-01-01T00:00:00Z', 'más felhasználó sora nem változik');
+  assert.equal(row(BOB.id).subscribed_at, '2026-01-01T00:00:00Z', 'más felhasználó sora nem változik');
+  assert.equal(client.tables.newsletter_subscribers.length, 2);
 
   assert.equal((await (await call(base, '/api/profile', { token: 'token-alice' })).json()).profile.newsletter_subscribed, true);
   // Ismételt feliratkozás nem írja át az eredeti időpontot.
   assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' })).status, 200);
-  assert.equal(row(ALICE.id).newsletter_subscribed_at, subscribedAt);
+  assert.equal(row(ALICE.id).subscribed_at, subscribedAt);
   // Bob már fel volt iratkozva: az ő időpontja sem módosul.
   assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' })).status, 200);
-  assert.equal(row(BOB.id).newsletter_subscribed_at, '2026-01-01T00:00:00Z');
+  assert.equal(row(BOB.id).subscribed_at, '2026-01-01T00:00:00Z');
 });
 
 test('subscribing creates the missing profile row first and a database failure is a generic 500', async (t) => {
@@ -1320,9 +1327,12 @@ test('subscribing creates the missing profile row first and a database failure i
   assert.equal((await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-alice' })).status, 200);
   const created = client.tables.profiles.filter((item) => item.id === ALICE.id);
   assert.equal(created.length, 1);
-  assert.equal(created[0].newsletter_subscribed, true);
+  const subscription = client.tables.newsletter_subscribers.filter((item) => item.email === ALICE.email.toLowerCase());
+  assert.equal(subscription.length, 1);
+  assert.equal(subscription[0].subscribed, true);
+  assert.equal(subscription[0].user_id, ALICE.id);
 
-  client.failures.profiles = 'relation secret detail';
+  client.failures.newsletter_subscribers = 'relation secret detail';
   const original = console.error;
   console.error = () => {};
   t.after(() => { console.error = original; });
@@ -1335,11 +1345,13 @@ test('the profile API can never change is_admin or the newsletter fields and nev
   relaxLimits(t);
   const rows = newsletterProfiles();
   rows[0].is_admin = true;
-  const client = useClient(t, fakeAccounts([], { profiles: rows }));
+  const client = useClient(t, fakeAccounts([], { profiles: rows, newsletter_subscribers: newsletterSubscribers() }));
   const base = await listen(t);
   const save = (body, token = 'token-alice') => call(base, '/api/profile', { method: 'POST', token, body });
   const alice = () => client.tables.profiles.find((item) => item.id === ALICE.id);
   const bob = () => client.tables.profiles.find((item) => item.id === BOB.id);
+  const aliceNews = () => client.tables.newsletter_subscribers.find((item) => item.user_id === ALICE.id);
+  const bobNews = () => client.tables.newsletter_subscribers.find((item) => item.user_id === BOB.id);
 
   const read = await (await call(base, '/api/profile', { token: 'token-alice' })).json();
   assert.equal('is_admin' in read.profile, false);
@@ -1351,21 +1363,22 @@ test('the profile API can never change is_admin or the newsletter fields and nev
   const response = await save({ ...hostile });
   assert.equal(response.status, 200);
   assert.equal(alice().full_name, 'Új Név');
-  assert.equal(alice().newsletter_token, TOKEN_ALICE);
-  assert.equal(alice().newsletter_subscribed, false);
-  assert.equal(alice().newsletter_subscribed_at, null);
+  assert.equal(aliceNews().newsletter_token, TOKEN_ALICE);
+  assert.equal(aliceNews().subscribed, false);
+  assert.equal(aliceNews().subscribed_at, null);
+  assert.equal('newsletter_token' in alice() || 'newsletter_subscribed' in alice(), false, 'a profil táblába nem íródik hírlevél-adat');
   assert.equal(alice().is_admin, true, 'a meglévő is_admin érték változatlan marad, a kérésből nem íródik');
   const bobSaved = await save({ is_admin: true, newsletter_token: TOKEN_ALICE, full_name: 'Bob 2' }, 'token-bob');
   assert.equal(bobSaved.status, 200);
   assert.equal(bob().is_admin, false, 'a nem admin felhasználó nem tehet magát adminná');
-  assert.equal(bob().newsletter_token, TOKEN_BOB);
+  assert.equal(bobNews().newsletter_token, TOKEN_BOB);
 
   // Csak védett mezőt tartalmazó kérés nem menthető, és a felirat nem is kapcsolható ki ezen az úton.
   for (const body of [{ is_admin: true }, { newsletter_token: TOKEN_BOB }, { newsletter_subscribed: false }]) {
     const rejected = await save(body, 'token-bob');
     assert.equal(rejected.status, 400, JSON.stringify(body));
   }
-  assert.equal(bob().newsletter_subscribed, true, 'a profil-végpont nem tud leiratkoztatni');
+  assert.equal(bobNews().subscribed, true, 'a profil-végpont nem tud leiratkoztatni');
   assert.equal(bob().is_admin, false);
 });
 
@@ -1403,26 +1416,28 @@ test('the newsletter migration keeps is_admin and the newsletter fields out of c
 
 test('POST /api/newsletter/unsubscribe is public, token based, idempotent and friendly 404 for unknown tokens', async (t) => {
   relaxLimits(t);
-  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  const client = useClient(t, fakeAccounts([], newsletterFixtures()));
   const base = await listen(t);
   const unsubscribe = (body) => call(base, '/api/newsletter/unsubscribe', { method: 'POST', body });
-  const row = (id) => client.tables.profiles.find((item) => item.id === id);
+  const row = (id) => client.tables.newsletter_subscribers.find((item) => item.user_id === id);
 
   const response = await unsubscribe({ token: TOKEN_BOB });
   assert.equal(response.status, 200, 'bejelentkezés nélkül is működik');
   const body = await response.json();
   assert.deepEqual(body, { success: true });
-  assert.equal(row(BOB.id).newsletter_subscribed, false);
-  assert.equal(row(ALICE.id).newsletter_subscribed, false);
+  assert.equal(row(BOB.id).subscribed, false);
+  assert.ok(row(BOB.id).unsubscribed_at, 'a leiratkozás ideje rögzül');
+  assert.equal(row(ALICE.id).subscribed, false);
   assert.equal(row(BOB.id).newsletter_token, TOKEN_BOB, 'a token marad, így az újabb levélben is él');
   assert.equal(JSON.stringify(body).includes(BOB.email), false, 'a válasz nem árul el e-mail címet');
 
   // Ismételt vagy nagybetűs token is barátságosan lefut.
   assert.equal((await unsubscribe({ token: TOKEN_BOB })).status, 200);
   await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' });
-  assert.equal(row(BOB.id).newsletter_subscribed, true);
+  assert.equal(row(BOB.id).subscribed, true);
+  assert.equal(row(BOB.id).unsubscribed_at, null);
   assert.equal((await unsubscribe({ token: TOKEN_BOB.toUpperCase() })).status, 200);
-  assert.equal(row(BOB.id).newsletter_subscribed, false);
+  assert.equal(row(BOB.id).subscribed, false);
 
   // Érvénytelen, ismeretlen vagy hiányzó token: 404 barátságos üzenettel, semmi nem változik.
   await call(base, '/api/newsletter/subscribe', { method: 'POST', token: 'token-bob' });
@@ -1433,7 +1448,7 @@ test('POST /api/newsletter/unsubscribe is public, token based, idempotent and fr
     assert.equal(data.success, false);
     assert.match(data.error, /érvénytelen vagy lejárt/);
   }
-  assert.equal(row(BOB.id).newsletter_subscribed, true);
+  assert.equal(row(BOB.id).subscribed, true);
 });
 
 test('unsubscribing without Supabase is 503 and a database failure is a generic 500', async (t) => {
@@ -1441,8 +1456,8 @@ test('unsubscribing without Supabase is 503 and a database failure is a generic 
   const base = await listen(t);
   assert.equal((await call(base, '/api/newsletter/unsubscribe', { method: 'POST', body: { token: TOKEN_ALICE } })).status, 503);
 
-  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
-  client.failures.profiles = 'relation secret detail';
+  const client = useClient(t, fakeAccounts([], newsletterFixtures()));
+  client.failures.newsletter_subscribers = 'relation secret detail';
   const original = console.error;
   console.error = () => {};
   t.after(() => { console.error = original; });
@@ -1453,7 +1468,7 @@ test('unsubscribing without Supabase is 503 and a database failure is a generic 
 
 test('the unsubscribe call is allowed from the production frontend origin and the page is shipped', async (t) => {
   relaxLimits(t);
-  useClient(t, fakeAccounts([], { profiles: newsletterProfiles() }));
+  useClient(t, fakeAccounts([], newsletterFixtures()));
   const base = await listen(t);
   const preflight = await fetch(`${base}/api/newsletter/unsubscribe`, { method: 'OPTIONS', headers: { Origin: 'https://ovitervezo.hu', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } });
   assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://ovitervezo.hu');
@@ -1613,25 +1628,28 @@ test('leiratkozas.html is a noindex page in the brand design without inline scri
 const GUEST_TOKEN = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
 test('guest newsletter signup is an upsert that reactivates unsubscribed guests and rejects bad e-mails', async (t) => {
-  const client = useClient(t, fakeAccounts([], { newsletter_guests: [{ email: 'vendeg@example.com', name: 'Régi', newsletter_token: GUEST_TOKEN, unsubscribed: true }] }));
+  const client = useClient(t, fakeAccounts([], { newsletter_subscribers: [{ email: 'vendeg@example.com', user_id: null, name: 'Régi', newsletter_token: GUEST_TOKEN, subscribed: false, unsubscribed_at: '2026-01-01T00:00:00Z' }] }));
   const profileService = require('../backend/services/profileService');
   await profileService.subscribeGuest({ email: 'Vendeg@Example.com', name: 'Új Név' });
   await profileService.subscribeGuest({ email: 'masik@example.com', name: '' });
-  const [first, second] = client.tables.newsletter_guests;
-  assert.equal(first.unsubscribed, false);
+  const [first, second] = client.tables.newsletter_subscribers;
+  assert.equal(first.subscribed, true);
+  assert.equal(first.unsubscribed_at, null);
   assert.equal(first.newsletter_token, GUEST_TOKEN, 'a régi leiratkozó link érvényes marad');
   assert.equal(first.name, 'Új Név');
   assert.equal(second.email, 'masik@example.com');
-  assert.equal(client.tables.newsletter_guests.length, 2);
+  assert.equal(second.subscribed, true);
+  assert.equal(client.tables.newsletter_subscribers.length, 2);
   await assert.rejects(() => profileService.subscribeGuest({ email: 'nem-email', name: 'X' }));
 });
 
-test('token unsubscribe falls back to newsletter_guests when no profile has the token', async (t) => {
+test('token unsubscribe works for guest rows without a profile and leaves other subscribers untouched', async (t) => {
   relaxLimits(t);
-  const client = useClient(t, fakeAccounts([], { profiles: newsletterProfiles(), newsletter_guests: [{ email: 'vendeg@example.com', newsletter_token: GUEST_TOKEN, unsubscribed: false }] }));
+  const client = useClient(t, fakeAccounts([], { ...newsletterFixtures(), newsletter_subscribers: [...newsletterSubscribers(), { email: 'vendeg@example.com', user_id: null, newsletter_token: GUEST_TOKEN, subscribed: true }] }));
   const base = await listen(t);
   const response = await call(base, '/api/newsletter/unsubscribe', { method: 'POST', body: { token: GUEST_TOKEN } });
   assert.equal(response.status, 200);
-  assert.equal(client.tables.newsletter_guests[0].unsubscribed, true);
-  assert.equal(client.tables.profiles.find((p) => p.id === BOB.id).newsletter_subscribed, true, 'a profilok érintetlenek');
+  const rows = client.tables.newsletter_subscribers;
+  assert.equal(rows.find((row) => row.email === 'vendeg@example.com').subscribed, false);
+  assert.equal(rows.find((row) => row.user_id === BOB.id).subscribed, true, 'a többi feliratkozó érintetlen');
 });

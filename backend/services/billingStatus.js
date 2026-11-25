@@ -3,6 +3,7 @@
 const stripeService = require('./stripeService');
 const invoiceService = require('./invoiceService');
 const barionService = require('./barionService');
+const supabaseService = require('./supabaseService');
 const { getBillingProfile } = require('./siteConstants');
 
 // Csak logikai értékeket és módokat ad: titkos kulcs vagy annak töredéke sosem kerül a válaszba.
@@ -29,6 +30,7 @@ function billingStatus(env = process.env) {
       stripe: stripeService.isTestMode(env) ? 'test' : 'live'
     },
     profiles,
+    supabase: supabaseService.connectionStatus(env),
     keys: {
       stripePublishable: profiles[profile.type].stripePublishable,
       stripeSecret: profiles[profile.type].stripeSecret,
