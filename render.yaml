@@ -86,5 +86,9 @@ services:
         sync: false
       - key: NOTIFICATION_EMAIL
         sync: false
+      - key: BILLING_NOTIFICATION_EMAIL
+        sync: false
+      - key: ERROR_NOTIFICATION_EMAIL
+        sync: false
       - key: ADMIN_EMAIL
         sync: false

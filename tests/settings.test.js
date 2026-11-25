@@ -519,6 +519,46 @@ test('payment, feedback and error alerts go to the admin-set notification addres
   assert.equal(sent[0].to, 'env@example.com', 'admin érték nélkül a környezeti változó él');
 });
 
+test('billing and error notification addresses are validated, resolved with the documented precedence and routed per mail type', async (t) => {
+  fakeDb(t, { settings: { notification_email: 'common@example.com', billing_notification_email: 'bill@example.com', error_notification_email: 'err@example.com' } });
+  const client = supabase.getClient();
+  for (const key of ['billing_notification_email', 'error_notification_email']) {
+    await assert.rejects(settingsService.updateSettings(client, { [key]: 'rossz' }), /érvénytelen/, key);
+    await assert.rejects(settingsService.updateSettings(client, { [key]: 7 }), /szöveg/, key);
+    assert.equal('billing_notification_email' in settingsService.publicConfig(await settingsService.getSettings({ force: true })), false);
+  }
+  const env = { BILLING_NOTIFICATION_EMAIL: 'eb@example.com', ERROR_NOTIFICATION_EMAIL: 'ee@example.com', NOTIFICATION_EMAIL: 'en@example.com', ADMIN_EMAIL: 'ea@example.com' };
+  const r = settingsService.resolveNotificationEmail;
+  assert.equal(r({ billing_notification_email: 'b@x.hu', notification_email: 'c@x.hu' }, env, 'billing'), 'b@x.hu');
+  assert.equal(r({ notification_email: 'c@x.hu' }, env, 'billing'), 'c@x.hu');
+  assert.equal(r({}, env, 'billing'), 'eb@example.com');
+  assert.equal(r({}, env, 'error'), 'ee@example.com');
+  assert.equal(r({}, { NOTIFICATION_EMAIL: 'en@example.com', ADMIN_EMAIL: 'ea@example.com' }, 'error'), 'en@example.com');
+  assert.equal(r({ billing_notification_email: 'b@x.hu' }, {}, 'error'), '');
+
+  await settingsService.getSettings({ force: true });
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  const mailEnv = { SMTP_HOST: 'smtp.test' };
+  await mailService.sendAdminNotification({ customer: { email: 'vevo@example.com' }, plan: 'daily', orderNumber: 'OVI-3' }, { transport, env: mailEnv });
+  await mailService.sendFeedbackNotification(mailEnv, { rating: 4, email: 'vevo@example.com', comment: 'ok' }, { transport });
+  await mailService.sendAdminErrorAlert({ operation: 'Teszt hiba', error: new Error('boom') }, { transport, env: mailEnv });
+  assert.deepEqual(sent.map((message) => message.to), ['bill@example.com', 'err@example.com', 'err@example.com']);
+});
+
+test('admin.html has separate billing and error notification fields with history and a migration', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
+  assert.match(html, /<input id="setBillingNotificationEmail" type="email"/);
+  assert.match(html, /<input id="setErrorNotificationEmail" type="email"/);
+  assert.match(html, /data-history-key="billing_notification_email"/);
+  assert.match(html, /data-history-key="error_notification_email"/);
+  assert.match(html, /<option value="billing_notification_email">/);
+  assert.match(html, /<option value="error_notification_email">/);
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261128100000_split_notification_emails.sql'), 'utf8');
+  assert.match(migration, /'billing_notification_email'/);
+  assert.match(migration, /'error_notification_email'/);
+});
+
 test('admin.html has the notification email field with history, explaining that it overrides the Render env', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
   assert.match(html, /<input id="setNotificationEmail" type="email"/);

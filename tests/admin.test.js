@@ -1232,4 +1232,9 @@ test('admin.js: the settings form saves four prices, the cap and the announcemen
   document.getElementById('notificationForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
   await tick();
   assert.deepEqual(patches[2], { notification_email: 'ops@example.com' });
+  document.getElementById('setBillingNotificationEmail').value = ' bill@example.com ';
+  document.getElementById('setErrorNotificationEmail').value = 'err@example.com';
+  document.getElementById('notificationSplitForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.deepEqual(patches[3], { billing_notification_email: 'bill@example.com', error_notification_email: 'err@example.com' });
 });

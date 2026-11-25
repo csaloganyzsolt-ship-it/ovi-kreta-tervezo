@@ -42,6 +42,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   }),
   maintenance_mode: false,
   notification_email: '',
+  billing_notification_email: '',
+  error_notification_email: '',
   billing_profile: process.env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev',
   payment_provider: 'barion',
   seasonal_hints: Object.freeze(['őszi falevelek gyűjtése', 'Márton-napi lámpáskészítés', 'farsangi mulatság'])
@@ -164,10 +166,15 @@ function pricingTierFor(productKey) {
 const isValidEmail = (value) => typeof value === 'string' && value.length <= 254 && /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/.test(value);
 
 // Üzemeltetői értesítési cím: az adminban mentett érték, ennek hiányában a környezeti változók (csak tartalék). A vevői levelek ettől függetlenül a vevőhöz mennek.
-function resolveNotificationEmail(settings, env = process.env) {
-  const stored = String(settings?.notification_email || '').trim();
-  if (stored && isValidEmail(stored)) return stored;
-  for (const name of ['NOTIFICATION_EMAIL', 'ADMIN_NOTIFICATION_EMAIL', 'ADMIN_EMAIL', 'SUPPORT_EMAIL']) {
+// kind: 'billing' (számlázási/rendelési) | 'error' (hiba-, tesztelési, visszajelzési) | nincs (közös cím). Sorrend: típusspecifikus admin-érték > közös admin-érték > env.
+function resolveNotificationEmail(settings, env = process.env, kind = '') {
+  const specificKey = kind === 'billing' ? 'billing_notification_email' : kind === 'error' ? 'error_notification_email' : '';
+  for (const key of [specificKey, 'notification_email']) {
+    const stored = key ? String(settings?.[key] || '').trim() : '';
+    if (stored && isValidEmail(stored)) return stored;
+  }
+  const specificEnv = kind === 'billing' ? 'BILLING_NOTIFICATION_EMAIL' : kind === 'error' ? 'ERROR_NOTIFICATION_EMAIL' : 'NOTIFICATION_EMAIL';
+  for (const name of [specificEnv, 'NOTIFICATION_EMAIL', 'ADMIN_NOTIFICATION_EMAIL', 'ADMIN_EMAIL', 'SUPPORT_EMAIL']) {
     const value = String(env?.[name] || '').trim();
     if (value) return value;
   }
@@ -257,6 +264,13 @@ function validatePatch(patch, current) {
     const email = patch.notification_email.trim();
     if (email && !isValidEmail(email)) throw new SettingsError('Az értesítési e-mail cím érvénytelen. Üresen hagyva a környezeti változók érvényesek.');
     updates.notification_email = email;
+  }
+  for (const [key, label] of [['billing_notification_email', 'számlázási/rendelési értesítési'], ['error_notification_email', 'hibariasztási/tesztelési/visszajelzési']]) {
+    if (!(key in patch)) continue;
+    if (typeof patch[key] !== 'string') throw new SettingsError(`A ${label} e-mail cím szöveg legyen.`);
+    const email = patch[key].trim();
+    if (email && !isValidEmail(email)) throw new SettingsError(`A ${label} e-mail cím érvénytelen. Üresen hagyva a közös cím, majd a környezeti változók érvényesek.`);
+    updates[key] = email;
   }
   if ('daily_generation_cap' in patch) {
     const raw = typeof patch.daily_generation_cap === 'string' && patch.daily_generation_cap.trim() !== '' ? Number(patch.daily_generation_cap) : patch.daily_generation_cap;

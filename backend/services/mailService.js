@@ -238,8 +238,9 @@ function planLabelOf(plan) {
 }
 
 // A rendszergazdai másolat kötelező. Sorrend: Admin Központban mentett értesítési cím > NOTIFICATION_EMAIL / ADMIN_NOTIFICATION_EMAIL / ADMIN_EMAIL / SUPPORT_EMAIL > közös ügyfélszolgálati cím.
-function adminEmail(env = process.env) {
-  return settingsService.resolveNotificationEmail(settingsService.peek(), env) || SUPPORT_EMAIL;
+// kind: 'billing' (fizetés/számla) vagy 'error' (hiba, tesztelés, visszajelzés).
+function adminEmail(env = process.env, kind = '') {
+  return settingsService.resolveNotificationEmail(settingsService.peek(), env, kind) || SUPPORT_EMAIL;
 }
 
 // A küldés előtt frissíti a beállítás-gyorsítótárat, hogy az admin friss címe azonnal érvényes legyen; adatbázis-hiba esetén az utolsó ismert érték/tartalék él.
@@ -261,7 +262,7 @@ async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumbe
   const transport = createTransport(env, deps);
   await transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
-    to: adminEmail(env),
+    to: adminEmail(env, 'billing'),
     subject: `OviTervező – új fizetés${paymentMethod === 'Barion' ? ' Barionnal' : ''}: ${orderNumber || ''}`.trim(),
     text: lines.join('\n'),
     attachments: Buffer.isBuffer(invoicePdf) && invoicePdf.length ? [{ filename: `${orderNumber || 'szamla'}.pdf`, content: invoicePdf, contentType: 'application/pdf' }] : []
@@ -370,7 +371,7 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
 
   await transport.sendMail({
     from: env.MAIL_FROM || `OviTervező <${support}>`,
-    to: adminEmail(env),
+    to: adminEmail(env, 'error'),
     replyTo: data.email,
     subject,
     text,
@@ -385,7 +386,7 @@ async function sendAdminErrorAlert({ operation, error, email, documentId, detail
   if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
   await refreshNotificationSettings();
   const support = supportEmail(env);
-  const recipient = adminEmail(env);
+  const recipient = adminEmail(env, 'error');
   const timestamp = new Date().toISOString();
   const errorMessage = error?.stack || error?.message || String(error || 'Ismeretlen hiba');
   const op = String(operation || 'Rendszerhiba');

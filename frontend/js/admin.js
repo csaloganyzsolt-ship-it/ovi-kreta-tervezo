@@ -607,6 +607,8 @@
       byId('setBillingProfile').value = settings.billing_profile || 'ev';
       byId('setPaymentProvider').value = settings.payment_provider || 'barion';
       byId('setNotificationEmail').value = settings.notification_email || '';
+      byId('setBillingNotificationEmail').value = settings.billing_notification_email || '';
+      byId('setErrorNotificationEmail').value = settings.error_notification_email || '';
       byId('notificationEffective').textContent = settings.notification_email
         ? 'Jelenleg ez a cím él (az Admin Központban mentve).'
         : 'Nincs mentett cím: a Render környezeti változók (vagy az ügyfélszolgálati cím) az érvényesek.';
@@ -693,6 +695,10 @@
   const saveNotification = (event) => saveSettings(event, () => ({
     notification_email: byId('setNotificationEmail').value.trim()
   }), { status: 'notificationStatus', error: 'notificationError', button: 'notificationSave' });
+  const saveNotificationSplit = (event) => saveSettings(event, () => ({
+    billing_notification_email: byId('setBillingNotificationEmail').value.trim(),
+    error_notification_email: byId('setErrorNotificationEmail').value.trim()
+  }), { status: 'notificationSplitStatus', error: 'notificationSplitError', button: 'notificationSplitSave' });
 
   // Módosítási napló: csak olvasható, a régi érték kijelölhető és másolható.
   async function openHistory(key) {
@@ -818,6 +824,7 @@
     byId('aiForm').addEventListener('submit', saveAi);
     byId('billingForm').addEventListener('submit', saveBilling);
     byId('notificationForm').addEventListener('submit', saveNotification);
+    byId('notificationSplitForm').addEventListener('submit', saveNotificationSplit);
     byId('linksForm').addEventListener('submit', saveLinks);
     document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
     byId('historyKey').addEventListener('change', () => openHistory());
