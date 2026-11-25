@@ -926,6 +926,9 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
   rows[0].querySelector('button').click();
   await tick();
   assert.ok(state.fetches.some((f) => f.path === '/api/admin/orders/OVI-F1/issue-invoice' && f.method === 'POST'));
+  assert.deepEqual(state.confirms, [], 'a számlakiállítás nem függ a böngésző confirm ablakától');
+  assert.match(document.getElementById('adminToast').textContent, /Számla kiállítva: E-2/);
+  assert.equal(document.getElementById('adminToast').hidden, false);
 });
 
 test('admin.js: the newsletter editor refreshes the live preview, asks for confirmation and sends the payload', async (t) => {

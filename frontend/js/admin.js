@@ -317,7 +317,9 @@
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
         const issue = el('button', 'profile-btn primary', 'Számla kiállítása');
         issue.type = 'button';
-        issue.disabled = order.status !== 'paid' || Boolean(order.invoiceNumber) || !(order.amount > 0);
+        const blocked = invoiceBlockReason(order);
+        issue.disabled = Boolean(blocked);
+        issue.title = blocked || 'Pótlólagos számlakiállítás a Számlázz.hu-n';
         issue.addEventListener('click', () => issueOrderInvoice(order, issue));
         const resend = el('button', 'profile-btn', 'Kiküldés e-mailben');
         resend.type = 'button';
@@ -373,18 +375,52 @@
 
   // Pótlólagos számlakiállítás: a szerver kiállítja a számlát a Számlázz.hu-n, és elmenti a számlaszámot (duplán nem állít ki).
   async function issueOrderInvoice(order, button) {
-    if (!window.confirm(`Kiállítod a számlát a(z) ${order.orderNumber} rendelésre?`)) return;
+    const reason = invoiceBlockReason(order);
+    if (reason) {
+      showToast(reason, true);
+      return;
+    }
     setText('ordersError', '');
+    const label = button.textContent;
     button.disabled = true;
+    button.textContent = 'Kiállítás…';
+    showToast(`Számla kiállítása folyamatban: ${order.orderNumber}…`);
     try {
       const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/issue-invoice`, { method: 'POST', body: {} });
-      setText('ordersCount', `Számla kiállítva: ${result.invoiceNumber}.`);
       await loadOrders();
       loadFailedOrdersBanner();
+      showToast(`Számla kiállítva: ${result.invoiceNumber} (${order.orderNumber}).`);
     } catch (error) {
-      setText('ordersError', `A számla kiállítása sikertelen: ${errorMessage(error)}`);
+      const message = `A számla kiállítása sikertelen: ${errorMessage(error)}`;
+      setText('ordersError', message);
+      showToast(message, true);
       button.disabled = false;
+      button.textContent = label;
     }
+  }
+
+  function invoiceBlockReason(order) {
+    if (order.status !== 'paid') return 'Csak kifizetett rendeléshez állítható ki számla.';
+    if (order.invoiceNumber) return `A rendeléshez már van számla: ${order.invoiceNumber}.`;
+    if (!(order.amount > 0)) return 'Ingyenes (0 Ft-os) rendeléshez nem készül számla.';
+    return '';
+  }
+
+  // Látható, a görgetéstől független visszajelzés (a táblázat feletti állapotsor görgetett nézetben nem látszik).
+  let toastTimer = null;
+  function showToast(message, isError = false) {
+    let toast = byId('adminToast');
+    if (!toast) {
+      toast = el('div', 'admin-toast');
+      toast.id = 'adminToast';
+      toast.setAttribute('role', 'status');
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.toggle('is-error', isError);
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, isError ? 9000 : 5000);
   }
 
   // A számla PDF-et a szerver élőben kéri a Számlázz.hu-tól; a böngésző csak letölti, nem tárolódik sehol.
@@ -415,9 +451,10 @@
     button.disabled = true;
     try {
       const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/resend`, { method: 'POST', body: {} });
-      setText('ordersCount', `Elküldve: ${result.to}${result.invoiceAttached ? ' (számlával)' : ''}.`);
+      showToast(`Elküldve: ${result.to}${result.invoiceAttached ? ' (számlával)' : ''}.`);
     } catch (error) {
       setText('ordersError', `Az újraküldés sikertelen: ${errorMessage(error)}`);
+      showToast(`Az újraküldés sikertelen: ${errorMessage(error)}`, true);
     } finally {
       button.disabled = false;
     }

@@ -2340,6 +2340,11 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-order-error { color: #c0392b; font-weight: 600; font-size: 0.85rem; overflow-wrap: anywhere; }
 [data-theme="dark"] .admin-order-error, [data-theme="dark"] .admin-alert-banner { color: #ff8f84; }
 .admin-alert-banner { margin: 0 0 16px; padding: 14px 16px; border: 1px solid #c0392b; border-left-width: 6px; border-radius: 14px; background: rgba(192, 57, 43, 0.08); color: #8e2a20; }
+.admin-toast { position: fixed; right: 20px; bottom: 20px; z-index: 1000; max-width: min(420px, calc(100vw - 40px)); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--primary); background: var(--surface, #fff); color: var(--text, #1f2d27); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); overflow-wrap: anywhere; }
+.admin-toast[hidden] { display: none; }
+.admin-toast.is-error { border-color: #c0392b; color: #8e2a20; }
+[data-theme="dark"] .admin-toast { background: var(--surface, #1c2622); color: var(--text, #e6f2ec); }
+[data-theme="dark"] .admin-toast.is-error { color: #ff8f84; }
 .admin-alert-banner ul { margin: 8px 0 10px; padding-left: 20px; overflow-wrap: anywhere; }
 .admin-tools { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--mint); }
 .admin-tools h2 { margin: 0 0 10px; font-size: 1rem; }
