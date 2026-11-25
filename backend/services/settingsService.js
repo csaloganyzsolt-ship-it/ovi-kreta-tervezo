@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     system_prompt: DEFAULT_SYSTEM_PROMPT
   }),
   maintenance_mode: false,
+  notification_email: '',
   billing_profile: process.env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev',
   payment_provider: 'barion',
   seasonal_hints: Object.freeze(['őszi falevelek gyűjtése', 'Márton-napi lámpáskészítés', 'farsangi mulatság'])
@@ -160,6 +161,19 @@ function pricingTierFor(productKey) {
   return productKey === 'weekly_detailed' ? 'weekly' : String(productKey);
 }
 
+const isValidEmail = (value) => typeof value === 'string' && value.length <= 254 && /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/.test(value);
+
+// Üzemeltetői értesítési cím: az adminban mentett érték, ennek hiányában a környezeti változók (csak tartalék). A vevői levelek ettől függetlenül a vevőhöz mennek.
+function resolveNotificationEmail(settings, env = process.env) {
+  const stored = String(settings?.notification_email || '').trim();
+  if (stored && isValidEmail(stored)) return stored;
+  for (const name of ['NOTIFICATION_EMAIL', 'ADMIN_NOTIFICATION_EMAIL', 'ADMIN_EMAIL', 'SUPPORT_EMAIL']) {
+    const value = String(env?.[name] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
 // A napi plafon a beállításból jön (érvénytelen vagy hiányzó értéknél 250).
 function dailyGenerationCapOf(settings) {
   const cap = settings?.daily_generation_cap;
@@ -237,6 +251,12 @@ function validatePatch(patch, current) {
   if ('payment_provider' in patch) {
     if (!PAYMENT_PROVIDERS.includes(patch.payment_provider)) throw new SettingsError('A fizetési szolgáltató „barion” vagy „stripe” lehet.');
     updates.payment_provider = patch.payment_provider;
+  }
+  if ('notification_email' in patch) {
+    if (typeof patch.notification_email !== 'string') throw new SettingsError('Az értesítési e-mail cím szöveg legyen.');
+    const email = patch.notification_email.trim();
+    if (email && !isValidEmail(email)) throw new SettingsError('Az értesítési e-mail cím érvénytelen. Üresen hagyva a környezeti változók érvényesek.');
+    updates.notification_email = email;
   }
   if ('daily_generation_cap' in patch) {
     const raw = typeof patch.daily_generation_cap === 'string' && patch.daily_generation_cap.trim() !== '' ? Number(patch.daily_generation_cap) : patch.daily_generation_cap;
@@ -368,6 +388,6 @@ function composeEmail(templates, id, values = {}) {
 
 module.exports = {
   isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
-  getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveAiModel,
+  getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
   listTemplates, listHistory, updateTemplate, getTemplates, fillPlaceholders, composeEmail
 };

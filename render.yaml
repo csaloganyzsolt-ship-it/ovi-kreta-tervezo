@@ -84,5 +84,7 @@ services:
         sync: false
       - key: ADMIN_NOTIFICATION_EMAIL
         sync: false
+      - key: NOTIFICATION_EMAIL
+        sync: false
       - key: ADMIN_EMAIL
         sync: false

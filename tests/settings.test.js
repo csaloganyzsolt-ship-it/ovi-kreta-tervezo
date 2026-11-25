@@ -477,3 +477,54 @@ test('the feedback_request template is listed with a default, editable and needs
   await assert.rejects(settingsService.updateTemplate(client, 'feedback_request', { subject: 'x', bodyHtml: '<p>Nincs helyőrző</p>' }), /\{\{/);
   await settingsService.updateTemplate(client, 'feedback_request', { subject: 'x', bodyHtml: '<p>Értékelj: {{stars}}</p>' });
 });
+
+test('notification_email is validated, resolved admin > env fallbacks and never exposed publicly', async (t) => {
+  fakeDb(t);
+  const client = supabase.getClient();
+  for (const bad of ['nem-email', 'a@b', 'a b@example.com', 'x@example.com, y@example.com', '<x@example.com>']) {
+    await assert.rejects(settingsService.updateSettings(client, { notification_email: bad }), /érvénytelen/, bad);
+  }
+  await assert.rejects(settingsService.updateSettings(client, { notification_email: 5 }), /szöveg/);
+  const saved = await settingsService.updateSettings(client, { notification_email: '  Uzemeltetes@Example.com ' });
+  assert.equal(saved.notification_email, 'Uzemeltetes@Example.com');
+  assert.equal('notification_email' in settingsService.publicConfig(saved), false);
+
+  const env = { NOTIFICATION_EMAIL: 'n@example.com', ADMIN_NOTIFICATION_EMAIL: 'an@example.com', ADMIN_EMAIL: 'a@example.com', SUPPORT_EMAIL: 's@example.com' };
+  assert.equal(settingsService.resolveNotificationEmail({ notification_email: 'db@example.com' }, env), 'db@example.com');
+  assert.equal(settingsService.resolveNotificationEmail({ notification_email: '' }, env), 'n@example.com');
+  assert.equal(settingsService.resolveNotificationEmail({}, { ADMIN_NOTIFICATION_EMAIL: 'an@example.com', ADMIN_EMAIL: 'a@example.com' }), 'an@example.com');
+  assert.equal(settingsService.resolveNotificationEmail({}, { ADMIN_EMAIL: 'a@example.com', SUPPORT_EMAIL: 's@example.com' }), 'a@example.com');
+  assert.equal(settingsService.resolveNotificationEmail({ notification_email: 'rossz' }, { SUPPORT_EMAIL: 's@example.com' }), 's@example.com', 'érvénytelen tárolt érték: tartalék');
+  assert.equal(settingsService.resolveNotificationEmail({}, {}), '');
+  const cleared = await settingsService.updateSettings(client, { notification_email: '' });
+  assert.equal(cleared.notification_email, '');
+});
+
+test('payment, feedback and error alerts go to the admin-set notification address; the buyer mail still goes to the buyer', async (t) => {
+  fakeDb(t, { settings: { notification_email: 'ops@example.com' } });
+  await settingsService.getSettings({ force: true });
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  const env = { SMTP_HOST: 'smtp.test', NOTIFICATION_EMAIL: 'env@example.com', ADMIN_NOTIFICATION_EMAIL: 'old@example.com' };
+  await mailService.sendAdminNotification({ customer: { email: 'vevo@example.com' }, plan: 'daily', orderNumber: 'OVI-1' }, { transport, env });
+  await mailService.sendFeedbackNotification(env, { rating: 4, email: 'vevo@example.com', comment: 'ok' }, { transport });
+  await mailService.sendAdminErrorAlert({ operation: 'Teszt hiba', error: new Error('boom') }, { transport, env });
+  assert.deepEqual(sent.map((message) => message.to), ['ops@example.com', 'ops@example.com', 'ops@example.com']);
+  await mailService.sendPurchaseEmail({ to: 'vevo@example.com', plan: 'daily', attachments: [], title: 'T', orderNumber: 'OVI-1' }, { transport, env, templates: null });
+  assert.equal(sent.at(-1).to, 'vevo@example.com');
+
+  await settingsService.updateSettings(supabase.getClient(), { notification_email: '' });
+  sent.length = 0;
+  await mailService.sendAdminNotification({ customer: { email: 'vevo@example.com' }, plan: 'daily', orderNumber: 'OVI-2' }, { transport, env });
+  assert.equal(sent[0].to, 'env@example.com', 'admin érték nélkül a környezeti változó él');
+});
+
+test('admin.html has the notification email field with history, explaining that it overrides the Render env', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
+  assert.match(html, /<input id="setNotificationEmail" type="email"/);
+  assert.match(html, /data-history-key="notification_email"/);
+  assert.match(html, /<option value="notification_email">/);
+  assert.match(html, /felülírja a Render környezeti változóit/);
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261128090000_notification_email_setting.sql'), 'utf8');
+  assert.match(migration, /'notification_email'/);
+});

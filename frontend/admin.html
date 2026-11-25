@@ -402,6 +402,22 @@
                   <span class="profile-error" id="billingError" role="alert" hidden></span>
                 </div>
               </form>
+
+              <form class="profile-form admin-notification" id="notificationForm" novalidate>
+                <h3 class="span-2">Értesítési e-mail cím (számlázási, tesztelési és hibaértesítések)</h3>
+                <div class="span-2">
+                  <label for="setNotificationEmail">Üzemeltetői értesítési e-mail cím</label>
+                  <input id="setNotificationEmail" type="email" maxlength="254" autocomplete="off" placeholder="pl. uzemeltetes@ovitervezo.hu" />
+                </div>
+                <p class="profile-hint span-2">Erre a címre érkezik minden üzemeltetői levél: új fizetések és számlák, vásárlói visszajelzések és értékelések, valamint a tesztelési és éles hibaértesítések. <strong>Ez felülírja a Render környezeti változóit</strong> (<code>NOTIFICATION_EMAIL</code>, <code>ADMIN_NOTIFICATION_EMAIL</code>, <code>ADMIN_EMAIL</code>, <code>SUPPORT_EMAIL</code>), amelyek csak tartalékként élnek, ha itt nincs cím megadva. A vevőknek szánt számlák és kézbesítések továbbra is a vevő saját címére mennek. Az Admin jogosultságot ez a mező nem érinti.</p>
+                <p class="profile-hint span-2" id="notificationEffective" role="status"></p>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="notificationSave">Mentés</button>
+                  <button type="button" class="profile-btn" data-history-key="notification_email" id="notificationHistory">Előzmények</button>
+                  <span class="profile-status" id="notificationStatus" role="status" hidden></span>
+                  <span class="profile-error" id="notificationError" role="alert" hidden></span>
+                </div>
+              </form>
             </div>
 
             <div id="settingsLinks" data-settings-panel="links" hidden>
@@ -430,6 +446,7 @@
                   <option value="daily_generation_cap">Napi szerverplafon</option>
                   <option value="announcement_bar">Főoldali akciós sáv</option>
                   <option value="external_links">Külső linkek</option>
+                  <option value="notification_email">Értesítési e-mail cím</option>
                   <option value="ai_config">AI beállítások (modell, rendszer prompt)</option>
                   <option value="maintenance_mode">Karbantartás mód</option>
                   <option value="seasonal_hints">Szezonális javaslatok</option>

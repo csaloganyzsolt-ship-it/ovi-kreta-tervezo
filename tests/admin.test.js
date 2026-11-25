@@ -1226,4 +1226,10 @@ test('admin.js: the settings form saves four prices, the cap and the announcemen
   assert.equal(anchors.length, 1);
   assert.equal(anchors[0].href, 'https://secure.barion.com/');
   assert.equal(document.getElementById('adminTools').hidden, false);
+
+  assert.match(document.getElementById('notificationEffective').textContent, /környezeti változók/);
+  document.getElementById('setNotificationEmail').value = ' ops@example.com ';
+  document.getElementById('notificationForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.deepEqual(patches[2], { notification_email: 'ops@example.com' });
 });

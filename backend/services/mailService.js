@@ -237,15 +237,25 @@ function planLabelOf(plan) {
   return String(plan).startsWith('weekly') ? 'heti csomag' : 'napi tervezet';
 }
 
-// A rendszergazdai másolat kötelező: alapértelmezetten a közös ügyfélszolgálati cím, az ADMIN_NOTIFICATION_EMAIL felülírhatja.
+// A rendszergazdai másolat kötelező. Sorrend: Admin Központban mentett értesítési cím > NOTIFICATION_EMAIL / ADMIN_NOTIFICATION_EMAIL / ADMIN_EMAIL / SUPPORT_EMAIL > közös ügyfélszolgálati cím.
 function adminEmail(env = process.env) {
-  return String(env.ADMIN_NOTIFICATION_EMAIL || '').trim() || SUPPORT_EMAIL;
+  return settingsService.resolveNotificationEmail(settingsService.peek(), env) || SUPPORT_EMAIL;
+}
+
+// A küldés előtt frissíti a beállítás-gyorsítótárat, hogy az admin friss címe azonnal érvényes legyen; adatbázis-hiba esetén az utolsó ismert érték/tartalék él.
+async function refreshNotificationSettings() {
+  try {
+    await settingsService.getSettings();
+  } catch (error) {
+    console.error('Az értesítési e-mail beállítás nem frissíthető, az utolsó ismert érték/tartalék él:', error.message);
+  }
 }
 
 // Külön értesítő a webhookból: a számla a rendszergazdához akkor is eljut, ha a vevő böngészője nem indítja a kézbesítést.
 async function sendAdminNotification({ customer, plan, orderNumber, invoiceNumber, invoicePdf, title, paymentMethod }, deps = {}) {
   const env = deps.env || process.env;
   if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  await refreshNotificationSettings();
   const support = supportEmail(env);
   const lines = [`Új sikeres fizetés${paymentMethod ? ` (${paymentMethod})` : ''}.`, `Rendelésszám: ${orderNumber || '-'}`, `Számlaszám: ${invoiceNumber || '-'}`, `Csomag: ${planLabelOf(plan)}`, `Vevő: ${customer?.name || '-'} <${customer?.email || '-'}>`, `Téma: ${title || '-'}`];
   const transport = createTransport(env, deps);
@@ -319,6 +329,7 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
     env = actualDeps.env || process.env;
   }
   if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  await refreshNotificationSettings();
   const support = supportEmail(env);
   const transport = createTransport(env, actualDeps);
 
@@ -372,6 +383,7 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
 async function sendAdminErrorAlert({ operation, error, email, documentId, details }, deps = {}) {
   const env = deps.env || process.env;
   if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  await refreshNotificationSettings();
   const support = supportEmail(env);
   const recipient = adminEmail(env);
   const timestamp = new Date().toISOString();

@@ -606,6 +606,10 @@
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
       byId('setBillingProfile').value = settings.billing_profile || 'ev';
       byId('setPaymentProvider').value = settings.payment_provider || 'barion';
+      byId('setNotificationEmail').value = settings.notification_email || '';
+      byId('notificationEffective').textContent = settings.notification_email
+        ? 'Jelenleg ez a cím él (az Admin Központban mentve).'
+        : 'Nincs mentett cím: a Render környezeti változók (vagy az ügyfélszolgálati cím) az érvényesek.';
       for (const [key, id] of LINK_FIELDS) byId(id).value = settings.external_links?.[key] || '';
       renderToolLinks(settings.external_links);
     } catch (error) {
@@ -685,6 +689,10 @@
     billing_profile: byId('setBillingProfile').value,
     payment_provider: byId('setPaymentProvider').value
   }), { status: 'billingStatus', error: 'billingError', button: 'billingSave' });
+
+  const saveNotification = (event) => saveSettings(event, () => ({
+    notification_email: byId('setNotificationEmail').value.trim()
+  }), { status: 'notificationStatus', error: 'notificationError', button: 'notificationSave' });
 
   // Módosítási napló: csak olvasható, a régi érték kijelölhető és másolható.
   async function openHistory(key) {
@@ -809,6 +817,7 @@
     byId('generalForm').addEventListener('submit', saveGeneral);
     byId('aiForm').addEventListener('submit', saveAi);
     byId('billingForm').addEventListener('submit', saveBilling);
+    byId('notificationForm').addEventListener('submit', saveNotification);
     byId('linksForm').addEventListener('submit', saveLinks);
     document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
     byId('historyKey').addEventListener('change', () => openHistory());
