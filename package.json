@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "NODE_ENV=test node scripts/check-site.js && NODE_ENV=test node --test tests/*.test.js",
+    "test": "NODE_ENV=test node scripts/check-site.js && NODE_ENV=test node --test --test-concurrency=1 tests/*.test.js",
     "start": "node backend/server.js",
     "start:backend": "node -r dotenv/config backend/server.js",
     "dev": "node --watch backend/server.js",
