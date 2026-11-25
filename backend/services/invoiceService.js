@@ -74,7 +74,7 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
     <szamlaagentkulcs>${escapeXml(szamlazzApiKey(env, billingProfile))}</szamlaagentkulcs>
-    <eszamla>true</eszamla>
+    <eszamla>${String(env.SZAMLAZZ_E_INVOICE || '').trim().toLowerCase() === 'true'}</eszamla>
     <szamlaLetoltes>true</szamlaLetoltes>
     <valaszVerzio>1</valaszVerzio>
   </beallitasok>
@@ -91,7 +91,7 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
   </fejlec>
   <elado>
     <emailReplyto>${escapeXml(supportEmail(env))}</emailReplyto>
-    <emailTargy>OviTervező – e-számla</emailTargy>
+    <emailTargy>OviTervező – számla</emailTargy>
     <emailSzoveg>A szolgáltatás az ovitervezo.hu oldalon keresztül valósult meg. Köszönjük a vásárlást!</emailSzoveg>
   </elado>
   <vevo>

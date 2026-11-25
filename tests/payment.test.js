@@ -155,7 +155,9 @@ test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a profo
   const order = { plan: 'daily', orderId: 'cs_1', customer: { email: 'a@b.hu' } };
   const sandbox = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_SANDBOX: 'true' });
   assert.match(sandbox, /<dijbekero>false<\/dijbekero>/);
-  assert.match(sandbox, /<eszamla>true<\/eszamla>/);
+  assert.match(sandbox, /<eszamla>false<\/eszamla>/);
+  assert.match(sandbox, /<szamlaLetoltes>true<\/szamlaLetoltes>/);
+  assert.match(invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_E_INVOICE: 'true' }), /<eszamla>true<\/eszamla>/);
   const live = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k' });
   assert.match(live, /<dijbekero>false<\/dijbekero>/);
 });
@@ -196,7 +198,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti alapcsomag<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
   assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@ovitervezo\.hu \| Köszönjük a vásárlást!<\/megjegyzes>/);
-  assert.match(daily, /<eszamla>true<\/eszamla>/);
+  assert.match(daily, /<eszamla>false<\/eszamla>/);
   assert.match(daily, /<sendEmail>false<\/sendEmail>/);
   assert.match(daily, /<dijbekero>false<\/dijbekero>/);
 });
