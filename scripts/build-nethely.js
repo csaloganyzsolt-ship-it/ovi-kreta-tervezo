@@ -55,7 +55,7 @@ copyAssets(frontend, out);
 const config = {
   apiBaseUrl,
   paywallEnabled: true,
-  turnstileSiteKey: TURNSTILE_SITE_KEY,
+  turnstileSiteKey: String(process.env.TURNSTILE_SITE_KEY || '').trim() || TURNSTILE_SITE_KEY,
   barionPixelId: barionPixelId(),
   SUPABASE_URL: SUPABASE_PUBLIC_URL,
   SUPABASE_PUBLISHABLE_KEY,

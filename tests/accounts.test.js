@@ -623,7 +623,7 @@ const pageHtml = readPage('tervezo.html');
 const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
 
 async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.html', search = '', config = {}, routes = {}, local = true, history = null, turnstile = false }) {
-  const state = { listener: null, otp: [], logins: [], signUps: [], resets: [], updates: [], oauth: [], fetches: [], signOuts: [], turnstile: { renders: [], resets: [], removes: [] } };
+  const state = { listener: null, otp: [], logins: [], signUps: [], resets: [], updates: [], oauth: [], fetches: [], signOuts: [], order: [], turnstile: { renders: [], resets: [], removes: [] } };
   const dom = new JSDOM(page, {
     url: `http://localhost:8000/${pageName}${search}`,
     runScripts: 'dangerously',
@@ -637,7 +637,7 @@ async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.
       if (turnstile) {
         window.turnstile = {
           render(target, options) { state.turnstile.renders.push({ target, options }); state.turnstile.last = options; return `widget-${state.turnstile.renders.length}`; },
-          reset(id) { state.turnstile.resets.push(id); },
+          reset(id) { state.order.push('reset'); state.turnstile.resets.push(id); },
           remove(id) { state.turnstile.removes.push(id); }
         };
       }
@@ -665,7 +665,11 @@ async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.
             auth: {
               onAuthStateChange(callback) { state.listener = callback; return { data: { subscription: {} } }; },
               async signInWithPassword(args) {
+                state.order.push('signIn');
                 state.logins.push(args);
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                state.order.push('signIn-done');
+                if (args.password === 'secretmismatch') return { error: { message: 'captcha protection: request disallowed (invalid-input-secret)' } };
                 return args.password === 'rosszjelszo' ? { error: { message: 'Invalid login credentials' } } : { data: {}, error: null };
               },
               async signUp(args) { state.signUps.push(args); return { data: { session: null, user: {} }, error: null }; },
@@ -1652,4 +1656,31 @@ test('token unsubscribe works for guest rows without a profile and leaves other 
   const rows = client.tables.newsletter_subscribers;
   assert.equal(rows.find((row) => row.email === 'vendeg@example.com').subscribed, false);
   assert.equal(rows.find((row) => row.user_id === BOB.id).subscribed, true, 'a többi feliratkozó érintetlen');
+});
+
+test('Turnstile: the token is sent once, reset only after the Supabase request, and a secret mismatch shows a clear message', async (t) => {
+  const { window, state } = await loadPage(t, { withSupabase: true, turnstile: true, config: { turnstileSiteKey: '0x4AAAAAAGFSc8Zzow6VmxQ9' } });
+  const document = window.document;
+  const errors = [];
+  window.console.error = (...args) => errors.push(args.join(' '));
+  document.getElementById('authBtn').click();
+  await tick();
+  document.getElementById('authEmail').value = 'tanar@example.com';
+  document.getElementById('authPassword').value = 'secretmismatch';
+  state.turnstile.last.callback('token-once');
+  submitAuthForm(window);
+  submitAuthForm(window); // dupla beküldés (pl. Enter + kattintás) nem mehet ki kétszer
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(state.logins.length, 1, 'ugyanaz a token nem megy ki kétszer');
+  assert.deepEqual(JSON.parse(JSON.stringify(state.logins[0].options)), { captchaToken: 'token-once' });
+  assert.deepEqual(state.order, ['signIn', 'signIn-done', 'reset'], 'a reset a Supabase-válasz után fut, nem előtte');
+  const message = text(window, 'authError');
+  assert.match(message, /szerveroldali titkos kulcsa nem egyezik a kliens site kulccsal/);
+  assert.match(message, /0x4AAAAAAGFS…/);
+  assert.ok(errors.some((line) => line.includes('0x4AAAAAAGFS…') && !line.includes('0x4AAAAAAGFSc8')));
+  // Reset után új token kell a következő próbálkozáshoz.
+  submitAuthForm(window);
+  await tick();
+  assert.equal(state.logins.length, 1);
+  assert.match(text(window, 'authError'), /biztonsági ellenőrzést/);
 });

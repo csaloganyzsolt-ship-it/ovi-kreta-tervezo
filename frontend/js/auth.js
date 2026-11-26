@@ -122,8 +122,8 @@
   }
 
   // Az egyszer használatos token minden Supabase-hívás előtt kerül a kérésbe, utána új ellenőrzés kell.
-  function captchaOptions() {
-    return captchaNeeded() ? { captchaToken: state.captchaToken } : {};
+  function captchaOptions(token) {
+    return captchaNeeded() ? { captchaToken: token } : {};
   }
 
   function setMode(mode) {
@@ -329,6 +329,14 @@
     const message = String(error?.message || '');
     if (/invalid login credentials/i.test(message)) return 'Hibás e-mail cím vagy jelszó.';
     if (/email not confirmed/i.test(message)) return 'Az e-mail címed még nincs megerősítve. Nézd meg a postaládádat a megerősítő levélért.';
+    if (/invalid-input-secret/i.test(message)) {
+      console.error(`Turnstile: a Supabase elutasította a tokent (invalid-input-secret). Az oldal sitekey-e: ${captchaSiteKey().slice(0, 12)}…`);
+      return 'A botvédelem (Turnstile) szerveroldali titkos kulcsa nem egyezik a kliens site kulccsal. Fejlesztőnek/adminnak: a Supabase Dashboard → Authentication → Attack Protection → Turnstile Secret Key mezőjében annak a widgetnek a Secret Key-e legyen, amelyhez a(z) ' + captchaSiteKey().slice(0, 12) + '… site kulcs tartozik.';
+    }
+    if (/captcha/i.test(message)) {
+      console.error(`Turnstile: a Supabase captcha hibát adott (${message}). Az oldal sitekey-e: ${captchaSiteKey().slice(0, 12)}…`);
+      return 'A biztonsági ellenőrzés lejárt vagy már felhasznált tokent kapott. Kérjük, pipáld be újra, majd próbáld meg még egyszer.';
+    }
     if (/rate limit|too many/i.test(message)) return 'Túl sok próbálkozás. Kérjük, várj pár percet, és próbáld újra.';
     if (/password.*(weak|short|least)|weak password/i.test(message)) return `A jelszó túl gyenge, legalább ${MIN_PASSWORD_LENGTH} karakter szükséges.`;
     return message || 'Ismeretlen hiba.';
@@ -341,7 +349,7 @@
   async function runMode(mode, values) {
     const redirectTo = `${window.location.origin}/tervezo.html`;
     if (mode === 'login') {
-      const { error } = await state.client.auth.signInWithPassword({ email: values.email, password: values.password, ...(captchaNeeded() ? { options: captchaOptions() } : {}) });
+      const { error } = await state.client.auth.signInWithPassword({ email: values.email, password: values.password, ...(captchaNeeded() ? { options: captchaOptions(values.captchaToken) } : {}) });
       if (error) throw error;
       closeAuthModal();
       return '';
@@ -350,7 +358,7 @@
       const { data, error } = await state.client.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { emailRedirectTo: redirectTo, data: { ...(values.name ? { full_name: values.name } : {}), newsletter_subscribed: values.newsletter === true }, ...captchaOptions() }
+        options: { emailRedirectTo: redirectTo, data: { ...(values.name ? { full_name: values.name } : {}), newsletter_subscribed: values.newsletter === true }, ...captchaOptions(values.captchaToken) }
       });
       if (error) throw error;
       const newsletterBox = byId('authNewsletter');
@@ -362,7 +370,7 @@
       return 'Elküldtük a megerősítő levelet az e-mail címedre. A benne lévő linkre kattintva aktiválhatod a fiókodat.';
     }
     if (mode === 'forgot') {
-      const { error } = await state.client.auth.resetPasswordForEmail(values.email, { redirectTo, ...captchaOptions() });
+      const { error } = await state.client.auth.resetPasswordForEmail(values.email, { redirectTo, ...captchaOptions(values.captchaToken) });
       if (error) throw error;
       return 'Ha az e-mail címhez tartozik fiók, elküldtük a jelszó-visszaállító linket.';
     }
@@ -396,17 +404,24 @@
       setMessage('authError', 'Kérjük, végezd el a biztonsági ellenőrzést.');
       return;
     }
+    if (state.busy) return;
+    state.busy = true;
+    // A token egyszer használható: kivesszük, így egy második beküldés nem küldheti el ugyanazt újra.
+    const captchaToken = state.captchaToken;
+    state.captchaToken = '';
     const submit = byId('authSubmit');
     if (submit) submit.disabled = true;
     try {
-      const status = await runMode(state.mode, { email, password, name, newsletter });
+      const status = await runMode(state.mode, { email, password, name, newsletter, captchaToken });
       if (status) setMessage('authStatus', status);
       const passwordInput = byId('authPassword');
       if (passwordInput) passwordInput.value = '';
     } catch (error) {
       setMessage('authError', friendlyError(error));
     } finally {
+      // A reset csak a Supabase-kérés lezárulta után fut: a felhasznált tokent újra kell generálni.
       if (captchaNeeded()) resetCaptcha();
+      state.busy = false;
       if (submit) submit.disabled = false;
     }
   });
