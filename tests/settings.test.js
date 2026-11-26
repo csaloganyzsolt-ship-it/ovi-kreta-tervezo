@@ -394,7 +394,7 @@ const migrationTemplates = () => Object.fromEntries([...MIGRATION_SQL.matchAll(/
 
 test('the migration seeds the real model, the full original prompt and the real templates with upsert', () => {
   const prompt = MIGRATION_SQL.match(/\$prompt\$([\s\S]*?)\$prompt\$/)[1];
-  assert.equal(prompt, settingsService.DEFAULT_SETTINGS.ai_config.system_prompt);
+  assert.ok(settingsService.DEFAULT_SETTINGS.ai_config.system_prompt.startsWith(prompt), 'az alapérték a migráció eredeti promptjával kezdődik');
   assert.match(MIGRATION_SQL, /'model', 'gemini-3\.1-pro-preview'/);
   assert.ok(prompt.length > 3000 && prompt.includes('kidolgozas_tablazat') && prompt.includes('mester-óvodapedagógus'));
   assert.equal(MIGRATION_SQL.includes('gpt-4o'), false);

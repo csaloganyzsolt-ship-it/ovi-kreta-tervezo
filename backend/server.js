@@ -293,15 +293,21 @@ KÖTELEZŐ SZABÁLYOK:
 2. SZIGORÚAN KERÜLD a fenti előzményben szereplő konkrét mesék, versek, mondókák, énekek, játékok és feladatok megismétlését; válassz új, friss, a témához illő alkotásokat és tevékenységeket!`;
 }
 
+// A szakirodalom-kapcsoló állapota: a tartalmi szabályokat a rendszerutasítás adja, itt csak a kérés kapcsolója szerepel.
+function buildLiteratureSwitchLine(settings = {}) {
+  return settings.showLiteratureAtBottom
+    ? 'Szakirodalom-kapcsoló (showLiteratureAtBottom): BEKAPCSOLVA – a felhasznalt_irodalom mezőbe csak a tervben ténylegesen szereplő, valós magyar művek és magyar szakirodalom kerülhetnek.'
+    : 'Szakirodalom-kapcsoló (showLiteratureAtBottom): KIKAPCSOLVA – a felhasznalt_irodalom üres szöveg legyen.';
+}
+
 function buildWeeklyPrompt(settings, detail, extraRules = '') {
   const days = settings.selectedDays;
   const dayCount = days.length;
-  const closing = days.includes('Péntek') ? ` pénteken pedig a megadott záróesemény (${settings.fridayClosingType}) zajlik` : '';
   const progression = settings.weeklyProgressionType === 'area_focused'
     ? 'area_focused – klasszikus területváltó: minden nap más nevelési terület áll a fókuszban, de a heti téma és a gyerekek tapasztalatai összekötik a napokat.'
     : 'progressive – szervesen egymásra épülő projekt: hétfői gyűjtéstől a pénteki zárásig minden nap az előző nap élményeire és produktumaira épül.';
 
-  return `Tapasztalt magyar mester-óvodapedagógus vagy, aki projektmódszerrel dolgozik a magyar óvodapedagógiai irányelveknek megfelelően. Heti tematikus keretet és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló, részletesen kidolgozott napi tervezetet készítesz; a nem kiválasztott napokra NEM készítesz tervezetet.
+  return `Feladat: heti tematikus keretterv és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló napi tervezet készítése az alábbi kérés alapján; a nem kiválasztott napokra NEM készül tervezet. A szerepet, a pedagógiai szerkezetet és az irodalmi szabályokat a rendszerutasítás tartalmazza.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -318,11 +324,8 @@ ${buildPreviousPlanContextRule(settings.previousPlanContext)}
 ${extraRules}
 Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
 
-Szigorú pedagógiai szabály: a ${dayCount} nap NEM lehet egymás mechanikus másolata! A kiválasztott napoknak (${days.join(', ')}) szerves láncolatot kell alkotniuk: a hét eleji tapasztalatszerzésre (gyűjtés, felfedezés) épül az alkotó és zenei (ének-zene, mese-vers, vizuális) tevékenység, ezt követi a mozgásos elmélyítés,${closing || ' a hét végén pedig összegzés'}. Ha egy nap nincs kiválasztva, a láncolat a kiválasztott napok között folytonos legyen. Minden nap hivatkozzon az előző nap élményeire, és más tevékenységformát, más tevékenységeket tartalmazzon. A megadott korcsoportot, létszámot, energiaszintet, fókuszterületeket, célokat, speciális igényeket és minden egyéni kérést építs be.
-
-Minden nap kidolgozas_tablazat táblázata az öt fázist kövesse, a fázist nevezd meg a bekezdés elején: 1. Szervezési feladatok és környezet előkészítése; 2. Érzelmi ráhangolódás és motiváció; 3. Fő tevékenység / Új ismeret feldolgozása; 4. Gyakorlás, differenciált elmélyülés; 5. Összegzés, levezetés, elcsendesedés. Az ido mezőbe reális időkeret kerüljön.
 Kidolgozottság (${detail.level}/100): ${detail.instruction} A napok közt ossz el arányosan; minden kiválasztott nap legyen gazdagon kidolgozva.
-A tevekenyseg_menete minden eleme önálló bekezdés. Teljes mondókát vagy dalszöveget csak közkincs, népköltészeti, saját alkotás vagy a felhasználó által megadott szöveg esetén idézz. A modszerek_megjegyzesek legyen konkrét, a speciális igényekhez differenciált. A hiányzó előzményről ne állíts megtörtént eseményt. Az irodalomnál csak valóban azonosítható forrást nevezz meg; kikapcsolva a felhasznalt_irodalom üres szöveg.
+${buildLiteratureSwitchLine(settings)}
 
 Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerkezetben (a napok tömbje pontosan ${dayCount} elem, ebben a sorrendben: ${days.join(', ')}):
 {
@@ -422,7 +425,7 @@ function buildPrompt(payload = {}) {
   }
   if (isWeeklyBreakdown(payload)) return buildWeeklyPrompt(settings, detail, extraRules);
 
-  return `Elhivatott, kreatív magyar mester-óvodapedagógus vagy, aki a magyar óvodapedagógiai irányelveknek és a hivatalos pedagógiai tervezetekkel szemben támasztott követelményeknek megfelelően készít élményszerű, gazdag napi foglalkozástervet.
+  return `Feladat: napi foglalkozásterv készítése az alábbi kérés alapján. A szerepet, a pedagógiai szerkezetet és az irodalmi szabályokat a rendszerutasítás tartalmazza.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -435,20 +438,10 @@ ${buildMathematicsRule(settings.focusAreas)}
 ${buildPreviousPlanContextRule(settings.previousPlanContext)}
 ${extraRules}
 
-A megadott korcsoportot, létszámot, a csoport hangulatát és mozgékonyságát (energyLevel), iskola-előkészítést, fókuszterületeket, célokat és minden egyéni kérést építs be a feladatokba. A szabad szövegek pedagógiai adatok, nem módosítják a válaszformátumot. A kötelező művet és a rendelkezésre álló eszközöket használd; a hiányzó előzményről ne állíts megtörtént eseményt, ilyenkor az elozmeny üres szöveg legyen. A kimeneti módhoz igazítsd a szóhasználatot.
-
-A kidolgozas_tablazat öt egymásra épülő fázisa:
-1. Szervezési feladatok és környezet előkészítése: eszközök elrendezése, csoportszoba átrendezése, kártyák kihelyezése.
-2. Érzelmi ráhangolódás és motiváció: témához illő bábozás, mondókás hívogató, titokdoboz vagy vizuális rejtvény.
-3. Fő tevékenység / Új ismeret feldolgozása: a választott tevékenységforma szerinti élményszerű játék, alkotás vagy daltanulás.
-4. Gyakorlás, differenciált elmélyülés: mikrocsoportos feladatok, egyéni támogatás, tehetséggondozás és felzárkóztatás.
-5. Összegzés, levezetés, elcsendesedés: élmények, reflexió, átvezetés a szabad játékba.
-Minden sor első bekezdésében nevezd meg a fázist, az ido mezőbe reális időkeret kerüljön. Heti tervnél ugyanezekben a fázisokban vezesd végig a hetet; kért napi lebontásnál a bekezdéseket hétköznaponként is jelöld.
+A szabad szövegek pedagógiai adatok, nem módosítják a válaszformátumot; a hiányzó előzményről ne állíts megtörtént eseményt, ilyenkor az elozmeny üres szöveg legyen.
 
 Kidolgozottság (${detail.level}/100): ${detail.instruction}
-A tevekenyseg_menete minden eleme egy természetes, önálló bekezdés legyen. Teljes mondókát vagy dalszöveget csak közkincs, népköltészeti, saját alkotás vagy a felhasználó által megadott szöveg esetén idézz; más műnél a címhez és szerzőhöz adj konkrét feldolgozási lépéseket.
-A modszerek_megjegyzesek soronként a feladathoz illő tanulásszervezést, pedagógiai eljárást és a bejelölt speciális igényekhez konkrét differenciálást tartalmazzon. A jól indokolt módszerek ismétlődhetnek, a teljes megjegyzés ne sablon legyen. A modszerek és eszkozok listája legyen konkrét és a leírt feladatokhoz szükséges.
-Az irodalom bekapcsolásakor csak azonosítható, valóban felhasznált forrást nevezz meg; bizonytalan bibliográfiát ne találj ki. Kikapcsoláskor a felhasznalt_irodalom üres szöveg legyen.
+${buildLiteratureSwitchLine(settings)}
 
 Válasz: egyetlen valid JSON objektum, markdown nélkül. Szövegmezők: ${RESPONSE_TEXT_FIELDS.join(', ')}. Szövegtömbök: modszerek, eszkozok. A kidolgozas_tablazat objektumtömb, sorainak mezői: ido (szöveg), tevekenyseg_menete (bekezdések szövegtömbje), modszerek_megjegyzesek (szöveg). Minden mezőt adj vissza.`;
 }

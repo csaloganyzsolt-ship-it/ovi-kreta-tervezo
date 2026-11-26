@@ -4,6 +4,7 @@
 // Napi terv: Foglalkozási/tevékenységi terv (3 oszlopos kidolgozás). Heti terv: Tematikus terv (7 oszlopos mátrix).
 
 const { generationError, readText, readStringArray, readParagraphs } = require('./responseReaders');
+const { LITERATURE_PRIORITY_RULE } = require('./literatureRules');
 
 // Az ONAP hat tevékenységi területe; a kulcsok a Gemini-válasz mezői, a feliratok a mátrix fejlécei.
 const AREA_COLUMNS = Object.freeze([
@@ -92,6 +93,7 @@ function weekRangeLabel(dateValue, weekIndex = 0) {
 }
 
 const SOURCE_RULES = `FORRÁSKÓDOK ÉS SZAKIRODALOM (szigorú szabályok):
+- ${LITERATURE_PRIORITY_RULE}
 - Rövidítések: ÉNÓ = Forrai Katalin: Ének az óvodában; KEE = Lukács Józsefné – Ferencz Éva: Kerek egy esztendő; ONAP = Óvodai nevelés országos alapprogramja (363/2012. (XII. 17.) Korm. rendelet). Törzsök Béla: Zenehallgatás az óvodában szintén használható zenehallgatási anyaghoz.
 - Minden vers, mondóka, mese, dal, énekes játék, kiszámoló és zenehallgatási anyag mellett tüntesd fel a gyűjteményi forráskódot (pl. (ÉNÓ 173.), (KEE 45.)). Oldalszámot csak akkor írj, ha biztosan tudod; bizonytalan oldalszám helyett csak a rövidítést add meg, vagy válassz másik, biztosan azonosítható művet. Oldalszámot, kiadót, évszámot SOHA ne találj ki.
 - A dokumentum legvégére, a "felhasznalt_irodalom" mezőbe kerüljön a "Felhasznált irodalom:" szakirodalmi jegyzék (a mező szövege már ne ismételje a címet): soronként egy tétel, szabványos alakban: "Szerző: Cím. Kiadó, Város, Évszám. (Rövidítés)". Csak valós, létező magyar óvodapedagógiai szakkönyvek és a dokumentumban ténylegesen hivatkozott művek szerepelhetnek; a jegyzék utolsó tétele: "Óvodai nevelés országos alapprogramja (ONAP)". Ha egy kiadói adatot nem tudsz biztosan, hagyd el az adott adatot, de ne találj ki helyette másikat. A tételeket új sorral válaszd el.
@@ -109,7 +111,7 @@ function toolsLine(settings) {
 }
 
 function buildAcademicDailyPrompt(settings, detail, commonRules) {
-  return `Egyetemi óvodapedagógus-képzésben dolgozó, tapasztalt szakmódszertani oktató és mentor-óvodapedagógus vagy. Hallgatói gyakorlatra, hospitálásra és zárótanításra alkalmas, hivatalos "Foglalkozási/tevékenységi terv" dokumentumot készítesz egyetemi szakmódszertani színvonalon, az Óvodai nevelés országos alapprogramja (ONAP) szerint.
+  return `Feladat: hallgatói gyakorlatra, hospitálásra és zárótanításra alkalmas, hivatalos "Foglalkozási/tevékenységi terv" dokumentum készítése az Óvodai nevelés országos alapprogramja (ONAP) szerint. A szerepet és az irodalmi szabályokat a rendszerutasítás tartalmazza.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -131,7 +133,6 @@ A DOKUMENTUM TARTALMA (szigorú szabályok):
    - tevekenyseg_menete (a "A fejlesztő tevékenység felépítése, a foglalkozás menete" oszlop): bekezdéstömb. A sorok sorrendje: **Szervezési feladatok:**, **Motiváció:**, majd a tevékenységi egységek (pl. **1. Tevékenységi egység – cím:**), végül **Elköszönés:**. A versek, mondókák teljes szövege (a szerzői jogi szabály szerint) dőlt betűs;
    - modszerek_megjegyzesek (a "A fejlesztés módszerei, munkaformák, eszközök, megjegyzések" oszlop): szöveg, bekezdéseit üres sor választja el. Kötelező tartalma soronként: "Tanulásszervezés módja: kötetlen." (vagy a valódi munkaforma), a pedagógus konkrét, szó szerinti kérdései és instrukciói dőlten, differenciálás (pl. *„Az ügyesebbek…”*), valamint hibajavítási/segítségnyújtási megoldás, és az eszközök.
 3. Kidolgozottság (${detail.level}/100): ${detail.instruction}
-4. Ne használj elcsépelt, ismétlődő sablonokat; a szöveg életszerű, differenciált és a magyar óvodapedagógiai irányelveknek megfelelő legyen.
 
 ${TYPOGRAPHY_RULES}
 
@@ -157,7 +158,7 @@ Minden mezőt adj vissza.`;
 
 function buildAcademicThematicPrompt(settings, detail, commonRules) {
   const range = weekRangeLabel(settings.dateValue);
-  return `Egyetemi óvodapedagógus-képzésben dolgozó, tapasztalt szakmódszertani oktató és mentor-óvodapedagógus vagy. Hallgatói gyakorlatra és hospitálásra alkalmas "Tematikus terv" dokumentumot készítesz pontosan ${THEMATIC_WEEK_COUNT} hétre egyetemi szakmódszertani színvonalon, az Óvodai nevelés országos alapprogramja (ONAP) szerint.${range ? ` A hét időszaka: ${range}` : ''}
+  return `Feladat: hallgatói gyakorlatra és hospitálásra alkalmas "Tematikus terv" dokumentum készítése pontosan ${THEMATIC_WEEK_COUNT} hétre, az Óvodai nevelés országos alapprogramja (ONAP) szerint. A szerepet és az irodalmi szabályokat a rendszerutasítás tartalmazza.${range ? ` A hét időszaka: ${range}` : ''}
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
@@ -179,7 +180,6 @@ A DOKUMENTUM TARTALMA (szigorú szabályok):
    - modszerek: szöveglista; eszkozok: szöveglista.
 4. "megjegyzes_egyeb_tevekenysegek": egyhetes tervnél null. (Többhetes tervnél a dokumentum végén objektum lenne: jatekbovites, anyanyelvi_jatekok, fejlesztojatek, kirandulas_setak szöveglistákkal.)
 5. Kidolgozottság (${detail.level}/100): ${detail.instruction} A terjedelmet a mátrix tartalmi gazdagságára és a pontos forrásmegjelölésekre fordítsd.
-6. Ne használj elcsépelt, ismétlődő sablonokat; a tartalom életszerű, differenciált és a magyar óvodapedagógiai irányelveknek megfelelő legyen.
 
 ${TYPOGRAPHY_RULES}
 

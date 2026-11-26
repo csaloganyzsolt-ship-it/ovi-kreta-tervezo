@@ -124,11 +124,13 @@ test('the concise pedagogical prompt includes all real settings and every custom
     hasPreschoolers: false, detailLevel: 90, includeDailyBreakdown: true, showLiteratureAtBottom: false })) {
     assert.match(prompt, new RegExp(`"${key}"\\s*:\\s*${value}`));
   }
-  assert.match(prompt, /mester-óvodapedagógus/);
-  assert.match(prompt, /óvodapedagógiai irányelv/);
+  // A szerepleírás és a pedagógiai szerkezet egyetlen helyen, az Adminban szerkeszthető rendszerpromptban él.
+  assert.doesNotMatch(prompt, /mester-óvodapedagógus/);
+  assert.doesNotMatch(prompt, /öt egymásra épülő fázis/);
+  const systemPrompt = require('../backend/services/settingsService').DEFAULT_SETTINGS.ai_config.system_prompt;
   for (const phase of ['Szervezési feladatok', 'Érzelmi ráhangolódás', 'Fő tevékenység',
-    'Gyakorlás, differenciált', 'Összegzés, levezetés']) {
-    assert.ok(prompt.includes(phase), `Missing phase: ${phase}`);
+    'Gyakorlás, differenciált', 'Összegzés, levezetés', 'mester-óvodapedagógus']) {
+    assert.ok(systemPrompt.includes(phase), `Missing phase in the system prompt: ${phase}`);
   }
 });
 
@@ -136,7 +138,6 @@ test('high detail starts at 80 and requests substantial paragraphs rather than a
   const prompt = buildPrompt(makePayload({ detailLevel: 80 }));
   assert.match(prompt, /legalább 3[^\n]*bekezdés/);
   assert.match(prompt, /szóbeli instrukció/);
-  assert.match(prompt, /közkincs|népköltészeti/);
 });
 
 test('Gemini requests default to the fast model and use Argon only when explicitly requested', async (t) => {
@@ -276,7 +277,7 @@ test('quota errors preserve their HTTP status and are not retried on a different
 test('weekly breakdown uses the weekly master prompt and 16384 output tokens', () => {
   const prompt = buildPrompt(makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true,
     weeklyProgressionType: 'area_focused', fridayClosingType: 'Projektzáró élményséta' }));
-  assert.match(prompt, /óvodapedagógiai irányelv/);
+  assert.doesNotMatch(prompt, /Tapasztalt magyar mester-óvodapedagógus/);
   assert.match(prompt, /heti_keretterv/);
   assert.match(prompt, /area_focused/);
   assert.match(prompt, /Projektzáró élményséta/);
@@ -313,7 +314,7 @@ test('weekly generation covers only the selected days in prompt and response val
   const payload = makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true, selectedDays: ['Hétfő', 'Kedd', 'Csütörtök'] });
   const prompt = buildPrompt(payload);
   assert.match(prompt, /pontosan 3 elem, ebben a sorrendben: Hétfő, Kedd, Csütörtök/);
-  assert.match(prompt, /nem kiválasztott napokra NEM készítesz/);
+  assert.match(prompt, /nem kiválasztott napokra NEM készül tervezet/);
   assert.doesNotMatch(prompt, /pontosan 5 elem/);
 
   const row = { ido: '10 perc', tevekenyseg_menete: ['Bekezdés'], modszerek_megjegyzesek: 'Megjegyzés' };

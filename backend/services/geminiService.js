@@ -3,6 +3,7 @@
 const FAST_MODEL = 'gemini-3.1-pro-preview';
 const PREMIUM_MODEL = 'gemini-3.1-pro-preview';
 const { isValidModelName } = require('./settingsService');
+const { LITERATURE_PRIORITY_RULE } = require('./literatureRules');
 
 function generationError(message, status = 502) {
   const error = new Error(message);
@@ -56,7 +57,7 @@ async function callGemini(prompt, {
         signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({
           systemInstruction: {
-            parts: [{ text: (systemPrompt ? `${systemPrompt}\n\n` : '') + 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' + (blacklist ? `\n\n${buildBlacklistRule(blacklist)}` : '') }]
+            parts: [{ text: (systemPrompt ? `${systemPrompt}\n\n` : '') + 'A feladatnak megfelelő, teljes magyar foglalkozástervet adj vissza egyetlen valid JSON objektumban. Ne használj markdown-kódblokkot vagy kísérőszöveget.' + `\n\n${LITERATURE_PRIORITY_RULE}` + (blacklist ? `\n\n${buildBlacklistRule(blacklist)}` : '') }]
           },
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
