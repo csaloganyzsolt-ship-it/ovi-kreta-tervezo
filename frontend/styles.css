@@ -2479,3 +2479,20 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
   .admin-pager-nav .profile-btn { min-width: 44px; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .admin-sidebar { transition: none; } }
+
+/* Admin: kompakt listasor, összecsukható szűrők, műveletek menü */
+.admin-listbar { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; margin: 6px 0 10px; }
+.admin-listbar .profile-hint { margin: 0; flex: 1 1 220px; }
+.admin-listbar-tools { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-listbar-tools .profile-btn { min-height: 40px; }
+.admin-pagesize { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted, inherit); }
+.admin-pagesize select { min-height: 40px; }
+.admin-listbar .profile-btn.has-filters { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.admin-filters[hidden], .admin-filter-row[hidden], .admin-menu-list[hidden] { display: none; }
+.admin-menu { position: relative; display: inline-block; }
+.admin-menu-toggle { min-height: 36px; white-space: nowrap; }
+.admin-menu-list { position: fixed; z-index: 1000; min-width: 220px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; border: 1px solid var(--border, #cfe8da); background: var(--surface, #fff); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+.admin-menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.admin-menu-item:hover:not(:disabled), .admin-menu-item:focus-visible { background: rgba(63, 174, 132, 0.15); outline: none; }
+.admin-menu-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.admin-menu-reason { font-size: 0.78rem; color: var(--muted, #5b6b64); }

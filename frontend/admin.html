@@ -54,11 +54,6 @@
             </details>
           </aside>
           <div class="admin-content">
-          <div class="profile-head">
-            <div>
-              <h1>Admin Központ</h1>
-            </div>
-          </div>
 
           <div class="admin-alert-banner" id="failedOrdersBanner" role="alert" hidden>
             <strong id="failedOrdersTitle"></strong>
@@ -202,7 +197,19 @@
 
           <section class="profile-panel" id="panelOrders" role="tabpanel" aria-labelledby="tabOrders" hidden>
             <h2>Rendelések &amp; Számlák</h2>
-            <div class="admin-filters">
+            <div class="admin-listbar">
+              <p class="profile-hint" id="ordersCount" role="status"></p>
+              <span class="admin-listbar-tools">
+                <button type="button" class="profile-btn" data-filters-toggle="orders" aria-expanded="false" aria-controls="ordersFilters">Szűrők</button>
+                <label class="admin-pagesize">Sor / oldal <select id="ordersPageSize" data-list="orders" data-pagesize>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
+                <button type="button" class="profile-btn" id="ordersExport" title="Az aktuális oldal exportja">CSV export</button>
+              </span>
+            </div>
+            <div class="admin-filters" id="ordersFilters" hidden>
               <div>
                 <label for="ordersSearch">Keresés</label>
                 <input id="ordersSearch" type="search" data-list="orders" data-filter="q" placeholder="E-mail, név, rendelésszám, kupon, számlaszám" autocomplete="off" />
@@ -244,23 +251,13 @@
                   <button type="button" class="profile-btn" data-list="orders" data-range="all">Összes</button>
                 </span>
               </div>
-              <div>
-                <label for="ordersPageSize">Sor / oldal</label>
-                <select id="ordersPageSize" data-list="orders" data-pagesize>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-              </div>
               <button type="button" class="profile-btn" data-list="orders" data-clear>Szűrők törlése</button>
-              <button type="button" class="profile-btn" id="ordersExport" title="Az aktuális oldal exportja">CSV export</button>
             </div>
-            <p class="profile-hint" id="ordersCount" role="status"></p>
             <div class="admin-table-wrap">
               <table class="admin-table" id="ordersTable">
                 <thead>
                   <tr><th>Dátum</th><th>Rendelésszám</th><th>Vevő</th><th>Csomag</th><th>Téma</th><th>Összeg</th><th>Kupon</th><th>Státusz</th><th>Számlaszám</th><th>Művelet</th></tr>
-                  <tr class="admin-filter-row"><th></th><th><input type="search" data-list="orders" data-filter="orderNumber" placeholder="Keresés" aria-label="Rendelésszám szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="customer" placeholder="Keresés" aria-label="Vevő szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="orders" data-filter="topic" placeholder="Keresés" aria-label="Téma szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="amount" placeholder="Keresés" aria-label="Összeg szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="coupon" placeholder="Keresés" aria-label="Kupon szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="orders" data-filter="invoiceNumber" placeholder="Keresés" aria-label="Számlaszám szűrése" autocomplete="off" /></th><th><button type="button" class="profile-btn" data-list="orders" data-clear>Szűrők törlése</button></th></tr>
+                  <tr class="admin-filter-row" hidden><th></th><th><input type="search" data-list="orders" data-filter="orderNumber" placeholder="Keresés" aria-label="Rendelésszám szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="customer" placeholder="Keresés" aria-label="Vevő szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="orders" data-filter="topic" placeholder="Keresés" aria-label="Téma szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="amount" placeholder="Keresés" aria-label="Összeg szűrése" autocomplete="off" /></th><th><input type="search" data-list="orders" data-filter="coupon" placeholder="Keresés" aria-label="Kupon szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="orders" data-filter="invoiceNumber" placeholder="Keresés" aria-label="Számlaszám szűrése" autocomplete="off" /></th><th><button type="button" class="profile-btn" data-list="orders" data-clear>Szűrők törlése</button></th></tr>
                 </thead>
                 <tbody></tbody>
               </table>
@@ -271,7 +268,19 @@
 
           <section class="profile-panel" id="panelUsers" role="tabpanel" aria-labelledby="tabUsers" hidden>
             <h2>Felhasználók</h2>
-            <div class="admin-filters">
+            <div class="admin-listbar">
+              <p class="profile-hint" id="usersCount" role="status"></p>
+              <span class="admin-listbar-tools">
+                <button type="button" class="profile-btn" data-filters-toggle="users" aria-expanded="false" aria-controls="usersFilters">Szűrők</button>
+                <label class="admin-pagesize">Sor / oldal <select id="usersPageSize" data-list="users" data-pagesize>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
+                <button type="button" class="profile-btn" id="usersExport">Feliratkozók CSV exportja</button>
+              </span>
+            </div>
+            <div class="admin-filters" id="usersFilters" hidden>
               <div>
                 <label for="usersRole">Szerepkör</label>
                 <select id="usersRole" data-list="users" data-filter="role">
@@ -306,23 +315,13 @@
                   <button type="button" class="profile-btn" data-list="users" data-range="all">Összes</button>
                 </span>
               </div>
-              <div>
-                <label for="usersPageSize">Sor / oldal</label>
-                <select id="usersPageSize" data-list="users" data-pagesize>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-              </div>
               <button type="button" class="profile-btn" data-list="users" data-clear>Szűrők törlése</button>
-              <button type="button" class="profile-btn" id="usersExport">Feliratkozók CSV exportja</button>
             </div>
-            <p class="profile-hint" id="usersCount" role="status"></p>
             <div class="admin-table-wrap">
               <table class="admin-table" id="usersTable">
                 <thead>
                   <tr><th>Név</th><th>E-mail</th><th>Óvoda</th><th>Csoport</th><th>Számlázási név / adószám</th><th>Szerepkör</th><th>Regisztráció</th><th>E-mail megerősítve</th><th>Feliratkozott</th><th>Ügyfélszolgálat</th></tr>
-                  <tr class="admin-filter-row"><th><input type="search" data-list="users" data-filter="name" placeholder="Keresés" aria-label="Név szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="email" placeholder="Keresés" aria-label="E-mail szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="kindergarten" placeholder="Keresés" aria-label="Óvoda szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="group" placeholder="Keresés" aria-label="Csoport szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="billing" placeholder="Keresés" aria-label="Számlázási név / adószám szűrése" autocomplete="off" /></th><th></th><th></th><th></th><th></th><th><button type="button" class="profile-btn" data-list="users" data-clear>Szűrők törlése</button></th></tr>
+                  <tr class="admin-filter-row" hidden><th><input type="search" data-list="users" data-filter="name" placeholder="Keresés" aria-label="Név szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="email" placeholder="Keresés" aria-label="E-mail szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="kindergarten" placeholder="Keresés" aria-label="Óvoda szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="group" placeholder="Keresés" aria-label="Csoport szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="billing" placeholder="Keresés" aria-label="Számlázási név / adószám szűrése" autocomplete="off" /></th><th></th><th></th><th></th><th></th><th><button type="button" class="profile-btn" data-list="users" data-clear>Szűrők törlése</button></th></tr>
                 </thead>
                 <tbody></tbody>
               </table>
@@ -395,7 +394,19 @@
             </div>
 
             <div data-logs-panel="system">
-              <div class="admin-filters">
+              <div class="admin-listbar">
+                <p class="profile-hint" id="logsCount" role="status"></p>
+                <span class="admin-listbar-tools">
+                  <button type="button" class="profile-btn" data-filters-toggle="logs" aria-expanded="false" aria-controls="logsFilters">Szűrők</button>
+                  <label class="admin-pagesize">Sor / oldal <select id="logsPageSize" data-list="logs" data-pagesize>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
+                  <button type="button" class="profile-btn" id="logsRefresh">Frissítés</button>
+                </span>
+              </div>
+              <div class="admin-filters" id="logsFilters" hidden>
                 <div>
                   <label for="logsLevel">Szint</label>
                   <select id="logsLevel" data-list="logs" data-filter="level">
@@ -427,23 +438,13 @@
                   <button type="button" class="profile-btn" data-list="logs" data-range="all">Összes</button>
                 </span>
               </div>
-              <div>
-                <label for="logsPageSize">Sor / oldal</label>
-                <select id="logsPageSize" data-list="logs" data-pagesize>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-              </div>
                 <button type="button" class="profile-btn" data-list="logs" data-clear>Szűrők törlése</button>
-                <button type="button" class="profile-btn" id="logsRefresh">Frissítés</button>
-              </div>
-              <p class="profile-hint" id="logsCount" role="status"></p>
+                </div>
               <div class="admin-table-wrap">
                 <table class="admin-table" id="logsTable">
                   <thead>
                     <tr><th>Dátum</th><th>Szint</th><th>Kontextus</th><th>Hibaüzenet</th><th>Felhasználó</th></tr>
-                    <tr class="admin-filter-row"><th><input type="search" data-list="logs" data-filter="time" placeholder="ÉÉÉÉ-HH-NN" aria-label="Időpont szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="logs" data-filter="context" placeholder="Keresés" aria-label="Kontextus szűrése" autocomplete="off" /></th><th><input type="search" data-list="logs" data-filter="message" placeholder="Keresés" aria-label="Üzenet szűrése" autocomplete="off" /></th><th><input type="search" data-list="logs" data-filter="email" placeholder="Keresés" aria-label="Felhasználó szűrése" autocomplete="off" /></th></tr>
+                    <tr class="admin-filter-row" hidden><th><input type="search" data-list="logs" data-filter="time" placeholder="ÉÉÉÉ-HH-NN" aria-label="Időpont szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="logs" data-filter="context" placeholder="Keresés" aria-label="Kontextus szűrése" autocomplete="off" /></th><th><input type="search" data-list="logs" data-filter="message" placeholder="Keresés" aria-label="Üzenet szűrése" autocomplete="off" /></th><th><input type="search" data-list="logs" data-filter="email" placeholder="Keresés" aria-label="Felhasználó szűrése" autocomplete="off" /></th></tr>
                   </thead>
                   <tbody></tbody>
                 </table>
@@ -453,7 +454,18 @@
             </div>
 
             <div data-logs-panel="audit" hidden>
-              <div class="admin-filters">
+              <div class="admin-listbar">
+                <p class="profile-hint" id="auditCount" role="status"></p>
+                <span class="admin-listbar-tools">
+                  <button type="button" class="profile-btn" data-filters-toggle="audit" aria-expanded="false" aria-controls="auditFilters">Szűrők</button>
+                  <label class="admin-pagesize">Sor / oldal <select id="auditPageSize" data-list="audit" data-pagesize>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
+                </span>
+              </div>
+              <div class="admin-filters" id="auditFilters" hidden>
                 <div>
                   <label for="auditType">Típus</label>
                   <select id="auditType" data-list="audit" data-filter="type">
@@ -472,22 +484,13 @@
                   <button type="button" class="profile-btn" data-list="audit" data-range="all">Összes</button>
                 </span>
               </div>
-              <div>
-                <label for="auditPageSize">Sor / oldal</label>
-                <select id="auditPageSize" data-list="audit" data-pagesize>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-              </div>
                 <button type="button" class="profile-btn" data-list="audit" data-clear>Szűrők törlése</button>
               </div>
-              <p class="profile-hint" id="auditCount" role="status"></p>
               <div class="admin-table-wrap">
                 <table class="admin-table" id="auditTable">
                   <thead>
                     <tr><th>Időpont</th><th>Módosító</th><th>Beállítás</th><th>Miről (régi érték)</th><th>Mire (új érték)</th></tr>
-                    <tr class="admin-filter-row"><th></th><th><input type="search" data-list="audit" data-filter="changedBy" placeholder="Keresés" aria-label="Módosító szűrése" autocomplete="off" /></th><th><input type="search" data-list="audit" data-filter="setting" placeholder="Keresés" aria-label="Beállítás szűrése" autocomplete="off" /></th><th></th><th></th></tr>
+                    <tr class="admin-filter-row" hidden><th></th><th><input type="search" data-list="audit" data-filter="changedBy" placeholder="Keresés" aria-label="Módosító szűrése" autocomplete="off" /></th><th><input type="search" data-list="audit" data-filter="setting" placeholder="Keresés" aria-label="Beállítás szűrése" autocomplete="off" /></th><th></th><th></th></tr>
                   </thead>
                   <tbody></tbody>
                 </table>

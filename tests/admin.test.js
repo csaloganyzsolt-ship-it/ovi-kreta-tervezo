@@ -939,8 +939,8 @@ test('admin.js: a free coupon order shows a 0 Ft / Kupon label instead of a disa
   await tick();
   const rows = document.querySelectorAll('#ordersTable tbody tr');
   assert.equal(rows[0].querySelector('.admin-free-label').textContent, '0 Ft / Kupon');
-  assert.ok(![...rows[0].querySelectorAll('button')].some((b) => b.textContent === 'Számla kiállítása'));
-  const paid = [...rows[1].querySelectorAll('button')].find((b) => b.textContent === 'Számla kiállítása');
+  assert.ok(![...rows[0].querySelectorAll('button')].some((b) => b.textContent.startsWith('Számla kiállítása')));
+  const paid = [...rows[1].querySelectorAll('.admin-menu-item')].find((b) => b.textContent === 'Számla kiállítása');
   assert.equal(paid.disabled, false);
 });
 
@@ -949,7 +949,7 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
     { orderNumber: 'OVI-F1', createdAt: ago(1), email: 'a@example.com', name: 'A', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: '', lastError: 'Számlázás: Számlázz.hu hiba (8): emelt díjcsomag' },
     { orderNumber: 'OVI-F2', documentId: 'gen_f2', createdAt: ago(2), email: 'b@example.com', name: 'B', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: 'E-1', lastError: '' }
   ];
-  const { document, state } = await loadPage(t, {
+  const { document, window, state } = await loadPage(t, {
     confirm: true,
     routes: {
       '/api/admin/me': ME,
@@ -969,12 +969,26 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
   assert.match(rows[0].textContent, /Hiba: Számlázás: Számlázz\.hu hiba \(8\)/);
   assert.ok(rows[0].querySelector('.admin-order-error'));
   assert.equal(rows[1].querySelector('.admin-order-error'), null);
-  const labels = (row) => [...row.querySelectorAll('button')].map((b) => [b.textContent, b.disabled]);
-  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Számla küldése', true], ['Csomag küldése', true], ['Számla letöltése', true]]);
-  assert.match([...rows[0].querySelectorAll('button')][2].title, /document_id hiányzik/, 'tervezet nélküli rendelésnél a gomb magyarázó tooltippel letiltott');
-  assert.deepEqual(labels(rows[1]), [['Számla kiállítása', true], ['Számla küldése', false], ['Csomag küldése', false], ['Számla letöltése', false]]);
+  const labels = (row) => [...row.querySelectorAll('.admin-menu-item')].map((b) => [b.textContent, b.disabled]);
+  assert.equal(rows[0].querySelectorAll('tr button:not(.admin-menu-item)').length, 1, 'soronként egyetlen Műveletek gomb látszik');
+  assert.equal(rows[0].querySelector('.admin-menu-toggle').textContent, 'Műveletek ▾');
+  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Számla küldése(még nincs számla)', true], ['Csomag küldése(nincs tervezet)', true], ['Számla letöltése(még nincs számla)', true]]);
+  assert.match(rows[0].querySelectorAll('.admin-menu-item')[2].title, /nincs tervezet/, 'tervezet nélküli rendelésnél a menüpont indoklással letiltott');
+  assert.deepEqual(labels(rows[1]), [['Számla kiállítása(már kiállítva)', true], ['Számla küldése', false], ['Csomag küldése', false], ['Számla letöltése', false]]);
 
-  rows[0].querySelector('button').click();
+  rows[0].querySelector('.admin-menu-toggle').click();
+  assert.equal(rows[0].querySelector('.admin-menu-list').hidden, false);
+  rows[1].querySelector('.admin-menu-toggle').click();
+  assert.equal(rows[0].querySelector('.admin-menu-list').hidden, true, 'új menü megnyitásakor a többi bezáródik');
+  assert.equal(rows[1].querySelector('.admin-menu-list').hidden, false);
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(rows[1].querySelector('.admin-menu-list').hidden, true);
+  rows[1].querySelector('.admin-menu-toggle').click();
+  document.body.click();
+  assert.equal(rows[1].querySelector('.admin-menu-list').hidden, true, 'kívülre kattintásra bezárul');
+
+  rows[0].querySelector('.admin-menu-toggle').click();
+  rows[0].querySelector('.admin-menu-item').click();
   await tick();
   assert.ok(state.fetches.some((f) => f.path === '/api/admin/orders/OVI-F1/issue-invoice' && f.method === 'POST'));
   assert.deepEqual(state.confirms, [], 'a számlakiállítás nem függ a böngésző confirm ablakától');
@@ -1814,4 +1828,31 @@ test('admin.js: the audit sub-tab lists who changed what, with collapsible long 
   who.dispatchEvent(new window.Event('input'));
   await tick(450);
   assert.match(state.fetches.at(-1).query, /changedBy=admin/);
+});
+
+test('admin.js: filter panels and column search rows are collapsed by default, with an active filter badge', async (t) => {
+  const { document, window } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS], '/api/admin/orders': () => [pagedOrders([])] } });
+  assert.equal(document.querySelector('h1'), null, 'nincs duplikált Admin Központ főcím');
+  for (const name of ['orders', 'users', 'logs', 'audit']) {
+    assert.equal(document.getElementById(`${name}Filters`).hidden, true, `${name} szűrőpanel alapból zárt`);
+    assert.equal(document.querySelector(`tr.admin-filter-row input[data-list="${name}"]`).closest('tr').hidden, true);
+    assert.equal(document.querySelector(`[data-filters-toggle="${name}"]`).getAttribute('aria-expanded'), 'false');
+  }
+  document.getElementById('tabOrders').click();
+  await tick();
+  const toggle = document.querySelector('[data-filters-toggle="orders"]');
+  toggle.click();
+  assert.equal(document.getElementById('ordersFilters').hidden, false);
+  assert.equal(document.querySelector('#ordersTable tr.admin-filter-row').hidden, false);
+  const status = document.getElementById('ordersStatus');
+  status.value = 'paid';
+  status.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick();
+  assert.equal(toggle.textContent, 'Szűrők (1)');
+  toggle.click();
+  assert.equal(document.getElementById('ordersFilters').hidden, true);
+  assert.equal(toggle.textContent, 'Szűrők (1)', 'a jelvény zárt panelnél is látszik');
+  document.querySelector('[data-list="orders"][data-clear]').click();
+  await tick();
+  assert.equal(toggle.textContent, 'Szűrők');
 });

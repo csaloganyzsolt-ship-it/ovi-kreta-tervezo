@@ -127,12 +127,29 @@
     let timer = null;
     let request = 0;
 
+    // Az aktív szűrők száma a „Szűrők” gombon; az összecsukott panel mögött is látszik, mi szűr.
+    function updateBadge() {
+      const active = new Set(query('[data-filter]').filter((input) => input.value.trim()).map((input) => input.dataset.filter));
+      document.querySelectorAll(`[data-filters-toggle="${name}"]`).forEach((button) => {
+        button.textContent = active.size ? `Szűrők (${active.size})` : 'Szűrők';
+        button.classList.toggle('has-filters', active.size > 0);
+      });
+    }
+
+    function setFiltersOpen(open) {
+      const panel = document.getElementById(`${name}Filters`);
+      if (panel) panel.hidden = !open;
+      new Set(query('[data-filter]').map((input) => input.closest('tr.admin-filter-row')).filter(Boolean)).forEach((row) => { row.hidden = !open; });
+      document.querySelectorAll(`[data-filters-toggle="${name}"]`).forEach((button) => button.setAttribute('aria-expanded', String(open)));
+    }
+
     function params() {
       const search = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
       query('[data-filter]').forEach((input) => {
         const value = input.value.trim();
         if (value) search.set(input.dataset.filter, value);
       });
+      updateBadge();
       return search;
     }
 
@@ -182,6 +199,9 @@
     const schedule = () => { clearTimeout(timer); timer = setTimeout(reload, SEARCH_DELAY_MS); };
 
     function bind() {
+      document.querySelectorAll(`[data-filters-toggle="${name}"]`).forEach((button) => button.addEventListener('click', () => {
+        setFiltersOpen(button.getAttribute('aria-expanded') !== 'true');
+      }));
       query('[data-filter]').forEach((input) => {
         const instant = input.tagName === 'SELECT' || input.type === 'date';
         input.addEventListener(instant ? 'change' : 'input', instant ? () => { clearTimeout(timer); reload(); } : schedule);
@@ -213,7 +233,7 @@
       }));
     }
 
-    return { load, reload, bind, state, set(filter, value) { query(`[data-filter="${filter}"]`).forEach((input) => { input.value = value; }); } };
+    return { load, reload, bind, state, setFiltersOpen, set(filter, value) { query(`[data-filter="${filter}"]`).forEach((input) => { input.value = value; }); updateBadge(); } };
   }
 
   const lists = {};
@@ -408,36 +428,90 @@
 
   let lastOrders = [];
 
+  // Soronkénti „Műveletek ▾” lenyíló menü; egyszerre csak egy lehet nyitva (kívülre kattintás, Esc, görgetés bezárja).
+  let openMenu = null;
+  function closeActionMenu() {
+    if (!openMenu) return;
+    openMenu.menu.hidden = true;
+    openMenu.toggle.setAttribute('aria-expanded', 'false');
+    openMenu = null;
+  }
+
+  function actionsMenu(order, items) {
+    const wrap = el('span', 'admin-actions');
+    const holder = el('span', 'admin-menu');
+    const toggle = el('button', 'profile-btn admin-menu-toggle', 'Műveletek ▾');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-haspopup', 'menu');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', `Műveletek: ${order.orderNumber}`);
+    const menu = el('div', 'admin-menu-list');
+    menu.setAttribute('role', 'menu');
+    menu.hidden = true;
+    items.forEach((item) => {
+      const button = el('button', 'admin-menu-item');
+      button.type = 'button';
+      button.setAttribute('role', 'menuitem');
+      button.append(el('span', '', item.label));
+      button.disabled = Boolean(item.reason);
+      button.title = item.reason ? `${item.label} (${item.reason})` : item.title;
+      if (item.reason) button.append(el('small', 'admin-menu-reason', `(${item.reason})`));
+      button.addEventListener('click', () => { closeActionMenu(); item.run(button); });
+      menu.append(button);
+    });
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wasOpen = openMenu && openMenu.menu === menu;
+      closeActionMenu();
+      if (wasOpen) return;
+      const rect = toggle.getBoundingClientRect();
+      menu.hidden = false;
+      menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
+      menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8))}px`;
+      toggle.setAttribute('aria-expanded', 'true');
+      openMenu = { menu, toggle };
+    });
+    holder.append(toggle, menu);
+    wrap.append(holder);
+    return wrap;
+  }
+
+  document.addEventListener('click', (event) => { if (openMenu && !openMenu.menu.contains(event.target)) closeActionMenu(); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && openMenu) { const { toggle } = openMenu; closeActionMenu(); toggle.focus(); }
+  });
+  window.addEventListener('resize', closeActionMenu);
+  window.addEventListener('scroll', closeActionMenu, true);
+
   function renderOrders(data) {
       lastOrders = data.orders;
       fillTable('ordersTable', data.orders.map((order) => {
         const buyer = el('span');
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
         const freeOrder = order.status === 'paid' && !(order.amount > 0);
-        const issue = freeOrder ? el('span', 'admin-free-label', '0 Ft / Kupon') : el('button', 'profile-btn primary', 'Számla kiállítása');
-        issue.type = 'button';
-        const blocked = invoiceBlockReason(order);
-        issue.disabled = Boolean(blocked);
-        issue.title = blocked || 'Pótlólagos számlakiállítás a Számlázz.hu-n';
-        if (!freeOrder) issue.addEventListener('click', () => issueOrderInvoice(order, issue));
-        const resend = el('button', 'profile-btn', 'Csomag küldése');
-        resend.type = 'button';
-        resend.disabled = order.status !== 'paid' || !order.email || !order.documentId;
-        resend.title = !order.documentId
-          ? 'A rendeléshez nem tartozik tervezet (document_id hiányzik), csak a számla küldhető ki.'
-          : 'A tárolt tervezet (.docx + .pdf) és a számla (ha van) kiküldése a vevőnek';
-        resend.addEventListener('click', () => resendOrder(order, resend));
-        const sendInvoice = el('button', 'profile-btn', 'Számla küldése');
-        sendInvoice.type = 'button';
-        sendInvoice.disabled = order.status !== 'paid' || !order.email || !order.invoiceNumber;
-        sendInvoice.title = sendInvoice.disabled ? 'Kifizetett, számlával rendelkező rendelés vevői címére küldhető' : 'Csak a számla PDF kiküldése a vevőnek';
-        sendInvoice.addEventListener('click', () => sendOrderInvoice(order, sendInvoice));
-        const invoice = el('button', 'profile-btn', 'Számla letöltése');
-        invoice.type = 'button';
-        invoice.disabled = order.status !== 'paid' || !order.invoiceNumber;
-        invoice.addEventListener('click', () => downloadOrderInvoice(order, invoice));
-        const actions = el('span', 'admin-actions');
-        actions.append(issue, sendInvoice, resend, invoice);
+        const notPaid = order.status !== 'paid';
+        const items = [];
+        if (!freeOrder) {
+          const reason = notPaid ? 'nem fizetett' : order.invoiceNumber ? 'már kiállítva' : '';
+          items.push({ label: 'Számla kiállítása', reason, title: invoiceBlockReason(order) || 'Pótlólagos számlakiállítás a Számlázz.hu-n', run: (button) => issueOrderInvoice(order, button) });
+        }
+        items.push({
+          label: 'Számla küldése',
+          reason: notPaid ? 'nem fizetett' : !order.email ? 'nincs e-mail cím' : !order.invoiceNumber ? 'még nincs számla' : '',
+          title: 'Csak a számla PDF kiküldése a vevőnek',
+          run: (button) => sendOrderInvoice(order, button)
+        });
+        items.push({
+          label: 'Csomag küldése',
+          reason: notPaid ? 'nem fizetett' : !order.email ? 'nincs e-mail cím' : !order.documentId ? 'nincs tervezet' : '',
+          title: !order.documentId
+            ? 'A rendeléshez nem tartozik tervezet (document_id hiányzik), csak a számla küldhető ki.'
+            : 'A tárolt tervezet (.docx + .pdf) és a számla (ha van) kiküldése a vevőnek',
+          run: (button) => resendOrder(order, button)
+        });
+        items.push({ label: 'Számla letöltése', reason: notPaid ? 'nem fizetett' : !order.invoiceNumber ? 'még nincs számla' : '', title: 'A számla PDF letöltése', run: (button) => downloadOrderInvoice(order, button) });
+        const actions = actionsMenu(order, items);
+        if (freeOrder) actions.prepend(el('span', 'admin-free-label', '0 Ft / Kupon'));
         const status = el('span');
         status.textContent = ORDER_STATUS_LABELS[order.status] || order.status;
         if (order.status === 'paid' && order.lastError) {
