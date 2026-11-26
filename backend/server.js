@@ -13,6 +13,7 @@ const { router: adminRouter } = require('./routes/admin');
 const authService = require('./services/authService');
 const { SHIPPED_EXTENSIONS } = require('../scripts/copy-assets');
 const mailService = require('./services/mailService');
+const reviewService = require('./services/reviewService');
 const geminiService = require('./services/geminiService');
 const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
@@ -754,6 +755,13 @@ app.post('/api/feedback', feedbackLimiter, async (req, res) => {
     }
     const cleanName = typeof name === 'string' ? name.trim().slice(0, 100) : '';
 
+    const reviewClient = supabase.getClient();
+    if (reviewClient) {
+      await reviewService.submitReview(reviewClient, { email: email.trim(), rating: numRating, name: cleanName, comment: cleanComment, documentId: typeof documentId === 'string' ? documentId.trim().slice(0, 100) : '' });
+    } else {
+      console.error('[feedback] Az értékelés nem menthető: a Supabase kapcsolat nincs beállítva.');
+    }
+
     await mailService.sendFeedbackNotification(process.env, {
       email: email.trim(),
       rating: numRating,
@@ -766,6 +774,20 @@ app.post('/api/feedback', feedbackLimiter, async (req, res) => {
   } catch (error) {
     console.error('Feedback submission error:', error);
     return res.status(500).json({ success: false, error: 'A visszajelzés elküldése nem sikerült.' });
+  }
+});
+
+// Publikus értékelések: kizárólag a jóváhagyott (approved) sorok, e-mail cím nélkül.
+app.get('/api/reviews/public', async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  try {
+    const client = supabase.getClient();
+    const reviews = client ? await reviewService.listPublicReviews(client) : [];
+    return res.json({ success: true, reviews });
+  } catch (error) {
+    console.error('Public reviews error:', error.message);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(500).json({ success: false, error: 'Az értékelések betöltése nem sikerült.' });
   }
 });
 

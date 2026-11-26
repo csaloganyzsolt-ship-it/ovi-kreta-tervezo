@@ -44,6 +44,7 @@
               <button type="button" role="tab" class="profile-tab" id="tabCoupons" data-admin-tab="coupons" aria-selected="false" aria-controls="panelCoupons">Kuponkezelő</button>
               <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
               <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók</button>
+              <button type="button" role="tab" class="profile-tab" id="tabReviews" data-admin-tab="reviews" aria-selected="false" aria-controls="panelReviews">Értékelések <span class="admin-nav-badge" id="reviewsBadge" hidden></span></button>
               <button type="button" role="tab" class="profile-tab" id="tabNewsletter" data-admin-tab="newsletter" aria-selected="false" aria-controls="panelNewsletter">Hírlevél</button>
               <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
               <button type="button" role="tab" class="profile-tab" id="tabSettings" data-admin-tab="settings" aria-selected="false" aria-controls="panelSettings">Beállítások</button>
@@ -338,6 +339,48 @@
             <p class="profile-error" id="usersError" role="alert" hidden></p>
             <p class="profile-status admin-support-result" id="supportResult" role="status" hidden></p>
             <p class="profile-error" id="supportError" role="alert" hidden></p>
+          </section>
+
+          <section class="profile-panel" id="panelReviews" role="tabpanel" aria-labelledby="tabReviews" hidden>
+            <h2>Értékelések</h2>
+            <div class="admin-listbar">
+              <p class="profile-hint" id="reviewsCount" role="status"></p>
+              <span class="admin-listbar-tools">
+                <label class="admin-pagesize">Státusz <select id="reviewsStatus" data-list="reviews" data-filter="status">
+                  <option value="">Összes</option>
+                  <option value="pending">Jóváhagyásra vár</option>
+                  <option value="approved">Elfogadva</option>
+                  <option value="rejected">Elutasítva</option>
+                </select></label>
+                <label class="admin-pagesize">Sor / oldal <select id="reviewsPageSize" data-list="reviews" data-pagesize>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
+                <button type="button" class="profile-btn" id="reviewsRefresh">Frissítés</button>
+              </span>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="reviewsTable">
+                <thead>
+                  <tr><th>Dátum</th><th>Értékelés</th><th>Vélemény</th><th>Beküldő</th><th>Rendelés</th><th>Státusz</th><th>Műveletek</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="admin-pager" data-list="reviews" data-pager></div>
+            <p class="profile-error" id="reviewsError" role="alert" hidden></p>
+            <dialog class="admin-dialog" id="reviewReplyDialog" aria-labelledby="reviewReplyTitle">
+              <form class="profile-form" id="reviewReplyForm" method="dialog" novalidate>
+                <h3 id="reviewReplyTitle">E-mail az ügyfélnek</h3>
+                <div class="profile-field"><label for="reviewReplyTo">Címzett</label><input id="reviewReplyTo" type="email" readonly /></div>
+                <div class="profile-field"><label for="reviewReplyOrder">Rendelésszám</label><input id="reviewReplyOrder" type="text" readonly /></div>
+                <div class="profile-field"><label for="reviewReplySubject">Tárgy</label><input id="reviewReplySubject" type="text" maxlength="200" autocomplete="off" /></div>
+                <div class="profile-field"><label for="reviewReplyMessage">Üzenet</label><textarea id="reviewReplyMessage" rows="9" maxlength="5000"></textarea></div>
+                <p class="profile-error" id="reviewReplyError" role="alert" hidden></p>
+                <div class="admin-dialog-actions"><button type="submit" class="btn" id="reviewReplySend">Küldés</button> <button type="button" class="btn secondary" id="reviewReplyCancel">Mégse</button></div>
+              </form>
+            </dialog>
           </section>
 
           <section class="profile-panel" id="panelNewsletter" role="tabpanel" aria-labelledby="tabNewsletter" hidden>

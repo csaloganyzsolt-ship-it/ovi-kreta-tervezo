@@ -405,6 +405,34 @@ async function sendFeedbackNotification(firstArg, secondArg, deps = {}) {
   return { sent: true };
 }
 
+// Admin válasz egy ügyfélértékelésre: a pedagógus a támogatási címről kap egyszerű, márkázott levelet, a válasz közvetlenül a támogatáshoz érkezik.
+async function sendReviewReply({ to, subject, message, orderNumber }, deps = {}) {
+  const env = deps.env || process.env;
+  if (!isConfigured(env)) return { sent: false, reason: 'smtp_not_configured' };
+  const support = supportEmail(env);
+  const transport = module.exports.createTransport(env, deps);
+  const cleanSubject = String(subject || '').trim().slice(0, 200) || 'Válasz az OviTervező értékelésedre';
+  const body = String(message || '').trim();
+  const html = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><title>${escapeHtml(cleanSubject)}</title></head>
+<body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #d9eadf;">
+<tr><td style="height:5px;line-height:5px;font-size:0;background:#3fae84;">&nbsp;</td></tr>
+<tr><td style="padding:24px 28px;color:#2d3b36;font-size:15px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(body)}</td></tr>
+${orderNumber ? `<tr><td style="padding:0 28px 22px;color:#7a8480;font-size:12px;">Rendelésszám: ${escapeHtml(orderNumber)}</td></tr>` : ''}
+</table></td></tr></table></body></html>`;
+  await transport.sendMail({
+    from: env.MAIL_FROM || `OviTervező <${support}>`,
+    to,
+    replyTo: support,
+    subject: cleanSubject,
+    text: orderNumber ? `${body}\n\nRendelésszám: ${orderNumber}` : body,
+    html
+  });
+  return { sent: true };
+}
+
 // Rendszergazdai e-mail riasztás kritikus hibákról (Gemini generálás, számlázás, fizetési rendszerhibák).
 async function sendAdminErrorAlert({ operation, error, email, documentId, details }, deps = {}) {
   const env = deps.env || process.env;
@@ -489,5 +517,6 @@ module.exports = {
   feedbackSecret,
   createFeedbackSignature,
   verifyFeedbackSignature,
-  sendFeedbackNotification
+  sendFeedbackNotification,
+  sendReviewReply
 };

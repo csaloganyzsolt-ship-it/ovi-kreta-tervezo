@@ -732,6 +732,100 @@
     }
   }
 
+  // ---------- Értékelések ----------
+
+  const REVIEW_STATUS_LABELS = { pending: 'Jóváhagyásra vár', approved: 'Elfogadva', rejected: 'Elutasítva' };
+  let reviewReplyTarget = null;
+
+  function setReviewsBadge(count) {
+    const badge = byId('reviewsBadge');
+    badge.textContent = String(count);
+    badge.hidden = !(count > 0);
+    badge.setAttribute('aria-label', `${count} jóváhagyásra váró értékelés`);
+  }
+
+  async function loadReviewsSummary() {
+    try {
+      setReviewsBadge((await api('/api/admin/reviews/summary')).pending || 0);
+    } catch (_error) {
+      setReviewsBadge(0);
+    }
+  }
+
+  async function setReviewStatus(review, status, button) {
+    button.disabled = true;
+    try {
+      await api(`/api/admin/reviews/${encodeURIComponent(review.id)}`, { method: 'PATCH', body: { status } });
+      showToast(status === 'approved' ? 'Az értékelés megjelenik a főoldalon.' : 'Az értékelés rejtett lett.');
+      await lists.reviews.load();
+      loadReviewsSummary();
+    } catch (error) {
+      showToast(`Az értékelés nem módosítható: ${errorMessage(error)}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function replyTemplate(review) {
+    const name = review.name ? ` ${review.name.split(/\s+/)[0]}` : '';
+    const topic = review.topic ? ` (${review.topic})` : '';
+    return `Kedves${name}!\n\nKöszönjük, hogy megosztottad velünk a véleményed az OviTervező tervezetről${topic}. Sajnáljuk, ha nem minden felelt meg az elvárásaidnak – szeretnénk segíteni, hogy legközelebb jobb élményed legyen.\n\nKérlek, írd meg röviden, mi volt a legnagyobb hiányosság vagy hiba, és ${review.orderNumber ? `a ${review.orderNumber} rendelésszámú tervezetet` : 'a tervezetet'} igyekszünk mielőbb rendbe tenni vagy pótolni.\n\nÜdvözlettel:\nAz OviTervező csapata`;
+  }
+
+  function openReviewReply(review) {
+    reviewReplyTarget = review;
+    byId('reviewReplyTo').value = review.email;
+    byId('reviewReplyOrder').value = review.orderNumber || '–';
+    byId('reviewReplySubject').value = `OviTervező – válasz az értékelésedre${review.orderNumber ? ` (${review.orderNumber})` : ''}`;
+    byId('reviewReplyMessage').value = replyTemplate(review);
+    byId('reviewReplyError').hidden = true;
+    byId('reviewReplyDialog').showModal();
+  }
+
+  async function sendReviewReply(event) {
+    event.preventDefault();
+    if (!reviewReplyTarget) return;
+    const button = byId('reviewReplySend');
+    const message = byId('reviewReplyMessage').value.trim();
+    if (!message) { setText('reviewReplyError', 'Az üzenet szövege nem lehet üres.'); return; }
+    button.disabled = true;
+    try {
+      await api(`/api/admin/reviews/${encodeURIComponent(reviewReplyTarget.id)}/reply`, { method: 'POST', body: { subject: byId('reviewReplySubject').value, message } });
+      byId('reviewReplyDialog').close();
+      showToast(`A válasz elment: ${reviewReplyTarget.email}`);
+      reviewReplyTarget = null;
+      lists.reviews.load();
+    } catch (error) {
+      setText('reviewReplyError', `A válasz nem küldhető el: ${errorMessage(error)}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function renderReviews(data) {
+    byId('reviewsCount').textContent = `${data.total} értékelés`;
+    fillTable('reviewsTable', data.reviews.map((review) => {
+      const stars = el('span', 'admin-stars', '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating));
+      stars.setAttribute('aria-label', `${review.rating} / 5 csillag`);
+      const sender = el('span');
+      sender.textContent = review.name ? `${review.name} (${review.email})` : review.email;
+      const order = el('span');
+      order.textContent = review.orderNumber ? `${review.orderNumber}${review.topic ? ` – ${review.topic}` : ''}` : '–';
+      const status = el('span', `admin-badge admin-review-${review.status}`);
+      status.textContent = REVIEW_STATUS_LABELS[review.status] || review.status;
+      if (review.replySentAt) status.append(el('br'), el('small', '', `Válasz: ${formatDate(review.replySentAt)}`));
+      const items = [
+        { label: 'Elfogadás (főoldalra)', reason: review.status === 'approved' ? 'már elfogadva' : '', title: 'Megjelenik a főoldalon', run: (button) => setReviewStatus(review, 'approved', button) },
+        { label: 'Elutasítás / levétel', reason: review.status === 'rejected' ? 'már elutasítva' : '', title: 'Nem jelenik meg a főoldalon', run: (button) => setReviewStatus(review, 'rejected', button) },
+        { label: 'E-mail írása az ügyfélnek', reason: '', title: 'Udvarias válasz küldése a beküldőnek', run: () => openReviewReply(review) }
+      ];
+      return [formatDate(review.createdAt), stars, review.comment || '–', sender, order, status, actionsMenu({ orderNumber: review.orderNumber || review.email }, items)];
+    }), 7, 'Nincs a szűrésnek megfelelő értékelés.');
+  }
+
+  lists.reviews = createList({ name: 'reviews', path: '/api/admin/reviews', render: renderReviews, errorId: 'reviewsError', errorText: 'Az értékelések nem tölthetők be' });
+  const loadReviews = () => lists.reviews.load();
+
   // ---------- Rendszernapló ----------
 
   function renderLogs(data) {
@@ -1246,6 +1340,7 @@
     coupons: [loadCoupons],
     orders: [loadOrders],
     users: [loadUsers],
+    reviews: [loadReviews],
     newsletter: [loadCampaigns, refreshPreview],
     logs: [loadLogs],
     settings: [loadSettings, loadTemplates]
@@ -1260,7 +1355,7 @@
   function activateTab(name) {
     document.querySelectorAll('[data-admin-tab]').forEach((tab) => {
       tab.setAttribute('aria-selected', tab.dataset.adminTab === name ? 'true' : 'false');
-      if (tab.dataset.adminTab === name) byId('adminMobileTitle').textContent = tab.textContent;
+      if (tab.dataset.adminTab === name) byId('adminMobileTitle').textContent = tab.childNodes[0].textContent.trim();
     });
     setMenuOpen(false);
     document.querySelectorAll('.profile-panel').forEach((panel) => { panel.hidden = panel.id !== `panel${name[0].toUpperCase()}${name.slice(1)}`; });
@@ -1286,6 +1381,10 @@
     byId('ordersExport').addEventListener('click', exportOrders);
     byId('usersExport').addEventListener('click', exportSubscribers);
     byId('logsRefresh').addEventListener('click', () => lists.logs.load());
+    byId('reviewsRefresh').addEventListener('click', () => { lists.reviews.load(); loadReviewsSummary(); });
+    byId('reviewReplyForm').addEventListener('submit', sendReviewReply);
+    byId('reviewReplyCancel').addEventListener('click', () => byId('reviewReplyDialog').close());
+    loadReviewsSummary();
     byId('newsletterForm').addEventListener('submit', sendNewsletter);
     byId('newsletterForm').addEventListener('input', schedulePreview);
     document.querySelectorAll('input[name="recipients"]').forEach((radio) => radio.addEventListener('change', syncRecipientMode));

@@ -2500,3 +2500,22 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-badge-on, .admin-badge-off { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
 .admin-badge-on { background: rgba(63, 174, 132, 0.18); color: var(--primary); }
 .admin-badge-off { background: rgba(120, 130, 125, 0.18); color: var(--muted, #5b6b64); }
+
+/* Ügyfélértékelések: főoldali „Pedagógusok mondták rólunk” és az admin értékelés-nézet */
+.testimonials { margin: 22px 0 8px; }
+.testimonials[hidden] { display: none; }
+.testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.testimonial-card { margin: 0; padding: 16px 18px; border: 1px solid #cfe8da; border-radius: 20px; background: var(--panel); text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.testimonial-stars { color: #f59e0b; font-size: 18px; letter-spacing: 2px; }
+.testimonial-card blockquote { margin: 0; color: var(--text); line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.testimonial-card figcaption { margin-top: auto; font-size: 13px; font-weight: 600; color: var(--primary); }
+[data-theme="dark"] .testimonial-card { border-color: rgba(63, 174, 132, 0.35); }
+.admin-nav-badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+.admin-nav-badge[hidden] { display: none; }
+.admin-stars { color: #f59e0b; letter-spacing: 1px; white-space: nowrap; }
+.admin-review-pending { color: #8a6100; }
+.admin-review-approved { color: #1f7a57; }
+.admin-review-rejected { color: #a33a3a; }
+[data-theme="dark"] .admin-review-pending { color: #f5c46b; }
+[data-theme="dark"] .admin-review-approved { color: #6fdcb1; }
+[data-theme="dark"] .admin-review-rejected { color: #f59a9a; }

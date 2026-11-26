@@ -37,7 +37,7 @@ function seedTemplateRows() {
 }
 
 function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) {
-  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_subscribers: [], email_templates: seedTemplateRows(), system_settings: [], system_settings_history: [], ...tables };
+  const db = { profiles: [], orders: [], documents: [], coupons: [], coupon_redemptions: [], newsletter_campaigns: [], newsletter_subscribers: [], email_templates: seedTemplateRows(), reviews: [], system_settings: [], system_settings_history: [], ...tables };
   const failures = {};
   const calls = { listUsers: 0 };
   return {
@@ -97,7 +97,7 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
         insert(row) {
           const insertError = failures[`insert:${name}`];
           if (!insertError) {
-            const stored = { ...(name === 'newsletter_campaigns' ? { id: `camp-${db[name].length + 1}`, created_at: new Date().toISOString() } : {}), ...(name === 'coupons' ? { created_at: new Date().toISOString() } : {}), ...row };
+            const stored = { ...(name === 'reviews' ? { id: `00000000-0000-4000-8000-${String(db[name].length + 1).padStart(12, '0')}`, created_at: new Date().toISOString() } : {}), ...(name === 'newsletter_campaigns' ? { id: `camp-${db[name].length + 1}`, created_at: new Date().toISOString() } : {}), ...(name === 'coupons' ? { created_at: new Date().toISOString() } : {}), ...row };
             db[name].push(stored);
             filters.push((candidate) => candidate === stored);
           } else {
@@ -1938,4 +1938,150 @@ test('admin.js: guests appear as "Vendég (nem regisztrált)" with a newsletter 
   const post = state.fetches.find((f) => f.path === '/api/admin/users/newsletter');
   assert.equal(post.method, 'POST');
   assert.deepEqual(JSON.parse(JSON.stringify(post.body)), { email: 'vendeg@example.com', subscribed: true });
+});
+
+// ---------- Ügyfélértékelések ----------
+
+const FEEDBACK_ENV_KEYS = ['FEEDBACK_SECRET', 'SMTP_HOST'];
+function useFeedbackEnv(t) {
+  const saved = Object.fromEntries(FEEDBACK_ENV_KEYS.map((key) => [key, process.env[key]]));
+  process.env.FEEDBACK_SECRET = 'review-secret';
+  process.env.SMTP_HOST = 'smtp.test';
+  t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+}
+
+const reviewRow = (n, status, extra = {}) => ({
+  id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, order_number: `OVI-R${n}`, customer_name: `Név ${n}`, customer_email: `vevo${n}@example.com`, plan_topic: 'Erdő', rating: 5, comment: `Vélemény ${n}`,
+  status, admin_reply_sent_at: null, admin_note: null, created_at: `2026-03-0${n}T10:00:00Z`, ...extra
+});
+
+const reviewTables = () => ({
+  profiles: [profile(ADMIN, { is_admin: true }), profile(IMPOSTOR, { is_admin: false })],
+  reviews: [reviewRow(1, 'pending', { rating: 2, comment: 'Gyenge volt', customer_email: 'panasz@example.com' }), reviewRow(2, 'approved'), reviewRow(3, 'rejected'), reviewRow(4, 'approved', { comment: '' })]
+});
+
+test('POST /api/feedback saves the review as pending, linked to the order found by document id', async (t) => {
+  useFeedbackEnv(t);
+  const tables = reviewTables();
+  tables.reviews = [];
+  tables.orders = [{ id: 'order-uuid-1', order_number: 'OVI-77', user_email: 'Tanar@Example.com', document_id: 'gen_abc', title: 'Tavaszi erdő', status: 'paid', created_at: ago(1) }];
+  const client = useAdminEnv(t, fakeAdmin(tables));
+  captureMail(t);
+  const base = await listen(t);
+  const email = 'tanar@example.com';
+  const sig = mailService.createFeedbackSignature(email, process.env);
+  const post = (body) => call(base, '/api/feedback', { method: 'POST', body });
+  assert.equal((await post({ email, sig: 'rossz', rating: 5, comment: 'x' })).status, 403);
+  assert.equal(client.db.reviews.length, 0, 'érvénytelen aláírással nem mentődik');
+  assert.equal((await post({ email, sig, rating: 4, name: 'K. Anna – óvónő', comment: 'Nagyon hasznos', documentId: 'gen_abc' })).status, 200);
+  assert.equal(client.db.reviews.length, 1);
+  const saved = client.db.reviews[0];
+  assert.deepEqual(
+    { status: saved.status, rating: saved.rating, order: saved.order_number, topic: saved.plan_topic, email: saved.customer_email, name: saved.customer_name, orderId: saved.order_id },
+    { status: 'pending', rating: 4, order: 'OVI-77', topic: 'Tavaszi erdő', email, name: 'K. Anna – óvónő', orderId: 'order-uuid-1' }
+  );
+  assert.equal((await post({ email, sig, rating: 5, comment: 'Mégis tökéletes', documentId: 'gen_abc' })).status, 200);
+  assert.equal(client.db.reviews.length, 1, 'rendelésenként egy értékelés: az újrabeküldés felülír');
+  assert.deepEqual({ rating: saved.rating, status: saved.status, comment: saved.comment }, { rating: 5, status: 'pending', comment: 'Mégis tökéletes' });
+});
+
+test('GET /api/reviews/public returns only approved reviews without e-mail or order data', async (t) => {
+  useAdminEnv(t, fakeAdmin(reviewTables()));
+  const base = await listen(t);
+  const response = await call(base, '/api/reviews/public');
+  assert.equal(response.status, 200);
+  const raw = await response.text();
+  const data = JSON.parse(raw);
+  assert.deepEqual(data.reviews.map((r) => r.comment), ['Vélemény 2'], 'a pending, a rejected és a szöveg nélküli sor nem jelenik meg');
+  assert.deepEqual(Object.keys(data.reviews[0]).sort(), ['comment', 'createdAt', 'name', 'rating', 'topic']);
+  assert.doesNotMatch(raw, /@example\.com|OVI-R|admin_note/);
+});
+
+test('admin reviews: list with status filter and pagination, summary badge count, approve and reject', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(reviewTables()));
+  const base = await listen(t);
+  const get = async (query = '') => (await call(base, `/api/admin/reviews?${query}`, { token: 'token-admin' })).json();
+  const all = await get();
+  assert.equal(all.total, 4);
+  assert.equal(all.reviews[0].status, 'approved', 'a legújabb elöl');
+  assert.deepEqual((await get('status=pending')).reviews.map((r) => r.id.slice(-1)), ['1']);
+  assert.deepEqual((await get('status=approved')).reviews.length, 2);
+  assert.equal((await call(base, '/api/admin/reviews?status=x', { token: 'token-admin' })).status, 400);
+  assert.equal((await call(base, '/api/admin/reviews?pageSize=7', { token: 'token-admin' })).status, 400);
+  assert.equal((await call(base, '/api/admin/reviews', { token: 'token-impostor' })).status, 403);
+  assert.equal((await call(base, '/api/admin/reviews')).status, 401);
+  assert.equal((await (await call(base, '/api/admin/reviews/summary', { token: 'token-admin' })).json()).pending, 1);
+
+  const id = client.db.reviews[0].id;
+  const patch = (body, route = id) => call(base, `/api/admin/reviews/${route}`, { method: 'PATCH', token: 'token-admin', body });
+  assert.equal((await patch({ status: 'approved' })).status, 200);
+  assert.equal(client.db.reviews[0].status, 'approved');
+  assert.equal((await (await call(base, '/api/admin/reviews/summary', { token: 'token-admin' })).json()).pending, 0);
+  assert.equal((await patch({ status: 'rejected' })).status, 200);
+  assert.equal(client.db.reviews[0].status, 'rejected');
+  assert.equal((await patch({ status: 'bármi' })).status, 400);
+  assert.equal((await patch({ status: 'approved' }, 'nem-uuid')).status, 400);
+  assert.equal((await patch({ status: 'approved' }, '00000000-0000-4000-8000-0000000000ff')).status, 404);
+  const publicData = await (await call(base, '/api/reviews/public')).json();
+  assert.ok(!publicData.reviews.some((r) => r.comment === 'Gyenge volt'), 'az elutasított nem jelenik meg publikusan');
+});
+
+test('POST /api/admin/reviews/:id/reply emails the customer and records the reply time', async (t) => {
+  useFeedbackEnv(t);
+  const client = useAdminEnv(t, fakeAdmin(reviewTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  const id = client.db.reviews[0].id;
+  const reply = (body, token = 'token-admin', route = id) => call(base, `/api/admin/reviews/${route}/reply`, { method: 'POST', token, body });
+  assert.equal((await reply({ message: '   ' })).status, 400, 'üres üzenet nem küldhető');
+  assert.equal((await reply({ message: 'Szia' }, 'token-impostor')).status, 403);
+  const response = await reply({ subject: 'Válasz az értékelésedre', message: 'Kedves Név!\nSajnáljuk, javítunk. <b>x</b>' });
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'panasz@example.com');
+  assert.equal(sent[0].subject, 'Válasz az értékelésedre');
+  assert.match(sent[0].text, /Sajnáljuk, javítunk/);
+  assert.match(sent[0].text, /OVI-R1/);
+  assert.doesNotMatch(sent[0].html, /<b>x<\/b>/, 'a szöveg HTML-escape-elve kerül a levélbe');
+  assert.ok(client.db.reviews[0].admin_reply_sent_at, 'a válasz ideje naplózódik');
+  assert.equal((await reply({ message: 'Szia' }, 'token-admin', '00000000-0000-4000-8000-0000000000ff')).status, 404);
+});
+
+test('admin.js: the reviews tab shows stars, filters by status, approves and opens the prefilled reply dialog', async (t) => {
+  const review = { id: '00000000-0000-4000-8000-000000000001', orderNumber: 'OVI-R1', name: 'Anna Kiss', email: 'anna@example.com', topic: 'Erdő', rating: 2, comment: 'Gyenge volt', status: 'pending', replySentAt: null, createdAt: '2026-03-01T10:00:00Z' };
+  const { document, state } = await loadPage(t, {
+    confirm: true,
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/reviews/summary': () => [{ success: true, pending: 3 }],
+      '/api/admin/reviews': () => [{ success: true, reviews: [review], total: 1, page: 1, pageSize: 20, totalPages: 1 }],
+      '/api/admin/reviews/00000000-0000-4000-8000-000000000001': () => [{ success: true, review: { ...review, status: 'approved' } }]
+    }
+  });
+  await tick();
+  const badge = document.getElementById('reviewsBadge');
+  assert.equal(badge.textContent, '3');
+  assert.equal(badge.hidden, false);
+  document.getElementById('tabReviews').click();
+  await tick();
+  const row = document.querySelector('#reviewsTable tbody tr');
+  assert.match(row.textContent, /★★☆☆☆/);
+  assert.match(row.textContent, /Gyenge volt/);
+  assert.match(row.textContent, /Anna Kiss \(anna@example\.com\)/);
+  assert.match(row.textContent, /OVI-R1 – Erdő/);
+  assert.match(row.textContent, /Jóváhagyásra vár/);
+  assert.deepEqual([...document.querySelectorAll('#reviewsStatus option')].map((o) => o.value), ['', 'pending', 'approved', 'rejected']);
+  row.querySelector('.admin-menu-toggle').click();
+  const items = [...row.querySelectorAll('.admin-menu-item')];
+  assert.deepEqual(items.map((i) => i.firstChild.textContent), ['Elfogadás (főoldalra)', 'Elutasítás / levétel', 'E-mail írása az ügyfélnek']);
+  items[2].click();
+  assert.equal(document.getElementById('reviewReplyTo').value, 'anna@example.com');
+  assert.equal(document.getElementById('reviewReplyOrder').value, 'OVI-R1');
+  assert.match(document.getElementById('reviewReplyMessage').value, /Kedves Anna!/);
+  items[0].click();
+  await tick();
+  const call1 = state.fetches.find((f) => f.method === 'PATCH');
+  assert.deepEqual(JSON.parse(JSON.stringify(call1.body)), { status: 'approved' });
+  await tick();
 });

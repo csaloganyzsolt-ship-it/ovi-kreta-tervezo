@@ -598,6 +598,66 @@ async function listUsers(client, query = {}) {
   };
 }
 
+// ---------- Ügyfélértékelések ----------
+
+const REVIEW_STATUSES = ['pending', 'approved', 'rejected'];
+const REVIEW_COLUMNS = 'id, order_number, customer_name, customer_email, plan_topic, rating, comment, status, admin_reply_sent_at, admin_note, created_at';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function reviewView(row) {
+  return {
+    id: row.id,
+    orderNumber: row.order_number || '',
+    name: row.customer_name || '',
+    email: row.customer_email || '',
+    topic: row.plan_topic || '',
+    rating: row.rating,
+    comment: row.comment || '',
+    status: row.status,
+    replySentAt: row.admin_reply_sent_at || null,
+    adminNote: row.admin_note || '',
+    createdAt: row.created_at
+  };
+}
+
+async function listReviews(client, query = {}) {
+  const paging = parsePaging(query);
+  const status = filterText(query.status);
+  if (status && !REVIEW_STATUSES.includes(status)) throw validationError('Ismeretlen értékelés-státusz.');
+  let request = client.from('reviews').select(REVIEW_COLUMNS, { count: 'exact' });
+  if (status) request = request.eq('status', status);
+  const offset = (paging.page - 1) * paging.pageSize;
+  const { data, error, count } = await request.order('created_at', { ascending: false }).range(offset, offset + paging.pageSize - 1);
+  if (error) throw dbError(error, 'Az értékelések nem olvashatók');
+  const reviews = (data || []).map(reviewView);
+  return { reviews, ...pageMeta(Number.isInteger(count) ? count : reviews.length, paging) };
+}
+
+async function reviewSummary(client) {
+  const { count, error } = await client.from('reviews').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+  if (error) throw dbError(error, 'Az értékelések száma nem olvasható');
+  return { pending: Number.isInteger(count) ? count : 0 };
+}
+
+async function getReview(client, id) {
+  if (!UUID_PATTERN.test(String(id || ''))) throw validationError('Érvénytelen értékelés-azonosító.');
+  const { data, error } = await client.from('reviews').select(REVIEW_COLUMNS).eq('id', id).maybeSingle();
+  if (error) throw dbError(error, 'Az értékelés nem olvasható');
+  if (!data) throw new AdminError('Az értékelés nem található.', 404);
+  return data;
+}
+
+async function setReviewStatus(client, id, body = {}) {
+  const status = String(body.status || '').trim();
+  if (!REVIEW_STATUSES.includes(status)) throw validationError('Az értékelés státusza pending, approved vagy rejected lehet.');
+  await getReview(client, id);
+  const patch = { status };
+  if (body.adminNote !== undefined) patch.admin_note = String(body.adminNote ?? '').trim().slice(0, 1000) || null;
+  const { data, error } = await client.from('reviews').update(patch).eq('id', id).select(REVIEW_COLUMNS).maybeSingle();
+  if (error) throw dbError(error, 'Az értékelés módosítása sikertelen');
+  return { review: reviewView(data || { id, ...patch }) };
+}
+
 // Hírlevél-állapot kapcsolása adminból: a rekord megmarad, csak a subscribed/unsubscribed_at változik.
 async function setNewsletterSubscription(client, body = {}) {
   const email = normalizeEmail(body.email);
@@ -616,6 +676,11 @@ async function setNewsletterSubscription(client, body = {}) {
 module.exports = {
   AdminError,
   setNewsletterSubscription,
+  REVIEW_STATUSES,
+  listReviews,
+  reviewSummary,
+  getReview,
+  setReviewStatus,
   ORDER_STATUSES,
   fetchAll,
   fetchProfiles,

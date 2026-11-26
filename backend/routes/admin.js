@@ -12,6 +12,7 @@ const settingsService = require('../services/settingsService');
 const orderService = require('../services/orderService');
 const invoiceService = require('../services/invoiceService');
 const planStore = require('../services/planStore');
+const reviewService = require('../services/reviewService');
 const documentExport = require('../services/documentExport');
 const { billingStatus } = require('../services/billingStatus');
 const { dailyGenerationStatus } = require('../services/generationCap');
@@ -89,6 +90,19 @@ router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása
   const coupon = await admin.createSupportCoupon(client, req.body);
   logger.info('admin_support', 'Kárpótlási kupon létrehozva', { email: coupon.email, details: { code: coupon.code, admin: req.user?.email } });
   res.status(201).json({ success: true, coupon });
+}));
+
+router.get('/admin/reviews/summary', handle('Az értékelések számának lekérdezése', (client) => admin.reviewSummary(client)));
+router.get('/admin/reviews', handle('Az értékelések lekérdezése', (client, req) => admin.listReviews(client, req.query)));
+router.patch('/admin/reviews/:id', handle('Az értékelés módosítása', async (client, req) => {
+  const result = await admin.setReviewStatus(client, req.params.id, req.body);
+  logger.info('admin_reviews', 'Értékelés státusza módosítva', { details: { id: req.params.id, status: result.review.status, admin: req.user?.email } });
+  return result;
+}));
+router.post('/admin/reviews/:id/reply', sendLimiter, handle('Az értékelésre adott válasz küldése', async (client, req) => {
+  const result = await reviewService.replyToReview(client, req.params.id, req.body);
+  logger.info('admin_reviews', 'Válasz küldve az értékelésre', { email: result.to, details: { id: req.params.id, orderNumber: result.orderNumber, admin: req.user?.email } });
+  return { replySentAt: result.replySentAt, to: result.to };
 }));
 
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, req.query)));

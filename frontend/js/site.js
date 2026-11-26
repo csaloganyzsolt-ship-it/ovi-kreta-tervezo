@@ -259,6 +259,39 @@ function openLegalModal(key) {
   openModal('legalModal');
 }
 
+// „Pedagógusok mondták rólunk”: a jóváhagyott értékelések (csak szövegként, HTML nélkül); amíg nincs egy sem, a szekció rejtett marad.
+function renderTestimonials(reviews) {
+  const section = document.getElementById('testimonials');
+  const grid = document.getElementById('testimonialGrid');
+  if (!section || !grid) return;
+  grid.replaceChildren();
+  const list = Array.isArray(reviews) ? reviews.filter((review) => review && review.comment) : [];
+  list.forEach((review) => {
+    const card = document.createElement('figure');
+    card.className = 'testimonial-card';
+    const stars = document.createElement('div');
+    stars.className = 'testimonial-stars';
+    const rating = Math.max(1, Math.min(5, Number(review.rating) || 5));
+    stars.textContent = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+    stars.setAttribute('aria-label', `${rating} csillag az 5-ből`);
+    const quote = document.createElement('blockquote');
+    quote.textContent = `„${String(review.comment).trim()}”`;
+    const caption = document.createElement('figcaption');
+    caption.textContent = [String(review.name || '').trim() || 'Óvodapedagógus', review.topic ? `– ${review.topic}` : ''].filter(Boolean).join(' ');
+    card.append(stars, quote, caption);
+    grid.append(card);
+  });
+  section.hidden = list.length === 0;
+}
+
+function loadTestimonials() {
+  if (!document.getElementById('testimonials') || typeof fetch !== 'function') return;
+  fetch(`${siteApiBaseUrl()}/api/reviews/public`)
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => { if (data && data.success) renderTestimonials(data.reviews); })
+    .catch(() => {});
+}
+
 function initSite() {
   if (window.__oviKretaSiteInitialized) return;
   window.__oviKretaSiteInitialized = true;
@@ -270,7 +303,7 @@ function initSite() {
 
   renderFooterCompany();
   applyPaymentProvider();
-  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); });
+  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); loadTestimonials(); });
   document.addEventListener('click', (event) => {
     const sample = event.target.closest('[data-sample-modal]');
     if (sample) { event.preventDefault(); openModal('sampleModal'); return; }
@@ -322,7 +355,7 @@ if (typeof window !== 'undefined') {
   window.getLockedMeta = getLockedMeta;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS };
+  module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS, renderTestimonials };
 }
 
 function initPage() {
