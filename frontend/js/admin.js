@@ -14,14 +14,12 @@
   };
   const RECIPIENT_LABELS = { test: 'Teszt', subscribers: 'Összes feliratkozó', custom: 'Egyedi lista' };
   const PREVIEW_DELAY_MS = 350;
-  const SEARCH_DELAY_MS = 300;
+  const SEARCH_DELAY_MS = 350;
   const POLL_MS = 3000;
 
   const auth = window.OviAuth;
   const loaded = {};
-  let ordersRequest = 0;
   let previewTimer = null;
-  let searchTimer = null;
   let pollTimer = null;
   let users = [];
 
@@ -110,6 +108,115 @@
   }
 
   const yesNo = (value) => (value ? 'Igen' : 'Nem');
+
+  // ---------- Szerveroldali lapozású, szűrhető listák ----------
+
+  const localDay = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  function pageNumbers(page, totalPages) {
+    const first = Math.max(1, Math.min(page - 2, totalPages - 4));
+    const last = Math.min(totalPages, first + 4);
+    return Array.from({ length: last - first + 1 }, (_, index) => first + index);
+  }
+
+  // Egy lista (rendelések, felhasználók, napló, audit) állapota: oldal, oldalméret, szűrők. A [data-list="név"] elemek kötődnek hozzá:
+  // data-filter (szűrőmező), data-range (gyorsgomb), data-clear (szűrők törlése), data-pagesize, data-pager.
+  function createList({ name, path, render, errorId, errorText }) {
+    const state = { page: 1, pageSize: 20 };
+    const query = (selector) => [...document.querySelectorAll(`[data-list="${name}"]${selector}`)];
+    let timer = null;
+    let request = 0;
+
+    function params() {
+      const search = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+      query('[data-filter]').forEach((input) => {
+        const value = input.value.trim();
+        if (value) search.set(input.dataset.filter, value);
+      });
+      return search;
+    }
+
+    function renderPager(data) {
+      query('[data-pager]').forEach((box) => {
+        box.replaceChildren();
+        const total = el('span', 'admin-pager-total', `${data.total} találat · ${data.page}. / ${data.totalPages} oldal`);
+        const button = (label, page, { disabled = false, current = false, title = '' } = {}) => {
+          const node = el('button', `profile-btn${current ? ' primary' : ''}`, label);
+          node.type = 'button';
+          node.disabled = disabled;
+          node.dataset.page = String(page);
+          if (title) node.title = title;
+          if (current) node.setAttribute('aria-current', 'page');
+          node.addEventListener('click', () => { state.page = page; load(); });
+          return node;
+        };
+        const nav = el('span', 'admin-pager-nav');
+        nav.append(
+          button('« Első', 1, { disabled: data.page <= 1 }),
+          button('‹ Előző', data.page - 1, { disabled: data.page <= 1 }),
+          ...pageNumbers(data.page, data.totalPages).map((page) => button(String(page), page, { current: page === data.page })),
+          button('Következő ›', data.page + 1, { disabled: data.page >= data.totalPages }),
+          button('Utolsó »', data.totalPages, { disabled: data.page >= data.totalPages })
+        );
+        box.append(total, nav);
+      });
+    }
+
+    async function load() {
+      const current = ++request;
+      setText(errorId, '');
+      try {
+        const data = await api(`${path}?${params()}`);
+        if (current !== request) return null;
+        state.page = data.page;
+        render(data);
+        renderPager(data);
+        return data;
+      } catch (error) {
+        if (current === request) setText(errorId, `${errorText}: ${errorMessage(error)}`);
+        return null;
+      }
+    }
+
+    const reload = () => { state.page = 1; return load(); };
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(reload, SEARCH_DELAY_MS); };
+
+    function bind() {
+      query('[data-filter]').forEach((input) => {
+        const instant = input.tagName === 'SELECT' || input.type === 'date';
+        input.addEventListener(instant ? 'change' : 'input', instant ? () => { clearTimeout(timer); reload(); } : schedule);
+      });
+      query('[data-range]').forEach((button) => button.addEventListener('click', () => {
+        const from = query('[data-filter="dateFrom"]')[0];
+        const to = query('[data-filter="dateTo"]')[0];
+        const today = new Date();
+        const range = button.dataset.range;
+        if (range === 'all') { from.value = ''; to.value = ''; } else {
+          const start = new Date(today);
+          start.setDate(start.getDate() - (range === 'today' ? 0 : Number(range) - 1));
+          from.value = localDay(start);
+          to.value = localDay(today);
+        }
+        clearTimeout(timer);
+        reload();
+      }));
+      query('[data-clear]').forEach((button) => button.addEventListener('click', () => {
+        query('[data-filter]').forEach((input) => { input.value = ''; });
+        clearTimeout(timer);
+        reload();
+      }));
+      query('[data-pagesize]').forEach((select) => select.addEventListener('change', () => {
+        state.pageSize = Number(select.value) || 20;
+        query('[data-pagesize]').forEach((other) => { other.value = String(state.pageSize); });
+        clearTimeout(timer);
+        reload();
+      }));
+    }
+
+    return { load, reload, bind, state, set(filter, value) { query(`[data-filter="${filter}"]`).forEach((input) => { input.value = value; }); } };
+  }
+
+  const lists = {};
 
   // ---------- 1. Áttekintés ----------
 
@@ -301,17 +408,8 @@
 
   let lastOrders = [];
 
-  async function loadOrders() {
-    const request = ++ordersRequest;
-    setText('ordersError', '');
-    const params = new URLSearchParams();
-    if (byId('ordersStatus').value) params.set('status', byId('ordersStatus').value);
-    if (byId('ordersSearch').value.trim()) params.set('q', byId('ordersSearch').value.trim());
-    try {
-      const data = await api(`/api/admin/orders${params.toString() ? `?${params}` : ''}`);
-      if (request !== ordersRequest) return;
+  function renderOrders(data) {
       lastOrders = data.orders;
-      renderFailedOrdersBanner(data.orders);
       fillTable('ordersTable', data.orders.map((order) => {
         const buyer = el('span');
         buyer.textContent = order.name ? `${order.name} (${order.email || '–'})` : order.email || '–';
@@ -348,25 +446,24 @@
           status.append(el('br'), failure);
         }
         return [
-          formatDate(order.createdAt), buyer, PLAN_LABELS[order.planKey] || order.planKey || '–', formatAmount(order.amount),
+          formatDate(order.createdAt), order.orderNumber, buyer, PLAN_LABELS[order.planKey] || order.planKey || '–', order.topic || '–', formatAmount(order.amount),
           order.couponCode || '–', status, order.invoiceNumber || '–', actions
         ];
-      }), 8, 'Nincs a szűrésnek megfelelő rendelés.');
-      byId('ordersCount').textContent = `${data.orders.length} rendelés${data.truncated ? ' (a lista csonkolt, szűkítsd a keresést)' : ''}`;
-    } catch (error) {
-      if (request !== ordersRequest) return;
-      setText('ordersError', `A rendelések nem tölthetők be: ${errorMessage(error)}`);
-    }
+      }), 10, 'Nincs a szűrésnek megfelelő rendelés.');
+      byId('ordersCount').textContent = `${data.total} rendelés${data.truncated ? ' (a lista csonkolt, szűkítsd az időszakot)' : ''}`;
   }
 
+  lists.orders = createList({ name: 'orders', path: '/api/admin/orders', render: renderOrders, errorId: 'ordersError', errorText: 'A rendelések nem tölthetők be' });
+  const loadOrders = () => lists.orders.load();
+
   // Felső figyelmeztető sáv: kifizetett, de számlázási/kézbesítési hibás rendelések (a rendelés fizetett marad, a hiba a szerveren rögzült).
-  function renderFailedOrdersBanner(orders) {
-    const failed = orders.filter((order) => order.status === 'paid' && order.lastError);
+  function renderFailedOrdersBanner(data) {
+    const failed = data.failed || [];
+    const count = data.failedCount ?? failed.length;
     const banner = byId('failedOrdersBanner');
-    banner.hidden = failed.length === 0;
-    byId('failedOrdersTitle').textContent = `${failed.length} kifizetett rendelésnél elbukott a számlázás vagy a kézbesítés`;
-    const list = byId('failedOrdersList');
-    list.replaceChildren(...failed.slice(0, 5).map((order) => {
+    banner.hidden = count === 0;
+    byId('failedOrdersTitle').textContent = `${count} kifizetett rendelésnél elbukott a számlázás vagy a kézbesítés`;
+    byId('failedOrdersList').replaceChildren(...failed.slice(0, 5).map((order) => {
       const item = el('li');
       item.textContent = `${order.orderNumber} – ${order.lastError}`;
       return item;
@@ -375,8 +472,7 @@
 
   async function loadFailedOrdersBanner() {
     try {
-      const data = await api('/api/admin/orders?status=paid');
-      renderFailedOrdersBanner(data.orders || []);
+      renderFailedOrdersBanner(await api('/api/admin/orders?status=paid&invoice=error&pageSize=20'));
     } catch (_error) {
       byId('failedOrdersBanner').hidden = true;
     }
@@ -496,19 +592,19 @@
 
   // ---------- 4. Felhasználók és hírlevél ----------
 
-  async function loadUsers() {
-    setText('usersError', '');
-    try {
-      const data = await api('/api/admin/users');
-      users = data.users;
-      byId('usersCount').textContent = `${users.length} regisztrált felhasználó, ebből ${data.subscriberCount} megerősített feliratkozó`;
-      fillTable('usersTable', users.map((user) => [
-        user.name || '–', user.email, formatDate(user.createdAt), yesNo(user.confirmed), yesNo(user.subscribed), supportButton(user.email)
-      ]), 6, 'Még nincs regisztrált felhasználó.');
-    } catch (error) {
-      setText('usersError', `A felhasználók nem tölthetők be: ${errorMessage(error)}`);
-    }
+  const ROLE_LABELS = { admin: 'Admin', user: 'Felhasználó' };
+
+  function renderUsers(data) {
+    users = data.users;
+    byId('usersCount').textContent = `${data.total} regisztrált felhasználó, ebből ${data.subscriberCount} megerősített feliratkozó (összesen)`;
+    fillTable('usersTable', users.map((user) => [
+      user.name || '–', user.email, user.kindergarten || '–', user.group || '–', [user.billingName, user.taxId].filter(Boolean).join(' / ') || '–',
+      ROLE_LABELS[user.role] || '–', formatDate(user.createdAt), yesNo(user.confirmed), yesNo(user.subscribed), supportButton(user.email)
+    ]), 10, 'Nincs a szűrésnek megfelelő felhasználó.');
   }
+
+  lists.users = createList({ name: 'users', path: '/api/admin/users', render: renderUsers, errorId: 'usersError', errorText: 'A felhasználók nem tölthetők be' });
+  const loadUsers = () => lists.users.load();
 
   // ---------- Ügyfélszolgálat: kárpótlási kupon ----------
 
@@ -536,18 +632,49 @@
 
   // ---------- Rendszernapló ----------
 
-  async function loadLogs() {
-    setText('logsError', '');
-    try {
-      const data = await api('/api/admin/logs');
-      byId('logsCount').textContent = `Legutóbbi ${data.logs.length} naplóbejegyzés`;
-      fillTable('logsTable', data.logs.map((entry) => [formatDate(entry.createdAt), entry.level, entry.context, entry.message, entry.email || '–']), 5, 'Még nincs naplóbejegyzés.');
-      [...byId('logsTable').tBodies[0].rows].forEach((row, index) => {
-        if (data.logs[index]?.level === 'error') row.classList.add('log-error');
-      });
-    } catch (error) {
-      setText('logsError', `A rendszernapló nem tölthető be: ${errorMessage(error)}`);
-    }
+  function renderLogs(data) {
+    byId('logsCount').textContent = `${data.total} naplóbejegyzés`;
+    fillTable('logsTable', data.logs.map((entry) => [formatDate(entry.createdAt), entry.level, entry.context, entry.message, entry.email || '–']), 5, 'Nincs a szűrésnek megfelelő naplóbejegyzés.');
+    [...byId('logsTable').tBodies[0].rows].forEach((row, index) => {
+      if (data.logs[index]?.level === 'error') row.classList.add('log-error');
+    });
+  }
+
+  lists.logs = createList({ name: 'logs', path: '/api/admin/logs', render: renderLogs, errorId: 'logsError', errorText: 'A rendszernapló nem tölthető be' });
+  const loadLogs = () => lists.logs.load();
+
+  // Audit napló: hosszú vagy összetett értékek (pl. AI prompt, e-mail sablon) összecsukható előtte/utána nézetben.
+  const AUDIT_INLINE_MAX = 80;
+
+  function auditValue(value) {
+    if (value === null || value === undefined || value === '') return el('em', 'admin-audit-empty', '–');
+    const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    if (text.length <= AUDIT_INLINE_MAX && !text.includes('\n')) return el('code', 'admin-audit-value', text);
+    const details = el('details', 'admin-audit-details');
+    details.append(el('summary', '', `${text.slice(0, AUDIT_INLINE_MAX).replace(/\s+/g, ' ')}…`));
+    const area = el('textarea', 'admin-audit-full');
+    area.readOnly = true;
+    area.value = text;
+    details.append(area);
+    return details;
+  }
+
+  function renderAudit(data) {
+    byId('auditCount').textContent = `${data.total} módosítás`;
+    fillTable('auditTable', data.entries.map((entry) => {
+      const label = el('span');
+      label.append(el('strong', '', entry.label));
+      if (entry.label !== entry.key) label.append(el('br'), el('small', 'admin-audit-key', entry.key));
+      return [formatDate(entry.changedAt), entry.changedBy || '–', label, auditValue(entry.oldValue), auditValue(entry.newValue)];
+    }), 5, 'Még nincs rögzített beállításmódosítás.');
+  }
+
+  lists.audit = createList({ name: 'audit', path: '/api/admin/audit', render: renderAudit, errorId: 'auditError', errorText: 'Az audit napló nem tölthető be' });
+
+  function activateLogsTab(name) {
+    document.querySelectorAll('[data-logs-tab]').forEach((tab) => tab.setAttribute('aria-selected', tab.dataset.logsTab === name ? 'true' : 'false'));
+    document.querySelectorAll('[data-logs-panel]').forEach((panel) => { panel.hidden = panel.dataset.logsPanel !== name; });
+    if (name === 'audit') lists.audit.load(); else lists.logs.load();
   }
 
   function exportSubscribers() {
@@ -1022,10 +1149,18 @@
     settings: [loadSettings, loadTemplates]
   };
 
+  function setMenuOpen(open) {
+    byId('adminSidebar').classList.toggle('is-open', open);
+    byId('adminBackdrop').hidden = !open;
+    byId('adminMenuToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
   function activateTab(name) {
     document.querySelectorAll('[data-admin-tab]').forEach((tab) => {
       tab.setAttribute('aria-selected', tab.dataset.adminTab === name ? 'true' : 'false');
+      if (tab.dataset.adminTab === name) byId('adminMobileTitle').textContent = tab.textContent;
     });
+    setMenuOpen(false);
     document.querySelectorAll('.profile-panel').forEach((panel) => { panel.hidden = panel.id !== `panel${name[0].toUpperCase()}${name.slice(1)}`; });
     if (!loaded[name]) {
       loaded[name] = true;
@@ -1041,11 +1176,14 @@
     byId('couponForm').addEventListener('submit', submitCoupon);
     byId('couponEditForm').addEventListener('submit', saveCouponEdit);
     byId('couponEditCancel').addEventListener('click', () => byId('couponEditDialog').close());
-    byId('ordersStatus').addEventListener('change', loadOrders);
-    byId('ordersSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadOrders, SEARCH_DELAY_MS); });
+    Object.values(lists).forEach((list) => list.bind());
+    byId('adminMenuToggle').addEventListener('click', () => setMenuOpen(!byId('adminSidebar').classList.contains('is-open')));
+    byId('adminBackdrop').addEventListener('click', () => setMenuOpen(false));
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setMenuOpen(false); });
+    document.querySelectorAll('[data-logs-tab]').forEach((tab) => tab.addEventListener('click', () => activateLogsTab(tab.dataset.logsTab)));
     byId('ordersExport').addEventListener('click', exportOrders);
     byId('usersExport').addEventListener('click', exportSubscribers);
-    byId('logsRefresh').addEventListener('click', loadLogs);
+    byId('logsRefresh').addEventListener('click', () => lists.logs.load());
     byId('newsletterForm').addEventListener('submit', sendNewsletter);
     byId('newsletterForm').addEventListener('input', schedulePreview);
     document.querySelectorAll('input[name="recipients"]').forEach((radio) => radio.addEventListener('change', syncRecipientMode));
@@ -1068,7 +1206,12 @@
     byId('tplSkeleton').addEventListener('click', loadSkeleton);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
-    byId('failedOrdersOpen').addEventListener('click', () => { byId('ordersStatus').value = 'paid'; activateTab('orders'); });
+    byId('failedOrdersOpen').addEventListener('click', () => {
+      lists.orders.set('status', 'paid');
+      lists.orders.set('invoice', 'missing');
+      activateTab('orders');
+      lists.orders.reload();
+    });
     loadFailedOrdersBanner();
     loadToolLinks();
   }

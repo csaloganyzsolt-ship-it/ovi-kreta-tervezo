@@ -64,19 +64,29 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
       let window = null;
       let single = false;
       let removing = false;
+      let wantCount = false;
       const run = () => {
         if (removing && failures[`delete:${name}`]) return { data: null, error: failures[`delete:${name}`] };
         if (failures[name]) return { data: null, error: { message: failures[name] } };
         let rows = db[name].filter((row) => filters.every((matches) => matches(row)));
+        const total = rows.length;
         if (patch) rows.forEach((row) => Object.assign(row, patch));
         if (removing) db[name] = db[name].filter((row) => !rows.includes(row));
         if (order) rows = [...rows].sort((a, b) => (order.ascending ? 1 : -1) * String(a[order.column]).localeCompare(String(b[order.column])));
         if (window) rows = rows.slice(window.from, window.to + 1);
         const data = rows.map((row) => ({ ...row, ...(name === 'documents' ? { request: row.data?.plan?.request } : {}) }));
-        return single ? { data: data[0] || null, error: null } : { data, error: null };
+        return single ? { data: data[0] || null, error: null } : { data, error: null, ...(wantCount ? { count: total } : {}) };
       };
       const builder = {
-        select() { return builder; },
+        select(_columns, options) { wantCount = options?.count === 'exact'; return builder; },
+        gte(column, value) { filters.push((row) => String(row[column] ?? '') >= value); return builder; },
+        lte(column, value) { filters.push((row) => row[column] != null && String(row[column]) <= value); return builder; },
+        ilike(column, pattern) {
+          const source = String(pattern).replace(/\\(.)/g, '\u0000$1').replace(/[.*+?^${}()|[\]]/g, '\\$&').replace(/%/g, '.*').replace(/\u0000(.)/g, (_m, char) => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+          const regex = new RegExp(`^${source}$`, 'i');
+          filters.push((row) => regex.test(String(row[column] ?? '')));
+          return builder;
+        },
         update(values) { patch = values; return builder; },
         delete() { removing = true; return builder; },
         eq(column, value) { filters.push((row) => row[column] === value); return builder; },
@@ -96,10 +106,12 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
           }
           return builder;
         },
-        upsert(row, options = {}) {
+        upsert(rows, options = {}) {
           const key = options.onConflict || 'id';
-          const existing = db[name].find((candidate) => candidate[key] === row[key]);
-          if (existing) Object.assign(existing, row); else db[name].push({ ...row });
+          for (const row of [].concat(rows)) {
+            const existing = db[name].find((candidate) => candidate[key] === row[key]);
+            if (existing) Object.assign(existing, row); else db[name].push({ ...row });
+          }
           return Promise.resolve({ data: null, error: null });
         },
         single() { single = true; return builder; },
@@ -113,6 +125,8 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
     }
   };
 }
+
+const pagedOrders = (orders, extra = {}) => ({ success: true, truncated: false, failedCount: 0, failed: [], orders, total: orders.length, page: 1, pageSize: 20, totalPages: 1, ...extra });
 
 function useAdminEnv(t, client, { adminEmail = 'ADMIN@example.com' } = {}) {
   const keys = ['ADMIN_EMAIL', 'ADMIN_RATE_LIMIT', 'ADMIN_SEND_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'];
@@ -669,7 +683,7 @@ test('admin.html and admin.js are shipped with every build, served by the backen
   assert.equal(/<script(?![^>]*\bsrc=)[^>]*>/.test(html), false, 'nincs inline script');
   assert.doesNotMatch(html, /#(?:e67e22|f39c12|ff9800|d35400)/i, 'nincs narancs szín');
   assert.match(html, /<iframe[^>]*id="nlPreview"[^>]*sandbox=""/, 'az előnézet sandboxolt');
-  for (const label of ['Cloudflare Analytics', 'Google Analytics', 'Google Search Console', 'Barion', 'Számlázz.hu', 'Külső statisztikák']) assert.ok(html.includes(label), label);
+  for (const label of ['Cloudflare Analytics', 'Google Analytics', 'Google Search Console', 'Barion', 'Számlázz.hu', 'Külső eszközök']) assert.ok(html.includes(label), label);
   assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'sitemap.xml'), 'utf8'), /admin/);
   const base = await listen(t);
   assert.equal((await fetch(`${base}/admin.html`)).status, 200);
@@ -831,7 +845,7 @@ test('admin.js: the orders table is filtered through the API and exports a formu
     routes: {
       '/api/admin/me': ME,
       '/api/admin/stats': () => [STATS],
-      '/api/admin/orders': (_method, _body, params) => [{ success: true, truncated: false, orders: orders.filter((o) => (!params.get('status') || o.status === params.get('status')) && (!params.get('q') || o.email.includes(params.get('q')))) }]
+      '/api/admin/orders': (_method, _body, params) => [pagedOrders(orders.filter((o) => (!params.get('status') || o.status === params.get('status')) && (!params.get('q') || o.email.includes(params.get('q')))))]
     }
   });
   document.getElementById('tabOrders').click();
@@ -883,7 +897,7 @@ test('admin.js: the users tab lists registrations and exports only confirmed sub
     routes: {
       '/api/admin/me': ME,
       '/api/admin/stats': () => [STATS],
-      '/api/admin/users': () => [{ success: true, users: usersData, subscriberCount: 1 }],
+      '/api/admin/users': () => [{ success: true, users: usersData, subscriberCount: 1, total: usersData.length, page: 1, pageSize: 20, totalPages: 1 }],
       '/api/admin/newsletter/campaigns': () => [{ success: true, sending: null, campaigns: [{ id: 'c1', subject: 'Őszi hírlevél', recipientFilter: 'subscribers', recipientCount: 12, sentCount: 11, failedCount: 1, sentBy: 'admin@example.com', createdAt: ago(2) }] }],
       '/api/admin/newsletter/preview': () => [{ success: true, html: '<html><body>ELŐNÉZET</body></html>' }]
     }
@@ -917,7 +931,7 @@ test('admin.js: a free coupon order shows a 0 Ft / Kupon label instead of a disa
     routes: {
       '/api/admin/me': ME,
       '/api/admin/stats': () => [STATS],
-      '/api/admin/orders': () => [{ success: true, truncated: false, failedCount: 0, orders }]
+      '/api/admin/orders': () => [pagedOrders(orders)]
     }
   });
   await tick();
@@ -940,7 +954,7 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
     routes: {
       '/api/admin/me': ME,
       '/api/admin/stats': () => [STATS],
-      '/api/admin/orders': () => [{ success: true, truncated: false, failedCount: 1, orders }],
+      '/api/admin/orders': () => [pagedOrders(orders, { failedCount: 1, failed: [{ orderNumber: 'OVI-F1', lastError: orders[0].lastError }] })],
       '/api/admin/orders/OVI-F1/issue-invoice': () => [{ success: true, invoiceNumber: 'E-2' }]
     }
   });
@@ -1065,7 +1079,7 @@ test('auth.js shows the discreet Vezérlőpult link next to the account button o
 
 // ---------- Rendszernapló és ügyfélszolgálati kupon ----------
 
-test('GET /api/admin/logs returns the latest 100 logs, newest first, only for admins', async (t) => {
+test('GET /api/admin/logs returns paginated logs, newest first, only for admins', async (t) => {
   const rows = Array.from({ length: 105 }, (_, i) => ({ id: `l${i}`, level: i === 104 ? 'error' : 'info', context: 'ai_generation', message: `m${i}`, details: { secret: 'x' }, user_email: i === 104 ? 'vevo@example.com' : null, created_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }));
   const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_logs: rows }));
   const base = await listen(t);
@@ -1074,8 +1088,11 @@ test('GET /api/admin/logs returns the latest 100 logs, newest first, only for ad
   const response = await call(base, '/api/admin/logs', { token: 'token-admin' });
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.equal(data.logs.length, 100);
-  assert.deepEqual({ level: data.logs[0].level, email: data.logs[0].email, message: data.logs[0].message }, { level: 'error', email: 'vevo@example.com', message: 'm104' });
+  assert.equal(data.logs.length, 20, 'az alapértelmezett oldalméret 20');
+  assert.equal(data.total, 105);
+  const full = await (await call(base, '/api/admin/logs?pageSize=100', { token: 'token-admin' })).json();
+  assert.equal(full.logs.length, 100);
+  assert.deepEqual({ level: full.logs[0].level, email: full.logs[0].email, message: full.logs[0].message }, { level: 'error', email: 'vevo@example.com', message: 'm104' });
   assert.equal(JSON.stringify(data).includes('secret'), false);
   assert.ok(client.db.system_logs.length >= 105);
 });
@@ -1475,4 +1492,326 @@ test('the admin e-mail template routes create, preview, delete and reset templat
   assert.equal(reset.status, 200);
   assert.equal((await send('/base_layout/reset', 'POST')).status, 409);
   assert.equal((await call(base, '/api/admin/email-templates/invoice_only', { method: 'DELETE' })).status, 401);
+});
+
+// ---------- Szerveroldali lapozás, szűrők és audit napló ----------
+
+const bulkOrder = (n, extra = {}) => ({
+  order_number: `OVI-${String(n).padStart(3, '0')}`, user_id: null, user_email: `vevo${n}@example.com`, document_id: `gen_${n}`, plan_mode: 'standard', plan_key: 'daily', amount: 390,
+  coupon_code: null, payment_method: 'Barion', status: 'paid', invoice_number: `OVITE-${n}`, title: `Téma ${n}`, billing: { name: `Vevő ${n}` }, created_at: ago(n), ...extra
+});
+
+test('GET /api/admin/orders paginates on the server with total, page count and validated page size', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: Array.from({ length: 45 }, (_, i) => bulkOrder(i + 1)) }));
+  const base = await listen(t);
+  const get = async (query = '') => (await call(base, `/api/admin/orders${query}`, { token: 'token-admin' })).json();
+  const first = await get();
+  assert.deepEqual({ total: first.total, page: first.page, pageSize: first.pageSize, totalPages: first.totalPages, rows: first.orders.length }, { total: 45, page: 1, pageSize: 20, totalPages: 3, rows: 20 });
+  assert.equal(first.orders[0].orderNumber, 'OVI-001', 'legújabb elöl');
+  const last = await get('?page=3');
+  assert.deepEqual({ page: last.page, rows: last.orders.length, first: last.orders[0].orderNumber }, { page: 3, rows: 5, first: 'OVI-041' });
+  assert.equal((await get('?pageSize=50')).orders.length, 45);
+  assert.equal((await get('?page=99')).page, 3, 'a túlzott oldalszám az utolsó oldalra igazodik');
+  assert.equal((await call(base, '/api/admin/orders?pageSize=7', { token: 'token-admin' })).status, 400);
+  assert.equal((await call(base, '/api/admin/orders?dateFrom=nem-datum', { token: 'token-admin' })).status, 400);
+});
+
+test('GET /api/admin/orders filters by period, type and per-column search combined', async (t) => {
+  const rows = [
+    bulkOrder(1, { payment_method: 'Barion', coupon_code: null, title: 'Őszi erdő', user_email: 'anna@example.com', billing: { name: 'Kiss Anna' }, amount: 390 }),
+    bulkOrder(2, { payment_method: 'Stripe', status: 'paid', invoice_number: null, amount: 890, title: 'Tavaszi rét' }),
+    bulkOrder(3, { payment_method: 'Kupon', amount: 0, coupon_code: 'NYAR100', invoice_number: null, title: 'Nyári játék' }),
+    bulkOrder(4, { status: 'pending', invoice_number: null, title: 'Téli ünnep' }),
+    bulkOrder(5, { last_error: 'Számlázás: hiba', invoice_number: null, created_at: ago(40) })
+  ];
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: rows }));
+  const base = await listen(t);
+  const numbers = async (query) => (await (await call(base, `/api/admin/orders?${query}`, { token: 'token-admin' })).json()).orders.map((o) => o.orderNumber);
+  assert.deepEqual(await numbers('paymentMethod=Stripe'), ['OVI-002']);
+  assert.deepEqual(await numbers('paymentMethod=Kupon'), ['OVI-003']);
+  assert.deepEqual(await numbers('invoice=has'), ['OVI-001']);
+  assert.deepEqual((await numbers('invoice=missing')).sort(), ['OVI-002', 'OVI-005'], 'fizetett >0 Ft számla nélkül + hibás; a 0 Ft-os kupon nem hiányos');
+  assert.deepEqual(await numbers('invoice=error'), ['OVI-005']);
+  assert.deepEqual(await numbers(`dateFrom=${ago(10).slice(0, 10)}`), ['OVI-001', 'OVI-002', 'OVI-003', 'OVI-004']);
+  assert.deepEqual(await numbers(`dateTo=${ago(20).slice(0, 10)}`), ['OVI-005']);
+  assert.deepEqual(await numbers('orderNumber=004'), ['OVI-004']);
+  assert.deepEqual(await numbers('customer=kiss'), ['OVI-001']);
+  assert.deepEqual(await numbers('customer=ANNA@'), ['OVI-001']);
+  assert.deepEqual(await numbers('topic=tavaszi'), ['OVI-002']);
+  assert.deepEqual(await numbers('amount=890'), ['OVI-002']);
+  assert.deepEqual(await numbers('coupon=nyar'), ['OVI-003']);
+  assert.deepEqual(await numbers('invoiceNumber=OVITE-1'), ['OVI-001']);
+  assert.deepEqual(await numbers('status=paid&paymentMethod=Barion&topic=erdő'), ['OVI-001'], 'a szűrők együtt érvényesülnek');
+  assert.deepEqual(await numbers('topic=nincs-ilyen'), []);
+  const data = await (await call(base, '/api/admin/orders?status=pending', { token: 'token-admin' })).json();
+  assert.equal(data.failed.length, 0);
+  const all = await (await call(base, '/api/admin/orders', { token: 'token-admin' })).json();
+  assert.deepEqual(all.failed, [{ orderNumber: 'OVI-005', lastError: 'Számlázás: hiba' }]);
+});
+
+test('GET /api/admin/users paginates and filters by role, newsletter, purchases, period and columns', async (t) => {
+  const tables = statsTables();
+  tables.profiles = tables.profiles.map((p) => (p.id === ALICE.id ? { ...p, full_name: 'Alice Kiss', kindergarten_name: 'Napsugár Óvoda', group_name: 'Méhecske', billing_tax_id: '12345678-1-42' } : p));
+  tables.orders = [{ order_number: 'U1', user_id: ALICE.id, user_email: 'alice@example.com', amount: 390, status: 'paid', created_at: ago(2) }, { order_number: 'U2', user_id: null, user_email: 'carol@example.com', amount: 390, status: 'pending', created_at: ago(2) }];
+  useAdminEnv(t, fakeAdmin(tables));
+  const base = await listen(t);
+  const get = async (query = '') => (await call(base, `/api/admin/users?${query}`, { token: 'token-admin' })).json();
+  const emails = async (query) => (await get(query)).users.map((u) => u.email).sort();
+  const everyone = await get();
+  assert.deepEqual({ total: everyone.total, page: everyone.page, totalPages: everyone.totalPages, subscriberCount: everyone.subscriberCount }, { total: 5, page: 1, totalPages: 1, subscriberCount: 2 });
+  assert.equal((await get('page=2')).page, 1, 'a túlzott oldalszám az utolsó oldalra igazodik');
+  assert.deepEqual(await emails('role=admin'), ['admin@example.com', 'alice@example.com']);
+  assert.equal((await emails('role=user')).length, 3);
+  assert.deepEqual(await emails('newsletter=not'), ['admin@example.com', 'bob@example.com']);
+  assert.deepEqual(await emails('hasOrders=yes'), ['alice@example.com'], 'csak a fizetett rendelés számít vásárlásnak');
+  assert.equal((await emails('hasOrders=no')).length, 4);
+  assert.deepEqual(await emails('kindergarten=napsugár'), ['alice@example.com']);
+  assert.deepEqual(await emails('group=méhecske'), ['alice@example.com']);
+  assert.deepEqual(await emails('billing=12345678'), ['alice@example.com']);
+  assert.deepEqual(await emails('name=alice&email=alice@'), ['alice@example.com']);
+  assert.deepEqual(await emails(`dateFrom=${ago(1).slice(0, 10)}`), []);
+  assert.equal((await call(base, '/api/admin/users?role=root', { token: 'token-admin' })).status, 400);
+  assert.equal(everyone.users.find((u) => u.email === 'alice@example.com').role, 'admin');
+});
+
+test('GET /api/admin/logs filters by level, category, period and columns on the database side with a total count', async (t) => {
+  const log = (i, extra) => ({ id: `l${i}`, level: 'info', context: 'ai_generation', message: `üzenet ${i}`, user_email: null, created_at: new Date(Date.UTC(2026, 2, 1 + i, 10, 0)).toISOString(), ...extra });
+  const rows = [log(0), log(1, { level: 'error', context: 'barion_payment', user_email: 'vevo@example.com', message: 'Eltérő összeg' }), log(2, { level: 'warning', context: 'invoice' }), log(3, { context: 'admin_settings' }), log(4, { context: 'guest_claim' })];
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_logs: rows }));
+  const base = await listen(t);
+  const get = async (query) => (await call(base, `/api/admin/logs?${query}`, { token: 'token-admin' })).json();
+  const ids = async (query) => (await get(query)).logs.map((l) => l.id).sort();
+  assert.deepEqual(await ids('level=error'), ['l1']);
+  assert.deepEqual(await ids('level=warn'), ['l2']);
+  assert.deepEqual(await ids('category=payment'), ['l1']);
+  assert.deepEqual(await ids('category=invoice'), ['l2']);
+  assert.deepEqual(await ids('category=ai'), ['l0']);
+  assert.deepEqual(await ids('category=settings'), ['l3']);
+  assert.deepEqual(await ids('category=auth'), ['l4']);
+  assert.deepEqual(await ids('time=2026-03-03'), ['l2']);
+  assert.deepEqual(await ids('time=2026-03'), ['l0', 'l1', 'l2', 'l3', 'l4']);
+  assert.deepEqual(await ids('dateFrom=2026-03-04&dateTo=2026-03-05'), ['l3', 'l4']);
+  assert.deepEqual(await ids('email=VEVO@'), ['l1']);
+  assert.deepEqual(await ids('message=összeg'), ['l1']);
+  assert.deepEqual(await ids('context=barion'), ['l1']);
+  assert.deepEqual(await ids('level=info&category=ai'), ['l0']);
+  const small = await get('pageSize=20');
+  assert.equal(small.total, 5);
+  for (const bad of ['level=fatal', 'category=x', 'time=tegnap', 'pageSize=500']) assert.equal((await call(base, `/api/admin/logs?${bad}`, { token: 'token-admin' })).status, 400, bad);
+  const paged = [];
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_logs: Array.from({ length: 130 }, (_, i) => log(i % 28, { id: `p${i}` })) }));
+  const page2 = await (await call(base, '/api/admin/logs?pageSize=50&page=2', { token: 'token-admin' })).json();
+  paged.push(page2.logs.length, page2.total, page2.totalPages);
+  assert.deepEqual(paged, [50, 130, 3]);
+});
+
+test('settings and e-mail template changes are audited with who, when, old and new value, and secrets are masked', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), system_settings_history: [] }));
+  const base = await listen(t);
+  const send = (path, method, body) => call(base, `/api/admin/${path}`, { token: 'token-admin', method, body });
+  assert.equal((await send('settings', 'PATCH', { announcement_bar: { enabled: true, text: 'Nyári szünet' } })).status, 200);
+  const stored = client.db.system_settings.find((row) => row.key === 'announcement_bar');
+  assert.equal(String(stored.updated_by).toLowerCase(), 'admin@example.com', 'a módosító admin e-mailje az updated_by-ba kerül (a trigger ebből tölti a changed_by-t)');
+
+  const created = await send('email-templates', 'POST', { id: 'audit_demo', name: 'Audit teszt', subject: 'Régi tárgy', bodyHtml: '<p>Régi törzs {{topic}}</p>' });
+  assert.equal(created.status, 201);
+  assert.equal((await send('email-templates/audit_demo', 'PATCH', { name: 'Audit teszt', subject: 'Új tárgy', bodyHtml: '<p>Új törzs {{topic}}</p>' })).status, 200);
+  assert.equal((await send('email-templates/audit_demo', 'DELETE')).status, 200);
+
+  const rows = client.db.system_settings_history.filter((row) => row.setting_key === 'email_template:audit_demo');
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].old_value, null);
+  assert.equal(rows[0].new_value.subject, 'Régi tárgy');
+  assert.deepEqual({ old: rows[1].old_value.subject, next: rows[1].new_value.subject }, { old: 'Régi tárgy', next: 'Új tárgy' });
+  assert.equal(rows[2].new_value, null);
+  assert.ok(rows.every((row) => String(row.changed_by).toLowerCase() === 'admin@example.com'));
+
+  client.db.system_settings_history.push({ id: 'h-secret', setting_key: 'external_links', old_value: { api_key: 'titok-1', url: 'https://a.example' }, new_value: { api_key: 'titok-2', url: 'https://b.example' }, changed_at: new Date().toISOString(), changed_by: 'admin@example.com' });
+  const audit = await (await call(base, '/api/admin/audit?pageSize=100', { token: 'token-admin' })).json();
+  assert.equal(audit.total, 4);
+  const secret = audit.entries.find((entry) => entry.id === 'h-secret');
+  assert.equal(secret.label, 'Külső eszközök linkjei');
+  assert.equal(secret.newValue.url, 'https://b.example');
+  assert.equal(JSON.stringify(audit).includes('titok'), false, 'a titkos nevű mezők maszkolva');
+  const tpl = audit.entries.find((entry) => entry.key === 'email_template:audit_demo');
+  assert.equal(tpl.label, 'E-mail sablon: audit_demo');
+  assert.equal(tpl.kind, 'template');
+
+  const ids = async (query) => (await (await call(base, `/api/admin/audit?${query}`, { token: 'token-admin' })).json()).entries.map((e) => e.key);
+  assert.deepEqual(await ids('type=setting'), ['external_links']);
+  assert.equal((await ids('type=template')).length, 3);
+  assert.deepEqual(await ids('setting=külső'), ['external_links']);
+  assert.equal((await ids('changedBy=ADMIN@')).length, 4);
+  assert.deepEqual(await ids('changedBy=senki'), []);
+  assert.equal((await call(base, '/api/admin/audit', { token: 'token-bob' })).status, 403);
+  assert.equal((await call(base, '/api/admin/audit?type=x', { token: 'token-admin' })).status, 400);
+});
+
+test('settings are saved even before the audit migration adds updated_by', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const original = client.from;
+  client.from = (name) => {
+    const builder = original(name);
+    const upsert = builder.upsert;
+    builder.upsert = (row, options) => (name === 'system_settings' && [].concat(row).some((item) => 'updated_by' in item)
+      ? Promise.resolve({ data: null, error: { code: '42703', message: 'column "updated_by" of relation "system_settings" does not exist' } })
+      : upsert(row, options));
+    return builder;
+  };
+  const base = await listen(t);
+  const response = await call(base, '/api/admin/settings', { token: 'token-admin', method: 'PATCH', body: { maintenance_mode: true } });
+  assert.equal(response.status, 200);
+  assert.equal(client.db.system_settings.find((row) => row.key === 'maintenance_mode').value, true);
+});
+
+test('the audit migration adds the actor columns and keeps the history trigger idempotent', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261203090000_settings_audit_log.sql'), 'utf8');
+  assert.match(sql, /add column if not exists updated_by text/);
+  assert.match(sql, /add column if not exists changed_by text/);
+  assert.match(sql, /drop trigger if exists system_settings_history_trigger/);
+  assert.match(sql, /create or replace function public\.log_system_settings_change/);
+});
+
+// ---------- Admin felület: oldalsáv, lapozó, szűrők ----------
+
+test('admin.html has a left sidebar with every tab, a collapsible external tools block and per-column filters', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
+  const sidebar = html.slice(html.indexOf('id="adminSidebar"'), html.indexOf('</aside>'));
+  for (const tab of ['overview', 'coupons', 'orders', 'users', 'newsletter', 'logs', 'settings']) assert.ok(sidebar.includes(`data-admin-tab="${tab}"`), tab);
+  assert.match(sidebar, /<details class="admin-tools" id="adminTools"/);
+  assert.match(html, /id="adminMenuToggle"/);
+  assert.match(html, /Beállítások változásai \(Audit napló\)/);
+  for (const list of ['orders', 'users', 'logs', 'audit']) {
+    assert.ok(html.includes(`data-list="${list}" data-pager`), `${list} lapozó`);
+    assert.ok(html.includes(`data-list="${list}" data-clear`), `${list} szűrők törlése`);
+    assert.ok(html.includes(`id="${list}PageSize"`), `${list} oldalméret`);
+  }
+  assert.equal((html.match(/class="admin-filter-row"/g) || []).length, 4, 'minden táblázat fejléce alatt szűrősor');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'styles.css'), 'utf8');
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.admin-sidebar \{ position: fixed/);
+});
+
+test('admin.js: the mobile drawer opens from the hamburger button and closes on selection, backdrop and Escape', async (t) => {
+  const { document, window } = await loadPage(t, { routes: { '/api/admin/me': ME, '/api/admin/stats': () => [STATS] } });
+  const sidebar = document.getElementById('adminSidebar');
+  const toggle = document.getElementById('adminMenuToggle');
+  toggle.click();
+  assert.ok(sidebar.classList.contains('is-open'));
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.getElementById('adminBackdrop').hidden, false);
+  document.getElementById('adminBackdrop').click();
+  assert.equal(sidebar.classList.contains('is-open'), false);
+  toggle.click();
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(sidebar.classList.contains('is-open'), false);
+  toggle.click();
+  document.getElementById('tabCoupons').click();
+  assert.equal(sidebar.classList.contains('is-open'), false);
+  assert.equal(document.getElementById('adminMobileTitle').textContent, 'Kuponkezelő');
+  await tick();
+});
+
+test('admin.js: orders table shows pager, page size, debounced column search, quick period buttons and clear filters', async (t) => {
+  const all = Array.from({ length: 45 }, (_, i) => ({ orderNumber: `OVI-${i + 1}`, createdAt: ago(i), email: `v${i}@example.com`, name: '', topic: `Téma ${i + 1}`, planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: `E-${i + 1}`, lastError: '', documentId: `g${i}` }));
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/orders': (_method, _body, params) => {
+        const size = Number(params.get('pageSize'));
+        const topic = params.get('topic');
+        const rows = all.filter((o) => !topic || o.topic.toLowerCase().includes(topic.toLowerCase()));
+        const totalPages = Math.max(1, Math.ceil(rows.length / size));
+        const page = Math.min(Number(params.get('page')) || 1, totalPages);
+        return [{ success: true, truncated: false, failedCount: 0, failed: [], orders: rows.slice((page - 1) * size, page * size), total: rows.length, page, pageSize: size, totalPages }];
+      }
+    }
+  });
+  document.getElementById('tabOrders').click();
+  await tick();
+  const rowCount = () => document.querySelectorAll('#ordersTable tbody tr').length;
+  assert.equal(rowCount(), 20);
+  assert.match(document.getElementById('ordersCount').textContent, /45 rendelés/);
+  const pager = document.querySelector('[data-list="orders"][data-pager]');
+  assert.match(pager.textContent, /45 találat · 1\. \/ 3 oldal/);
+  const labels = [...pager.querySelectorAll('button')].map((b) => b.textContent);
+  assert.deepEqual([labels[0], labels[1], labels.at(-2), labels.at(-1)], ['« Első', '‹ Előző', 'Következő ›', 'Utolsó »']);
+  assert.equal(pager.querySelector('button[data-page="1"]').disabled, true);
+
+  pager.querySelector('button[data-page="3"]:not([aria-current])').click();
+  await tick();
+  assert.match(state.fetches.at(-1).query, /page=3/);
+  assert.equal(rowCount(), 5);
+  assert.equal([...document.querySelectorAll('[data-list="orders"][data-pager] button')].find((b) => b.textContent === 'Következő ›').disabled, true);
+
+  const size = document.getElementById('ordersPageSize');
+  size.value = '50';
+  size.dispatchEvent(new window.Event('change'));
+  await tick();
+  assert.match(state.fetches.at(-1).query, /pageSize=50/);
+  assert.match(state.fetches.at(-1).query, /page=1/);
+  assert.equal(rowCount(), 45);
+
+  const before = state.fetches.length;
+  const topic = document.querySelector('[data-list="orders"][data-filter="topic"]');
+  topic.value = 'Téma 4';
+  topic.dispatchEvent(new window.Event('input'));
+  topic.value = 'Téma 45';
+  topic.dispatchEvent(new window.Event('input'));
+  await tick(150);
+  assert.equal(state.fetches.length, before, '350 ms előtt nincs lekérdezés');
+  await tick(400);
+  assert.equal(state.fetches.length, before + 1, 'a gépelés egyetlen lekérdezéssé összevonva');
+  assert.match(state.fetches.at(-1).query, /topic=T%C3%A9ma\+45|topic=T%C3%A9ma%2045/);
+  assert.equal(rowCount(), 1);
+
+  document.querySelector('[data-list="orders"][data-range="7"]').click();
+  await tick();
+  assert.match(state.fetches.at(-1).query, /dateFrom=\d{4}-\d{2}-\d{2}/);
+  assert.match(state.fetches.at(-1).query, /dateTo=\d{4}-\d{2}-\d{2}/);
+  document.querySelector('[data-list="orders"][data-range="all"]').click();
+  await tick();
+  assert.doesNotMatch(state.fetches.at(-1).query, /dateFrom/);
+
+  document.querySelector('[data-list="orders"][data-clear]').click();
+  await tick();
+  assert.equal(topic.value, '');
+  assert.doesNotMatch(state.fetches.at(-1).query, /topic=/);
+  assert.equal(rowCount(), 45);
+});
+
+test('admin.js: the audit sub-tab lists who changed what, with collapsible long values and masked secrets', async (t) => {
+  const prompt = 'Hosszú AI prompt '.repeat(20);
+  const { document, window, state } = await loadPage(t, {
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/logs': () => [{ success: true, logs: [], total: 0, page: 1, pageSize: 20, totalPages: 1 }],
+      '/api/admin/audit': () => [{ success: true, total: 2, page: 1, pageSize: 20, totalPages: 1, entries: [
+        { id: 'a1', key: 'ai_config', label: 'AI beállítások (modell és prompt)', kind: 'setting', changedAt: ago(1), changedBy: 'admin@example.com', oldValue: { system_prompt: 'régi' }, newValue: { system_prompt: prompt } },
+        { id: 'a2', key: 'maintenance_mode', label: 'Karbantartási mód', kind: 'setting', changedAt: ago(2), changedBy: '', oldValue: false, newValue: true }
+      ] }]
+    }
+  });
+  document.getElementById('tabLogs').click();
+  await tick();
+  document.getElementById('logsTabAudit').click();
+  await tick();
+  assert.equal(document.querySelector('[data-logs-panel="audit"]').hidden, false);
+  assert.equal(document.querySelector('[data-logs-panel="system"]').hidden, true);
+  const rows = document.querySelectorAll('#auditTable tbody tr');
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].textContent, /admin@example\.com/);
+  assert.match(rows[0].textContent, /AI beállítások/);
+  assert.ok(rows[0].querySelectorAll('details').length >= 1, 'a hosszú érték összecsukható');
+  const [oldArea, newArea] = rows[0].querySelectorAll('textarea');
+  assert.ok(oldArea.value.includes('régi'));
+  assert.ok(newArea.value.includes('Hosszú AI prompt'));
+  assert.match(rows[1].textContent, /false/);
+  assert.match(rows[1].textContent, /true/);
+  const who = document.querySelector('[data-list="audit"][data-filter="changedBy"]');
+  who.value = 'admin';
+  who.dispatchEvent(new window.Event('input'));
+  await tick(450);
+  assert.match(state.fetches.at(-1).query, /changedBy=admin/);
 });

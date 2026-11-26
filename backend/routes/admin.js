@@ -83,14 +83,15 @@ router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (clie
 router.delete('/admin/coupons/:code', handle('A kupon törlése', (client, req) => admin.deleteCoupon(client, req.params.code)));
 router.get('/admin/newsletter/campaigns/:id', handle('A kampány betöltése', (client, req) => newsletter.getCampaign(client, req.params.id)));
 
-router.get('/admin/logs', handle('A rendszernapló lekérdezése', (client) => admin.listLogs(client)));
+router.get('/admin/logs', handle('A rendszernapló lekérdezése', (client, req) => admin.listLogs(client, req.query)));
+router.get('/admin/audit', handle('A beállítások naplójának lekérdezése', (client, req) => admin.listAudit(client, req.query)));
 router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása', async (client, req, res) => {
   const coupon = await admin.createSupportCoupon(client, req.body);
   logger.info('admin_support', 'Kárpótlási kupon létrehozva', { email: coupon.email, details: { code: coupon.code, admin: req.user?.email } });
   res.status(201).json({ success: true, coupon });
 }));
 
-router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
+router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, req.query)));
 // A visszaigazoló / számlaértesítő levél újraküldése: kizárólag a szerveren tárolt, fizetett rendelés vevői címére, az élőben lekért számla PDF-fel; a vevői kézbesítési számlálót nem növeli.
 // A vevőnek szóló levél kiküldése a szerveren tárolt, fizetett rendelés címére; a számla PDF-et élőben kéri le a Számlázz.hu-tól. A vevői kézbesítési számlálót nem növeli.
 const MISSING_PLAN_MESSAGE = 'A rendeléshez tartozó tervezet nem található az adatbázisban, csak a számla küldhető ki.';
@@ -176,7 +177,7 @@ router.get('/admin/orders/:orderNumber/invoice', handle('A számla letöltése',
   res.setHeader('Content-Disposition', `attachment; filename="${String(order.invoiceNumber).replace(/[^A-Za-z0-9._-]/g, '_')}.pdf"`);
   res.send(pdf);
 }));
-router.get('/admin/users', handle('A felhasználók lekérdezése', (client) => admin.listUsers(client)));
+router.get('/admin/users', handle('A felhasználók lekérdezése', (client, req) => admin.listUsers(client, req.query)));
 
 router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: await newsletter.buildPreview(req.body) })));
 router.post('/admin/newsletter/send', sendLimiter, handle('A hírlevél indítása', async (client, req, res) => {
@@ -195,28 +196,28 @@ router.get('/admin/settings/history/:key', handle('Az előzmények lekérdezése
   history: await settingsService.listHistory(client, req.params.key)
 })));
 router.patch('/admin/settings', handle('A beállítások mentése', async (client, req) => {
-  const settings = await settingsService.updateSettings(client, req.body);
+  const settings = await settingsService.updateSettings(client, req.body, req.user?.email);
   logger.info('admin_settings', 'Rendszerbeállítások módosítva', { details: { keys: Object.keys(req.body || {}), admin: req.user?.email } });
   return { settings };
 }));
 router.get('/admin/email-templates', handle('Az e-mail sablonok lekérdezése', async (client) => ({ templates: await settingsService.listTemplates(client) })));
 router.patch('/admin/email-templates/:id', handle('Az e-mail sablon mentése', async (client, req) => {
-  const template = await settingsService.updateTemplate(client, req.params.id, req.body);
+  const template = await settingsService.updateTemplate(client, req.params.id, req.body, req.user?.email);
   logger.info('admin_settings', 'E-mail sablon módosítva', { details: { id: template.id, admin: req.user?.email } });
   return { template };
 }));
 router.post('/admin/email-templates', handle('Az e-mail sablon létrehozása', async (client, req, res) => {
-  const template = await settingsService.createTemplate(client, req.body);
+  const template = await settingsService.createTemplate(client, req.body, req.user?.email);
   logger.info('admin_settings', 'Egyedi e-mail sablon létrehozva', { details: { id: template.id, admin: req.user?.email } });
   res.status(201).json({ success: true, template });
 }));
 router.post('/admin/email-templates/:id/reset', handle('A sablon alapértékre állítása', async (client, req) => {
-  const template = await settingsService.resetTemplate(client, req.params.id);
+  const template = await settingsService.resetTemplate(client, req.params.id, req.user?.email);
   logger.info('admin_settings', 'E-mail sablon alapértékre állítva', { details: { id: template.id, admin: req.user?.email } });
   return { template };
 }));
 router.delete('/admin/email-templates/:id', handle('Az e-mail sablon törlése', async (client, req) => {
-  const result = await settingsService.deleteTemplate(client, req.params.id);
+  const result = await settingsService.deleteTemplate(client, req.params.id, req.user?.email);
   logger.info('admin_settings', 'Egyedi e-mail sablon törölve', { details: { id: result.id, admin: req.user?.email } });
   return { deleted: result.id };
 }));

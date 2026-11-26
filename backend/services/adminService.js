@@ -5,6 +5,7 @@
 const crypto = require('node:crypto');
 const { CODE_PATTERN, normalizeCode } = require('./coupons');
 const { normalizeEmail } = require('../utils/email');
+const settingsService = require('./settingsService');
 
 class AdminError extends Error {
   constructor(message, status = 500) {
@@ -223,12 +224,165 @@ async function deleteCoupon(client, rawCode, now = Date.now()) {
 
 // ---------- Rendszernapló és ügyfélszolgálat ----------
 
-const LOG_LIMIT = 100;
+// ---------- Közös lapozás- és szűrő-segédek ----------
 
-async function listLogs(client) {
-  const { data, error } = await client.from('system_logs').select('id, level, context, message, user_email, created_at').order('created_at', { ascending: false }).limit(LOG_LIMIT);
+const PAGE_SIZES = [20, 50, 100];
+const FILTER_MAX = 100;
+
+function parsePaging(query = {}) {
+  const page = Number.parseInt(query.page, 10);
+  const pageSize = Number.parseInt(query.pageSize, 10);
+  if (query.pageSize !== undefined && query.pageSize !== '' && !PAGE_SIZES.includes(pageSize)) throw validationError(`Az oldalméret ${PAGE_SIZES.join(', ')} lehet.`);
+  return { page: Number.isInteger(page) && page > 0 ? page : 1, pageSize: PAGE_SIZES.includes(pageSize) ? pageSize : PAGE_SIZES[0] };
+}
+
+function pageMeta(total, { page, pageSize }) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return { total, page: Math.min(page, totalPages), pageSize, totalPages };
+}
+
+function parseDay(value, endOfDay, label) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(text))) throw validationError(`A(z) ${label} dátuma ÉÉÉÉ-HH-NN formátumú legyen.`);
+  return `${text}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`;
+}
+
+function parseDateRange(query = {}) {
+  const from = parseDay(query.dateFrom, false, 'kezdő');
+  const to = parseDay(query.dateTo, true, 'záró');
+  if (from && to && from > to) throw validationError('A kezdő dátum nem lehet későbbi a záró dátumnál.');
+  return { from, to };
+}
+
+function filterText(value) {
+  return String(value ?? '').trim().slice(0, FILTER_MAX);
+}
+
+// Az idő oszlop keresése: ÉÉÉÉ, ÉÉÉÉ-HH vagy ÉÉÉÉ-HH-NN előtag, amely időtartománnyá alakul.
+function timePrefixRange(value) {
+  const text = filterText(value);
+  const match = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(text);
+  if (!match) throw validationError('Az időpont szűrő ÉÉÉÉ, ÉÉÉÉ-HH vagy ÉÉÉÉ-HH-NN formátumú legyen.');
+  const [, year, month, day] = match;
+  const start = new Date(Date.UTC(Number(year), month ? Number(month) - 1 : 0, day ? Number(day) : 1));
+  if (Number.isNaN(start.getTime())) throw validationError('Az időpont szűrő érvénytelen.');
+  const end = new Date(start);
+  if (day) end.setUTCDate(end.getUTCDate() + 1); else if (month) end.setUTCMonth(end.getUTCMonth() + 1); else end.setUTCFullYear(end.getUTCFullYear() + 1);
+  return { from: start.toISOString(), to: new Date(end.getTime() - 1).toISOString() };
+}
+
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+const contains = (haystack, needle) => String(haystack ?? '').toLowerCase().includes(String(needle).toLowerCase());
+
+// ---------- Rendszernapló ----------
+
+const LOG_LEVELS = { info: 'info', warn: 'warning', warning: 'warning', error: 'error' };
+const LOG_CATEGORIES = {
+  payment: ['barion_payment', 'stripe_payment', 'payment', 'coupon'],
+  invoice: ['invoice', 'email_delivery'],
+  ai: ['ai_generation', 'generation_failed', 'ai'],
+  auth: ['auth', 'profile', 'guest_claim'],
+  settings: ['settings', 'admin_settings', 'admin_support'],
+  system: ['system', 'planStore', 'newsletter']
+};
+
+async function listLogs(client, query = {}) {
+  const paging = parsePaging(query);
+  const level = filterText(query.level);
+  const category = filterText(query.category);
+  if (level && !LOG_LEVELS[level]) throw validationError('Ismeretlen naplószint.');
+  if (category && !LOG_CATEGORIES[category]) throw validationError('Ismeretlen naplókategória.');
+  const range = parseDateRange(query);
+  const time = filterText(query.time) ? timePrefixRange(query.time) : null;
+  const from = [range.from, time?.from].filter(Boolean).sort().pop() || null;
+  const to = [range.to, time?.to].filter(Boolean).sort()[0] || null;
+
+  let request = client.from('system_logs').select('id, level, context, message, user_email, created_at', { count: 'exact' });
+  if (level) request = request.eq('level', LOG_LEVELS[level]);
+  if (category) request = request.in('context', LOG_CATEGORIES[category]);
+  if (from) request = request.gte('created_at', from);
+  if (to) request = request.lte('created_at', to);
+  for (const [param, column] of [['context', 'context'], ['message', 'message'], ['email', 'user_email']]) {
+    const text = filterText(query[param]);
+    if (text) request = request.ilike(column, `%${escapeLike(text)}%`);
+  }
+  const offset = (paging.page - 1) * paging.pageSize;
+  const { data, error, count } = await request.order('created_at', { ascending: false }).range(offset, offset + paging.pageSize - 1);
   if (error) throw dbError(error, 'A rendszernapló lekérdezése sikertelen');
-  return { logs: (data || []).map((row) => ({ id: row.id, level: row.level, context: row.context, message: row.message, email: row.user_email, createdAt: row.created_at })) };
+  const logs = (data || []).map((row) => ({ id: row.id, level: row.level, context: row.context, message: row.message, email: row.user_email, createdAt: row.created_at }));
+  return { logs, ...pageMeta(Number.isInteger(count) ? count : logs.length, paging) };
+}
+
+// ---------- Beállítások változásai (audit napló) ----------
+
+const SETTING_LABELS = {
+  pricing: 'Árak',
+  daily_generation_cap: 'Napi generálási keret',
+  announcement_bar: 'Bejelentősáv',
+  external_links: 'Külső eszközök linkjei',
+  ai_config: 'AI beállítások (modell és prompt)',
+  maintenance_mode: 'Karbantartási mód',
+  notification_email: 'Rendszerértesítési e-mail',
+  billing_notification_email: 'Számlázási értesítési e-mail',
+  error_notification_email: 'Hibaértesítési e-mail',
+  billing_profile: 'Számlázási profil',
+  payment_provider: 'Fizetési szolgáltató',
+  seasonal_hints: 'Szezonális ötletek',
+  invoice_e_invoice: 'E-számla kapcsoló'
+};
+const TEMPLATE_KEY_PREFIX = 'email_template:';
+const SECRET_NAME = /key|secret|token|password|authorization/i;
+
+function settingLabel(key) {
+  const text = String(key || '');
+  if (text.startsWith(TEMPLATE_KEY_PREFIX)) return `E-mail sablon: ${text.slice(TEMPLATE_KEY_PREFIX.length)}`;
+  return SETTING_LABELS[text] || text;
+}
+
+// Titkos nevű beállítások és objektum-tulajdonságok értéke maszkolva kerül a felületre.
+function maskValue(value, key = '') {
+  if (value === null || value === undefined) return value ?? null;
+  if (SECRET_NAME.test(key)) return value === '' ? '' : '••••••••';
+  if (Array.isArray(value)) return value.map((item) => maskValue(item));
+  if (typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, maskValue(item, name)]));
+  return value;
+}
+
+async function listAudit(client, query = {}) {
+  const paging = parsePaging(query);
+  const range = parseDateRange(query);
+  const type = filterText(query.type);
+  if (type && !['setting', 'template'].includes(type)) throw validationError('Ismeretlen beállítás-típus.');
+  let request = client.from('system_settings_history').select('id, setting_key, old_value, new_value, changed_at, changed_by', { count: 'exact' });
+  if (type === 'template') request = request.ilike('setting_key', `${TEMPLATE_KEY_PREFIX}%`);
+  if (type === 'setting') request = request.in('setting_key', Object.keys(settingsService.DEFAULT_SETTINGS));
+  if (range.from) request = request.gte('changed_at', range.from);
+  if (range.to) request = request.lte('changed_at', range.to);
+  const who = filterText(query.changedBy);
+  if (who) request = request.ilike('changed_by', `%${escapeLike(who)}%`);
+  const setting = filterText(query.setting);
+  if (setting) {
+    const known = Object.keys(SETTING_LABELS).filter((key) => contains(key, setting) || contains(SETTING_LABELS[key], setting));
+    request = known.length && !contains('e-mail sablon', setting) ? request.in('setting_key', known) : request.ilike('setting_key', `%${escapeLike(setting)}%`);
+  }
+  const offset = (paging.page - 1) * paging.pageSize;
+  const { data, error, count } = await request.order('changed_at', { ascending: false }).range(offset, offset + paging.pageSize - 1);
+  if (error) throw dbError(error, 'A beállítások naplója nem olvasható');
+  const entries = (data || []).map((row) => ({
+    id: row.id,
+    key: row.setting_key,
+    label: settingLabel(row.setting_key),
+    kind: String(row.setting_key).startsWith(TEMPLATE_KEY_PREFIX) ? 'template' : 'setting',
+    changedAt: row.changed_at,
+    changedBy: row.changed_by || '',
+    oldValue: maskValue(row.old_value),
+    newValue: maskValue(row.new_value)
+  }));
+  return { entries, ...pageMeta(Number.isInteger(count) ? count : entries.length, paging) };
 }
 
 const SUPPORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -270,25 +424,40 @@ async function fetchProfiles(client, ids, columns) {
   return rows;
 }
 
+const PAYMENT_METHODS = ['Barion', 'Stripe', 'Kupon'];
+const INVOICE_FILTERS = ['has', 'missing', 'error'];
+const FAILED_PREVIEW = 20;
+
 // A regisztrált vevő neve a profiljából (számlázási név, ennek hiányában teljes név), a vendégé a rendelés számlázási adataiból (billing.name) származik.
-async function listOrders(client, { status, q } = {}) {
-  const wantedStatus = String(status || '').trim();
+// A státusz / fizetési mód / időszak az adatbázisban szűr, az oszlopkeresések a (legfeljebb MAX_ORDER_ROWS soros) találati halmazon, a lapozás szerveroldali.
+async function listOrders(client, query = {}) {
+  const wantedStatus = filterText(query.status);
   if (wantedStatus && !ORDER_STATUSES.includes(wantedStatus)) throw validationError('Ismeretlen rendelési státusz.');
+  const method = filterText(query.paymentMethod);
+  if (method && !PAYMENT_METHODS.includes(method)) throw validationError('Ismeretlen fizetési mód.');
+  const invoice = filterText(query.invoice);
+  if (invoice && !INVOICE_FILTERS.includes(invoice)) throw validationError('Ismeretlen számlaállapot-szűrő.');
+  const paging = parsePaging(query);
+  const range = parseDateRange(query);
   const load = (columns) => fetchAll(() => {
-    let query = client.from('orders').select(columns);
-    if (wantedStatus) query = query.eq('status', wantedStatus);
-    return query.order('created_at', { ascending: false });
+    let request = client.from('orders').select(columns);
+    if (wantedStatus) request = request.eq('status', wantedStatus);
+    if (method) request = request.eq('payment_method', method);
+    if (range.from) request = request.gte('created_at', range.from);
+    if (range.to) request = request.lte('created_at', range.to);
+    return request.order('created_at', { ascending: false });
   }, 'A rendelések lekérdezése sikertelen', MAX_ORDER_ROWS);
-  // A hibamezők (last_error) a migráció előtt még hiányozhatnak: ilyenkor hibamegjelenítés nélkül, de működik a lista.
-  const rows = await load(ORDER_ERROR_COLUMNS).catch(() => load(ORDER_COLUMNS));
+  // A title (téma) és a hibamezők (last_error) a migráció előtt még hiányozhatnak: ilyenkor azok nélkül, de működik a lista.
+  const rows = await load(`${ORDER_ERROR_COLUMNS}, title`).catch(() => load(ORDER_ERROR_COLUMNS)).catch(() => load(ORDER_COLUMNS));
 
   const profiles = await fetchProfiles(client, rows.map((row) => row.user_id), 'id, full_name, billing_name');
   const names = new Map(profiles.map((profile) => [String(profile.id), profile.billing_name || profile.full_name || '']));
-  const orders = rows.map((row) => ({
+  const all = rows.map((row) => ({
     orderNumber: row.order_number,
     createdAt: row.created_at,
     email: row.user_email || '',
     name: names.get(String(row.user_id)) || String(row.billing?.name || ''),
+    topic: row.title || '',
     planKey: row.plan_key || '',
     planMode: row.plan_mode || '',
     amount: Number(row.amount) || 0,
@@ -301,23 +470,64 @@ async function listOrders(client, { status, q } = {}) {
     documentId: row.document_id || ''
   }));
 
-  const needle = String(q || '').trim().toLowerCase().slice(0, 100);
-  const filtered = needle
-    ? orders.filter((order) => [order.orderNumber, order.email, order.name, order.couponCode, order.invoiceNumber, order.documentId].some((value) => String(value).toLowerCase().includes(needle)))
-    : orders;
-  return { orders: filtered, truncated: rows.length >= MAX_ORDER_ROWS, failedCount: orders.filter((order) => order.status === 'paid' && order.lastError).length };
+  const needle = filterText(query.q);
+  const columns = {
+    orderNumber: filterText(query.orderNumber),
+    customer: filterText(query.customer),
+    topic: filterText(query.topic),
+    amount: filterText(query.amount).replace(/\D/g, ''),
+    coupon: filterText(query.coupon),
+    invoiceNumber: filterText(query.invoiceNumber)
+  };
+  const failedOf = (order) => order.status === 'paid' && Boolean(order.lastError);
+  const filtered = all.filter((order) => {
+    if (needle && ![order.orderNumber, order.email, order.name, order.couponCode, order.invoiceNumber, order.documentId, order.topic].some((value) => contains(value, needle))) return false;
+    if (columns.orderNumber && !contains(order.orderNumber, columns.orderNumber)) return false;
+    if (columns.customer && !contains(order.name, columns.customer) && !contains(order.email, columns.customer)) return false;
+    if (columns.topic && !contains(order.topic, columns.topic)) return false;
+    if (columns.amount && !String(order.amount).includes(columns.amount)) return false;
+    if (columns.coupon && !contains(order.couponCode, columns.coupon)) return false;
+    if (columns.invoiceNumber && !contains(order.invoiceNumber, columns.invoiceNumber)) return false;
+    if (invoice === 'has') return Boolean(order.invoiceNumber);
+    if (invoice === 'error') return failedOf(order);
+    if (invoice === 'missing') return failedOf(order) || (order.status === 'paid' && order.amount > 0 && !order.invoiceNumber);
+    return true;
+  });
+  const meta = pageMeta(filtered.length, paging);
+  const start = (meta.page - 1) * meta.pageSize;
+  return {
+    orders: filtered.slice(start, start + meta.pageSize),
+    ...meta,
+    truncated: rows.length >= MAX_ORDER_ROWS,
+    failedCount: all.filter(failedOf).length,
+    failed: all.filter(failedOf).slice(0, FAILED_PREVIEW).map((order) => ({ orderNumber: order.orderNumber, lastError: order.lastError }))
+  };
 }
 
 // ---------- Felhasználók ----------
 
-async function listUsers(client) {
-  const [authUsers, profiles, subscriptions] = await Promise.all([
+const USER_ROLES = ['admin', 'user'];
+
+async function listUsers(client, query = {}) {
+  const role = filterText(query.role);
+  const newsletter = filterText(query.newsletter);
+  const hasOrders = filterText(query.hasOrders);
+  if (role && !USER_ROLES.includes(role)) throw validationError('Ismeretlen szerepkör.');
+  if (newsletter && !['subscribed', 'not'].includes(newsletter)) throw validationError('Ismeretlen hírlevél-szűrő.');
+  if (hasOrders && !['yes', 'no'].includes(hasOrders)) throw validationError('Ismeretlen rendelés-szűrő.');
+  const paging = parsePaging(query);
+  const range = parseDateRange(query);
+
+  const [authUsers, profiles, subscriptions, orderRows] = await Promise.all([
     listAuthUsers(client),
-    fetchAll(() => client.from('profiles').select('id, email, full_name, billing_name').order('id', { ascending: true }), 'A profilok lekérdezése sikertelen'),
-    fetchAll(() => client.from('newsletter_subscribers').select('email, subscribed, subscribed_at').order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen')
+    fetchAll(() => client.from('profiles').select('id, email, full_name, billing_name, billing_tax_id, kindergarten_name, group_name, is_admin').order('id', { ascending: true }), 'A profilok lekérdezése sikertelen'),
+    fetchAll(() => client.from('newsletter_subscribers').select('email, subscribed, subscribed_at').order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen'),
+    hasOrders ? fetchAll(() => client.from('orders').select('user_id, user_email').eq('status', 'paid').order('order_number', { ascending: true }), 'A rendelések lekérdezése sikertelen') : []
   ]);
   const byId = new Map(profiles.map((profile) => [String(profile.id), profile]));
   const byEmail = new Map(subscriptions.map((row) => [normalizeEmail(row.email), row]));
+  const buyerIds = new Set(orderRows.map((row) => String(row.user_id || '')));
+  const buyerEmails = new Set(orderRows.map((row) => normalizeEmail(row.user_email)));
   const users = authUsers.map((user) => {
     const profile = byId.get(String(user.id)) || {};
     const email = normalizeEmail(user.email || profile.email);
@@ -326,6 +536,12 @@ async function listUsers(client) {
       id: String(user.id),
       email,
       name: profile.full_name || profile.billing_name || '',
+      kindergarten: profile.kindergarten_name || '',
+      group: profile.group_name || '',
+      billingName: profile.billing_name || '',
+      taxId: profile.billing_tax_id || '',
+      role: profile.is_admin === true ? 'admin' : 'user',
+      hasOrders: hasOrders ? buyerIds.has(String(user.id)) || buyerEmails.has(email) : undefined,
       createdAt: user.created_at || null,
       confirmed: isConfirmed(user),
       subscribed: subscription?.subscribed === true,
@@ -333,7 +549,25 @@ async function listUsers(client) {
     };
   });
   users.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return { users, subscriberCount: users.filter((user) => user.subscribed && user.confirmed).length };
+  const text = { name: filterText(query.name), email: filterText(query.email), kindergarten: filterText(query.kindergarten), group: filterText(query.group), billing: filterText(query.billing) };
+  const filtered = users.filter((user) => {
+    if (role && user.role !== role) return false;
+    if (newsletter && user.subscribed !== (newsletter === 'subscribed')) return false;
+    if (hasOrders && user.hasOrders !== (hasOrders === 'yes')) return false;
+    const created = user.createdAt ? new Date(user.createdAt).toISOString() : '';
+    if (range.from && (!created || created < range.from)) return false;
+    if (range.to && (!created || created > range.to)) return false;
+    return (!text.name || contains(user.name, text.name)) && (!text.email || contains(user.email, text.email))
+      && (!text.kindergarten || contains(user.kindergarten, text.kindergarten)) && (!text.group || contains(user.group, text.group))
+      && (!text.billing || contains(user.billingName, text.billing) || contains(user.taxId, text.billing));
+  });
+  const meta = pageMeta(filtered.length, paging);
+  const start = (meta.page - 1) * meta.pageSize;
+  return {
+    users: filtered.slice(start, start + meta.pageSize).map(({ hasOrders: _unused, ...user }) => user),
+    ...meta,
+    subscriberCount: users.filter((user) => user.subscribed && user.confirmed).length
+  };
 }
 
 module.exports = {
@@ -351,6 +585,9 @@ module.exports = {
   deleteCoupon,
   parseCouponInput,
   listLogs,
+  listAudit,
+  maskValue,
+  settingLabel,
   createSupportCoupon,
   supportCode,
   listOrders,

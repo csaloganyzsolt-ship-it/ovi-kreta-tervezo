@@ -2423,3 +2423,59 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-history-list time { font-weight: 700; }
 .admin-history-list textarea { width: 100%; min-height: 90px; font: 13px/1.5 ui-monospace, Menlo, monospace; }
 .admin-dialog::backdrop { background: rgba(20, 40, 33, 0.45); }
+
+/* ---------- Admin Központ: bal oldali navigáció, lapozás, oszloponkénti szűrők ---------- */
+.admin-page { max-width: 1600px; }
+.admin-shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; align-items: start; }
+.admin-content { min-width: 0; }
+.admin-sidebar { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }
+.admin-sidebar-head strong { color: var(--primary-text, var(--text)); font-size: 1.05rem; }
+.admin-sidebar-head .profile-email { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 0.85rem; }
+.admin-sidenav { display: flex; flex-direction: column; gap: 4px; }
+.admin-sidenav .profile-tab { flex: none; width: 100%; min-height: 44px; text-align: left; padding: 8px 14px; }
+.admin-sidenav .profile-tab[aria-selected="true"] { background: var(--mint); color: var(--text); box-shadow: inset 3px 0 0 var(--primary); }
+.admin-sidebar .admin-tools { margin: 0; padding: 10px 12px; border-radius: 14px; }
+.admin-sidebar .admin-tools summary { cursor: pointer; min-height: 32px; font-weight: 700; }
+.admin-sidebar .admin-tools-list { flex-direction: column; margin-top: 8px; }
+.admin-sidebar .admin-tools-list .profile-btn { width: 100%; text-align: left; }
+.admin-mobilebar, .admin-backdrop { display: none; }
+
+.admin-filters .admin-daterange { flex: 2 1 320px; }
+.admin-daterange > span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.admin-daterange input[type="date"] { width: auto; min-width: 140px; }
+.admin-quick { margin-top: 6px; }
+.admin-quick .profile-btn { min-height: 36px; padding: 4px 12px; }
+.admin-filters select, .admin-filters input[type="date"] { min-height: 44px; }
+.admin-filter-row th { padding: 4px 6px; background: var(--card); }
+.admin-filter-row input { width: 100%; min-width: 90px; min-height: 36px; padding: 4px 8px; font-size: 0.82rem; }
+.admin-filter-row .profile-btn { min-height: 36px; padding: 4px 10px; font-size: 0.78rem; white-space: nowrap; }
+.admin-table { min-width: 720px; }
+.admin-table .admin-actions .profile-btn { min-height: 36px; }
+
+.admin-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.admin-pager-total { color: var(--muted); font-size: 0.88rem; }
+.admin-pager-nav { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.admin-pager-nav .profile-btn { min-height: 40px; min-width: 40px; padding: 4px 10px; }
+.admin-pager-nav .profile-btn[aria-current="page"] { background: var(--primary-dark, var(--primary)); color: #fff; border-color: var(--primary-dark, var(--primary)); }
+.admin-subtabs { margin-bottom: 14px; }
+.admin-subtabs .profile-tab { flex: 0 1 auto; }
+
+.admin-audit-value { display: inline-block; max-width: 280px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 0.82rem; }
+.admin-audit-details summary { cursor: pointer; max-width: 280px; overflow-wrap: anywhere; font-size: 0.82rem; }
+.admin-audit-full { width: min(420px, 70vw); min-height: 140px; margin-top: 6px; font: 12px/1.5 ui-monospace, Menlo, monospace; }
+.admin-audit-empty, .admin-audit-key { color: var(--muted); }
+
+@media (max-width: 900px) {
+  .admin-page { padding: 12px 12px 32px; }
+  .admin-shell { display: block; }
+  .admin-mobilebar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+  .admin-mobilebar .profile-btn { min-height: 44px; }
+  .admin-sidebar { position: fixed; z-index: 50; top: 0; left: 0; bottom: 0; width: min(300px, 86vw); max-height: none; border-radius: 0 18px 18px 0; transform: translateX(-105%); transition: transform 0.2s ease; box-shadow: 0 0 28px rgba(0, 0, 0, 0.25); }
+  .admin-sidebar.is-open { transform: translateX(0); }
+  .admin-backdrop:not([hidden]) { position: fixed; z-index: 40; inset: 0; display: block; background: rgba(20, 40, 33, 0.5); }
+  .admin-filters > div, .admin-filters .admin-daterange { flex: 1 1 100%; }
+  .admin-filters .profile-btn { min-height: 44px; }
+  .admin-pager { justify-content: center; }
+  .admin-pager-nav .profile-btn { min-width: 44px; min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .admin-sidebar { transition: none; } }

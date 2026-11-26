@@ -311,11 +311,15 @@ function validatePatch(patch, current) {
   return updates;
 }
 
-async function updateSettings(client, patch) {
+// A módosító (admin e-mail) az updated_by oszlopba kerül, abból tölti a history.changed_by mezőt a trigger (20261203090000 migráció); nélküle is ment.
+async function updateSettings(client, patch, actor = '') {
   const current = await getSettings({ force: true });
   const updates = validatePatch(patch, current);
-  const rows = Object.entries(updates).map(([key, value]) => ({ key, value, updated_at: new Date().toISOString() }));
-  const { error } = await client.from('system_settings').upsert(rows, { onConflict: 'key' });
+  const stamp = new Date().toISOString();
+  const by = String(actor || '').trim().slice(0, 254);
+  const rows = Object.entries(updates).map(([key, value]) => ({ key, value, updated_at: stamp }));
+  let { error } = await client.from('system_settings').upsert(by ? rows.map((row) => ({ ...row, updated_by: by })) : rows, { onConflict: 'key' });
+  if (error && by && isMissingColumn(error)) ({ error } = await client.from('system_settings').upsert(rows, { onConflict: 'key' }));
   if (error) throw dbError('A beállítások mentése sikertelen', error);
   cache = normalizeRows([...Object.entries(current).map(([key, value]) => ({ key, value })), ...rows]);
   cachedAt = Date.now();
@@ -418,7 +422,27 @@ async function saveTemplateRow(client, row, { insertOnly = false } = {}) {
   }
 }
 
-async function updateTemplate(client, id, body = {}) {
+// E-mail sablon módosítás naplózása a beállítások előzményei közé (setting_key = 'email_template:<id>'); a napló hibája nem akadályozza a mentést.
+async function logTemplateChange(client, id, before, after, actor) {
+  const view = (row) => (row ? { name: row.name || '', subject: row.subject || '', bodyHtml: row.bodyHtml || '' } : null);
+  const row = { setting_key: `email_template:${id}`, old_value: view(before), new_value: view(after), changed_by: String(actor || '').slice(0, 254) || null };
+  try {
+    let { error } = await client.from('system_settings_history').insert(row);
+    if (error && isMissingColumn(error)) {
+      const { changed_by: _by, ...legacy } = row;
+      ({ error } = await client.from('system_settings_history').insert(legacy));
+    }
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    console.warn(`[settings] A sablonmódosítás naplózása sikertelen: ${error.message}`);
+  }
+}
+
+async function findTemplate(client, id) {
+  return (await listTemplates(client)).find((row) => row.id === id) || null;
+}
+
+async function updateTemplate(client, id, body = {}, actor = '') {
   const custom = !TEMPLATE_IDS.includes(id);
   if (custom && (!CUSTOM_TEMPLATE_ID.test(id) || !(await listTemplates(client)).some((row) => row.id === id))) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
   const { subject, bodyHtml } = validateTemplateContent(id, body);
@@ -428,13 +452,15 @@ async function updateTemplate(client, id, body = {}) {
     row.name = validateTemplateName(body.name);
     result.name = row.name;
   }
+  const before = await findTemplate(client, id);
   await saveTemplateRow(client, row);
   templateCache = null;
+  await logTemplateChange(client, id, before, { ...before, ...result }, actor);
   return { ...result, custom, hasDefault: id in DEFAULT_TEMPLATES };
 }
 
 // Új egyedi sablon: kisbetűs azonosító (slug), a rendszersablonok azonosítói foglaltak.
-async function createTemplate(client, body = {}) {
+async function createTemplate(client, body = {}, actor = '') {
   const id = typeof body.id === 'string' ? body.id.trim() : '';
   if (!CUSTOM_TEMPLATE_ID.test(id)) throw new SettingsError('Az azonosító 3–40 karakter lehet: kisbetű, szám és alsó vonás, betűvel kezdődően.');
   if (TEMPLATE_IDS.includes(id)) throw new SettingsError('Ez az azonosító egy beépített rendszersablonhoz tartozik.', 409);
@@ -442,25 +468,30 @@ async function createTemplate(client, body = {}) {
   const { subject, bodyHtml } = validateTemplateContent(id, body);
   await saveTemplateRow(client, { id, name, subject, body_html: bodyHtml, is_system: false }, { insertOnly: true });
   templateCache = null;
+  await logTemplateChange(client, id, null, { name, subject, bodyHtml }, actor);
   return { id, name, subject, bodyHtml, custom: true, hasDefault: false };
 }
 
 // Csak egyedi sablon törölhető; a rendszersablon alapértékre állítható vissza.
-async function deleteTemplate(client, id) {
+async function deleteTemplate(client, id, actor = '') {
   if (TEMPLATE_IDS.includes(id)) throw new SettingsError('A rendszersablon nem törölhető, csak alapértékre állítható vissza.', 409);
   if (!CUSTOM_TEMPLATE_ID.test(String(id)) || !(await listTemplates(client)).some((row) => row.id === id)) throw new SettingsError('Ismeretlen e-mail sablon.', 404);
+  const before = await findTemplate(client, id);
   const { error } = await client.from('email_templates').delete().eq('id', id);
   if (error) throw dbError('Az e-mail sablon törlése sikertelen', error);
   templateCache = null;
+  await logTemplateChange(client, id, before, null, actor);
   return { id };
 }
 
 // A beépített alapértékkel rendelkező rendszersablon (jelenleg: invoice_only, feedback_request) visszaállítása.
-async function resetTemplate(client, id) {
+async function resetTemplate(client, id, actor = '') {
   const fallback = DEFAULT_TEMPLATES[id];
   if (!fallback) throw new SettingsError('Ennek a sablonnak nincs beépített alapértéke.', 409);
+  const before = await findTemplate(client, id);
   await saveTemplateRow(client, { id, subject: fallback.subject, body_html: fallback.bodyHtml });
   templateCache = null;
+  await logTemplateChange(client, id, before, { ...before, subject: fallback.subject, bodyHtml: fallback.bodyHtml }, actor);
   return { ...fallback, name: '', custom: false, hasDefault: true };
 }
 

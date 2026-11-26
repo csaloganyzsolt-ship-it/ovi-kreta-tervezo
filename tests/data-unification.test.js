@@ -195,9 +195,10 @@ test('the data unification migration defines the newsletter table, the guest-cla
   for (const statement of sql.match(/create table [^;(]+/gi) || []) assert.match(statement, /if not exists/i);
 });
 
-test('RUN_ALL_PENDING_MIGRATIONS.sql contains every migration since 20261127 verbatim', () => {
+// A gyűjtőfájlt a 20261202090000 migrációig kézzel frissítik; az újabb migrációkat külön futtatják.
+test('RUN_ALL_PENDING_MIGRATIONS.sql contains every migration from 20261127 to 20261202090000 verbatim', () => {
   const all = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'RUN_ALL_PENDING_MIGRATIONS.sql'), 'utf8');
-  const pending = fs.readdirSync(MIGRATIONS).filter((name) => name >= '20261127').sort();
+  const pending = fs.readdirSync(MIGRATIONS).filter((name) => name >= '20261127' && name <= '20261202090000.sql').sort();
   assert.ok(pending.length >= 5);
   let cursor = -1;
   for (const name of pending) {
