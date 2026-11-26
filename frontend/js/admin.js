@@ -324,7 +324,10 @@
         if (!freeOrder) issue.addEventListener('click', () => issueOrderInvoice(order, issue));
         const resend = el('button', 'profile-btn', 'Csomag küldése');
         resend.type = 'button';
-        resend.disabled = order.status !== 'paid' || !order.email;
+        resend.disabled = order.status !== 'paid' || !order.email || !order.documentId;
+        resend.title = !order.documentId
+          ? 'A rendeléshez nem tartozik tervezet (document_id hiányzik), csak a számla küldhető ki.'
+          : 'A tárolt tervezet (.docx + .pdf) és a számla (ha van) kiküldése a vevőnek';
         resend.addEventListener('click', () => resendOrder(order, resend));
         const sendInvoice = el('button', 'profile-btn', 'Számla küldése');
         sendInvoice.type = 'button';
@@ -450,17 +453,17 @@
     }
   }
 
-  // A visszaigazoló / számlaértesítő levél újraküldése a vevő rendelésen tárolt címére (a számla PDF-jét a szerver élőben kéri le).
+  // Teljes csomag a vevő rendelésen tárolt címére: a szerver a Supabase-ben tárolt tervből újra előállítja a fájlokat, a számla PDF-et élőben kéri le.
   async function resendOrder(order, button) {
-    if (!window.confirm(`Újraküldöd a visszaigazoló levelet (${order.orderNumber}) ide: ${order.email}?`)) return;
+    if (!window.confirm(`Kiküldöd a teljes tervezetcsomagot (${order.orderNumber}) ide: ${order.email}?`)) return;
     setText('ordersError', '');
     button.disabled = true;
     try {
       const result = await api(`/api/admin/orders/${encodeURIComponent(order.orderNumber)}/resend`, { method: 'POST', body: {} });
-      showToast(`Elküldve: ${result.to}${result.invoiceAttached ? ' (számlával)' : ''}.`);
+      showToast(`A csomag elküldve: ${result.to}${result.invoiceAttached ? ' (számlával)' : ' (számla nélkül)'}.`);
     } catch (error) {
-      setText('ordersError', `Az újraküldés sikertelen: ${errorMessage(error)}`);
-      showToast(`Az újraküldés sikertelen: ${errorMessage(error)}`, true);
+      setText('ordersError', `A csomag küldése sikertelen: ${errorMessage(error)}`);
+      showToast(`A csomag küldése sikertelen: ${errorMessage(error)}`, true);
     } finally {
       button.disabled = false;
     }

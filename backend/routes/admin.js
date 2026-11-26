@@ -11,6 +11,8 @@ const mailService = require('../services/mailService');
 const settingsService = require('../services/settingsService');
 const orderService = require('../services/orderService');
 const invoiceService = require('../services/invoiceService');
+const planStore = require('../services/planStore');
+const documentExport = require('../services/documentExport');
 const { billingStatus } = require('../services/billingStatus');
 const { dailyGenerationStatus } = require('../services/generationCap');
 const logger = require('../utils/logger');
@@ -91,13 +93,32 @@ router.post('/admin/support/coupon', handle('A kárpótlási kupon létrehozása
 router.get('/admin/orders', handle('A rendelések lekérdezése', (client, req) => admin.listOrders(client, { status: req.query.status, q: req.query.q })));
 // A visszaigazoló / számlaértesítő levél újraküldése: kizárólag a szerveren tárolt, fizetett rendelés vevői címére, az élőben lekért számla PDF-fel; a vevői kézbesítési számlálót nem növeli.
 // A vevőnek szóló levél kiküldése a szerveren tárolt, fizetett rendelés címére; a számla PDF-et élőben kéri le a Számlázz.hu-tól. A vevői kézbesítési számlálót nem növeli.
-async function sendOrderMail(req, { requireInvoice, templateId }) {
+const MISSING_PLAN_MESSAGE = 'A rendeléshez tartozó tervezet nem található az adatbázisban, csak a számla küldhető ki.';
+
+async function loadPlanAttachments(order) {
+  if (!order.documentId) throw new admin.AdminError(MISSING_PLAN_MESSAGE, 404);
+  let plan;
+  try {
+    plan = await planStore.loadPlan(order.documentId);
+  } catch (error) {
+    throw new admin.AdminError(`A tervezet nem olvasható az adatbázisból: ${error.message}`, 503);
+  }
+  if (!plan) throw new admin.AdminError(MISSING_PLAN_MESSAGE, 404);
+  try {
+    return await documentExport.buildDeliveryFiles(plan);
+  } catch (error) {
+    throw new admin.AdminError(`A tervezetfájlok előállítása sikertelen: ${error.message}`, 500);
+  }
+}
+
+async function sendOrderMail(req, { requireInvoice, templateId, withPlan = false }) {
   const order = await orderService.getByOrderNumber(String(req.params.orderNumber || '').slice(0, 40));
   if (!order) throw new admin.AdminError('A rendelés nem található.', 404);
   if (order.status !== 'paid') throw new admin.AdminError('Csak kifizetett rendelés értesítője küldhető újra.', 409);
   if (!order.email) throw new admin.AdminError('A rendeléshez nem tartozik e-mail cím.', 422);
   if (requireInvoice && !order.invoiceNumber) throw new admin.AdminError('A rendeléshez még nincs számla, előbb állítsd ki.', 409);
   if (!mailService.isConfigured()) throw new admin.AdminError('Az e-mail küldés nincs beállítva (SMTP).', 503);
+  const attachments = withPlan ? await loadPlanAttachments(order) : [];
   const invoicePdf = order.invoiceNumber
     ? await invoiceService.fetchInvoicePdf({ invoiceNumber: order.invoiceNumber, billingProfile: order.billingProfile })
     : undefined;
@@ -106,7 +127,7 @@ async function sendOrderMail(req, { requireInvoice, templateId }) {
       to: order.email,
       plan: order.planKey,
       orderNumber: order.orderNumber,
-      attachments: [],
+      attachments,
       invoicePdf,
       invoiceName: order.invoiceNumber ? `${order.invoiceNumber}.pdf` : undefined,
       invoiceNumber: order.invoiceNumber,
@@ -121,10 +142,11 @@ async function sendOrderMail(req, { requireInvoice, templateId }) {
     throw error;
   }
   await orderService.clearError(order.orderNumber, 'Kézbesítés');
-  return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf), template: invoicePdf ? (templateId || 'invoice_only') : 'payment_success' };
+  return { sent: true, to: order.email, invoiceAttached: Boolean(invoicePdf), attachmentCount: attachments.length, template: attachments.length || !invoicePdf ? 'payment_success' : (templateId || 'invoice_only') };
 }
 
-router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('Az újraküldés', (_client, req) => sendOrderMail(req, { requireInvoice: false })));
+// Teljes csomag: a Supabase-ben tárolt tervből újra előállított .docx + .pdf (heti: ZIP) és, ha van, a számla PDF.
+router.post('/admin/orders/:orderNumber/resend', sendLimiter, handle('A csomag küldése', (_client, req) => sendOrderMail(req, { requireInvoice: false, withPlan: true })));
 // Csak a számla PDF kiküldése (opcionális templateId: rendszer- vagy egyedi sablon, alapértelmezetten invoice_only).
 router.post('/admin/orders/:orderNumber/send-invoice', sendLimiter, handle('A számla küldése', (_client, req) => {
   const templateId = req.body?.templateId === undefined || req.body?.templateId === '' ? undefined : String(req.body.templateId).slice(0, 40);

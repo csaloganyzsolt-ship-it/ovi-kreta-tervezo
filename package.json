@@ -17,17 +17,17 @@
     "@supabase/supabase-js": "^2.119.2",
     "cors": "^2.8.5",
     "csv-parse": "^7.0.3",
+    "docx": "^8.5.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.7.4",
+    "jsdom": "^26.1.0",
+    "jszip": "^3.10.1",
     "nodemailer": "^10.4.0",
+    "pdfmake": "^0.2.23",
     "stripe": "^17.7.0"
   },
   "devDependencies": {
-    "docx": "^8.5.0",
-    "jsdom": "^26.1.0",
-    "jszip": "^3.10.1",
-    "pdfjs-dist": "^4.10.38",
-    "pdfmake": "^0.2.23"
+    "pdfjs-dist": "^4.10.38"
   }
 }

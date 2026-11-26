@@ -8,7 +8,8 @@ const server = require('../backend/server');
 const supabase = require('../backend/services/supabaseService');
 const mailService = require('../backend/services/mailService');
 const newsletter = require('../backend/services/newsletterService');
-const { readPage } = require('./fixtures');
+const { readPage, makePlan, makePayload } = require('./fixtures');
+const planStore = require('../backend/services/planStore');
 
 const user = (n, email, extra = {}) => ({ id: `${n}`.repeat(8) + '-1111-4111-8111-' + `${n}`.repeat(12), email, email_confirmed_at: '2026-01-01T00:00:00Z', created_at: `2026-01-0${n}T10:00:00Z`, ...extra });
 const ADMIN = user(1, 'Admin@Example.com');
@@ -94,6 +95,12 @@ function fakeAdmin(tables = {}, authUsers = [ADMIN, ALICE, BOB, NEWBIE, CAROL]) 
             builder.insertError = insertError;
           }
           return builder;
+        },
+        upsert(row, options = {}) {
+          const key = options.onConflict || 'id';
+          const existing = db[name].find((candidate) => candidate[key] === row[key]);
+          if (existing) Object.assign(existing, row); else db[name].push({ ...row });
+          return Promise.resolve({ data: null, error: null });
         },
         single() { single = true; return builder; },
         maybeSingle() { single = true; return builder; },
@@ -394,9 +401,10 @@ test('guest orders show the buyer name from the stored billing data', async (t) 
   assert.deepEqual(orders.map((o) => o.name), ['Vendég Vevő Bt.', 'Alice Óvoda Kft.', '']);
 });
 
-test('POST /api/admin/orders/:orderNumber/resend re-sends the mail only to the stored address, with a live invoice PDF', async (t) => {
+test('POST /api/admin/orders/:orderNumber/resend re-sends the stored package (docx + pdf) and the live invoice PDF to the stored address', async (t) => {
   const row = (extra) => ({ order_number: 'OVI-R1', session_id: 'barion_r1', user_id: null, user_email: 'vevo@example.com', document_id: 'gen_r', plan_mode: 'standard', plan_key: 'daily', amount: 390, payment_method: 'Barion', status: 'paid', invoice_number: 'OVITE-2026-9', billing_profile: 'ev', delivery_count: 1, created_at: ago(1), ...extra });
-  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [row(), row({ order_number: 'OVI-R2', status: 'pending' })] }));
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [row(), row({ order_number: 'OVI-R2', status: 'pending' })], documents: [{ document_id: 'gen_r', unlocked: true, data: { plan: { ...makePlan(), request: makePayload(), generationId: 'gen_r' }, meta: {} } }] }));
+  planStore.clearPlans();
   const saved = { SMTP_HOST: process.env.SMTP_HOST, SZAMLAZZ_API_KEY_EV: process.env.SZAMLAZZ_API_KEY_EV };
   process.env.SMTP_HOST = 'smtp.invalid.example';
   process.env.SZAMLAZZ_API_KEY_EV = 'agent-ev';
@@ -412,8 +420,10 @@ test('POST /api/admin/orders/:orderNumber/resend re-sends the mail only to the s
 
   const response = await call(base, '/api/admin/orders/OVI-R1/resend', { token: 'token-admin', method: 'POST', body: { email: 'masik@example.com' } });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { success: true, sent: true, to: 'vevo@example.com', invoiceAttached: true, template: 'invoice_only' });
+  assert.deepEqual(await response.json(), { success: true, sent: true, to: 'vevo@example.com', invoiceAttached: true, attachmentCount: 2, template: 'payment_success' });
   assert.equal(mailService.mockOutbox.length, 1);
+  assert.deepEqual(mailService.mockOutbox[0].attachments, ['ovi-kreta-terv.pdf', 'ovi-kreta-terv.docx', 'OVITE-2026-9.pdf', 'ovitervezo-logo.png'], 'a tervezet a memória nélkül, a documents táblából épül újra');
+  assert.doesNotMatch(mailService.mockOutbox[0].subject, /Számlája elkészült/);
   assert.equal(mailService.mockOutbox[0].to, 'vevo@example.com', 'a kliens által küldött cím nem számít');
   assert.match(pdfRequests[0], /<szamlaszam>OVITE-2026-9<\/szamlaszam>/);
   assert.equal(client.db.orders[0].delivery_count, 1, 'az admin újraküldés nem használja el a vevői kézbesítést');
@@ -923,7 +933,7 @@ test('admin.js: a free coupon order shows a 0 Ft / Kupon label instead of a disa
 test('admin.js: failed paid orders show a red banner and error text, with separate issue-invoice, e-mail and download buttons', async (t) => {
   const orders = [
     { orderNumber: 'OVI-F1', createdAt: ago(1), email: 'a@example.com', name: 'A', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: '', lastError: 'Számlázás: Számlázz.hu hiba (8): emelt díjcsomag' },
-    { orderNumber: 'OVI-F2', createdAt: ago(2), email: 'b@example.com', name: 'B', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: 'E-1', lastError: '' }
+    { orderNumber: 'OVI-F2', documentId: 'gen_f2', createdAt: ago(2), email: 'b@example.com', name: 'B', planKey: 'daily', amount: 390, couponCode: '', paymentMethod: 'Barion', status: 'paid', invoiceNumber: 'E-1', lastError: '' }
   ];
   const { document, state } = await loadPage(t, {
     confirm: true,
@@ -946,7 +956,8 @@ test('admin.js: failed paid orders show a red banner and error text, with separa
   assert.ok(rows[0].querySelector('.admin-order-error'));
   assert.equal(rows[1].querySelector('.admin-order-error'), null);
   const labels = (row) => [...row.querySelectorAll('button')].map((b) => [b.textContent, b.disabled]);
-  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Számla küldése', true], ['Csomag küldése', false], ['Számla letöltése', true]]);
+  assert.deepEqual(labels(rows[0]), [['Számla kiállítása', false], ['Számla küldése', true], ['Csomag küldése', true], ['Számla letöltése', true]]);
+  assert.match([...rows[0].querySelectorAll('button')][2].title, /document_id hiányzik/, 'tervezet nélküli rendelésnél a gomb magyarázó tooltippel letiltott');
   assert.deepEqual(labels(rows[1]), [['Számla kiállítása', true], ['Számla küldése', false], ['Csomag küldése', false], ['Számla letöltése', false]]);
 
   rows[0].querySelector('button').click();
@@ -1365,4 +1376,103 @@ test('admin.js: the settings form saves four prices, the cap and the announcemen
   document.getElementById('notificationSplitForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
   await tick();
   assert.deepEqual(patches[3], { billing_notification_email: 'bill@example.com', error_notification_email: 'err@example.com' });
+});
+
+function mailEnv(t) {
+  const saved = { SMTP_HOST: process.env.SMTP_HOST, SZAMLAZZ_API_KEY_EV: process.env.SZAMLAZZ_API_KEY_EV };
+  process.env.SMTP_HOST = 'smtp.invalid.example';
+  process.env.SZAMLAZZ_API_KEY_EV = 'agent-ev';
+  const realFetch = global.fetch;
+  global.fetch = async (url, options) => (String(url).includes('szamlazz.hu') ? new Response(Buffer.from('%PDF-1.4 x'), { status: 200 }) : realFetch(url, options));
+  t.after(() => { global.fetch = realFetch; for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+}
+
+const packageOrder = (extra) => ({ order_number: 'OVI-P1', session_id: 'barion_p1', user_id: null, user_email: 'vevo@example.com', document_id: 'gen_p', plan_mode: 'standard', plan_key: 'daily', amount: 390, payment_method: 'Barion', status: 'paid', invoice_number: 'OVITE-2026-5', billing_profile: 'ev', delivery_count: 1, created_at: ago(1), ...extra });
+const storedPlan = (id) => ({ document_id: id, unlocked: true, data: { plan: { ...makePlan(), request: makePayload(), generationId: id }, meta: {} } });
+
+test('the package resend works from an empty planStore memory, and a 0 Ft coupon order gets the package without an invoice', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [packageOrder(), packageOrder({ order_number: 'OVI-P0', document_id: 'gen_free', amount: 0, invoice_number: null })], documents: [storedPlan('gen_p'), storedPlan('gen_free')] }));
+  mailEnv(t);
+  planStore.clearPlans();
+  const base = await listen(t);
+  mailService.mockOutbox.length = 0;
+
+  const paid = await (await call(base, '/api/admin/orders/OVI-P1/resend', { token: 'token-admin', method: 'POST' })).json();
+  assert.deepEqual([paid.sent, paid.invoiceAttached, paid.attachmentCount, paid.template], [true, true, 2, 'payment_success']);
+  assert.ok(planStore.hasPlan('gen_p'), 'a terv a documents táblából visszatöltődött');
+
+  planStore.clearPlans();
+  const free = await (await call(base, '/api/admin/orders/OVI-P0/resend', { token: 'token-admin', method: 'POST' })).json();
+  assert.deepEqual([free.sent, free.invoiceAttached, free.attachmentCount], [true, false, 2]);
+  assert.deepEqual(mailService.mockOutbox.map((mail) => mail.attachments), [['ovi-kreta-terv.pdf', 'ovi-kreta-terv.docx', 'OVITE-2026-5.pdf', 'ovitervezo-logo.png'], ['ovi-kreta-terv.pdf', 'ovi-kreta-terv.docx', 'ovitervezo-logo.png']]);
+});
+
+test('the package resend never silently falls back to an invoice-only mail when the stored plan is missing', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [packageOrder({ document_id: 'gen_nincs' }), packageOrder({ order_number: 'OVI-P2', document_id: null })], documents: [] }));
+  mailEnv(t);
+  planStore.clearPlans();
+  const base = await listen(t);
+  mailService.mockOutbox.length = 0;
+  for (const number of ['OVI-P1', 'OVI-P2']) {
+    const response = await call(base, `/api/admin/orders/${number}/resend`, { token: 'token-admin', method: 'POST' });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error, 'A rendeléshez tartozó tervezet nem található az adatbázisban, csak a számla küldhető ki.');
+  }
+  assert.equal(mailService.mockOutbox.length, 0);
+});
+
+test('the weekly package is re-built as a single ZIP', async (t) => {
+  const weekly = { ...makePlan(), is_weekly: true, heti_keretterv: { tema: 'Erdő', teruletek_heti_eloszlasa: [] }, napok: ['Hétfő', 'Kedd'].map((nap_neve) => ({ nap_neve, kidolgozas_tablazat: makePlan().kidolgozas_tablazat })), request: makePayload({ duration: 'Heti' }), generationId: 'gen_w' };
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [packageOrder({ document_id: 'gen_w', plan_key: 'weekly_detailed' })], documents: [{ document_id: 'gen_w', unlocked: true, data: { plan: weekly, meta: {} } }] }));
+  mailEnv(t);
+  planStore.clearPlans();
+  const base = await listen(t);
+  mailService.mockOutbox.length = 0;
+  const response = await call(base, '/api/admin/orders/OVI-P1/resend', { token: 'token-admin', method: 'POST' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(mailService.mockOutbox[0].attachments, ['OviTervezo_heti_csomag.zip', 'OVITE-2026-5.pdf', 'ovitervezo-logo.png']);
+});
+
+test('POST /api/admin/orders/:orderNumber/send-invoice sends only the invoice PDF with invoice_only, an explicit template, or errors clearly', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), orders: [packageOrder(), packageOrder({ order_number: 'OVI-P3', invoice_number: null })], documents: [storedPlan('gen_p')] }));
+  mailEnv(t);
+  const base = await listen(t);
+  mailService.mockOutbox.length = 0;
+  const post = (number, body) => call(base, `/api/admin/orders/${number}/send-invoice`, { token: 'token-admin', method: 'POST', body });
+
+  const plain = await (await post('OVI-P1', {})).json();
+  assert.deepEqual([plain.sent, plain.attachmentCount, plain.template], [true, 0, 'invoice_only']);
+  assert.deepEqual(mailService.mockOutbox[0].attachments, ['OVITE-2026-5.pdf', 'ovitervezo-logo.png']);
+  assert.match(mailService.mockOutbox[0].subject, /Számlája elkészült – OviTervező \(OVITE-2026-5\)/);
+
+  assert.equal((await post('OVI-P1', { templateId: 'nincs_ilyen' })).status, 404);
+  assert.equal((await post('OVI-P3', {})).status, 409, 'számla nélküli rendeléshez nincs számlaküldés');
+  assert.equal((await call(base, '/api/admin/orders/OVI-P1/send-invoice', { method: 'POST' })).status, 401);
+});
+
+test('the admin e-mail template routes create, preview, delete and reset templates', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  const send = (route, method, body) => call(base, `/api/admin/email-templates${route}`, { token: 'token-admin', method, body });
+  const fresh = { id: 'husvet_level', name: 'Húsvéti levél', subject: 'Boldog húsvétot!', bodyHtml: '<p>Szia {{topic}}</p>' };
+
+  const created = await send('', 'POST', fresh);
+  assert.equal(created.status, 201);
+  assert.equal((await send('', 'POST', { ...fresh, id: 'Rossz Id' })).status, 400);
+  assert.equal((await send('', 'POST', { ...fresh, id: 'invoice_only' })).status, 409);
+  assert.ok(client.db.email_templates.some((row) => row.id === 'husvet_level'));
+
+  const preview = await send('/preview', 'POST', { id: 'husvet_level', subject: fresh.subject, bodyHtml: fresh.bodyHtml });
+  assert.equal(preview.status, 200);
+  assert.match(JSON.stringify(await preview.json()), /Szia/);
+
+  assert.equal((await send('/invoice_only', 'DELETE')).status, 409, 'rendszersablon nem törölhető');
+  assert.equal((await send('/nincs_ilyen', 'DELETE')).status, 404);
+  assert.equal((await send('/husvet_level', 'DELETE')).status, 200);
+  assert.equal(client.db.email_templates.some((row) => row.id === 'husvet_level'), false);
+
+  const reset = await send('/invoice_only/reset', 'POST');
+  assert.equal(reset.status, 200);
+  assert.equal((await send('/base_layout/reset', 'POST')).status, 409);
+  assert.equal((await call(base, '/api/admin/email-templates/invoice_only', { method: 'DELETE' })).status, 401);
 });
