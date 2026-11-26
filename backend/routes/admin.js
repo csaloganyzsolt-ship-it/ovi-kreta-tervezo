@@ -99,6 +99,11 @@ router.patch('/admin/reviews/:id', handle('Az értékelés módosítása', async
   logger.info('admin_reviews', 'Értékelés státusza módosítva', { details: { id: req.params.id, status: result.review.status, admin: req.user?.email } });
   return result;
 }));
+router.delete('/admin/reviews/:id', handle('Az értékelés törlése', async (client, req) => {
+  const result = await admin.deleteReview(client, req.params.id);
+  logger.info('admin_reviews', 'Értékelés véglegesen törölve', { details: { id: req.params.id, admin: req.user?.email } });
+  return result;
+}));
 router.post('/admin/reviews/:id/reply', sendLimiter, handle('Az értékelésre adott válasz küldése', async (client, req) => {
   const result = await reviewService.replyToReview(client, req.params.id, req.body);
   logger.info('admin_reviews', 'Válasz küldve az értékelésre', { email: result.to, details: { id: req.params.id, orderNumber: result.orderNumber, admin: req.user?.email } });

@@ -1985,16 +1985,39 @@ test('POST /api/feedback saves the review as pending, linked to the order found 
   assert.deepEqual({ rating: saved.rating, status: saved.status, comment: saved.comment }, { rating: 5, status: 'pending', comment: 'Mégis tökéletes' });
 });
 
-test('GET /api/reviews/public returns only approved reviews without e-mail or order data', async (t) => {
-  useAdminEnv(t, fakeAdmin(reviewTables()));
+test('GET /api/reviews/public returns only approved reviews, newest first, 6 per page, without e-mail or order data', async (t) => {
+  const tables = reviewTables();
+  for (let n = 10; n < 18; n += 1) tables.reviews.push(reviewRow(n, 'approved', { comment: `Közös ${n}`, created_at: `2026-04-${n}T10:00:00Z`, role_label: n === 10 ? 'Óvónő' : null }));
+  useAdminEnv(t, fakeAdmin(tables));
   const base = await listen(t);
   const response = await call(base, '/api/reviews/public');
   assert.equal(response.status, 200);
   const raw = await response.text();
   const data = JSON.parse(raw);
-  assert.deepEqual(data.reviews.map((r) => r.comment), ['Vélemény 2'], 'a pending, a rejected és a szöveg nélküli sor nem jelenik meg');
-  assert.deepEqual(Object.keys(data.reviews[0]).sort(), ['comment', 'createdAt', 'name', 'rating', 'topic']);
-  assert.doesNotMatch(raw, /@example\.com|OVI-R|admin_note/);
+  assert.deepEqual({ total: data.total, page: data.page, pageSize: data.pageSize, totalPages: data.totalPages, count: data.reviews.length }, { total: 10, page: 1, pageSize: 6, totalPages: 2, count: 6 });
+  assert.deepEqual(data.reviews.map((r) => r.comment), ['Közös 17', 'Közös 16', 'Közös 15', 'Közös 14', 'Közös 13', 'Közös 12'], 'legújabb elöl');
+  assert.deepEqual(Object.keys(data.reviews[0]).sort(), ['comment', 'createdAt', 'name', 'rating', 'role']);
+  assert.equal(data.reviews[0].role, 'Óvodapedagógus', 'alapértelmezett szerepkör-megjelölés');
+  assert.doesNotMatch(raw, /@example\.com|OVI-R|admin_note|Gyenge volt|Vélemény 3/);
+  const second = await (await call(base, '/api/reviews/public?page=2')).json();
+  assert.deepEqual(second.reviews.map((r) => r.comment), ['Közös 11', 'Közös 10', '', 'Vélemény 2']);
+  assert.equal(second.reviews[1].role, 'Óvónő');
+});
+
+test('DELETE /api/admin/reviews/:id removes the review permanently and requires an admin', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(reviewTables()));
+  const base = await listen(t);
+  const id = client.db.reviews[1].id;
+  const del = (token, route = id) => call(base, `/api/admin/reviews/${route}`, { method: 'DELETE', token });
+  assert.equal((await del(undefined)).status, 401);
+  assert.equal((await del('token-impostor')).status, 403);
+  assert.equal((await del('token-admin', 'nem-uuid')).status, 400);
+  assert.equal((await del('token-admin', '00000000-0000-4000-8000-0000000000ff')).status, 404);
+  assert.equal(client.db.reviews.length, 4);
+  assert.equal((await del('token-admin')).status, 200);
+  assert.equal(client.db.reviews.length, 3);
+  assert.ok(!client.db.reviews.some((r) => r.id === id));
+  assert.ok(!(await (await call(base, '/api/reviews/public')).json()).reviews.some((r) => r.comment === 'Vélemény 2'));
 });
 
 test('admin reviews: list with status filter and pagination, summary badge count, approve and reject', async (t) => {
@@ -2074,11 +2097,14 @@ test('admin.js: the reviews tab shows stars, filters by status, approves and ope
   assert.deepEqual([...document.querySelectorAll('#reviewsStatus option')].map((o) => o.value), ['', 'pending', 'approved', 'rejected']);
   row.querySelector('.admin-menu-toggle').click();
   const items = [...row.querySelectorAll('.admin-menu-item')];
-  assert.deepEqual(items.map((i) => i.firstChild.textContent), ['Elfogadás (főoldalra)', 'Elutasítás / levétel', 'E-mail írása az ügyfélnek']);
+  assert.deepEqual(items.map((i) => i.firstChild.textContent), ['Elfogadás (főoldalra)', 'Elutasítás / levétel', 'E-mail írása az ügyfélnek', 'Végleges törlés']);
   items[2].click();
   assert.equal(document.getElementById('reviewReplyTo').value, 'anna@example.com');
   assert.equal(document.getElementById('reviewReplyOrder').value, 'OVI-R1');
   assert.match(document.getElementById('reviewReplyMessage').value, /Kedves Anna!/);
+  items[3].click();
+  await tick();
+  assert.ok(state.fetches.some((f) => f.method === 'DELETE' && f.path === '/api/admin/reviews/00000000-0000-4000-8000-000000000001'), 'törlés a megerősítés után');
   items[0].click();
   await tick();
   const call1 = state.fetches.find((f) => f.method === 'PATCH');

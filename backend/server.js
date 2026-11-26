@@ -778,12 +778,12 @@ app.post('/api/feedback', feedbackLimiter, async (req, res) => {
 });
 
 // Publikus értékelések: kizárólag a jóváhagyott (approved) sorok, e-mail cím nélkül.
-app.get('/api/reviews/public', async (_req, res) => {
+app.get('/api/reviews/public', async (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
   try {
     const client = supabase.getClient();
-    const reviews = client ? await reviewService.listPublicReviews(client) : [];
-    return res.json({ success: true, reviews });
+    const result = client ? await reviewService.listPublicReviews(client, req.query) : { reviews: [], total: 0, page: 1, pageSize: reviewService.PUBLIC_PAGE_SIZE, totalPages: 1 };
+    return res.json({ success: true, ...result });
   } catch (error) {
     console.error('Public reviews error:', error.message);
     res.setHeader('Cache-Control', 'no-store');

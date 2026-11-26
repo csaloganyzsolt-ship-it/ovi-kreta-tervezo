@@ -5,7 +5,8 @@ const { normalizeEmail } = require('../utils/email');
 const admin = require('./adminService');
 const mailService = require('./mailService');
 
-const PUBLIC_LIMIT = 12;
+const PUBLIC_PAGE_SIZE = 6;
+const PUBLIC_MAX_PAGE_SIZE = 12;
 const escapeLike = (value) => String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
 
 // A beküldés a rendeléshez kötődik: előbb a dokumentum-azonosító (ha az e-mail egyezik), majd a vevő legutóbbi fizetett rendelése.
@@ -47,17 +48,25 @@ async function submitReview(client, { email, rating, name, comment, documentId }
   return { id: data?.id || null, orderNumber: row.order_number, updated: false };
 }
 
-// Publikus nézet: csak jóváhagyott sorok, e-mail cím és rendelésszám nélkül.
-async function listPublicReviews(client, limit = PUBLIC_LIMIT) {
-  const { data, error } = await client.from('reviews')
-    .select('customer_name, plan_topic, rating, comment, created_at')
+// Publikus nézet: csak jóváhagyott sorok (legújabb elöl), lapozva; e-mail cím és rendelésszám nélkül.
+async function listPublicReviews(client, { page, pageSize } = {}) {
+  const size = Math.min(PUBLIC_MAX_PAGE_SIZE, Math.max(1, Number.parseInt(pageSize, 10) || PUBLIC_PAGE_SIZE));
+  const requested = Math.max(1, Number.parseInt(page, 10) || 1);
+  const { data, error, count } = await client.from('reviews')
+    .select('customer_name, role_label, rating, comment, created_at', { count: 'exact' })
     .eq('status', 'approved')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .range((requested - 1) * size, requested * size - 1);
   if (error) throw new admin.AdminError(`Az értékelések nem olvashatók: ${error.message}`, 500);
-  return (data || [])
-    .filter((row) => String(row.comment || '').trim())
-    .map((row) => ({ name: String(row.customer_name || '').trim() || 'Óvodapedagógus', topic: row.plan_topic || '', rating: row.rating, comment: row.comment, createdAt: row.created_at }));
+  const total = Number.isInteger(count) ? count : (data || []).length;
+  const reviews = (data || []).map((row) => ({
+    name: String(row.customer_name || '').trim() || 'Óvodapedagógus',
+    role: String(row.role_label || '').trim() || 'Óvodapedagógus',
+    rating: row.rating,
+    comment: row.comment || '',
+    createdAt: row.created_at
+  }));
+  return { reviews, total, page: requested, pageSize: size, totalPages: Math.max(1, Math.ceil(total / size)) };
 }
 
 async function replyToReview(client, id, { subject, message } = {}, deps = {}) {
@@ -73,4 +82,4 @@ async function replyToReview(client, id, { subject, message } = {}, deps = {}) {
   return { replySentAt: sentAt, to: review.customer_email, orderNumber: review.order_number || '' };
 }
 
-module.exports = { submitReview, listPublicReviews, replyToReview, PUBLIC_LIMIT };
+module.exports = { submitReview, listPublicReviews, replyToReview, PUBLIC_PAGE_SIZE };

@@ -259,37 +259,107 @@ function openLegalModal(key) {
   openModal('legalModal');
 }
 
-// „Pedagógusok mondták rólunk”: a jóváhagyott értékelések (csak szövegként, HTML nélkül); amíg nincs egy sem, a szekció rejtett marad.
-function renderTestimonials(reviews) {
-  const section = document.getElementById('testimonials');
-  const grid = document.getElementById('testimonialGrid');
-  if (!section || !grid) return;
-  grid.replaceChildren();
-  const list = Array.isArray(reviews) ? reviews.filter((review) => review && review.comment) : [];
-  list.forEach((review) => {
-    const card = document.createElement('figure');
-    card.className = 'testimonial-card';
-    const stars = document.createElement('div');
-    stars.className = 'testimonial-stars';
-    const rating = Math.max(1, Math.min(5, Number(review.rating) || 5));
-    stars.textContent = '★'.repeat(rating) + '☆'.repeat(5 - rating);
-    stars.setAttribute('aria-label', `${rating} csillag az 5-ből`);
-    const quote = document.createElement('blockquote');
-    quote.textContent = `„${String(review.comment).trim()}”`;
-    const caption = document.createElement('figcaption');
-    caption.textContent = [String(review.name || '').trim() || 'Óvodapedagógus', review.topic ? `– ${review.topic}` : ''].filter(Boolean).join(' ');
-    card.append(stars, quote, caption);
-    grid.append(card);
-  });
-  section.hidden = list.length === 0;
+// ---------- „Pedagógusok mondták rólunk”: az adatbázisból érkező, jóváhagyott vélemények ----------
+
+const REVIEWS_PER_PAGE = 6;
+const REVIEW_AVATAR_CLASSES = 6;
+
+// Monogram a névből: az első és az utolsó név kezdőbetűje („Kovácsné T. Judit” → KJ); egyetlen névnél az első két betű.
+function reviewMonogram(name) {
+  const base = String(name || '').split(/\s+[–-]\s+|,/)[0];
+  const words = base.split(/\s+/).map((word) => word.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+  if (!words.length) return 'Ó';
+  const letters = words.length === 1 ? Array.from(words[0]).slice(0, 2).join('') : `${Array.from(words[0])[0]}${Array.from(words[words.length - 1])[0]}`;
+  return letters.toLocaleUpperCase('hu');
 }
 
-function loadTestimonials() {
-  if (!document.getElementById('testimonials') || typeof fetch !== 'function') return;
-  fetch(`${siteApiBaseUrl()}/api/reviews/public`)
+// Relatív idő a naptári napok alapján: Ma, Tegnap, X napja, X hete, X hónapja, X éve.
+function reviewRelativeTime(iso, now = new Date()) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = (value) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  const days = Math.max(0, Math.round((day(now) - day(date)) / 86400000));
+  if (days === 0) return 'Ma';
+  if (days === 1) return 'Tegnap';
+  if (days < 7) return `${days} napja`;
+  if (days < 30) return `${Math.floor(days / 7)} hete`;
+  if (days < 365) return `${Math.floor(days / 30)} hónapja`;
+  return `${Math.floor(days / 365)} éve`;
+}
+
+function reviewAvatarClass(name) {
+  let hash = 0;
+  for (const char of String(name || '')) hash = (hash * 31 + char.codePointAt(0)) % 1000;
+  return `avatar-${(hash % REVIEW_AVATAR_CLASSES) + 1}`;
+}
+
+function buildReviewCard(review, now) {
+  const card = document.createElement('div');
+  card.className = 'review-card';
+  const header = document.createElement('div');
+  header.className = 'review-card-header';
+  const avatar = document.createElement('div');
+  avatar.className = `review-avatar ${reviewAvatarClass(review.name)}`;
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.textContent = reviewMonogram(review.name);
+  const meta = document.createElement('div');
+  meta.className = 'review-meta';
+  const name = document.createElement('strong');
+  name.className = 'review-name';
+  name.textContent = String(review.name || '').trim() || 'Óvodapedagógus';
+  const role = document.createElement('span');
+  role.className = 'review-role-date';
+  role.textContent = [String(review.role || '').trim() || 'Óvodapedagógus', reviewRelativeTime(review.createdAt, now)].filter(Boolean).join(' • ');
+  meta.append(name, role);
+  header.append(avatar, meta);
+  const rating = Math.max(1, Math.min(5, Number(review.rating) || 5));
+  const stars = document.createElement('div');
+  stars.className = 'review-stars';
+  stars.textContent = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  stars.setAttribute('aria-label', `${rating} csillag az 5-ből`);
+  const text = document.createElement('p');
+  text.className = 'review-text';
+  text.textContent = `„${String(review.comment || '').trim()}”`;
+  card.append(header, stars, text);
+  return card;
+}
+
+// Egyetlen közös rács; a lapozó csak 6-nál több jóváhagyott vélemény esetén látszik, és nincs vélemény → a szekció rejtett.
+function renderReviews(data, now = new Date()) {
+  const section = document.getElementById('testimonials');
+  const grid = document.getElementById('reviewsGrid');
+  if (!section || !grid) return;
+  const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
+  grid.replaceChildren(...reviews.map((review) => buildReviewCard(review, now)));
+  section.hidden = reviews.length === 0;
+  const totalPages = Math.max(1, Number(data?.totalPages) || 1);
+  const page = Math.min(totalPages, Math.max(1, Number(data?.page) || 1));
+  const pager = document.getElementById('reviewsPager');
+  pager.hidden = !(Number(data?.total) > REVIEWS_PER_PAGE && totalPages > 1);
+  document.getElementById('reviewsPageInfo').textContent = `${page} / ${totalPages}`;
+  document.getElementById('reviewsPrev').disabled = page <= 1;
+  document.getElementById('reviewsNext').disabled = page >= totalPages;
+  section.dataset.page = String(page);
+}
+
+function loadReviews(page = 1) {
+  if (!document.getElementById('testimonials') || typeof fetch !== 'function') return Promise.resolve();
+  return fetch(`${siteApiBaseUrl()}/api/reviews/public?page=${page}&pageSize=${REVIEWS_PER_PAGE}`)
     .then((response) => (response.ok ? response.json() : null))
-    .then((data) => { if (data && data.success) renderTestimonials(data.reviews); })
+    .then((data) => { if (data && data.success) renderReviews(data); })
     .catch(() => {});
+}
+
+function initReviews() {
+  const section = document.getElementById('testimonials');
+  if (!section) return;
+  const go = (delta) => () => {
+    const target = Math.max(1, Number(section.dataset.page || 1) + delta);
+    loadReviews(target).then(() => section.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+  };
+  document.getElementById('reviewsPrev').addEventListener('click', go(-1));
+  document.getElementById('reviewsNext').addEventListener('click', go(1));
+  loadReviews(1);
 }
 
 function initSite() {
@@ -303,7 +373,8 @@ function initSite() {
 
   renderFooterCompany();
   applyPaymentProvider();
-  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); loadTestimonials(); });
+  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); });
+  initReviews();
   document.addEventListener('click', (event) => {
     const sample = event.target.closest('[data-sample-modal]');
     if (sample) { event.preventDefault(); openModal('sampleModal'); return; }
@@ -355,7 +426,7 @@ if (typeof window !== 'undefined') {
   window.getLockedMeta = getLockedMeta;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS, renderTestimonials };
+  module.exports = { formatExtentSummary, getLockedMeta, LEGAL_TEXTS, reviewMonogram, reviewRelativeTime, renderReviews };
 }
 
 function initPage() {

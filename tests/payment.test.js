@@ -653,11 +653,11 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);
-  for (const reviewText of ['4,9 / 5', 'Óvodapedagógusok visszajelzései alapján', 'Valós használói tapasztalatok',
-    'Kovácsné T. Judit', 'Szabó Eszter', 'Varga-Németh Krisztina', 'Tóth Anikó', 'Horváthné Gabi', 'Molnár Dóra']) {
+  for (const reviewText of ['Pedagógusok mondták rólunk', 'id="reviewsGrid"', 'id="reviewsPager"']) {
     assert.ok(landing.includes(reviewText), `missing review element: ${reviewText}`);
   }
-  const reviewsPos = landing.indexOf('Visszajelzések és vélemények');
+  assert.doesNotMatch(landing, /Kovácsné T\. Judit|4,9 \/ 5/, 'a vélemények az adatbázisból jönnek, nincs beégetve');
+  const reviewsPos = landing.indexOf('Pedagógusok mondták rólunk');
   const faqPos = landing.indexOf('Gyakran ismételt kérdések');
   assert.ok(reviewsPos !== -1 && faqPos !== -1 && reviewsPos < faqPos, 'Reviews section must precede FAQ');
 });

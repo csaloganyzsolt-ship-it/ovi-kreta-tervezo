@@ -601,7 +601,7 @@ async function listUsers(client, query = {}) {
 // ---------- Ügyfélértékelések ----------
 
 const REVIEW_STATUSES = ['pending', 'approved', 'rejected'];
-const REVIEW_COLUMNS = 'id, order_number, customer_name, customer_email, plan_topic, rating, comment, status, admin_reply_sent_at, admin_note, created_at';
+const REVIEW_COLUMNS = 'id, order_number, customer_name, customer_email, plan_topic, role_label, rating, comment, status, admin_reply_sent_at, admin_note, created_at';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function reviewView(row) {
@@ -611,6 +611,7 @@ function reviewView(row) {
     name: row.customer_name || '',
     email: row.customer_email || '',
     topic: row.plan_topic || '',
+    roleLabel: row.role_label || '',
     rating: row.rating,
     comment: row.comment || '',
     status: row.status,
@@ -658,6 +659,13 @@ async function setReviewStatus(client, id, body = {}) {
   return { review: reviewView(data || { id, ...patch }) };
 }
 
+async function deleteReview(client, id) {
+  await getReview(client, id);
+  const { error } = await client.from('reviews').delete().eq('id', id);
+  if (error) throw dbError(error, 'Az értékelés törlése sikertelen');
+  return { deleted: id };
+}
+
 // Hírlevél-állapot kapcsolása adminból: a rekord megmarad, csak a subscribed/unsubscribed_at változik.
 async function setNewsletterSubscription(client, body = {}) {
   const email = normalizeEmail(body.email);
@@ -681,6 +689,7 @@ module.exports = {
   reviewSummary,
   getReview,
   setReviewStatus,
+  deleteReview,
   ORDER_STATUSES,
   fetchAll,
   fetchProfiles,

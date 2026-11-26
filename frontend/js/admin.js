@@ -766,6 +766,21 @@
     }
   }
 
+  async function deleteReview(review, button) {
+    if (!window.confirm(`Véglegesen törlöd ${review.name || review.email} értékelését? Ez nem vonható vissza.`)) return;
+    button.disabled = true;
+    try {
+      await api(`/api/admin/reviews/${encodeURIComponent(review.id)}`, { method: 'DELETE' });
+      showToast('Az értékelés véglegesen törölve.');
+      await lists.reviews.load();
+      loadReviewsSummary();
+    } catch (error) {
+      showToast(`Az értékelés nem törölhető: ${errorMessage(error)}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function replyTemplate(review) {
     const name = review.name ? ` ${review.name.split(/\s+/)[0]}` : '';
     const topic = review.topic ? ` (${review.topic})` : '';
@@ -817,7 +832,8 @@
       const items = [
         { label: 'Elfogadás (főoldalra)', reason: review.status === 'approved' ? 'már elfogadva' : '', title: 'Megjelenik a főoldalon', run: (button) => setReviewStatus(review, 'approved', button) },
         { label: 'Elutasítás / levétel', reason: review.status === 'rejected' ? 'már elutasítva' : '', title: 'Nem jelenik meg a főoldalon', run: (button) => setReviewStatus(review, 'rejected', button) },
-        { label: 'E-mail írása az ügyfélnek', reason: '', title: 'Udvarias válasz küldése a beküldőnek', run: () => openReviewReply(review) }
+        { label: 'E-mail írása az ügyfélnek', reason: '', title: 'Udvarias válasz küldése a beküldőnek', run: () => openReviewReply(review) },
+        { label: 'Végleges törlés', reason: '', title: 'Az értékelés végleges törlése az adatbázisból', run: (button) => deleteReview(review, button) }
       ];
       return [formatDate(review.createdAt), stars, review.comment || '–', sender, order, status, actionsMenu({ orderNumber: review.orderNumber || review.email }, items)];
     }), 7, 'Nincs a szűrésnek megfelelő értékelés.');

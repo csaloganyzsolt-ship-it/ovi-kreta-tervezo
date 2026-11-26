@@ -2501,15 +2501,9 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-badge-on { background: rgba(63, 174, 132, 0.18); color: var(--primary); }
 .admin-badge-off { background: rgba(120, 130, 125, 0.18); color: var(--muted, #5b6b64); }
 
-/* Ügyfélértékelések: főoldali „Pedagógusok mondták rólunk” és az admin értékelés-nézet */
+/* Ügyfélértékelések */
 .testimonials { margin: 22px 0 8px; }
 .testimonials[hidden] { display: none; }
-.testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.testimonial-card { margin: 0; padding: 16px 18px; border: 1px solid #cfe8da; border-radius: 20px; background: var(--panel); text-align: left; display: flex; flex-direction: column; gap: 8px; }
-.testimonial-stars { color: #f59e0b; font-size: 18px; letter-spacing: 2px; }
-.testimonial-card blockquote { margin: 0; color: var(--text); line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
-.testimonial-card figcaption { margin-top: auto; font-size: 13px; font-weight: 600; color: var(--primary); }
-[data-theme="dark"] .testimonial-card { border-color: rgba(63, 174, 132, 0.35); }
 .admin-nav-badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
 .admin-nav-badge[hidden] { display: none; }
 .admin-stars { color: #f59e0b; letter-spacing: 1px; white-space: nowrap; }
@@ -2519,3 +2513,13 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 [data-theme="dark"] .admin-review-pending { color: #f5c46b; }
 [data-theme="dark"] .admin-review-approved { color: #6fdcb1; }
 [data-theme="dark"] .admin-review-rejected { color: #f59a9a; }
+
+.review-card .review-stars { color: #f59e0b; letter-spacing: 2px; font-size: 18px; margin: 4px 0 10px; }
+.review-text { overflow-wrap: anywhere; white-space: pre-line; }
+.reviews-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin: -14px 0 28px; }
+.reviews-pager[hidden] { display: none; }
+.reviews-pager-info { font-weight: 600; color: var(--muted); min-width: 56px; text-align: center; }
+.reviews-pager-btn { border: 1px solid #cfe8da; background: var(--panel); color: var(--text); border-radius: 999px; padding: 7px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+.reviews-pager-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.reviews-pager-btn:disabled { opacity: .45; cursor: default; }
+:root[data-theme="dark"] .reviews-pager-btn { border-color: #38564a; }
