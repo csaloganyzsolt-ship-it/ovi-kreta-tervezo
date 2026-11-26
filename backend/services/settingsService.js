@@ -351,7 +351,50 @@ const DEFAULT_INVOICE_ONLY_HTML = `<h1 style="margin:0 0 12px;font-size:22px;col
 <p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
 <p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>
 <p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk!</p>`;
+// A kézbesítő levél (payment_success) és a közös keret (base_layout) hivatalos alapértéke: a ténylegesen kiküldött, értékeléskérő blokkot ({{feedback_block}}) is tartalmazó HTML.
+const DEFAULT_BASE_LAYOUT_SUBJECT = 'OviTervező';
+const DEFAULT_BASE_LAYOUT_HTML = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OviTervező</title></head>
+<body style="margin:0;padding:0;background:#eef6f1;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef6f1;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #d9ebe0;">
+<tr><td style="height:5px;line-height:5px;font-size:0;background:#3fae84;">&nbsp;</td></tr>
+<tr><td style="background:#d8f0e3;padding:22px 28px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>
+<td style="padding-right:12px;vertical-align:middle;"><img src="{{logo_src}}" width="52" height="52" alt="OT" style="display:block;border:0;border-radius:12px;"></td>
+<td style="vertical-align:middle;font-size:26px;line-height:1;color:#1f3d34;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">Ovi<strong style="font-weight:800;color:#2f946f;">Tervező</strong></td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:28px;">
+{{content}}
+</td></tr>
+<tr><td style="background:#f6f7f7;padding:18px 28px;border-top:1px solid #e6eae8;font-size:12px;line-height:1.6;color:#7a8480;">
+{{unsubscribe_link}}
+<strong>Kibocsátó:</strong> {{company_legal}}.<br>
+<a href="{{site_url}}" style="color:#7a8480;">Adatkezelési tájékoztató</a> · <a href="{{site_url}}" style="color:#7a8480;">ÁSZF</a> – <a href="{{site_url}}" style="color:#7a8480;">{{site_url}}</a><br>
+Ez a vásárláshoz/tervezéshez kapcsolódó automatikus rendszerüzenet.
+</td></tr>
+</table></td></tr></table></body></html>`;
+const DEFAULT_PAYMENT_SUCCESS_SUBJECT = 'OviTervező – a megvásárolt tervezet és a számla';
+const DEFAULT_PAYMENT_SUCCESS_HTML = `<h1 style="margin:0 0 12px;font-size:22px;color:#1f5f52;">Kedves Kolléganő!</h1>
+<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#2d3b36;">Köszönjük, hogy az OviTervezőt választotta – és köszönjük az elhivatott munkát, amellyel nap mint nap a gyerekek mellett áll.</p>
+<p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#2d3b36;">Reméljük, hogy a kész tervezet sok időt spórol Önnek, így több jut a legfontosabbra: a közös játékra és felfedezésre.</p>
+<p style="margin:0 0 18px;padding:10px 14px;background:#f4fbf7;border-left:4px solid #3fae84;border-radius:8px;font-size:15px;color:#2d3b36;"><strong>Tervezet témája:</strong> {{topic}}</p>
+{{plan_type_block}}
+<p style="margin:0 0 18px;font-size:14px;color:#5b6b64;">Rendelésszám: <strong>{{orderId}}</strong></p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4fbf7;border:1px solid #cfe8da;border-radius:14px;"><tr><td style="padding:14px 18px;">
+<div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#1f5f52;margin-bottom:4px;">📎 Mellékletek</div>
+<table role="presentation" cellpadding="0" cellspacing="0">{{attachments_rows}}</table>
+</td></tr></table>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#5b6b64;background:#f6f7f7;border-radius:10px;padding:10px 14px;">Tipp: A csatolt Word (.docx) formátum szabadon szerkeszthető, így bármikor hozzáigazíthatja saját csoportja igényeihez.</p>
+<p style="margin:20px 0;text-align:center;"><a href="{{site_url}}" style="display:inline-block;background:#3fae84;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:13px 26px;border-radius:999px;">Új tervezet készítése</a></p>
+<p style="margin:0 0 4px;font-size:16px;line-height:1.6;color:#2d3b36;">Sikeres, játékos hetet kívánunk!</p>
+<p style="margin:0;font-size:16px;line-height:1.6;color:#2d3b36;">Üdvözlettel,<br><strong>Az OviTervező csapata</strong></p>
+<p style="margin:14px 0 0;font-size:14px;color:#5b6b64;">Kérdése van? Nyugodtan válaszoljon közvetlenül erre a levélre, szívesen segítünk!</p>
+{{feedback_block}}`;
 const DEFAULT_TEMPLATES = Object.freeze({
+  base_layout: Object.freeze({ id: 'base_layout', subject: DEFAULT_BASE_LAYOUT_SUBJECT, bodyHtml: DEFAULT_BASE_LAYOUT_HTML }),
+  payment_success: Object.freeze({ id: 'payment_success', subject: DEFAULT_PAYMENT_SUCCESS_SUBJECT, bodyHtml: DEFAULT_PAYMENT_SUCCESS_HTML }),
   feedback_request: Object.freeze({ id: 'feedback_request', subject: 'Értékeléskérő blokk (a kézbesítő levélben)', bodyHtml: DEFAULT_FEEDBACK_REQUEST_HTML }),
   invoice_only: Object.freeze({ id: 'invoice_only', subject: DEFAULT_INVOICE_ONLY_SUBJECT, bodyHtml: DEFAULT_INVOICE_ONLY_HTML })
 });

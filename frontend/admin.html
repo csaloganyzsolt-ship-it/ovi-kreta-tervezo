@@ -282,6 +282,14 @@
             </div>
             <div class="admin-filters" id="usersFilters" hidden>
               <div>
+                <label for="usersAccount">Fiók állapota</label>
+                <select id="usersAccount" data-list="users" data-filter="account">
+                  <option value="">Összes</option>
+                  <option value="registered">Regisztrált</option>
+                  <option value="guest">Vendég (nem regisztrált)</option>
+                </select>
+              </div>
+              <div>
                 <label for="usersRole">Szerepkör</label>
                 <select id="usersRole" data-list="users" data-filter="role">
                   <option value="">Összes</option>
@@ -294,7 +302,7 @@
                 <select id="usersNewsletter" data-list="users" data-filter="newsletter">
                   <option value="">Összes</option>
                   <option value="subscribed">Feliratkozott</option>
-                  <option value="not">Nem feliratkozott</option>
+                  <option value="not">Leiratkozott / nem feliratkozott</option>
                 </select>
               </div>
               <div>
@@ -320,8 +328,8 @@
             <div class="admin-table-wrap">
               <table class="admin-table" id="usersTable">
                 <thead>
-                  <tr><th>Név</th><th>E-mail</th><th>Óvoda</th><th>Csoport</th><th>Számlázási név / adószám</th><th>Szerepkör</th><th>Regisztráció</th><th>E-mail megerősítve</th><th>Feliratkozott</th><th>Ügyfélszolgálat</th></tr>
-                  <tr class="admin-filter-row" hidden><th><input type="search" data-list="users" data-filter="name" placeholder="Keresés" aria-label="Név szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="email" placeholder="Keresés" aria-label="E-mail szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="kindergarten" placeholder="Keresés" aria-label="Óvoda szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="group" placeholder="Keresés" aria-label="Csoport szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="billing" placeholder="Keresés" aria-label="Számlázási név / adószám szűrése" autocomplete="off" /></th><th></th><th></th><th></th><th></th><th><button type="button" class="profile-btn" data-list="users" data-clear>Szűrők törlése</button></th></tr>
+                  <tr><th>Név</th><th>E-mail</th><th>Fiók</th><th>Óvoda</th><th>Csoport</th><th>Számlázási név / adószám</th><th>Szerepkör</th><th>Regisztráció / feliratkozás</th><th>E-mail megerősítve</th><th>Hírlevél</th><th>Ügyfélszolgálat</th></tr>
+                  <tr class="admin-filter-row" hidden><th><input type="search" data-list="users" data-filter="name" placeholder="Keresés" aria-label="Név szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="email" placeholder="Keresés" aria-label="E-mail szűrése" autocomplete="off" /></th><th></th><th><input type="search" data-list="users" data-filter="kindergarten" placeholder="Keresés" aria-label="Óvoda szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="group" placeholder="Keresés" aria-label="Csoport szűrése" autocomplete="off" /></th><th><input type="search" data-list="users" data-filter="billing" placeholder="Keresés" aria-label="Számlázási név / adószám szűrése" autocomplete="off" /></th><th></th><th></th><th></th><th></th><th><button type="button" class="profile-btn" data-list="users" data-clear>Szűrők törlése</button></th></tr>
                 </thead>
                 <tbody></tbody>
               </table>

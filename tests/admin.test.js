@@ -905,7 +905,7 @@ test('admin.js: the users tab lists registrations and exports only confirmed sub
   document.getElementById('tabUsers').click();
   await tick();
   assert.equal(document.querySelectorAll('#usersTable tbody tr').length, 3);
-  assert.match(document.getElementById('usersCount').textContent, /3 regisztrált.*1 megerősített/);
+  assert.match(document.getElementById('usersCount').textContent, /3 felhasználó.*1 aktív hírlevél/);
   assert.equal(document.getElementById('nlSubject'), document.querySelector('#panelNewsletter #nlSubject'), 'a hírlevél űrlap a saját fülén van');
   assert.equal(document.querySelector('#panelUsers #nlSubject'), null);
   document.getElementById('tabNewsletter').click();
@@ -1504,7 +1504,7 @@ test('the admin e-mail template routes create, preview, delete and reset templat
 
   const reset = await send('/invoice_only/reset', 'POST');
   assert.equal(reset.status, 200);
-  assert.equal((await send('/base_layout/reset', 'POST')).status, 409);
+  assert.equal((await send('/welcome_email/reset', 'POST')).status, 409);
   assert.equal((await call(base, '/api/admin/email-templates/invoice_only', { method: 'DELETE' })).status, 401);
 });
 
@@ -1855,4 +1855,87 @@ test('admin.js: filter panels and column search rows are collapsed by default, w
   document.querySelector('[data-list="orders"][data-clear]').click();
   await tick();
   assert.equal(toggle.textContent, 'Szűrők');
+});
+
+// ---------- Vendég hírlevél-feliratkozók ----------
+
+function guestTables() {
+  const tables = newsletterTables();
+  tables.newsletter_subscribers.push(
+    { email: 'vendeg@example.com', user_id: null, name: 'Vendég Vera', newsletter_token: 'tok-vendeg', subscribed: true, subscribed_at: '2026-02-01T00:00:00Z', unsubscribed_at: null },
+    { email: 'kilepett@example.com', user_id: null, name: '', newsletter_token: 'tok-kilepett', subscribed: false, subscribed_at: '2026-01-05T00:00:00Z', unsubscribed_at: '2026-01-10T00:00:00Z' }
+  );
+  return tables;
+}
+
+test('GET /api/admin/users lists guest subscribers next to registered users, with account filter and kept unsubscribed records', async (t) => {
+  useAdminEnv(t, fakeAdmin(guestTables()));
+  const base = await listen(t);
+  const get = async (query = '') => (await call(base, `/api/admin/users?${query}`, { token: 'token-admin' })).json();
+  const all = await get();
+  const guest = all.users.find((u) => u.email === 'vendeg@example.com');
+  assert.deepEqual({ type: guest.accountType, subscribed: guest.subscribed, name: guest.name }, { type: 'guest', subscribed: true, name: 'Vendég Vera' });
+  const gone = all.users.find((u) => u.email === 'kilepett@example.com');
+  assert.deepEqual({ type: gone.accountType, subscribed: gone.subscribed }, { type: 'guest', subscribed: false });
+  assert.equal(all.users.find((u) => u.email === 'alice@example.com').accountType, 'registered');
+  assert.doesNotMatch(JSON.stringify(all), /tok-vendeg|newsletter_token/);
+  assert.deepEqual((await get('account=guest')).users.map((u) => u.email).sort(), ['kilepett@example.com', 'vendeg@example.com']);
+  assert.ok((await get('account=registered')).users.every((u) => u.accountType === 'registered'));
+  assert.deepEqual((await get('account=guest&newsletter=subscribed')).users.map((u) => u.email), ['vendeg@example.com']);
+  assert.equal((await call(base, '/api/admin/users?account=x', { token: 'token-admin' })).status, 400);
+});
+
+test('POST /api/admin/users/newsletter toggles the subscription state and keeps the record', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin(guestTables()));
+  const base = await listen(t);
+  const post = (body, token = 'token-admin') => call(base, '/api/admin/users/newsletter', { method: 'POST', token, body });
+  assert.equal((await post({ email: 'vendeg@example.com', subscribed: false })).status, 200);
+  const row = client.db.newsletter_subscribers.find((r) => r.email === 'vendeg@example.com');
+  assert.equal(row.subscribed, false);
+  assert.ok(row.unsubscribed_at, 'a leiratkozás ideje rögzül');
+  assert.equal((await post({ email: 'VENDEG@example.com ', subscribed: true })).status, 200);
+  assert.deepEqual({ s: row.subscribed, u: row.unsubscribed_at }, { s: true, u: null });
+  assert.equal(client.db.newsletter_subscribers.filter((r) => r.email === 'vendeg@example.com').length, 1, 'a rekord megmarad, nem duplikálódik');
+  assert.equal((await post({ email: 'vendeg@example.com', subscribed: 'igen' })).status, 400);
+  assert.equal((await post({ email: 'vendeg@example.com', subscribed: false }, 'token-impostor')).status, 403);
+});
+
+test('newsletter to all subscribers includes active guests once and skips unsubscribed ones', async (t) => {
+  useAdminEnv(t, fakeAdmin(guestTables()));
+  const sent = captureMail(t);
+  const base = await listen(t);
+  assert.equal((await sendNewsletter(base, campaignBody({ recipients: 'subscribers' }))).status, 202);
+  await newsletter.whenIdle();
+  assert.deepEqual(sent.map((m) => m.to).sort(), ['alice@example.com', 'carol@example.com', 'vendeg@example.com']);
+  const guestMail = sent.find((m) => m.to === 'vendeg@example.com');
+  assert.ok(guestMail.html.includes('leiratkozas.html?token=tok-vendeg'));
+});
+
+test('admin.js: guests appear as "Vendég (nem regisztrált)" with a newsletter toggle and an account filter', async (t) => {
+  const usersData = [
+    { id: '1', email: 'alice@example.com', name: 'Alice', accountType: 'registered', createdAt: '2026-01-02T10:00:00Z', confirmed: true, subscribed: true },
+    { id: '', email: 'vendeg@example.com', name: 'Vera', accountType: 'guest', createdAt: '2026-02-01T10:00:00Z', confirmed: false, subscribed: false }
+  ];
+  const { document, state } = await loadPage(t, {
+    confirm: true,
+    routes: {
+      '/api/admin/me': ME,
+      '/api/admin/stats': () => [STATS],
+      '/api/admin/users': () => [{ success: true, users: usersData, subscriberCount: 1, total: 2, page: 1, pageSize: 20, totalPages: 1 }],
+      '/api/admin/users/newsletter': () => [{ success: true }]
+    }
+  });
+  document.getElementById('tabUsers').click();
+  await tick();
+  const rows = document.querySelectorAll('#usersTable tbody tr');
+  assert.match(rows[0].textContent, /Regisztrált/);
+  assert.match(rows[1].textContent, /Vendég \(nem regisztrált\)/);
+  assert.match(rows[1].textContent, /Leiratkozott/);
+  assert.match(rows[0].textContent, /Feliratkozott/);
+  assert.deepEqual([...document.querySelectorAll('#usersAccount option')].map((o) => o.value), ['', 'registered', 'guest']);
+  [...rows[1].querySelectorAll('button')].find((b) => b.textContent === 'Feliratkoztat').click();
+  await tick();
+  const post = state.fetches.find((f) => f.path === '/api/admin/users/newsletter');
+  assert.equal(post.method, 'POST');
+  assert.deepEqual(JSON.parse(JSON.stringify(post.body)), { email: 'vendeg@example.com', subscribed: true });
 });

@@ -54,7 +54,7 @@ test('system templates cannot be deleted, unknown ones give 404, and defaults ca
   const reset = await settingsService.resetTemplate(client, 'invoice_only');
   assert.equal(reset.subject, 'Számlája elkészült – OviTervező ({{invoiceNumber}})');
   assert.equal(client.rows.get('invoice_only').subject, reset.subject);
-  await assert.rejects(settingsService.resetTemplate(client, 'base_layout'), (error) => error.status === 409);
+  await assert.rejects(settingsService.resetTemplate(client, 'welcome_email'), (error) => error.status === 409);
 });
 
 test('the invoice_only default has no draft attachment table and no .docx tip', () => {
@@ -94,4 +94,37 @@ test('a delivery with draft attachments keeps the full package template', async 
 
 test('an unknown explicit templateId fails instead of silently sending a wrong mail', async () => {
   await assert.rejects(sendWith({ attachments: [], templateId: 'nincs_ilyen' }), (error) => error.status === 404);
+});
+
+test('the official payment_success default carries the feedback block and is used when no database templates are available', async () => {
+  const { payment_success: delivery, base_layout: layout } = settingsService.DEFAULT_TEMPLATES;
+  assert.match(delivery.bodyHtml, /\{\{feedback_block\}\}/);
+  assert.match(settingsService.DEFAULT_TEMPLATES.feedback_request.bodyHtml, /\{\{stars\}\}/);
+  assert.match(layout.bodyHtml, /\{\{content\}\}/);
+  assert.doesNotMatch(delivery.subject, /e-számla/i);
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  await mailService.sendPurchaseEmail(
+    { to: 'vevo@example.com', plan: 'daily', attachments: [{ filename: 'terv.docx', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF'), title: 'Erdő', orderNumber: 'OVI-9', invoiceNumber: 'OVITE-9', documentId: 'gen_1' },
+    { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates: null }
+  );
+  const html = sent[0].html;
+  assert.match(html, /Hogy sikerült a tervezet\?/, 'az értékeléskérő blokk benne van');
+  assert.match(html, /ertekeles\.html\?rating=5&email=vevo%40example\.com&sig=/);
+  assert.match(html, /Tervezet témája:<\/strong> Erdő/);
+  assert.match(html, /Tipp: A csatolt Word/);
+  assert.equal(sent[0].subject, 'OviTervező – a megvásárolt tervezet és a számla');
+});
+
+test('the delivery uses the edited payment_success template from the database', async () => {
+  const sent = [];
+  const transport = { async sendMail(message) { sent.push(message); return { messageId: 'x' }; } };
+  const templates = { ...settingsService.DEFAULT_TEMPLATES, payment_success: { id: 'payment_success', subject: 'Saját tárgy', bodyHtml: '<p>SAJÁT {{topic}}</p>{{feedback_block}}' } };
+  await mailService.sendPurchaseEmail(
+    { to: 'vevo@example.com', plan: 'daily', attachments: [{ filename: 'terv.docx', content: Buffer.from('x') }], invoicePdf: Buffer.from('%PDF'), title: 'Erdő', orderNumber: 'OVI-9', invoiceNumber: 'OVITE-9', documentId: 'gen_1' },
+    { env: { FEEDBACK_SECRET: 'unit-secret', NODE_ENV: 'test' }, transport, templates }
+  );
+  assert.match(sent[0].html, /SAJÁT Erdő/);
+  assert.match(sent[0].html, /Hogy sikerült a tervezet\?/);
+  assert.equal(sent[0].subject, 'Saját tárgy');
 });

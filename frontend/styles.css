@@ -2496,3 +2496,7 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-menu-item:hover:not(:disabled), .admin-menu-item:focus-visible { background: rgba(63, 174, 132, 0.15); outline: none; }
 .admin-menu-item:disabled { opacity: 0.55; cursor: not-allowed; }
 .admin-menu-reason { font-size: 0.78rem; color: var(--muted, #5b6b64); }
+.admin-newsletter-cell { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-badge-on, .admin-badge-off { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.admin-badge-on { background: rgba(63, 174, 132, 0.18); color: var(--primary); }
+.admin-badge-off { background: rgba(120, 130, 125, 0.18); color: var(--muted, #5b6b64); }

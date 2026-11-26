@@ -668,13 +668,41 @@
 
   const ROLE_LABELS = { admin: 'Admin', user: 'Felhasználó' };
 
+  const ACCOUNT_LABELS = { registered: 'Regisztrált', guest: 'Vendég (nem regisztrált)' };
+
+  // Hírlevél-állapot + kapcsoló: a leiratkozott rekord megmarad, csak az állapota vált.
+  function newsletterCell(user) {
+    const cell = el('span', 'admin-newsletter-cell');
+    cell.append(el('span', user.subscribed ? 'admin-badge-on' : 'admin-badge-off', user.subscribed ? 'Feliratkozott' : 'Leiratkozott'));
+    const toggle = el('button', 'profile-btn', user.subscribed ? 'Leiratkoztat' : 'Feliratkoztat');
+    toggle.type = 'button';
+    toggle.addEventListener('click', () => toggleNewsletter(user, toggle));
+    cell.append(toggle);
+    return cell;
+  }
+
+  async function toggleNewsletter(user, button) {
+    const subscribe = !user.subscribed;
+    if (!window.confirm(`${subscribe ? 'Feliratkoztatod' : 'Leiratkoztatod'} ezt a címet: ${user.email}?`)) return;
+    setText('usersError', '');
+    button.disabled = true;
+    try {
+      await api('/api/admin/users/newsletter', { method: 'POST', body: { email: user.email, subscribed: subscribe } });
+      showToast(`${user.email}: ${subscribe ? 'feliratkozott' : 'leiratkozott'}.`);
+      await lists.users.load();
+    } catch (error) {
+      setText('usersError', `A hírlevél-állapot nem módosítható: ${errorMessage(error)}`);
+      button.disabled = false;
+    }
+  }
+
   function renderUsers(data) {
     users = data.users;
-    byId('usersCount').textContent = `${data.total} regisztrált felhasználó, ebből ${data.subscriberCount} megerősített feliratkozó (összesen)`;
+    byId('usersCount').textContent = `${data.total} felhasználó / vendég, ebből ${data.subscriberCount} aktív hírlevél-feliratkozó (összesen)`;
     fillTable('usersTable', users.map((user) => [
-      user.name || '–', user.email, user.kindergarten || '–', user.group || '–', [user.billingName, user.taxId].filter(Boolean).join(' / ') || '–',
-      ROLE_LABELS[user.role] || '–', formatDate(user.createdAt), yesNo(user.confirmed), yesNo(user.subscribed), supportButton(user.email)
-    ]), 10, 'Nincs a szűrésnek megfelelő felhasználó.');
+      user.name || '–', user.email, ACCOUNT_LABELS[user.accountType] || '–', user.kindergarten || '–', user.group || '–', [user.billingName, user.taxId].filter(Boolean).join(' / ') || '–',
+      user.accountType === 'guest' ? '–' : ROLE_LABELS[user.role] || '–', formatDate(user.createdAt), user.accountType === 'guest' ? '–' : yesNo(user.confirmed), newsletterCell(user), supportButton(user.email)
+    ]), 11, 'Nincs a szűrésnek megfelelő felhasználó.');
   }
 
   lists.users = createList({ name: 'users', path: '/api/admin/users', render: renderUsers, errorId: 'usersError', errorText: 'A felhasználók nem tölthetők be' });
@@ -753,7 +781,7 @@
 
   function exportSubscribers() {
     const rows = [['Név', 'E-mail', 'Regisztráció', 'Feliratkozás']];
-    users.filter((user) => user.subscribed && user.confirmed).forEach((user) => rows.push([user.name, user.email, user.createdAt, user.subscribedAt]));
+    users.filter((user) => user.subscribed && (user.confirmed || user.accountType === 'guest')).forEach((user) => rows.push([user.name, user.email, user.createdAt, user.subscribedAt]));
     downloadCsv(`hirlevel-feliratkozok-${today()}.csv`, rows);
   }
 

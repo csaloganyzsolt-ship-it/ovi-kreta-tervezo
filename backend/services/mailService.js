@@ -292,8 +292,10 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
   try {
     templates = deps.templates !== undefined ? deps.templates : await settingsService.getTemplates();
   } catch (error) {
-    console.error(`[mail] Az e-mail sablonok betöltése sikertelen, a beépített levél megy ki: ${error.message}`);
+    console.error(`[mail] Az e-mail sablonok betöltése sikertelen, a hivatalos alapsablon megy ki: ${error.message}`);
   }
+  // Adatbázis nélkül (vagy olvasási hibánál) is az Adminban szerkeszthető sablon hivatalos alapértéke küldi a levelet, nem egy külön beégetett HTML.
+  if (!templates) templates = { ...settingsService.DEFAULT_TEMPLATES };
   if (invoiceOnly && templateId && templates && !templates[templateId] && !settingsService.DEFAULT_TEMPLATES[templateId]) {
     const missing = new Error('A kiválasztott e-mail sablon nem található.');
     missing.status = 404;
@@ -301,7 +303,9 @@ async function sendPurchaseEmail({ to, plan, attachments, invoicePdf, invoiceNam
   }
   try {
     if (templates) {
-      if (!templates[activeTemplateId] && settingsService.DEFAULT_TEMPLATES[activeTemplateId]) templates = { ...templates, [activeTemplateId]: settingsService.DEFAULT_TEMPLATES[activeTemplateId] };
+      for (const id of [activeTemplateId, 'base_layout']) {
+        if (!templates[id] && settingsService.DEFAULT_TEMPLATES[id]) templates = { ...templates, [id]: settingsService.DEFAULT_TEMPLATES[id] };
+      }
       const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       // A szerkeszthető értékeléskérő sablon csak aláírt (érvényes FEEDBACK_SECRET-es) linkekkel jelenik meg.
       const feedbackBlock = templates.feedback_request && built.parts.feedback_stars

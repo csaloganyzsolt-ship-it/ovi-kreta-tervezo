@@ -512,6 +512,8 @@ async function listUsers(client, query = {}) {
   const role = filterText(query.role);
   const newsletter = filterText(query.newsletter);
   const hasOrders = filterText(query.hasOrders);
+  const account = filterText(query.account);
+  if (account && !['registered', 'guest'].includes(account)) throw validationError('Ismeretlen fiókállapot-szűrő.');
   if (role && !USER_ROLES.includes(role)) throw validationError('Ismeretlen szerepkör.');
   if (newsletter && !['subscribed', 'not'].includes(newsletter)) throw validationError('Ismeretlen hírlevél-szűrő.');
   if (hasOrders && !['yes', 'no'].includes(hasOrders)) throw validationError('Ismeretlen rendelés-szűrő.');
@@ -521,7 +523,7 @@ async function listUsers(client, query = {}) {
   const [authUsers, profiles, subscriptions, orderRows] = await Promise.all([
     listAuthUsers(client),
     fetchAll(() => client.from('profiles').select('id, email, full_name, billing_name, billing_tax_id, kindergarten_name, group_name, is_admin').order('id', { ascending: true }), 'A profilok lekérdezése sikertelen'),
-    fetchAll(() => client.from('newsletter_subscribers').select('email, subscribed, subscribed_at').order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen'),
+    fetchAll(() => client.from('newsletter_subscribers').select('email, name, subscribed, subscribed_at, unsubscribed_at').order('email', { ascending: true }), 'A feliratkozók lekérdezése sikertelen'),
     hasOrders ? fetchAll(() => client.from('orders').select('user_id, user_email').eq('status', 'paid').order('order_number', { ascending: true }), 'A rendelések lekérdezése sikertelen') : []
   ]);
   const byId = new Map(profiles.map((profile) => [String(profile.id), profile]));
@@ -544,13 +546,39 @@ async function listUsers(client, query = {}) {
       hasOrders: hasOrders ? buyerIds.has(String(user.id)) || buyerEmails.has(email) : undefined,
       createdAt: user.created_at || null,
       confirmed: isConfirmed(user),
+      accountType: 'registered',
       subscribed: subscription?.subscribed === true,
-      subscribedAt: subscription?.subscribed_at || null
+      subscribedAt: subscription?.subscribed_at || null,
+      unsubscribedAt: subscription?.unsubscribed_at || null
     };
   });
+  // Regisztráció nélküli (vendég) feliratkozók: van hírlevél-soruk, de nincs fiókjuk. A leiratkozott vendég rekordja is megmarad.
+  const registeredEmails = new Set(users.map((user) => user.email));
+  for (const row of subscriptions) {
+    const email = normalizeEmail(row.email);
+    if (!email || registeredEmails.has(email)) continue;
+    users.push({
+      id: '',
+      email,
+      name: row.name || '',
+      kindergarten: '',
+      group: '',
+      billingName: '',
+      taxId: '',
+      role: 'user',
+      hasOrders: hasOrders ? buyerEmails.has(email) : undefined,
+      createdAt: row.subscribed_at || null,
+      confirmed: false,
+      accountType: 'guest',
+      subscribed: row.subscribed === true,
+      subscribedAt: row.subscribed_at || null,
+      unsubscribedAt: row.unsubscribed_at || null
+    });
+  }
   users.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const text = { name: filterText(query.name), email: filterText(query.email), kindergarten: filterText(query.kindergarten), group: filterText(query.group), billing: filterText(query.billing) };
   const filtered = users.filter((user) => {
+    if (account && user.accountType !== account) return false;
     if (role && user.role !== role) return false;
     if (newsletter && user.subscribed !== (newsletter === 'subscribed')) return false;
     if (hasOrders && user.hasOrders !== (hasOrders === 'yes')) return false;
@@ -566,12 +594,28 @@ async function listUsers(client, query = {}) {
   return {
     users: filtered.slice(start, start + meta.pageSize).map(({ hasOrders: _unused, ...user }) => user),
     ...meta,
-    subscriberCount: users.filter((user) => user.subscribed && user.confirmed).length
+    subscriberCount: users.filter((user) => user.subscribed && (user.confirmed || user.accountType === 'guest')).length
   };
+}
+
+// Hírlevél-állapot kapcsolása adminból: a rekord megmarad, csak a subscribed/unsubscribed_at változik.
+async function setNewsletterSubscription(client, body = {}) {
+  const email = normalizeEmail(body.email);
+  if (!email || typeof body.subscribed !== 'boolean') throw validationError('Adj meg e-mail címet és a kívánt hírlevél-állapotot.');
+  const now = new Date().toISOString();
+  const patch = body.subscribed ? { subscribed: true, subscribed_at: now, unsubscribed_at: null } : { subscribed: false, unsubscribed_at: now };
+  const found = await client.from('newsletter_subscribers').select('email').eq('email', email).maybeSingle();
+  if (found.error) throw new AdminError(`A feliratkozó lekérdezése sikertelen: ${found.error.message}`, 500);
+  const write = found.data
+    ? await client.from('newsletter_subscribers').update(patch).eq('email', email)
+    : body.subscribed ? await client.from('newsletter_subscribers').insert({ email, ...patch }) : { error: null };
+  if (write.error) throw new AdminError(`A hírlevél-állapot mentése sikertelen: ${write.error.message}`, 500);
+  return { email, subscribed: body.subscribed };
 }
 
 module.exports = {
   AdminError,
+  setNewsletterSubscription,
   ORDER_STATUSES,
   fetchAll,
   fetchProfiles,

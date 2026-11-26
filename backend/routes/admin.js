@@ -177,6 +177,7 @@ router.get('/admin/orders/:orderNumber/invoice', handle('A számla letöltése',
   res.setHeader('Content-Disposition', `attachment; filename="${String(order.invoiceNumber).replace(/[^A-Za-z0-9._-]/g, '_')}.pdf"`);
   res.send(pdf);
 }));
+router.post('/admin/users/newsletter', handle('A hírlevél-állapot módosítása', (client, req) => admin.setNewsletterSubscription(client, req.body)));
 router.get('/admin/users', handle('A felhasználók lekérdezése', (client, req) => admin.listUsers(client, req.query)));
 
 router.post('/admin/newsletter/preview', handle('Az előnézet készítése', async (_client, req) => ({ html: await newsletter.buildPreview(req.body) })));
