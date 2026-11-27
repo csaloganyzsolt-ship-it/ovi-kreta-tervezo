@@ -155,6 +155,7 @@
     align-items: center;
   }
   .advanced-settings > summary::-webkit-details-marker { display: none; }
+  .advanced-settings > summary .summary-hint { flex: 1; margin: 0 10px 0 8px; font-weight: 400; font-size: 0.82rem; color: var(--muted); opacity: 0.8; }
   .advanced-settings > summary::after { content: '▾'; transition: transform 0.2s ease; }
   .advanced-settings[open] > summary::after { transform: rotate(180deg); }
   .advanced-body { display: grid; gap: 16px; padding: 4px 18px 18px; }
@@ -647,6 +648,8 @@
   .coupon-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   .coupon-controls input { flex: 1 1 180px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; text-transform: uppercase; }
   .coupon-controls button { min-height: 44px; }
+  .coupon-status { margin-top: 6px; font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .coupon-status:empty { display: none; }
 
   .panel.preview[hidden] { display: none !important; }
   .preview-hidden {
@@ -1620,7 +1623,9 @@
 
 /* ===== Fizetés előtti tükör-struktúra és terjedelem-jelző sáv (emoji nélkül) ===== */
 .locked-mirror-text {
-  filter: blur(5px);
+  color: transparent !important;
+  text-shadow: 0 0 7px rgba(100, 116, 139, 0.85);
+  filter: blur(2px);
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;

@@ -47,7 +47,7 @@ test('the summary lists every selected setting of a standard plan and nothing th
   const lines = summaryLines(window);
   const text = lines.join('\n');
   for (const expected of ['Tervezet típusa: Óvodai tervezet', 'Időtartam: Napi', 'Korcsoport: Középső csoport', 'Téma: Őszi erdő', `Nevelési területek: ${first.dataset.focusArea}`,
-    'Óvoda: Napsugár Óvoda', 'Óvodapedagógus: Kovács Eszter', 'Gyereklétszám:', 'Speciális nevelési igények (SNI):', 'Kidolgozottság:', 'Tiltólista:', 'Előző tervezet csatolva: nem']) {
+    'Óvoda: Napsugár Óvoda', 'Óvodapedagógus: Kovács Eszter', 'Gyereklétszám:', 'Speciális nevelési igények (SNI, BTMN):', 'Kidolgozottság:', 'Tiltólista:', 'Előző tervezet csatolva: nem']) {
     assert.ok(text.includes(expected), `hiányzik az összesítőből: ${expected}`);
   }
   assert.doesNotMatch(text, /margó|margin|elrendezés|tájolás|orientation|oldalbeállítás|szakasz|Hallgató/i);

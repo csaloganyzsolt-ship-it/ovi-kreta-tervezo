@@ -248,7 +248,7 @@ function renderSummaryChecklist() {
   if (!checklist) return;
 
   const payload = buildGenerationPayload();
-  const { selectedGoals, specialNeeds, customNotes } = payload;
+  const { specialNeeds, customNotes } = payload;
   const none = 'Nincs megadva';
   const isWeekly = payload.duration === 'Heti';
   const progressionLabels = {
@@ -266,6 +266,7 @@ function renderSummaryChecklist() {
     ['Téma és időkeret', [
       `Tervezet típusa: ${payload.planMode === 'academic' ? 'Oktatási célú tervezet' : 'Óvodai tervezet'}`,
       ...(payload.planMode === 'academic' ? [`Hallgató / Óvodapedagógus: ${payload.studentName || none}`] : []),
+      `Előző tervezet csatolva: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
       `Időtartam: ${describeDuration(payload)}`,
       `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
       `Korcsoport: ${payload.group}`,
@@ -289,20 +290,18 @@ function renderSummaryChecklist() {
       `Gyereklétszám: ${payload.childCount ?? none}`,
       `Csoport hangulata, mozgékonysága: ${payload.energyLevel}`,
       `Iskola-előkészítő gyermekek: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
-      `Speciális nevelési igények (SNI): ${specialNeeds.join(', ') || none}`,
+      `Speciális nevelési igények (SNI, BTMN): ${specialNeeds.join(', ') || none}`,
       `Csoportmegjegyzés: ${customNotes.groupNote || none}`
     ]],
     ['Pedagógiai kívánságok', [
       `Rendelkezésre álló eszközök és saját ötletek: ${payload.availableTools || defaultToolsText}`,
       `Kötelező mese/vers/dal: ${customNotes.requiredText || none}`,
-      `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
       `Külön kérés: ${customNotes.customRequest || none}`,
-      `Kidolgozottság: ${{ concise: 'Tömör vázlat', extended: 'Kibővített, mély kidolgozás' }[payload.detail] || 'Részletesen kidolgozott tervezet'}`
+      `Kidolgozottság: ${{ concise: 'Tömör vázlat', extended: 'Kibővített, mély kidolgozás (1400–2000 szó)' }[payload.detail] || 'Részletesen kidolgozott tervezet'}`
     ]],
     ['Speciális beállítások', [
       `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
       `Előzmény: ${payload.elozmeny || none}`,
-      `Előző tervezet csatolva: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
       `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
       `IKT / Digitális eszközök: ${payload.iktEnabled ? ([...(payload.iktTools || []), payload.iktCustomApp].filter(Boolean).join('; ') || 'Igen') : 'Nem'}`,
       `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
@@ -368,7 +367,6 @@ function getAutoSaveKey(element) {
 }
 
 function collectDraftState() {
-  const selectedGoals = Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim());
   const draft = {
     version: 1,
     currentStep,
@@ -378,7 +376,6 @@ function collectDraftState() {
     selectedDays: getSelectedDays(),
     energy: getChoice('energy', ENERGY_DEFAULT),
     detail: getChoice('detail', 'detailed'),
-    selectedGoals,
     weeklyFocusAreas: getWeeklyFocusAreas(),
     fields: {}
   };
@@ -708,7 +705,6 @@ function formatPreviousPlanContext(attached) {
     `Típus: ${attached.duration}`,
     attached.date ? `Dátum: ${attached.date}` : '',
     p.focusAreas?.length ? `Nevelési terület: ${p.focusAreas.join(', ')}` : '',
-    p.selectedGoals?.length ? `Célok: ${p.selectedGoals.join(', ')}` : '',
     p.availableTools ? `Eszközök: ${p.availableTools}` : ''
   ].filter(Boolean);
   return parts.join(' • ');
@@ -789,11 +785,6 @@ function restorePlanSettings(plan) {
   const sniList = Array.isArray(plan.specialNeeds) ? plan.specialNeeds : (Array.isArray(plan.customNotes?.specialNeeds) ? plan.customNotes.specialNeeds : []);
   document.querySelectorAll('[data-sni-label]').forEach((cb) => {
     cb.checked = sniList.includes(cb.dataset.sniLabel.trim());
-  });
-
-  const goals = Array.isArray(plan.selectedGoals) ? plan.selectedGoals : [];
-  document.querySelectorAll('.chip:not([data-theme-option]):not([data-ikt-tool])').forEach((chip) => {
-    chip.classList.toggle('active', goals.includes(chip.textContent.trim()));
   });
 
   if (plan.iktEnabled !== undefined) {
@@ -1189,7 +1180,6 @@ function buildGenerationPayload() {
     customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
     customNotes: getCustomNotes(),
     detailLevel: getDetailLevel(),
-    selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
     specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
     showLiteratureAtBottom: planMode === 'academic' || (document.querySelector('input[data-field="show-literature"]')?.checked || false),
     iktEnabled,

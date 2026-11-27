@@ -179,7 +179,7 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(daily.group, values.group);
   assert.equal(daily.theme, values.theme);
   assert.equal(daily.focusAreas.length, 6);
-  assert.equal(daily.specialNeeds.length, 4);
+  assert.equal(daily.specialNeeds.length, 6);
   assert.equal(daily.customNotes.primary, values['custom-note']);
   assert.equal(daily.customNotes.groupNote, values['group-note']);
   assert.equal(daily.showLiteratureAtBottom, true);
@@ -214,13 +214,14 @@ test('all administrative fields, custom notes, selected needs, dates, and weekly
   assert.equal(document.querySelector('#weeklySettingsPanel').hidden, true);
 });
 
-test('theme suggestions are not mistakenly sent as selected pedagogical goals', async (t) => {
+test('theme suggestions are not sent as goals and the retired goal chips are gone', async (t) => {
   const window = await loadApp(t);
   const suggestion = window.document.querySelector('[data-theme-option]');
   suggestion.click();
   const payload = window.buildGenerationPayload();
   assert.equal(payload.theme, suggestion.dataset.themeOption);
-  assert.equal(payload.selectedGoals.includes(payload.theme), false);
+  assert.equal('selectedGoals' in payload, false);
+  assert.equal(window.document.body.textContent.includes('Célkifejezések'), false);
 });
 
 test('the preview has no margin or section controls and always shows the full fixed A4 document', async (t) => {
@@ -346,12 +347,13 @@ test('the summary checklist lists every setting, including the new ones', async 
   const text = doc.querySelector('#summaryChecklist').textContent;
   for (const label of ['Óvoda:', 'Óvoda arculata:', 'Óvodapedagógus:', 'Csoport neve:', 'Korcsoport:', 'Időtartam:', 'Dátum:', 'Téma:',
     'Tevékenységi forma:', 'Előzmény:', 'Gyereklétszám:', 'Csoport hangulata', 'Iskola-előkészítő', 'Speciális nevelési igények',
-    'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök és saját ötletek: xilofon', 'Kötelező mese/vers/dal:', 'Kiválasztott célkifejezések:',
+    'Csoportmegjegyzés:', 'Rendelkezésre álló eszközök és saját ötletek: xilofon', 'Kötelező mese/vers/dal:',
     'Külön kérés:', 'Tiltólista: gyurma', 'Irodalomjegyzék', 'IKT / Digitális eszközök: Nem', 'Heti építkezés típusa:', 'Pénteki zárás formája:',
     'Kidolgozottság:']) {
     assert.ok(text.includes(label), `Missing summary line: ${label}`);
   }
   assert.equal(text.includes('Modell:'), false);
+  assert.equal(text.includes('célkifejezések'), false);
   assert.equal(text.includes('Kimeneti forma:'), false);
   assert.equal(text.includes('Generálási beállítások'), false);
   assert.equal(doc.querySelector('#premiumQuality'), null);
@@ -969,4 +971,40 @@ test('the standard DOCX keeps every paragraph of a table cell as its own Word pa
     assert.equal(holders.length, 1);
     assert.equal(holders[0].includes('Első bekezdés.') && holders[0].includes('Második bekezdés.'), false, 'a bekezdések nem olvadhatnak össze');
   }
+});
+
+test('the locked daily preview keeps labels readable and hides every locked value behind the mask class', async (t) => {
+  const window = await loadApp(t);
+  window.APP_CONFIG = { ...(window.APP_CONFIG || {}), paywallEnabled: true };
+  const plan = makePlan(3);
+  plan.locked_meta = { is_locked: true, table_count: 1, activity_count: 3, summary_text: 'x' };
+  plan.cel = 'Lorem szerű zárolt cél'; plan.nevelesi_feladatok = 'Zárolt nevelési feladat'; plan.felhasznalt_irodalom = 'Zárolt irodalom'; plan.showLiteratureAtBottom = true;
+  window.renderResultDocument({ ...plan, generationId: 'gen_locked_ui', request: makePayload({ showLiteratureAtBottom: true }) });
+  const root = window.document.querySelector('#resultDocument');
+  const masked = (needle) => Array.from(root.querySelectorAll('.locked-mirror-text')).some((el) => el.textContent.includes(needle));
+  for (const label of ['Cél', 'Eszközök', 'Nevelési feladatok:', 'Didaktikai feladatok:', 'Módszerek:']) {
+    assert.ok(root.textContent.includes(label), `a címke látszik: ${label}`);
+  }
+  for (const value of ['Lorem szerű zárolt cél', 'Zárolt nevelési feladat', 'Zárolt irodalom']) assert.ok(masked(value), `kitakart: ${value}`);
+});
+
+test('the planner page uses the new step 4 title, SNI/BTMN options, the tools hint before the textarea and no goal chips', () => {
+  assert.match(html, /<span>Összegzés és elkészítés<\/span>/);
+  assert.match(html, /<h2>4\. Összegzés és elkészítés<\/h2>/);
+  assert.equal(html.includes('Generálási folyamat'), false);
+  assert.equal(html.includes('Célkifejezések'), false);
+  assert.match(html, /data-sni-label="Sajátos nevelési igény \(SNI\)"/);
+  assert.match(html, /data-sni-label="Beilleszkedési, tanulási, magatartási nehézség \(BTMN\)"/);
+  assert.ok(html.indexOf('Ha ide nem írsz semmit') < html.indexOf('id="availableTools"'));
+  assert.match(html, /Speciális beállítások <span class="summary-hint">\(tiltólista/);
+  assert.match(html, /<button type="button" class="btn secondary" id="couponApply">/);
+  assert.match(html, /id="couponStatus" class="coupon-status"/);
+});
+
+test('the landing page carries the new headline, the sixth activity area and the ONOAP wording', () => {
+  const index = readPage('index.html');
+  assert.match(index, /<h1>Saját óvodai tervezet 5 perc alatt – okos segítség a mindennapi munkádhoz<\/h1>/);
+  assert.match(index, /A külső világ tevékeny megismerése – matematikai tartalommal/);
+  assert.match(index, /ONOAP \(Óvodai Nevelés Országos Alapprogramja\)/);
+  assert.match(index, /egyszerű és gyors/);
 });

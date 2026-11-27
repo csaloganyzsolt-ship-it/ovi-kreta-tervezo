@@ -190,14 +190,15 @@ function buildActivityTable(rows, orientation, locked = false) {
           </table>`;
 }
 
+// A harmadik elem (locked) esetén az érték kitakart, olvashatatlan sávként jelenik meg; a címke mindig olvasható.
 function buildMetaBlock(metaRows) {
   return `
           <div class="doc-section doc-meta-block">
             <div class="official-meta">
-              ${metaRows.map(([label, value]) => `
+              ${metaRows.map(([label, value, locked]) => `
                 <div class="meta-row">
                   <span class="meta-label">${escapeHtml(label)}</span>
-                  <span class="meta-value">${escapeHtml(value)}</span>
+                  <span class="meta-value${locked ? ' locked-mirror-text' : ''}">${escapeHtml(value)}</span>
                 </div>`).join('')}
             </div>
           </div>`;
@@ -323,10 +324,10 @@ function buildDailyHtml(result, request, { orientation, locked, title, lockResul
     ...(specialNeeds.length ? [['SNI / differenciálás', specialNeeds.join(', ')]] : []),
     ['Nevelési terület', focusAreasText],
     ['Forma', result.tevekenyseg_forma],
-    ['Előzmény', result.elozmeny],
+    ['Előzmény', result.elozmeny, locked],
     ['Téma', result.tema],
-    ['Cél', result.cel],
-    ['Eszközök', result.eszkozok.join(', ')]
+    ['Cél', result.cel, locked],
+    ['Eszközök', result.eszkozok.join(', '), locked]
   ];
   const professionalFields = [
     ['Nevelési feladatok', result.nevelesi_feladatok],
@@ -345,7 +346,7 @@ function buildDailyHtml(result, request, { orientation, locked, title, lockResul
           ${buildMetaBlock(metaRows)}
           <div class="doc-section">
             <h3>Cél- és feladatrendszer</h3>
-            ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
+            ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> <span${locked ? ' class="locked-mirror-text"' : ''}>${escapeHtml(value)}</span></p>`).join('')}
           </div>
           ${locked ? buildLockedBoundaryCard(lockResult) : ''}
           <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
@@ -355,7 +356,7 @@ function buildDailyHtml(result, request, { orientation, locked, title, lockResul
           ${showLiterature && result.felhasznalt_irodalom.trim() ? `
             <div class="doc-section">
               <h3>Felhasznált irodalom</h3>
-              ${formatTableCell(result.felhasznalt_irodalom)}
+              <div${locked ? ' class="locked-mirror-text"' : ''}>${formatTableCell(result.felhasznalt_irodalom)}</div>
             </div>` : ''}`;
 }
 

@@ -54,7 +54,7 @@
             <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span>Téma és időkeret</span></button>
             <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span>A csoport profilja</span></button>
             <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span>Pedagógiai kívánságok</span></button>
-            <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span>Generálás</span></button>
+            <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span>Összegzés és elkészítés</span></button>
           </div>
         </aside>
 
@@ -352,6 +352,8 @@
                     <label class="check-item"><input type="checkbox" data-sni-label="Beszédfejlődési elmaradás" /> Beszédfejlődési elmaradás</label>
                     <label class="check-item"><input type="checkbox" data-sni-label="Autizmus spektrumzavar" /> Autizmus spektrumzavar</label>
                     <label class="check-item"><input type="checkbox" data-sni-label="Mozgásfejlődési elmaradás" /> Mozgásfejlődési elmaradás</label>
+                    <label class="check-item"><input type="checkbox" data-sni-label="Sajátos nevelési igény (SNI)" /> Sajátos nevelési igény (SNI)</label>
+                    <label class="check-item"><input type="checkbox" data-sni-label="Beilleszkedési, tanulási, magatartási nehézség (BTMN)" /> Beilleszkedési, tanulási, magatartási nehézség (BTMN)</label>
                   </div>
                 </div>
               </div>
@@ -370,30 +372,13 @@
             <div class="field-grid">
               <div class="field full">
                 <label for="availableTools">Rendelkezésre álló eszközök és saját ötletek</label>
-                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok; gyűjtött gesztenye és falevelek a barkácsoláshoz"></textarea>
                 <small class="field-hint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
+                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok; gyűjtött gesztenye és falevelek a barkácsoláshoz"></textarea>
               </div>
 
               <div class="field full">
                 <label>Van kötelező mese, vers vagy dal?</label>
                 <textarea data-field="required-text" placeholder="Pl.: Mindig legyen benne a „Süni, süni, sünikém” című dal."></textarea>
-              </div>
-
-              <div class="field full">
-                <label>Célkifejezések</label>
-                <div class="quick-actions">
-                  <button class="chip active" type="button">finommotorika fejlesztése</button>
-                  <button class="chip active" type="button">szociális kompetenciák erősítése</button>
-                  <button class="chip" type="button">szabálytudat erősítése</button>
-                  <button class="chip" type="button">beszédfejlesztés</button>
-                  <button class="chip active" type="button">figyelem tartósítása</button>
-                  <button class="chip active" type="button">differenciált feladatok</button>
-                  <button class="chip" type="button">kommunikációs készségek</button>
-                  <button class="chip active" type="button">megfigyelés fejlesztése</button>
-                  <button class="chip" type="button">kreativitás fejlesztése</button>
-                  <button class="chip active" type="button">ritmusérzék fejlesztése</button>
-                  <button class="chip" type="button">tempó és önszabályozás</button>
-                </div>
               </div>
 
               <div class="field full">
@@ -411,7 +396,7 @@
               </div>
 
               <details class="advanced-settings" id="advancedSettings">
-                <summary>Speciális beállítások</summary>
+                <summary>Speciális beállítások <span class="summary-hint">(tiltólista, előzmény, irodalom a lap alján, IKT eszközök, heti építkezés és pénteki lezárás)</span></summary>
                 <div class="advanced-body">
                   <div class="field">
                     <label for="blacklist">Tiltások / Amit NE használjon</label>
@@ -479,8 +464,8 @@
           </div>
 
           <div class="step-panel" data-step="4">
-            <h2>4. Összegzés és generálás</h2>
-            <p class="subhead">Mielőtt elküldöd a végső generálást, ellenőrizd a beállításokat és a szerkesztett szövegeket.</p>
+            <h2>4. Összegzés és elkészítés</h2>
+            <p class="subhead">Mielőtt elindítod az elkészítést, ellenőrizd a beállításokat.</p>
 
             <div class="inline-box">
               <h3>Ellenőrző lista</h3>
@@ -499,16 +484,6 @@
               </div>
               <strong id="generationStatus">Készülünk...</strong>
               <small id="generationElapsed" class="field-hint"></small>
-            </div>
-
-            <div class="inline-box u-mt-18">
-              <h3>Generálási folyamat</h3>
-              <div class="mini-badges">
-                <span class="tag">Célok összeállítása</span>
-                <span class="tag">Tevékenységek kiválasztása</span>
-                <span class="tag">Differenciálás beépítése</span>
-                <span class="tag">Szakmai tervezet formázása</span>
-              </div>
             </div>
           </div>
 
@@ -721,9 +696,9 @@
             <label for="couponCode"><strong>Kuponkód</strong></label>
             <div class="coupon-controls">
               <input id="couponCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="Kuponkód" />
-              <button type="button" id="couponApply">Érvényesítés</button>
+              <button type="button" class="btn secondary" id="couponApply">Érvényesítés</button>
             </div>
-            <div id="couponStatus" class="modal-note" role="status"></div>
+            <div id="couponStatus" class="coupon-status" role="status"></div>
           </div>
           <div id="checkoutError" class="modal-error" role="alert"></div>
           <p id="checkoutSummary" class="checkout-total"></p>
