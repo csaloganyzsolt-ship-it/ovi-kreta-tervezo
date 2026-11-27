@@ -621,3 +621,24 @@ test('admin.html has the notification email field with history, explaining that 
   const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261128090000_notification_email_setting.sql'), 'utf8');
   assert.match(migration, /'notification_email'/);
 });
+
+test('the system prompt accepts up to 100 000 characters untruncated and refuses more with a validation error', () => {
+  assert.equal(settingsService.MAX_PROMPT_LENGTH, 100000);
+  const current = settingsService.DEFAULT_SETTINGS;
+  const long = `${'Á'.repeat(59999)}Z`;
+  const ok = settingsService.validatePatch({ ai_config: { system_prompt: long } }, current);
+  assert.equal(ok.ai_config.system_prompt.length, 60000);
+  assert.equal(ok.ai_config.system_prompt, long);
+  const max = 'x'.repeat(100000);
+  assert.equal(settingsService.validatePatch({ ai_config: { system_prompt: max } }, current).ai_config.system_prompt.length, 100000);
+  assert.throws(() => settingsService.validatePatch({ ai_config: { system_prompt: `${max}y` } }, current), /100000/);
+});
+
+test('admin.html and admin.js agree on the 100 000 character prompt limit with a live counter', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'admin.js'), 'utf8');
+  assert.match(html, /id="setAiPrompt"[^>]*maxlength="100000"/);
+  assert.match(html, /id="setAiPromptCount"/);
+  assert.match(js, /PROMPT_MAX = 100000/);
+  assert.match(js, /setAiPrompt'\)\?\.addEventListener\('input', updatePromptCount\)/);
+});

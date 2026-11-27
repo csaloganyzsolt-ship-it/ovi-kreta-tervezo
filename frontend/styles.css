@@ -2523,3 +2523,4 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .reviews-pager-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
 .reviews-pager-btn:disabled { opacity: .45; cursor: default; }
 :root[data-theme="dark"] .reviews-pager-btn { border-color: #38564a; }
+.is-over{color:#b42318;font-weight:600}

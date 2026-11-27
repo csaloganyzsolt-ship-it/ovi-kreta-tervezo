@@ -25,7 +25,7 @@ const MAX_TEMPLATE_NAME_LENGTH = 80;
 const MAX_PRICE_HUF = 100000;
 const MAX_HINTS = 12;
 const MAX_HINT_LENGTH = 120;
-const MAX_PROMPT_LENGTH = 8000;
+const MAX_PROMPT_LENGTH = 100000;
 const MAX_TEMPLATE_LENGTH = 100000;
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -570,6 +570,6 @@ function composeEmail(templates, id, values = {}) {
 
 module.exports = {
   isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
-  getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
+  MAX_PROMPT_LENGTH, validatePatch, getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
   listTemplates, listHistory, updateTemplate, createTemplate, deleteTemplate, resetTemplate, DEFAULT_TEMPLATES, getTemplates, fillPlaceholders, composeEmail
 };

@@ -1056,6 +1056,7 @@
       byId('setHints').value = settings.seasonal_hints.join('; ');
       byId('setAiModel').value = settings.ai_config.model;
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
+      updatePromptCount();
       byId('setBillingProfile').value = settings.billing_profile || 'ev';
       byId('setPaymentProvider').value = settings.payment_provider || 'barion';
       byId('setNotificationEmail').value = settings.notification_email || '';
@@ -1325,6 +1326,16 @@
     }
   }
 
+  const PROMPT_MAX = 100000;
+  function updatePromptCount() {
+    const field = byId('setAiPrompt');
+    const counter = byId('setAiPromptCount');
+    if (!field || !counter) return;
+    const length = field.value.length;
+    counter.textContent = `${length.toLocaleString('hu-HU')} / ${PROMPT_MAX.toLocaleString('hu-HU')} karakter`;
+    counter.classList.toggle('is-over', length > PROMPT_MAX);
+  }
+
   async function resetTemplate() {
     const id = byId('tplSelect').value;
     if (!templates[id]?.hasDefault || !window.confirm('Visszaállítod a sablont a beépített alapértékre? A módosításaid elvesznek.')) return;
@@ -1420,6 +1431,7 @@
     byId('tplCancelNew').addEventListener('click', showTemplate);
     byId('tplDelete').addEventListener('click', deleteTemplate);
     byId('tplReset').addEventListener('click', resetTemplate);
+    byId('setAiPrompt')?.addEventListener('input', updatePromptCount);
     byId('tplSkeleton').addEventListener('click', loadSkeleton);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');
