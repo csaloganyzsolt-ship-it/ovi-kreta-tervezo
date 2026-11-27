@@ -237,7 +237,7 @@ async function issueInvoiceForOrder(order, deps = {}) {
       couponPercent: order.couponPercent || undefined,
       paymentMethod: order.paymentMethod || undefined,
       billingProfile: order.billingProfile || undefined,
-      customer: { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
+      customer: { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '', taxNumber: billing.taxNumber || '' }
     }, { env: deps.env, fetch: deps.fetch });
     if (result.mock || !result.invoiceNumber) throw new Error('A Számlázz.hu Agent kulcs nincs beállítva, a számla nem állítható ki.');
     await patchOrder(order.orderNumber, { invoiceNumber: result.invoiceNumber, invoiceStatus: 'issued', invoiceIssuedAt: new Date().toISOString() });

@@ -178,7 +178,7 @@ function openCheckoutModal() {
 
 // Bejelentkezett felhasználónál a profil mentett számlázási adatai kitöltik az üres mezőket (a már beírt értéket nem írják felül).
 // A fizetés indításakor a szerver a megadott (vagy módosított) adatokat visszaírja a profilba, ezért itt nincs külön mentés.
-const PROFILE_BILLING_FIELDS = { billingName: 'billing_name', billingZip: 'billing_zip', billingCity: 'billing_city', billingAddress: 'billing_address' };
+const PROFILE_BILLING_FIELDS = { billingName: 'billing_name', billingZip: 'billing_zip', billingCity: 'billing_city', billingAddress: 'billing_address', billingTaxNumber: 'billing_tax_id' };
 
 async function prefillCheckoutFromProfile() {
   const auth = window.OviAuth;
@@ -224,16 +224,22 @@ function readBilling() {
   const value = (id) => String(document.getElementById(id)?.value || '').replace(/\s+/g, ' ').trim();
   const billing = { name: value('billingName'), zip: value('billingZip'), city: value('billingCity'), address: value('billingAddress') };
   if (billing.name.length < 2 || !BILLING_ZIP_PATTERN.test(billing.zip) || billing.city.length < 2 || billing.address.length < 3) return null;
-  return billing;
+  const taxNumber = value('billingTaxNumber');
+  return taxNumber ? { ...billing, taxNumber } : billing;
 }
 
-// A „Mindent bepipálok” gomb a három jelölőnégyzetet együtt jelöli be (a hírlevél opcionális, de ez is része a gyorsgombnak).
+// A „Kötelező nyilatkozatok bepipálása” gomb csak a két kötelező nyilatkozatot jelöli be; a hírlevél külön, önkéntes hozzájárulás (GDPR), azt soha nem pipálja be.
 function checkAllConsents() {
-  for (const id of ['cb-newsletter', 'cb-terms', 'cb-digital']) {
+  for (const id of ['cb-terms', 'cb-digital']) {
     const box = document.getElementById(id);
     if (box) box.checked = true;
   }
   syncCheckoutButtons();
+}
+
+// A szerver is megköveteli és naplózza (45/2014. Korm. rendelet 29. § (1) m)).
+function consentPayload() {
+  return { terms: document.getElementById('cb-terms')?.checked === true, digitalContent: document.getElementById('cb-digital')?.checked === true };
 }
 
 // Közös ellenőrzés a fizetéshez és a kuponhoz; hibánál kiírja az okot és null-t ad. A számlázási adat csak a fizetésnél kötelező.
@@ -251,7 +257,7 @@ function readCheckoutForm({ billing = false } = {}) {
     return null;
   }
   if (!document.getElementById('cb-digital').checked) {
-    errorEl.textContent = 'A fizetéshez mindkét nyilatkozatot el kell fogadni.';
+    errorEl.textContent = 'A fizetéshez ki kell jelentened, hogy az azonnali teljesítést kéred, és tudomásul veszed az elállási jog elvesztését.';
     return null;
   }
   errorEl.textContent = '';
@@ -275,12 +281,13 @@ async function startBarionCheckout() {
     const response = await fetch(`${getApiBaseUrl()}/api/checkout-barion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, subscribeNewsletter: document.getElementById('cb-newsletter')?.checked === true, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, consent: consentPayload(), subscribeNewsletter: document.getElementById('cb-newsletter')?.checked === true, billing: form.billing, generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
       const failure = new Error(data.error || `HTTP ${response.status}`);
       failure.code = data.code;
+      failure.status = response.status;
       throw failure;
     }
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
@@ -293,7 +300,7 @@ async function startBarionCheckout() {
       localStorage.removeItem(APPLIED_COUPON_KEY);
       renderCheckoutPrice();
       errorEl.textContent = `A kupon már nem érvényes (${error.message}) Kattints újra a fizetésre a teljes áron.`;
-    } else if (error.message === 'A Barion érvénytelen fizetési címet adott vissza.') {
+    } else if (error.message === 'A Barion érvénytelen fizetési címet adott vissza.' || (error.status === 400 && error.message)) {
       errorEl.textContent = error.message;
     } else {
       errorEl.textContent = 'Hiba történt a fizetés indításakor. Kérjük, frissítsd az oldalt (F5), és próbáld újra!';
@@ -314,7 +321,7 @@ async function startStripeCheckout() {
     const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ plan: planKind(), planMode: currentPlanMode(), email: form.email, consent: consentPayload(), generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
@@ -372,7 +379,7 @@ async function applyCouponCode() {
     const response = await fetch(`${getApiBaseUrl()}/api/apply-coupon`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ code, plan: planKind(), planMode: currentPlanMode(), email: form.email, generationId: lastResult.generationId, title: planTitle() }),
+      body: JSON.stringify({ code, plan: planKind(), planMode: currentPlanMode(), email: form.email, consent: consentPayload(), generationId: lastResult.generationId, title: planTitle() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
@@ -412,6 +419,7 @@ function unlockGeneration(generationId, sessionId) {
 // Sikeres fizetés vagy kupon után: a terv feloldása, a teljes tartalom megjelenítése a webes nézetben.
 function showUnlockedPlan(generationId, sessionId, planData) {
   if (generationId) unlockGeneration(generationId, sessionId);
+  if (isInAppBrowser()) showInAppDownloadTip();
   if (planData) {
     lastResult = { ...planData, request: lastResult?.request || planData.request, generationId };
     try {
@@ -505,7 +513,12 @@ async function downloadInvoice() {
     // A számla a Stripe webhook után készül, ezért néhányszor újrapróbáljuk.
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const response = await fetch(`${getApiBaseUrl()}/api/invoice/${encodeURIComponent(sessionId)}`);
-      if (response.ok) { downloadBlob(await response.blob(), 'OviTervezo_szamla.pdf'); return; }
+      if (response.ok) {
+        // Beépített böngészőben a szerver Content-Disposition: attachment válasza megbízhatóbb a Blob URL-nél.
+        if (isInAppBrowser()) { showInAppDownloadTip(); redirectTo(`${getApiBaseUrl()}/api/invoice/${encodeURIComponent(sessionId)}`); return; }
+        downloadBlob(await response.blob(), 'OviTervezo_szamla.pdf');
+        return;
+      }
       if (response.status !== 404) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || `HTTP ${response.status}`);

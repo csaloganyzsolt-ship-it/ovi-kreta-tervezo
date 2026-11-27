@@ -120,7 +120,8 @@ async function subscribeNewsletter(req, res) {
 // Nyilvános, egykattintásos leiratkozás a levelek aljáról: a newsletter_token azonosít, belépés nem kell.
 async function unsubscribeNewsletter(req, res) {
   try {
-    await profileService.unsubscribeNewsletter(req.body?.token);
+    // Az egykattintásos (RFC 8058) POST a tokent a lekérdezési paraméterben hozza, a törzs form-kódolt.
+    await profileService.unsubscribeNewsletter(req.body?.token || req.query?.token);
     return res.json({ success: true });
   } catch (error) {
     return sendAccountError(res, error, 'A leiratkozás');
@@ -156,6 +157,11 @@ router.get('/profile', accountLimiter, requireUser, getProfile);
 router.post('/profile', accountLimiter, requireUser, saveProfile);
 router.post('/newsletter/subscribe', accountLimiter, requireUser, subscribeNewsletter);
 router.post('/newsletter/unsubscribe', accountLimiter, unsubscribeNewsletter);
+// A levelezőkliens „Leiratkozás” hivatkozása GET-tel nyílik meg: ez nem iratkoztat le (a linkellenőrzők miatt), hanem a megerősítő oldalra visz.
+router.get('/newsletter/unsubscribe', (req, res) => {
+  const token = String(req.query.token || '').slice(0, 64);
+  res.redirect(302, `https://ovitervezo.hu/leiratkozas.html${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+});
 router.get('/my-orders', accountLimiter, requireUser, listOrders);
 router.post('/delete-account', deleteLimiter, requireUser, deleteAccount);
 

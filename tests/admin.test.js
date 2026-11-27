@@ -528,7 +528,8 @@ test('newsletter test mode mails only the admin with the admin personal unsubscr
   assert.equal(sent[0].subject, 'Őszi újdonságok');
   assert.ok(sent[0].html.includes(`https://ovitervezo.hu/leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}`));
   assert.ok(sent[0].text.includes(`leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}`));
-  assert.equal(sent[0].headers['List-Unsubscribe'], `<https://ovitervezo.hu/leiratkozas.html?token=${TOKEN_OF[ADMIN.id]}>`);
+  assert.match(sent[0].headers['List-Unsubscribe'], /^<mailto:info@ovitervezo\.hu\?subject=/);
+  assert.equal(sent[0].headers['List-Unsubscribe-Post'], undefined, 'backend URL nélkül nincs one-click');
   assert.ok(sent[0].html.includes('Szia &lt;Anna&gt;!'), 'a főcím escape-elt');
   assert.ok(sent[0].html.includes('Második &amp; harmadik sor.'), 'sima szöveg: escape-elt bekezdések');
   assert.ok(sent[0].html.includes('cid:ovitervezo-logo'));
@@ -596,7 +597,7 @@ test('custom recipients: unknown addresses get no personal link, unsubscribed me
   assert.ok(byTo['alice@example.com'].html.includes(`token=${TOKEN_OF[ALICE.id]}`));
   assert.ok(!byTo['ismeretlen@example.com'].html.includes('leiratkozas.html'), 'regisztráció nélkül nincs személyes link');
   assert.ok(byTo['ismeretlen@example.com'].html.includes('válaszolj erre a levélre'));
-  assert.equal(byTo['ismeretlen@example.com'].headers, undefined);
+  assert.ok(!('List-Unsubscribe-Post' in byTo['ismeretlen@example.com'].headers), 'token nélkül nincs one-click');
   assert.equal(client.db.newsletter_campaigns[0].recipient_filter, 'custom');
 
   for (const emails of ['', '   ', 'nem-email', 'jo@example.com, rossz@']) {

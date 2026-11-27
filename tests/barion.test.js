@@ -88,7 +88,9 @@ function cleanPaymentEnv(t) {
   t.after(() => { for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); });
 }
 
-const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const CONSENT = { terms: true, digitalContent: true };
+const withConsent = (route, body) => (/\/api\/(checkout-barion|create-checkout-session|apply-coupon)$/.test(route) && body && !('consent' in body) ? { ...body, consent: CONSENT } : body);
+const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withConsent(route, body)) });
 
 test('the server takes the plan mode from the stored plan, so an academic plan cannot be bought at the standard price', async (t) => {
   cleanPaymentEnv(t);
@@ -228,9 +230,9 @@ test('the payment form has the mandatory consent above the payment button and th
 
   const consent = document.getElementById('cb-terms');
   const label = consent.closest('label');
-  assert.equal(label.textContent.replace(/\s+/g, ' ').trim(), 'Elfogadom az ÁSZF-et és az Adatvédelmi tájékoztatót.');
+  assert.equal(label.textContent.replace(/\s+/g, ' ').trim(), 'Elfogadom az ÁSZF-et, és megismertem az Adatkezelési tájékoztatót.');
   assert.equal(label.querySelector('a[data-legal="terms"]').textContent, 'ÁSZF');
-  assert.equal(label.querySelector('a[data-legal="privacy"]').textContent, 'Adatvédelmi tájékoztatót');
+  assert.equal(label.querySelector('a[data-legal="privacy"]').textContent, 'Adatkezelési tájékoztatót');
 
   const barion = document.getElementById('checkoutBarion');
   assert.equal(consent.checked, false);
@@ -250,7 +252,7 @@ test('the payment button needs both declarations, a valid billing e-mail and all
   window.renderResultDocument(standardResult());
   window.openCheckoutModal();
   const digital = document.getElementById('cb-digital').closest('label').textContent.replace(/\s+/g, ' ').trim();
-  assert.equal(digital, 'Tudomásul veszem, hogy a fizetés után azonnal megkapom a digitális tartalmat, így elveszítem a 14 napos elállási jogomat.');
+  assert.equal(digital, 'Kifejezetten kérem a szerződés azonnali teljesítését (a digitális tartalom azonnali hozzáférhetővé tételét), és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat (45/2014. Korm. rendelet 29. § (1) m)).');
   const state = () => document.getElementById('checkoutBarion').disabled;
 
   assert.equal(state(), true, 'induláskor letiltva');
@@ -397,7 +399,7 @@ test('a disabled Barion button does nothing, and a forced Barion call with a bro
   assert.match(error.textContent, /érvényes e-mail/, 'szkriptből hívva is ellenőriz');
   fill(window, { digital: false });
   window.startBarionCheckout();
-  assert.match(error.textContent, /mindkét nyilatkozat/);
+  assert.match(error.textContent, /azonnali teljesítést kéred/);
   fill(window, { billing: { billingCity: '' } });
   window.startBarionCheckout();
   assert.match(error.textContent, /számlázási nevet, az irányítószámot, a települést/, 'hiányos számlázási adatnál is megáll');

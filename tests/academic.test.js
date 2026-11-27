@@ -907,7 +907,7 @@ test('after payment the full real thematic plan is returned from the server for 
   const checkout = await (await fetch(`${base}/api/create-checkout-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu', generationId: locked.data.generationId })
+    body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu', generationId: locked.data.generationId, consent: { terms: true, digitalContent: true } })
   })).json();
   assert.equal(checkout.mock, true);
   const verified = await (await fetch(`${base}/api/checkout-session/${checkout.id}`)).json();

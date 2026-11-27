@@ -13,6 +13,15 @@
     <meta property="og:image" content="https://ovitervezo.hu/assets/og-preview.png" />
     <meta property="og:url" content="https://ovitervezo.hu/tervezo.html" />
     <meta property="og:type" content="website" />
+    <meta property="og:image:secure_url" content="https://ovitervezo.hu/assets/og-preview.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OviTervező – óvodai tervezet készítő szoftver" />
+    <meta property="og:site_name" content="OviTervező" />
+    <meta property="og:locale" content="hu_HU" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://ovitervezo.hu/assets/og-preview.png" />
     <script src="js/theme-init.js"></script>
     <script src="js/barion-pixel.js" defer></script>
     <script src="js/telemetry.js" defer></script>
@@ -540,6 +549,7 @@
 
               <div class="preview-actionbar"><p class="lock-note" id="unlockBottomNote" hidden>A részletes tevékenységmenet kidolgozása és a letöltés a terv feloldása után érhető el.</p><button class="unlock-cta" id="unlockBottomBtn" type="button" hidden></button></div>
               <div id="purchaseNotice" class="modal-note" role="status" hidden></div>
+              <div id="inAppDownloadTip" class="modal-note" role="note" hidden>Ha a Facebook / Messenger / Instagram alkalmazáson belül nem indulna el a letöltés, koppints a jobb felső ••• menüre, és válaszd a „Megnyitás külső böngészőben” lehetőséget. A tervedet e-mailben is elküldtük!</div>
               <div class="download-row">
                 <button id="downloadInvoiceBtn" class="download-btn" type="button" hidden>Számla letöltése (PDF)</button>
                 <button id="downloadPdfBtn" class="download-btn" type="button">PDF letöltése</button>
@@ -568,9 +578,9 @@
               <a data-legal="terms">Általános Szerződési Feltételek (ÁSZF)</a>
               <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
               <a data-legal="billing">Fizetési és Számlázási Tájékoztató</a>
+              <a data-legal="imprint">Impresszum és partnerek</a>
             </div>
             <span>Fogyasztói jogvita esetén: Győr-Moson-Sopron Vármegyei Békéltető Testület (9021 Győr, Szent István út 10/a)</span>
-            <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">Online vitarendezési platform</a>
             <span class="footer-note">Az oldalt a Cloudflare Turnstile védi a botok ellen: <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Adatvédelmi irányelvek</a> és <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener">Szolgáltatási feltételek</a>.</span>
           </div>
           <div class="footer-col">
@@ -691,11 +701,13 @@
           </div>
           <label for="billingAddress"><strong>Utca, házszám</strong></label>
           <input id="billingAddress" class="billing-input" type="text" autocomplete="street-address" maxlength="120" placeholder="Fő utca 1." required />
+          <label for="billingTaxNumber"><strong>Adószám</strong> <span class="field-hint">(opcionális – óvoda, alapítvány, cég esetén)</span></label>
+          <input id="billingTaxNumber" class="billing-input" type="text" inputmode="numeric" autocomplete="off" maxlength="13" placeholder="12345678-1-23" />
           <div class="consent-group">
-            <button type="button" class="check-all-btn" id="checkAll">&#10003; Mindent bepipálok.</button>
+            <button type="button" class="check-all-btn" id="checkAll">&#10003; Kötelező nyilatkozatok bepipálása</button>
             <label class="consent"><input type="checkbox" id="cb-newsletter" /> <span>Kérem az ingyenes szakmai tippeket, ovis ötleteket és az exkluzív kedvezményeket!</span></label>
-            <label class="consent"><input type="checkbox" id="cb-terms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et és az <a data-legal="privacy">Adatvédelmi tájékoztatót</a>.</span></label>
-            <label class="consent"><input type="checkbox" id="cb-digital" /> <span>Tudomásul veszem, hogy a fizetés után azonnal megkapom a digitális tartalmat, így elveszítem a 14 napos elállási jogomat.</span></label>
+            <label class="consent"><input type="checkbox" id="cb-terms" /> <span>Elfogadom az <a data-legal="terms">ÁSZF</a>-et, és megismertem az <a data-legal="privacy">Adatkezelési tájékoztatót</a>.</span></label>
+            <label class="consent"><input type="checkbox" id="cb-digital" /> <span>Kifejezetten kérem a szerződés azonnali teljesítését (a digitális tartalom azonnali hozzáférhetővé tételét), és tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási jogomat (45/2014. Korm. rendelet 29. § (1) m)).</span></label>
           </div>
           <div class="coupon-row">
             <label for="couponCode"><strong>Kuponkód</strong></label>

@@ -20,7 +20,9 @@ async function listen(t) {
   return `http://127.0.0.1:${instance.address().port}`;
 }
 
-const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const CONSENT = { terms: true, digitalContent: true };
+const withConsent = (route, body) => (/\/api\/(checkout-barion|create-checkout-session|apply-coupon)$/.test(route) && body && !('consent' in body) ? { ...body, consent: CONSENT } : body);
+const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withConsent(route, body)) });
 
 function setEnv(t, values) {
   const saved = {};
@@ -248,7 +250,7 @@ test('a valid coupon unlocks the plan, hides the invoice button, closes the form
   await new Promise((resolve) => setTimeout(resolve, 60));
 
   assert.equal(calls[0].url, 'http://localhost:8000/api/apply-coupon');
-  assert.deepEqual({ ...calls[0].body, title: undefined }, { code: 'TEST100', plan: 'daily', planMode: 'standard', email: 'vevo@example.com', generationId: 'gen_ui_coupon', title: undefined });
+  assert.deepEqual({ ...calls[0].body, title: undefined }, { code: 'TEST100', plan: 'daily', planMode: 'standard', email: 'vevo@example.com', consent: { terms: true, digitalContent: true }, generationId: 'gen_ui_coupon', title: undefined });
   assert.equal(window.isPlanLocked(), false);
   assert.equal(document.getElementById('checkoutModal').classList.contains('open'), false);
   assert.equal(document.getElementById('unlockedBadge').hidden, false);

@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const stripeService = require('./stripeService');
+const { normalizeHuTaxNumber } = require('../utils/taxNumber');
 const invoiceService = require('./invoiceService');
 const mailService = require('./mailService');
 const sheetsService = require('./sheetsService');
@@ -90,13 +91,15 @@ function cleanText(value, max) {
 function parseBilling(input) {
   const raw = input && typeof input === 'object' ? input : {};
   const billing = { name: cleanText(raw.name, 120), zip: cleanText(raw.zip, 10), city: cleanText(raw.city, 80), address: cleanText(raw.address, 120) };
+  const taxNumber = normalizeHuTaxNumber(raw.taxNumber);
+  if (taxNumber === null) throw new PaymentError('Az adószám érvénytelen. Adj meg 8 jegyű törzsszámot vagy teljes adószámot (pl. 12345678-1-23), vagy hagyd üresen magánszemélyként.', 400);
   const missing = [['name', 'számlázási név'], ['zip', 'irányítószám'], ['city', 'település'], ['address', 'utca, házszám']]
     .filter(([key]) => !billing[key]).map(([, label]) => label);
   if (missing.length) throw new PaymentError(`A számlázási adatok hiányosak: ${missing.join(', ')}.`, 400);
   if (billing.name.length < 2 || billing.city.length < 2 || billing.address.length < 3 || !BILLING_ZIP_PATTERN.test(billing.zip)) {
     throw new PaymentError('A számlázási adatok érvénytelenek: ellenőrizd a nevet, az irányítószámot, a települést és az utcát, házszámot.', 400);
   }
-  return billing;
+  return taxNumber ? { ...billing, taxNumber } : billing;
 }
 
 // ---------- Barion API ----------
@@ -258,7 +261,7 @@ async function issueOrderInvoice(order, deps, env) {
       couponPercent: order.couponPercent || undefined,
       paymentMethod: 'Barion',
       billingProfile: order.billingProfile || undefined,
-      customer: { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' }
+      customer: { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '', taxNumber: billing.taxNumber || '' }
     }, { env, fetch: deps.fetch });
     await updateOrder(order, result.mock
       ? { invoiceStatus: 'mock' }
@@ -324,7 +327,7 @@ function isSettled(order) {
 function notifyPurchase(order, invoiceNumber, invoicePdf, deps) {
   const env = deps.env || process.env;
   const billing = order.billing || {};
-  const customer = { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '' };
+  const customer = { name: billing.name || '', email: order.email, zip: billing.zip || '', city: billing.city || '', address: billing.address || '', taxNumber: billing.taxNumber || '' };
   const created = createdSeconds(order);
   const session = { id: order.sessionId, created, metadata: { plan: order.planKey, title: order.title, amountHuf: order.amount } };
   sheetsService.recordPurchase({ session, invoiceNumber, invoicePdf, customer }, { env, fetch: deps.sheetsFetch }).catch(() => {});

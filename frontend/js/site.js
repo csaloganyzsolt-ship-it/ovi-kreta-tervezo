@@ -11,6 +11,15 @@ const DEFAULT_COMPANY = {
   address: '9153 Öttevény, Kossuth Lajos utca 26.',
   vatNote: 'Alanyi adómentes (AAM) értékesítés, az árak 0 Ft ÁFÁ-t tartalmaznak.'
 };
+const PROCESSORS_LIST = `<ol>
+<li>Nethely Kft. (1115 Budapest, Halmi utca 29., info@nethely.hu) – tárhelyszolgáltató: domain, DNS és a statikus weboldal kiszolgálása.</li>
+<li>Render Services, Inc. (525 Brannan Street, Suite 300, San Francisco, CA 94107, USA) – a backend (API) szerverkörnyezet futtatása.</li>
+<li>Supabase, Inc. (USA) – adatbázis, felhasználói fiókok és hitelesítés, tervezet- és rendeléstárolás.</li>
+<li>Google Ireland Limited (Gordon House, Barrow Street, Dublin 4, Írország) / Google LLC – Gemini API: a tervezetszövegek mesterséges intelligenciával történő generálása; Google Táblázatok és Drive: vásárlási nyilvántartás.</li>
+<li>Barion Payment Zrt. (1117 Budapest, Infopark sétány 1. I. ép. 5. em.) – bankkártyás fizetés és csalásmegelőzés (Barion Pixel).</li>
+<li>KBOSS.hu Kft. (Számlázz.hu, 1031 Budapest, Záhony utca 7.) – számlakiállítás és számlaarchiválás.</li>
+<li>Cloudflare, Inc. (101 Townsend St, San Francisco, CA 94107, USA) – Turnstile robotvédelem.</li>
+</ol>`;
 const LEGAL_TEXTS = {
   terms: ['Általános Szerződési Feltételek (ÁSZF)', `
 <h3>1. A Szolgáltató adatai</h3>
@@ -22,6 +31,7 @@ const LEGAL_TEXTS = {
 <li>Ügyfélszolgálati e-mail: {{SUPPORT_EMAIL}}</li>
 <li>Tárhelyszolgáltató: Nethely Kft. (1115 Budapest, Halmi utca 29., e-mail: info@nethely.hu)</li>
 </ul>
+<p>A szolgáltatás nyújtásában közreműködő további partnerek (tárhely, adatbázis, fizetés, számlázás, mesterséges intelligencia, robotvédelem) az <strong>Impresszum és partnerek</strong> oldalon, illetve az Adatkezelési Tájékoztatóban szerepelnek.</p>
 <h3>2. A szolgáltatás jellege</h3>
 <p>Az OviTervező (ovitervezo.hu) webes, mesterséges intelligenciával támogatott digitális pedagógiai tervezőszoftver, amely óvodapedagógusok számára nyújt segítséget napi és heti foglalkozástervezetek, tematikus vázlatok összeállításához. A szoftver által előállított dokumentumok (.docx és .pdf formátumban) pedagógiai segédanyagnak, ötlettárnak, szakmai kiindulópontnak minősülnek, és nem váltják ki a pedagógus szakmai felelősségét. A tartalom helyi sajátosságokhoz, csoportigényekhez és a hatályos óvodapedagógiai előírásokhoz történő végső igazítása, szakmai felülvizsgálata és az elektronikus naplóba történő beillesztése kizárólag a Felhasználó (pedagógus) felelőssége.</p>
 <p>Az űrlap témamezőibe személyes adat (pl. gyermek neve, sajátos nevelési igényének személyhez köthető részletei) nem adható meg, kizárólag általános pedagógiai célok és témák.</p>
@@ -34,9 +44,11 @@ const LEGAL_TEXTS = {
 <p>{{VAT_NOTE}}</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
 <p>A fizetés a Barion Payment Zrt. biztonságos, PCI-DSS minősítésű felületén történik bankkártyával (vagy Barion-egyenleggel). A Szolgáltató bankkártyaadatokat nem kezel és nem tárol.</p>
+<p>A Szolgáltató a vásárlásról a Számlázz.hu rendszerén keresztül <strong>papíralapú számlának minősülő számlát</strong> állít ki, amelyet <strong>PDF formátumban, e-mailben</strong> továbbít a Vevő részére. A számla nem minősül (nem minősített időbélyeggel ellátott) elektronikus számlának (e-számlának). Szervezet (óvoda, alapítvány, vállalkozás) nevére történő számlázáshoz a fizetéskor megadható az adószám; a számlázási adatok utólagos módosítására a számla kiállítása után csak jogszabályi keretek között (érvénytelenítés és új számla) van lehetőség.</p>
 <h3>4. Teljesítés és az elállási jog kizárása</h3>
-<p>A teljesítés a sikeres bankkártyás fizetést követően azonnal megtörténik: a rendszer a tervezetet a böngészőben letölthetővé teszi, valamint ezzel párhuzamosan elektronikus levélben elküldi a Felhasználó által megadott e-mail címre.</p>
-<p>A fogyasztó és a vállalkozás közötti szerződések részletes szabályairól szóló 45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pontja alapján a Felhasználó kifejezetten tudomásul veszi és beleegyezik, hogy nem tárgyi adathordozón nyújtott digitális adattartalom esetén a teljesítés a fizetéssel azonnal megkezdődik, amelynek következtében a Felhasználó a szerződéskötést követően elveszíti a 14 napos indokolás nélküli elállási jogát. A fizetés indításával a Felhasználó ezt a feltételt kifejezetten elfogadja; ezt fizetés előtt külön jelölőnégyzettel is megerősíti.</p>
+<p>A teljesítés a sikeres bankkártyás fizetést követően azonnal megtörténik: a rendszer a tervezetet a böngészőben letölthetővé teszi, valamint ezzel párhuzamosan elektronikus levélben (Word és PDF melléklettel) elküldi a Felhasználó által megadott e-mail címre. Közösségi alkalmazások (pl. Facebook, Messenger, Instagram) beépített böngészőjében a letöltés korlátozott lehet; ilyenkor a Felhasználó külső böngészőt használhat, a tervezet e-mailben mindenképp megérkezik.</p>
+<p>A fogyasztó és a vállalkozás közötti szerződések részletes szabályairól szóló 45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pontja alapján a fogyasztót nem illeti meg a 14 napos indokolás nélküli elállási jog olyan, nem tárgyi adathordozón nyújtott digitális adattartalom esetén, amelynek teljesítése a fogyasztó előzetes, kifejezett beleegyezésével és tudomásul vételével megkezdődött, mielőtt az elállási határidő lejárt volna.</p>
+<p>A fizetés megkezdése előtt a Felhasználónak <strong>kötelező jelölőnégyzettel</strong> kifejezetten nyilatkoznia kell arról, hogy (1) elfogadja jelen ÁSZF-et és megismerte az Adatkezelési tájékoztatót, valamint (2) kifejezetten kéri a szerződés azonnali teljesítését (a digitális adattartalom azonnali hozzáférhetővé tételét), és tudomásul veszi, hogy a teljesítés megkezdésével elveszíti a 14 napos elállási jogát. E nyilatkozatok nélkül a fizetés nem indítható; a nyilatkozat megtörténtét a Szolgáltató bizonyítási célból naplózza. A Szolgáltató a teljesítést (a tervezet hozzáférhetővé tételét, valamint e-mailben történő kézbesítését) a sikeres fizetést követően azonnal megkezdi, és erről e-mailben visszaigazolást küld.</p>
 <h3>5. Szellemi tulajdon és felhasználási jogok</h3>
 <p>Az OviTervező weboldal felülete, forráskódja, grafikai elemei és adatbázisai a Szolgáltató kizárólagos szellemi tulajdonát képezik. A megvásárolt tervezetek tekintetében a Szolgáltató nem kizárólagos, határozatlan idejű felhasználási jogot biztosít a vásárlónak saját, illetve intézményi pedagógiai munkájához (szabadon módosítható, kinyomtatható, beilleszthető az óvodai naplóba). A megvásárolt anyagok és a szoftver viszonteladása, nyilvános kereskedelmi terjesztése vagy tömeges továbbértékesítése szigorúan tilos.</p>
 <h3>6. Szavatosság és felelősségkorlátozás</h3>
@@ -48,7 +60,8 @@ const LEGAL_TEXTS = {
 <ul>
 <li>Panaszaival a Felhasználó az {{SUPPORT_EMAIL}} e-mail címen élhet. A Szolgáltató a beérkezett panaszokat 30 napon belül érdemben kivizsgálja és megválaszolja.</li>
 <li>Fogyasztói jogvita esetén a Felhasználó jogosult a lakóhelye vagy a Szolgáltató székhelye szerinti Békéltető Testülethez fordulni: Győr-Moson-Sopron Vármegyei Békéltető Testület, 9021 Győr, Szent István út 10/a., e-mail: bekelteto.testulet@gymsmkik.hu</li>
-<li>Az Európai Unió online vitarendezési platformja: <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">ec.europa.eu/consumers/odr</a></li>
+<li>Az Európai Bizottság online vitarendezési (ODR) platformja 2025. július 20-án megszűnt, ezért arra a Szolgáltató nem hivatkozik; a fogyasztói jogviták a békéltető testület előtt, illetve bíróságon rendezhetők.</li>
+<li>Fogyasztóvédelmi hatósági eljárást a Felhasználó a lakóhelye szerint illetékes kormányhivatalnál kezdeményezhet (a hatóságok elérhetősége: <a href="https://www.kormanyhivatal.hu" target="_blank" rel="noopener">kormanyhivatal.hu</a>); a békéltető testületek listája: <a href="https://www.bekeltet.hu" target="_blank" rel="noopener">bekeltet.hu</a>. A békéltető testületi eljárásban a Szolgáltatót együttműködési kötelezettség terheli.</li>
 </ul>`],
   privacy: ['Adatkezelési Tájékoztató (GDPR)', `
 <h3>1. Az Adatkezelő adatai</h3>
@@ -63,7 +76,7 @@ const LEGAL_TEXTS = {
 <p><strong>a) Számlázási és kapcsolattartási adatok</strong></p>
 <ul>
 <li>Kezelt adatok: a vevő neve, számlázási címe (irányítószám, város, utca, házszám), e-mail címe, a tranzakció összege és dátuma, valamint a tervezet témájának címe.</li>
-<li>Cél: a vásárlási tranzakció lebonyolítása, a megvásárolt anyagok e-mailben történő kézbesítése, jogszabályban előírt elektronikus számla kiállítása.</li>
+<li>Cél: a vásárlási tranzakció lebonyolítása, a megvásárolt anyagok e-mailben történő kézbesítése, jogszabályban előírt számla kiállítása (PDF formátumban, e-mailben).</li>
 <li>Jogalap: a szerződés teljesítése (GDPR 6. cikk (1) bek. b) pont), valamint a számvitelről szóló 2000. évi C. törvény 169. § (2) bekezdése szerinti jogi kötelezettség teljesítése (GDPR 6. cikk (1) bek. c) pont).</li>
 <li>Megőrzési idő: a számviteli bizonylatokat a törvényi előírásnak megfelelően 8 évig köteles megőrizni az Adatkezelő.</li>
 </ul>
@@ -79,24 +92,22 @@ const LEGAL_TEXTS = {
 <li>Az oldal a Barion Base Pixelt használja csalásmegelőzési (fraud prevention) célból, a Barion Payment Zrt. előírásainak megfelelően. A pixel a böngésző és az eszköz technikai adatait (pl. IP-cím, böngészőazonosító) továbbítja a Barion Payment Zrt.-nek, kizárólag a fizetések biztonságos lebonyolítása és a visszaélések kiszűrése érdekében; marketing célra nem használjuk. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési csalások megelőzése.</li>
 <li>A Teljes (Full) Barion Pixel a fizetési folyamat e-kereskedelmi eseményeit (tervezet megtekintése, csomag kosárba helyezése, fizetés indítása, sikeres vásárlás) küldi a Barion Payment Zrt.-nek a csomag nevével, azonosítójával és árával; a megadott név, e-mail cím és számlázási adat nem kerül továbbításra. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési szolgáltatás biztonságos és ellenőrizhető nyújtása.</li>
 </ul>
-<p><strong>d) Opcionális felhasználói fiók</strong></p>
+<p><strong>d) Hírlevél (önkéntes hozzájárulás)</strong></p>
 <ul>
-<li>A fiók létrehozása nem kötelező, az OviTervező regisztráció nélkül is használható. Belépéskor a megadott e-mail cím a Supabase (Supabase Inc.) hitelesítési szolgáltatásához kerül, ahová jelszó nélküli belépési linket küldünk.</li>
+<li>Kezelt adatok: e-mail cím, a feliratkozás ténye és időpontja, a leiratkozás időpontja. Cél: pedagógiai tippek, újdonságok és ajánlatok küldése. Jogalap: a Felhasználó önkéntes hozzájárulása (GDPR 6. cikk (1) bek. a) pont; Grt. 6. §), amelyet a fizetéskor vagy a profilban jelölőnégyzettel adhat meg; a hozzájárulás a fizetésnek nem feltétele.</li>
+<li>Leiratkozás bármikor: minden levél alján található linkkel, a levelezőprogram „Leiratkozás” funkciójával (List-Unsubscribe), vagy az {{SUPPORT_EMAIL}} címen. Leiratkozás után a hírlevélküldés megszűnik; a rekord a leiratkozás tényének igazolására megmarad.</li>
+</ul>
+<p><strong>e) Opcionális felhasználói fiók</strong></p>
+<ul>
+<li>A fiók létrehozása nem kötelező, az OviTervező regisztráció nélkül is használható. Regisztrációkor és belépéskor az e-mail cím és a jelszó (kizárólag titkosított lenyomat formájában) a Supabase, Inc. hitelesítési szolgáltatásához kerül.</li>
 <li>Kezelt adatok: e-mail cím, a fiókhoz kötött tervezetek (az űrlap általános adatai és a generált dokumentum). Cél: a tervezetek felhős mentése és több eszközről való elérése. Jogalap: a Felhasználó hozzájárulása és a szerződés teljesítése (GDPR 6. cikk (1) bek. a) és b) pont).</li>
 <li>A fiók és a hozzá kötött tervezetek törlését az {{SUPPORT_EMAIL}} címen kérheted.</li>
 </ul>
 <h3>3. Bankkártyás fizetés</h3>
 <p>A bankkártyás fizetést a Barion Payment Zrt. (Magyarország) fizetési szolgáltató kezeli. A bankkártya érzékeny adataihoz (kártyaszám, lejárati idő, CVC kód) a {{COMPANY_NAME}} és az OviTervező szerverei semmilyen formában nem férnek hozzá, azokat nem ismerik és nem tárolják.</p>
 <h3>4. Címzettek és adatfeldolgozók köre</h3>
-<p>Az adatkezelés során az Adatkezelő az alábbi technológiai partnereket veszi igénybe adatfeldolgozóként:</p>
-<ol>
-<li>Barion Payment Zrt. (Magyarország) – bankkártyás fizetési szolgáltatás és csalásmegelőzés (Barion Base Pixel).</li>
-<li>KBOSS.hu Kft. (Számlázz.hu, Magyarország) – elektronikus számlakiállítás.</li>
-<li>Nethely Kft. (Magyarország) – weboldal domain és DNS kiszolgálás, statikus tárhely.</li>
-<li>Render Services, Inc. (USA / EU) – backend szerverkörnyezet és API futtatás.</li>
-<li>Google Ireland Limited / Google LLC – tervezetszövegek generálása (Gemini API), valamint a vásárlási nyilvántartás és a számlamásolat mentése (Google Táblázatok és Drive).</li>
-<li>Cloudflare, Inc. (USA) – Turnstile robotvédelmi szolgáltatás: az űrlap visszaélés elleni védelme a böngésző és az IP-cím technikai adatainak kiértékelésével.</li>
-</ol>
+<p>Az adatkezelés során az Adatkezelő az alábbi technológiai partnereket veszi igénybe adatfeldolgozóként (az USA-ba történő adattovábbítás az Európai Bizottság megfelelőségi határozata (EU–US Data Privacy Framework), illetve általános szerződési feltételek (SCC) alapján történik):</p>
+${PROCESSORS_LIST}
 <h3>5. Az érintettek jogai</h3>
 <p>Kérheted az Adatkezelőtől a rád vonatkozó személyes adatokhoz való hozzáférést, azok helyesbítését, törlését (kivéve a számviteli törvény által kötelezően előírt 8 éves számlaadatokat), illetve az adatkezelés korlátozását. Kérelmet az {{SUPPORT_EMAIL}} címre küldhetsz.</p>
 <h3>6. Jogorvoslati lehetőségek</h3>
@@ -110,6 +121,23 @@ const LEGAL_TEXTS = {
 <li>Weboldal: <a href="https://naih.hu" target="_blank" rel="noopener">naih.hu</a></li>
 </ul>
 <p>Jogaidat bírósági úton (a lakóhelyed szerinti törvényszék előtt) is érvényesítheted.</p>`],
+  imprint: ['Impresszum és partnerek', `
+<h3>Szolgáltató (üzemeltető)</h3>
+<ul>
+<li>Név: {{COMPANY_NAME}}</li>
+<li>Székhely: {{COMPANY_ADDRESS}}</li>
+<li>{{COMPANY_REG}}</li>
+<li>Adószám: {{COMPANY_TAX_ID}}</li>
+<li>E-mail: {{SUPPORT_EMAIL}}</li>
+<li>Weboldal: ovitervezo.hu</li>
+</ul>
+<p>{{VAT_NOTE}}</p>
+<h3>Tárhelyszolgáltató és adatfeldolgozók</h3>
+${PROCESSORS_LIST}
+<h3>Szakmai és AI-felelősségkizárás</h3>
+<p>Az OviTervező által előállított tervezetek mesterséges intelligencia által támogatott pedagógiai segédanyagok és javaslatok. A tartalom szakmai ellenőrzése, a helyi Pedagógiai Programhoz és a csoport igényeihez történő igazítása, valamint a hivatalos dokumentációba való beillesztése a felhasználó (pedagógus) felelőssége.</p>
+<h3>Fogyasztói jogérvényesítés</h3>
+<p>Panasz: {{SUPPORT_EMAIL}}. Békéltető testület: Győr-Moson-Sopron Vármegyei Békéltető Testület, 9021 Győr, Szent István út 10/a., bekelteto.testulet@gymsmkik.hu. Az EU ODR platformja 2025. július 20-án megszűnt.</p>`],
   billing: ['Fizetési és Számlázási Tájékoztató', `
 <h3>1. Fizetési mód: biztonságos bankkártyás fizetés</h3>
 <p>A fizetés a Barion Payment Zrt. titkosított, PCI-DSS minősítésű rendszerén keresztül történik.</p>
@@ -128,7 +156,8 @@ const LEGAL_TEXTS = {
 <h3>3. Számlázás és bizonylatkiállítás</h3>
 <ul>
 <li>A számlát a {{COMPANY_NAME}} állítja ki a jogszabályoknak megfelelően a Számlázz.hu (KBOSS.hu Kft.) rendszerén keresztül.</li>
-<li>A fizetés jóváhagyását követően a rendszer azonnal kiállítja az elektronikus számlát (e-számlát).</li>
+<li>A fizetés jóváhagyását követően a rendszer azonnal kiállítja a számlát. A számla papíralapú számlának minősül, PDF formátumban, e-mailben kerül kézbesítésre; nem minősített időbélyeggel ellátott elektronikus számla (e-számla).</li>
+<li>Szervezet (óvoda, alapítvány, cég) nevére történő számlázáshoz a fizetéskor megadható az adószám (8 jegyű törzsszám vagy teljes adószám, pl. 12345678-1-23), amely a számlára kerül.</li>
 <li>A számla PDF formátumban automatikusan megérkezik a vásárláskor megadott e-mail címedre, a megrendelt tervezet Word és PDF fájljaival együtt.</li>
 <li>Kérjük, fizetéskor ügyelj a számlázási adatok és az e-mail cím pontos megadására, mert a számla kiállítása teljesen automatizált.</li>
 </ul>

@@ -1,6 +1,7 @@
 'use strict';
 
 const { PRODUCTS } = require('./stripeService');
+const { normalizeHuTaxNumber } = require('../utils/taxNumber');
 
 const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
 
@@ -70,6 +71,7 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
   const vatKey = vatRate(env, billingProfile);
   const { net, vat } = splitGross(gross, vatKey);
   const day = today(date);
+  const taxNumber = normalizeHuTaxNumber(customer.taxNumber) || '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
@@ -100,7 +102,9 @@ function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amou
     <telepules>${escapeXml(customer.city)}</telepules>
     <cim>${escapeXml(customer.address)}</cim>
     <email>${escapeXml(customer.email)}</email>
-    <sendEmail>false</sendEmail>
+    <sendEmail>false</sendEmail>${taxNumber ? `
+    <adoalany>1</adoalany>
+    <adoszam>${escapeXml(taxNumber)}</adoszam>` : ''}
   </vevo>
   <tetelek>
     <tetel>

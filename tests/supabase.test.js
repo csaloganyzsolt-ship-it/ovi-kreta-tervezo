@@ -86,7 +86,9 @@ async function listen(t) {
   return `http://127.0.0.1:${instance.address().port}`;
 }
 
-const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const CONSENT = { terms: true, digitalContent: true };
+const withConsent = (route, body) => (/\/api\/(checkout-barion|create-checkout-session|apply-coupon)$/.test(route) && body && !('consent' in body) ? { ...body, consent: CONSENT } : body);
+const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withConsent(route, body)) });
 
 function setEnv(t, values) {
   const saved = {};

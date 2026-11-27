@@ -23,7 +23,9 @@ async function listen(t) {
   return `http://127.0.0.1:${instance.address().port}`;
 }
 
-const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const CONSENT = { terms: true, digitalContent: true };
+const withConsent = (route, body) => (/\/api\/(checkout-barion|create-checkout-session|apply-coupon)$/.test(route) && body && !('consent' in body) ? { ...body, consent: CONSENT } : body);
+const post = (base, route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withConsent(route, body)) });
 
 function setEnv(t, values) {
   const saved = {};
@@ -521,4 +523,30 @@ test('the Barion session ids and gateway addresses are validated strictly', () =
   for (const id of ['barion_', 'barion_XYZ', 'cs_test_123456', 'barion_0123456789abcdef0123456789', '../barion_0123456789abcdef01234567', undefined]) assert.equal(barionService.isSessionId(id), false, String(id));
   for (const url of ['https://secure.barion.com/Pay?id=1', 'https://secure.test.barion.com/Pay?id=1']) assert.ok(barionService.GATEWAY_PATTERN.test(url), url);
   for (const url of ['http://secure.barion.com/Pay', 'https://secure.barion.com.evil.example/Pay', 'https://evil.example/https://secure.barion.com/', 'javascript:alert(1)']) assert.equal(barionService.GATEWAY_PATTERN.test(url), false, url);
+});
+
+test('checkout-barion refuses a payment without both consent declarations and logs the accepted ones', async (t) => {
+  barionEnv(t);
+  seedPlans();
+  stubExternal(t);
+  const base = await listen(t);
+  const body = { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing: BILLING, generationId: 'gen_barion_std' };
+  for (const consent of [undefined, {}, { terms: true }, { digitalContent: true }, { terms: true, digitalContent: 'true' }]) {
+    const response = await fetch(`${base}/api/checkout-barion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, consent }) });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'CONSENT_REQUIRED');
+  }
+  const ok = await post(base, '/api/checkout-barion', body);
+  assert.equal(ok.status, 200);
+});
+
+test('checkout-barion refuses an invalid tax number and accepts a valid institution tax number', async (t) => {
+  barionEnv(t);
+  seedPlans();
+  stubExternal(t);
+  const base = await listen(t);
+  const bad = await startBarion(base, { billing: { ...BILLING, taxNumber: '12345678-1-23' } });
+  assert.equal(bad.response.status, 400);
+  const good = await startBarion(base, { billing: { ...BILLING, taxNumber: '68274568-1-28' } });
+  assert.equal(good.response.status, 200);
 });

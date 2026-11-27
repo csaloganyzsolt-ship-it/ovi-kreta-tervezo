@@ -74,7 +74,7 @@ function sendPaymentError(res, error, context, req) {
       }).catch((e) => console.warn('Admin error alert failed:', e.message));
     }
   }
-  return res.status(status).json({ success: false, ...(error.code === 'INVALID_COUPON' ? { code: error.code } : {}), error: error.message });
+  return res.status(status).json({ success: false, ...(error.code === 'INVALID_COUPON' || error.code === 'CONSENT_REQUIRED' ? { code: error.code } : {}), error: error.message });
 }
 
 // Kézbesítési hiba a fizetett rendelésen: a hiba rögzül, a riasztás ugyanarra a hibára csak egyszer megy ki a hibariasztási címre.
@@ -91,6 +91,22 @@ async function recordDeliveryFailure(order, error, req) {
 }
 
 // A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri.
+// 45/2014. (II. 26.) Korm. rendelet 29. § (1) m): digitális adattartalomnál a vevő kifejezett nyilatkozata nélkül nem indul fizetés; a nyilatkozat bizonyítékként a rendszernaplóba kerül.
+const CONSENT_VERSION = '2026-11-27';
+function requireConsent(req, body, email) {
+  const consent = body.consent || {};
+  if (consent.terms !== true || consent.digitalContent !== true) {
+    const error = new Error('A fizetéshez el kell fogadnod az ÁSZF-et és az Adatkezelési tájékoztatót, valamint kifejezetten nyilatkoznod kell a digitális tartalom azonnali teljesítéséről és az elállási jog elvesztéséről.');
+    error.status = 400;
+    error.code = 'CONSENT_REQUIRED';
+    throw error;
+  }
+  logger.info('consent', 'Fogyasztói nyilatkozat rögzítve (ÁSZF/adatkezelés elfogadása, azonnali teljesítés kérése, elállási jog elvesztése)', {
+    email: String(email || '').slice(0, 200),
+    details: { termsAccepted: true, immediatePerformanceRequested: true, withdrawalRightAcknowledged: true, version: CONSENT_VERSION, generationId: String(body.generationId || '').slice(0, 100), ip: req?.ip, userAgent: String(req?.get?.('user-agent') || '').slice(0, 160) }
+  });
+}
+
 function planModeFor(body = {}) {
   const stored = body.generationId ? planStore.getPlan(String(body.generationId)) : null;
   if (stored) return stored.planMode === 'academic' || stored.is_thematic === true || stored.request?.planMode === 'academic' ? 'academic' : 'standard';
@@ -100,6 +116,7 @@ function planModeFor(body = {}) {
 async function createCheckout(req, res) {
   try {
     const body = req.body || {};
+    requireConsent(req, body, body.email);
     if (body.generationId) await planStore.loadPlan(String(body.generationId).slice(0, 100));
     const planMode = planModeFor(body);
     const session = await stripeService.createCheckoutSession({ ...body, planMode });
@@ -152,6 +169,7 @@ async function applyCoupon(req, res) {
       return res.json({ success: true, paid: false, coupon: { code: coupon.code, percent: coupon.percent }, plan: product.key, ...discount, generationId });
     }
 
+    requireConsent(req, body, email);
     const session = await coupons.redeem({ code: coupon.code, generationId, email, plan: product.key, planMode, originalPrice: product.amountHuf });
     // Először a documents sor mentődik (feloldva), majd az orders; bármelyik hibája 5xx-ként kerül vissza, és a terv nem marad feloldva.
     const unlockMeta = { coupon: { code: coupon.code, plan: product.key, planMode, ...discount }, coupon_session: session };
@@ -207,6 +225,7 @@ async function checkoutBarion(req, res) {
     if (!generationId || !(await planStore.loadPlan(generationId))) {
       return res.status(404).json({ success: false, error: 'A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.' });
     }
+    requireConsent(req, body, body.email);
     const user = await recordOwner(req, generationId, body.email);
     const saved = planStore.getDocumentState(generationId)?.coupon;
     let coupon = null;

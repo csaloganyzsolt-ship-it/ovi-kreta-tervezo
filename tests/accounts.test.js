@@ -1241,7 +1241,7 @@ test('starting a Barion payment writes the billing data back into the logged-in 
   planStore.savePlan('gen_bill_1', { ...makePlan(3), request: { planMode: 'standard', duration: 'Napi' } });
   const base = await listen(t);
   const NEW_BILLING = { name: 'Új Óvoda Kft.', zip: '9021', city: 'Győr', address: 'Fő utca 12/B.' };
-  const start = (token, billing) => call(base, '/api/checkout-barion', { method: 'POST', token, body: { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing, generationId: 'gen_bill_1', title: 'Őszi erdő' } });
+  const start = (token, billing) => call(base, '/api/checkout-barion', { method: 'POST', token, body: { plan: 'daily', planMode: 'standard', email: 'vevo@example.com', billing, generationId: 'gen_bill_1', title: 'Őszi erdő', consent: { terms: true, digitalContent: true } } });
   const profileOf = (id) => client.tables.profiles.find((row) => row.id === id);
 
   // Bejelentkezve a módosított számlázási adat felülírja a profilét, a többi mező és az e-mail változatlan.

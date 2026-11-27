@@ -77,7 +77,7 @@ test('webhook rejects calls without valid configuration or signature', async () 
     const response = await fetch(`http://127.0.0.1:${port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.ok([400, 503].includes(response.status));
     const mock = await fetch(`http://127.0.0.1:${port}/api/create-checkout-session`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu' })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu', consent: { terms: true, digitalContent: true } })
     });
     assert.equal(mock.status, 200);
     assert.equal((await mock.json()).mock, true);
@@ -649,7 +649,7 @@ test('index.html is a pure landing page and tervezo.html is the planner only', (
   }
   const css = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'styles.css'), 'utf8');
   assert.doesNotMatch(css, /grecaptcha|recaptcha/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'site.js'), 'utf8'), /Cloudflare, Inc\. \(USA\) – Turnstile/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'site.js'), 'utf8'), /Cloudflare, Inc\./);
   for (const kw of ['óvodai tervezet készítés', 'óvodai tervezet minta', 'foglalkozásterv minta', 'heti tervezet óvoda', 'Milyen óvodai tervezet készíthető', 'leggyorsabb óvodai tervezet készítő']) assert.ok(landing.includes(kw), kw);
   const types = [...landing.matchAll(/"@type":"(FAQPage|SoftwareApplication)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(types, ['FAQPage', 'SoftwareApplication']);

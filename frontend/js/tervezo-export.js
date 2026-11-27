@@ -1,7 +1,19 @@
 // PDF (pdfmake, vektoros), DOCX és ZIP exportok, nyomtatás.
 // Klasszikus script (nem ES modul): a felső szintű deklarációk közös globális hatókörben élnek.
 
-function downloadBlob(blob, filename) {
+// A Facebook, Messenger és Instagram beépített böngészője (WebView) a Blob URL-es letöltést iOS-en és sok Android készüléken némán eldobja.
+const IN_APP_BROWSER_PATTERN = /FBAN|FBAV|FB_IAB|Instagram|Messenger/i;
+
+function isInAppBrowser(userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '') {
+  return IN_APP_BROWSER_PATTERN.test(String(userAgent || ''));
+}
+
+function showInAppDownloadTip() {
+  const tip = document.getElementById('inAppDownloadTip');
+  if (tip) tip.hidden = false;
+}
+
+function anchorDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -9,7 +21,24 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+// Beépített böngészőben először a rendszer megosztás-/mentés panelje (Web Share fájlokkal), ha az nem elérhető, a hagyományos letöltés; mindkét esetben segítő tipp is megjelenik.
+async function downloadBlob(blob, filename) {
+  if (isInAppBrowser()) {
+    showInAppDownloadTip();
+    try {
+      const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return;
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+  anchorDownload(blob, filename);
 }
 
 // Egységes oldalmargó minden formátumban és minden oldalon (az előnézet, a PDF és a DOCX is ezt használja).

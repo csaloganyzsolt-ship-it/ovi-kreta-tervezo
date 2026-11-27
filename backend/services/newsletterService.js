@@ -95,6 +95,18 @@ function unsubscribeUrlFor(token) {
   return `${SITE}/leiratkozas.html?token=${encodeURIComponent(token)}`;
 }
 
+// RFC 2369 / RFC 8058: a Gmail és a Yahoo tömeges küldőtől HTTPS-es egykattintásos leiratkozást vár. A POST végpont a backend (Render) API-n van, nem a statikus oldalon;
+// ha a backend nyilvános címe nem ismert, vagy nincs token (admin teszt), a levél csak a mailto: leiratkozót kapja (egykattintásos fejléc nélkül).
+function unsubscribeHeaders(token, env = process.env) {
+  const mailto = `<mailto:${supportEmail(env)}?subject=${encodeURIComponent('Leiratkozás')}>`;
+  const apiBase = String(env.BACKEND_URL || env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+  if (!token || !/^https:\/\//.test(apiBase)) return { 'List-Unsubscribe': mailto };
+  return {
+    'List-Unsubscribe': `<${apiBase}/api/newsletter/unsubscribe?token=${encodeURIComponent(token)}>, ${mailto}`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+  };
+}
+
 // Hivatalos zöld OviTervező levél: menta sáv, "OT" logó (CID), főcím, törzs, opcionális gomb, jogi lábléc és leiratkozás.
 function buildNewsletterHtml({ heading, bodyHtml, ctaText, ctaUrl, unsubscribeUrl, logoSrc }, env = process.env) {
   const c = mailService.companyLines(env);
@@ -281,7 +293,7 @@ async function runJob({ client, campaignId, input, recipients, env, deps, logger
         subject: input.subject,
         text: buildNewsletterText(input, unsubscribeUrl),
         html: renderNewsletter(templates, input, { unsubscribeUrl, env }),
-        headers: unsubscribeUrl ? { 'List-Unsubscribe': `<${unsubscribeUrl}>` } : undefined,
+        headers: unsubscribeHeaders(recipient.token, env),
         attachments: [mailService.logoAttachment()]
       });
       sent += 1;
@@ -387,6 +399,7 @@ module.exports = {
   buildNewsletterText,
   buildPreview,
   unsubscribeUrlFor,
+  unsubscribeHeaders,
   renderNewsletter,
   logoDataUriOf,
   resolveRecipients,

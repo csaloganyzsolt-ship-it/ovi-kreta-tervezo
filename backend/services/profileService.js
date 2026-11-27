@@ -141,7 +141,7 @@ async function saveProfile(user, body) {
 
 // A fizetésnél megadott (vagy módosított) számlázási adat visszaírása a bejelentkezett felhasználó profiljába. A hibát a hívó naplózza: a fizetést nem akaszthatja meg.
 async function rememberBilling(user, billing) {
-  return saveProfile(user, { billing_name: billing?.name, billing_zip: billing?.zip, billing_city: billing?.city, billing_address: billing?.address });
+  return saveProfile(user, { billing_name: billing?.name, billing_zip: billing?.zip, billing_city: billing?.city, billing_address: billing?.address, ...(billing?.taxNumber ? { billing_tax_id: billing.taxNumber } : {}) });
 }
 
 // Hírlevél: a profilból csak feliratkozni lehet; a leiratkozás kizárólag a leveleken lévő, tokenes linkkel történik.
