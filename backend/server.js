@@ -234,8 +234,8 @@ function getDetailProfile(detailLevel) {
   return { level, instruction: 'Soronként 2–3 összefüggő bekezdésben írd le a végrehajtást, a pedagógusi kérdéseket és a gyermekek tevékenységét; a fő rész legyen a legrészletesebb.' };
 }
 
-const WEEKLY_MAX_OUTPUT_TOKENS = 16384;
-const WEEKLY_TIMEOUT_MS = 290000;
+const weeklySummary = require('./services/weeklySummary');
+const generationJobs = require('./services/generationJobs');
 
 // A kiválasztott napok (hétfői–pénteki sorrendben, duplikáció nélkül); hiányzó vagy érvénytelen érték esetén mind az 5 nap.
 function getSelectedDays(payload = {}) {
@@ -244,8 +244,9 @@ function getSelectedDays(payload = {}) {
   return days.length ? days : [...WEEKDAYS];
 }
 
-function isWeeklyBreakdown(payload = {}) {
-  return payload.duration === 'Heti' && payload.includeDailyBreakdown === true && !academicPlan.isAcademic(payload);
+// 'summary' = csak heti összesítő, 'package' = összesítő + napi tervek (láncolt generálás), null = napi vagy oktatási célú terv.
+function weeklyScope(payload = {}) {
+  return academicPlan.isAcademic(payload) ? null : weeklySummary.weeklyScopeOf(payload);
 }
 
 function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays, focusAreas = []) {
@@ -268,14 +269,14 @@ function buildWeeklyFocusAreasRule(weeklyFocusAreas, selectedDays, focusAreas = 
   const generalAreas = Array.isArray(focusAreas) ? focusAreas.filter((area) => area && !isAssigned(area)) : [];
 
   if (specificLines.length > 0) {
-    return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${specificLines.join('\n')}\nKötelező szabály: az egyes napok (napok tömb elemei) tevékenységformája, céljai és a kidolgozás táblázatának feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' mezőben pontosan ezeknek a területeknek kell szerepelniük az adott napoknál.${generalAreas.length ? ` A többi napra a kiválasztott további területeket (${generalAreas.join(', ')}) kiegyensúlyozottan oszd el.` : ''}`;
+    return `SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS (minden napot kötelezően a megadott nevelési terület(ek) köré kell felépíteni):\n${specificLines.join('\n')}\nKötelező szabály: az egyes napok tevékenységei, céljai és feladatai szigorúan az adott naphoz beállított nevelési terület(ek)hez kapcsolódjanak! Az összesítő megfelelő területi tételeinél jelöld meg a napot zárójelben (pl. "(Kedd)"), a napi beosztásban (ha készül) a 'fo_terulet' pontosan ezeknek a területeknek feleljen meg.${generalAreas.length ? ` A többi napra a kiválasztott további területeket (${generalAreas.join(', ')}) kiegyensúlyozottan oszd el.` : ''}`;
   }
 
   if (generalAreas.length > 0) {
-    return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nA pedagógus a következő nevelési területeket jelölte meg általános heti elosztásra: ${generalAreas.join(', ')}. Ezeket a területeket a hét kiválasztott ${selectedDays.length} napjára (${selectedDays.join(', ')}) kiegyensúlyozottan, szervesen egymásra építve oszd el! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' oszlopban minden naphoz rendelj hozzá egy-egy területet.`;
+    return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nA pedagógus a következő nevelési területeket jelölte meg általános heti elosztásra: ${generalAreas.join(', ')}. Ezeket a területeket a hét kiválasztott ${selectedDays.length} napjára (${selectedDays.join(', ')}) kiegyensúlyozottan, szervesen egymásra építve oszd el! A napi beosztásban (ha készül) a 'fo_terulet' mezőben minden naphoz rendelj hozzá egy-egy területet.`;
   }
 
-  return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nMivel a pedagógus nem jelölt ki konkrét területeket, a fő óvodai nevelési területeket (külső világ tevékeny megismerése, verselés-mesélés, ének-zene, rajzolás-festés-mintázás-kézimunka, mozgás) a hét kiválasztott napjaira szakmailag kiegyensúlyozottan, a heti témához illeszkedve oszd el! A heti_keretterv.teruletek_heti_eloszlasa táblázatban a 'fo_terulet' oszlopban minden naphoz rendelj hozzá egy-egy odaillő területet.`;
+  return `SZAKMAI NEVELÉSI TERÜLET ELOSZTÁS:\nMivel a pedagógus nem jelölt ki konkrét területeket, a fő óvodai nevelési területeket (külső világ tevékeny megismerése, verselés-mesélés, ének-zene, rajzolás-festés-mintázás-kézimunka, mozgás) a hét kiválasztott napjaira szakmailag kiegyensúlyozottan, a heti témához illeszkedve oszd el! A napi beosztásban (ha készül) a 'fo_terulet' mezőben minden naphoz rendelj hozzá egy-egy odaillő területet.`;
 }
 
 function buildPreviousPlanContextRule(previousPlanContext) {
@@ -301,62 +302,6 @@ function buildLiteratureSwitchLine(settings = {}) {
     : 'Szakirodalom-kapcsoló (showLiteratureAtBottom): KIKAPCSOLVA – a felhasznalt_irodalom üres szöveg legyen.';
 }
 
-function buildWeeklyPrompt(settings, detail, extraRules = '') {
-  const days = settings.selectedDays;
-  const dayCount = days.length;
-  const progression = settings.weeklyProgressionType === 'area_focused'
-    ? 'area_focused – klasszikus területváltó: minden nap más nevelési terület áll a fókuszban, de a heti téma és a gyerekek tapasztalatai összekötik a napokat.'
-    : 'progressive – szervesen egymásra épülő projekt: hétfői gyűjtéstől a pénteki zárásig minden nap az előző nap élményeire és produktumaira épül.';
-
-  return `Feladat: heti tematikus keretterv és a kiválasztott ${dayCount} napra (${days.join(', ')}) önálló napi tervezet készítése az alábbi kérés alapján; a nem kiválasztott napokra NEM készül tervezet. A szerepet, a pedagógiai szerkezetet és az irodalmi szabályokat a rendszerutasítás tartalmazza.
-
-Beállítások (JSON):
-${JSON.stringify(settings)}
-
-Heti építkezés (weeklyProgressionType): ${progression}
-
-${settings.availableTools ? `Rendelkezésre álló eszközök és a pedagógus saját ötletei (availableTools): ${JSON.stringify(settings.availableTools)}. Az eszkozok listánál és a feladatok tervezésénél ELSŐSORBAN ezeket használd, a megadott ötleteket építsd be; csak indokolt esetben egészítsd ki más, az óvodákban általánosan megtalálható alapeszközzel.` : 'Nincs megadott eszközkészlet: az óvodákban általánosan megtalálható alapfelszerelésekkel (papír, olló, ceruza, labda stb.) tervezz.'}
-${buildBlacklistRule(settings.blacklist)}
-${buildKindergartenProfileRule(settings.kindergartenProfile)}
-${buildIktRule(settings)}
-${buildMathematicsRule(settings.focusAreas)}
-${buildWeeklyFocusAreasRule(settings.weeklyFocusAreas, settings.selectedDays, settings.focusAreas)}
-${buildPreviousPlanContextRule(settings.previousPlanContext)}
-${extraRules}
-Pénteki lezárás formája (fridayClosingType): ${settings.fridayClosingType}
-
-Kidolgozottság (${detail.level}/100): ${detail.instruction} A napok közt ossz el arányosan; minden kiválasztott nap legyen gazdagon kidolgozva.
-${buildLiteratureSwitchLine(settings)}
-
-Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerkezetben (a napok tömbje pontosan ${dayCount} elem, ebben a sorrendben: ${days.join(', ')}):
-{
-  "is_weekly": true,
-  "summary": "string",
-  "heti_keretterv": {
-    "tema": "string",
-    "heti_fo_cel": "string",
-    "nevelesi_feladatok": "string",
-    "didaktikai_feladatok": "string",
-    "teruletek_heti_eloszlasa": [
-      { "nap": "Hétfő", "fo_terulet": "string", "csoportos_tevekenyseg": "string (Csoportos tevékenység / Tevékenység)" }
-    ],
-    "eszkozok": ["string"],
-    "felhasznalt_irodalom": "string"
-  },
-  "napok": [
-    {
-      "nap_neve": "Hétfő",
-      "tevekenyseg_forma": "string",
-      "napi_cel": "string",
-      "kidolgozas_tablazat": [
-        { "ido": "string", "tevekenyseg_menete": ["string"], "modszerek_megjegyzesek": "string" }
-      ]
-    }
-  ]
-}
-A teruletek_heti_eloszlasa is pontosan a kiválasztott napokat tartalmazza (${days.join(', ')}). Minden mezőt adj vissza.`;
-}
-
 const MIXED_GROUP_RULE = 'KÖTELEZŐ DIFFERENCIÁLÁS: Mivel ez egy vegyes csoport, a tevékenységek kidolgozásánál kötelezően jelenjen meg a 3 szintű differenciálás korcsoportok szerint: külön feladatszint a kicsiknek (egyszerűsített), a középsősöknek, és a nagyoknak/iskola-előkészítősöknek (összetett, szabálykövető).';
 const NO_PLATFORM_NAME_RULE = 'A dokumentum szövegében ne hivatkozz állami vagy külső naplórendszerekre; a kimenet egyszerűen szakmai pedagógiai tervezet.';
 
@@ -366,7 +311,8 @@ function buildMathematicsRule(focusAreas = []) {
   return `MATEMATIKAI TARTALMÚ TEVÉKENYSÉG KÖVETELMÉNYE: Mivel a fókuszterületek között szerepel a "A külső világ tevékeny megismerése – matematikai tartalommal", a tevékenységekben (különösen a fő tevékenység és a gyakorlás/differenciálás fázisaiban) kötelezően dolgozz ki konkrét matematikai tapasztalatszerzési lehetőségeket a témához kötve. Ezek a természeti/környezeti megfigyelésektől elkülönülten, önálló matematikai fejlesztési célként jelenjenek meg: például halmazképzés, válogatás és csoportosítás tulajdonságok szerint, számlálás, több-kevesebb-ugyanannyi relációk, téri tájékozódás (alatt, felett, mellett, jobb/bal), síkidomok és geometriai formák felismerése, mérés (hosszúság, súly, űrtartalom természetes mérőeszközökkel), soralkotás vagy ritmikus mintázatok.`;
 }
 
-function buildPrompt(payload = {}) {
+// dayContext: a heti csomag napi tervének kontextus-blokkja (összesítő, napi fókusz, előző napok összefoglalója).
+function buildPrompt(payload = {}, { dayContext = '' } = {}) {
   const customNotes = payload.customNotes || {};
   const detail = getDetailProfile(Number(payload.detailLevel ?? 68));
   const settings = {
@@ -379,7 +325,7 @@ function buildPrompt(payload = {}) {
     dateValue: payload.dateValue || '',
     duration: payload.duration || 'Napi',
     planMode: getPlanKind(payload),
-    includeDailyBreakdown: Boolean(payload.includeDailyBreakdown),
+    weeklyScope: weeklyScope(payload),
     selectedDays: getSelectedDays(payload),
     weeklyProgressionType: payload.weeklyProgressionType === 'area_focused' ? 'area_focused' : 'progressive',
     fridayClosingType: payload.fridayClosingType || 'Kiállítás a csoportszobában',
@@ -424,13 +370,30 @@ function buildPrompt(payload = {}) {
     ].filter(Boolean).join('\n');
     return academicPlan.buildAcademicPrompt(academicSettings, detail, commonRules);
   }
-  if (isWeeklyBreakdown(payload)) return buildWeeklyPrompt(settings, detail, extraRules);
+  const scope = weeklyScope(payload);
+  if (scope) {
+    const commonRules = [
+      buildBlacklistRule(settings.blacklist),
+      buildKindergartenProfileRule(settings.kindergartenProfile),
+      buildIktRule(settings),
+      buildMathematicsRule(settings.focusAreas),
+      buildPreviousPlanContextRule(settings.previousPlanContext),
+      extraRules
+    ].filter(Boolean).join('\n');
+    const weeklyAreaRule = buildWeeklyFocusAreasRule(settings.weeklyFocusAreas, settings.selectedDays, settings.focusAreas);
+    const toolsLine = settings.availableTools
+      ? `Rendelkezésre álló eszközök és a pedagógus saját ötletei (availableTools): ${JSON.stringify(settings.availableTools)}. Az eszközöknél és a feladatoknál ELSŐSORBAN ezeket használd.`
+      : 'Nincs megadott eszközkészlet: az óvodákban általánosan megtalálható alapfelszerelésekkel tervezz.';
+    return weeklySummary.buildSummaryPrompt(settings, detail, commonRules, {
+      withDays: scope === 'package', weeklyAreaRule, toolsLine, literatureLine: buildLiteratureSwitchLine(settings)
+    });
+  }
 
   return `Feladat: napi foglalkozásterv készítése az alábbi kérés alapján. A szerepet, a pedagógiai szerkezetet és az irodalmi szabályokat a rendszerutasítás tartalmazza.
 
 Beállítások (JSON):
 ${JSON.stringify(settings)}
-
+${dayContext ? `\n${dayContext}\n` : ''}
 ${settings.availableTools ? `Rendelkezésre álló eszközök és a pedagógus saját ötletei (availableTools): ${JSON.stringify(settings.availableTools)}. Az eszkozok listánál és a feladatok tervezésénél ELSŐSORBAN ezeket használd, a megadott ötleteket építsd be; csak indokolt esetben egészítsd ki más, általánosan megtalálható alapeszközzel.` : 'Nincs megadott eszközkészlet: az óvodákban általánosan megtalálható alapfelszerelésekkel (papír, olló, ceruza, labda stb.) tervezz.'}
 ${buildBlacklistRule(settings.blacklist)}
 ${buildKindergartenProfileRule(settings.kindergartenProfile)}
@@ -457,74 +420,14 @@ function safeParseJson(rawText) {
   }
 }
 
-function normalizeWeeklyResponse(parsed, payload) {
-  const frame = parsed.heti_keretterv;
-  if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
-    throw generationError('Hiányzó vagy hibás heti_keretterv a Gemini válaszában.');
-  }
-  const days = getSelectedDays(payload);
-  const grid = frame.teruletek_heti_eloszlasa;
-  if (!Array.isArray(grid) || grid.length !== days.length) {
-    throw generationError(`A heti_keretterv.teruletek_heti_eloszlasa nem pontosan a kiválasztott ${days.length} napot tartalmazza (${days.join(', ')}).`);
-  }
-  if (!Array.isArray(parsed.napok) || parsed.napok.length !== days.length) {
-    throw generationError(`A Gemini válasza nem tartalmaz pontosan ${days.length} napi tervezetet (${days.join(', ')}).`);
-  }
-
-  const heti_keretterv = {
-    tema: readText(frame.tema, 'heti_keretterv.tema'),
-    heti_fo_cel: readText(frame.heti_fo_cel, 'heti_keretterv.heti_fo_cel'),
-    nevelesi_feladatok: readText(frame.nevelesi_feladatok, 'heti_keretterv.nevelesi_feladatok'),
-    didaktikai_feladatok: readText(frame.didaktikai_feladatok, 'heti_keretterv.didaktikai_feladatok'),
-    teruletek_heti_eloszlasa: grid.map((row, index) => {
-      const field = `heti_keretterv.teruletek_heti_eloszlasa[${index}]`;
-      if (!row || typeof row !== 'object') throw generationError(`Hibás sor a Gemini válaszában: ${field}.`);
-      const act = readText(
-        row.csoportos_tevekenyseg ?? row.mikrocsoportos_tevekenyseg ?? row.tevekenyseg,
-        `${field}.csoportos_tevekenyseg`
-      );
-      return {
-        nap: readText(row.nap, `${field}.nap`),
-        fo_terulet: readText(row.fo_terulet, `${field}.fo_terulet`),
-        csoportos_tevekenyseg: act,
-        mikrocsoportos_tevekenyseg: act
-      };
-    }),
-    eszkozok: readStringArray(frame.eszkozok, 'heti_keretterv.eszkozok'),
-    felhasznalt_irodalom: readText(frame.felhasznalt_irodalom, 'heti_keretterv.felhasznalt_irodalom', true)
-  };
-
-  const napok = parsed.napok.map((day, index) => {
-    const field = `napok[${index}]`;
-    if (!day || typeof day !== 'object' || Array.isArray(day)) {
-      throw generationError(`Hibás napi tervezet a Gemini válaszában: ${field}.`);
-    }
-    return {
-      nap_neve: readText(day.nap_neve, `${field}.nap_neve`),
-      tevekenyseg_forma: readText(day.tevekenyseg_forma, `${field}.tevekenyseg_forma`),
-      napi_cel: readText(day.napi_cel, `${field}.napi_cel`),
-      kidolgozas_tablazat: normalizeTable(day.kidolgozas_tablazat)
-    };
-  });
-
-  return {
-    is_weekly: true,
-    summary: typeof parsed.summary === 'string' && parsed.summary.trim()
-      ? parsed.summary.trim()
-      : [heti_keretterv.tema, payload.group, payload.duration, payload.dateValue].filter(Boolean).join(' • '),
-    heti_keretterv,
-    napok,
-    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom)
-  };
-}
-
 function normalizeResponse(rawText, payload = {}) {
   const parsed = safeParseJson(rawText);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw generationError('A Gemini API válasza nem valid JSON objektum. Nem készült dokumentum.');
   }
   if (academicPlan.isAcademic(payload)) return academicPlan.normalizeAcademicResponse(parsed, payload);
-  if (isWeeklyBreakdown(payload)) return normalizeWeeklyResponse(parsed, payload);
+  const scope = weeklyScope(payload);
+  if (scope) return weeklySummary.normalizeWeeklySummary(parsed, payload, { withDays: scope === 'package' });
 
   const result = {};
   for (const field of RESPONSE_TEXT_FIELDS) {
@@ -609,6 +512,90 @@ function newServerGenerationId() {
   return `gen_${crypto.randomUUID()}`;
 }
 
+const WEEKDAY_LABELS = Object.freeze({ Hétfő: 'Hétfői', Kedd: 'Keddi', Szerda: 'Szerdai', Csütörtök: 'Csütörtöki', Péntek: 'Pénteki' });
+
+function releaseUnits(count) {
+  for (let i = 0; i < count; i += 1) releaseDailyGeneration();
+}
+
+// Teljes heti csomag: 1 heti összesítő + napi tervek, láncolt Gemini-hívásokkal a háttérben (a státuszt a GET /api/generate/:id/status adja).
+async function runWeeklyPackage({ job, request, settings, model, user, clientIp, reserved }) {
+  let used = 0;
+  try {
+    const days = getSelectedDays(request);
+    const base = {
+      model,
+      systemPrompt: settings.ai_config.system_prompt,
+      blacklist: normalizeFreeText(request.blacklist)
+    };
+
+    generationJobs.startStep(job, 0);
+    const summaryRaw = await callGemini(buildPrompt(request), {
+      ...base, maxOutputTokens: weeklySummary.SUMMARY_MAX_OUTPUT_TOKENS, timeoutMs: weeklySummary.SUMMARY_TIMEOUT_MS
+    });
+    used += 1;
+    const summaryResult = normalizeResponse(summaryRaw, request);
+    const osszesito = summaryResult.heti_osszesito;
+    generationJobs.finishStep(job, 0);
+
+    const napok = [];
+    const previous = [];
+    for (let index = 0; index < days.length; index += 1) {
+      const day = days[index];
+      generationJobs.startStep(job, index + 1);
+      const assigned = Array.isArray(request.weeklyFocusAreas?.[day]) ? request.weeklyFocusAreas[day] : [];
+      const dayRequest = {
+        ...request,
+        duration: 'Napi',
+        planKind: 'daily',
+        weeklyScope: undefined,
+        includeDailyBreakdown: false,
+        weeklyFocusAreas: {},
+        selectedDays: [day],
+        dateValue: weeklySummary.dayDate(request.dateValue, day) || request.dateValue,
+        focusAreas: assigned.length ? assigned : (request.focusAreas || []),
+        tevekenysegForma: '',
+        elozmeny: ''
+      };
+      const dayContext = weeklySummary.buildDayContext({ osszesito, day, index, total: days.length, previous });
+      const dayRaw = await callGemini(buildPrompt(dayRequest, { dayContext }), base);
+      used += 1;
+      const dayResult = normalizeResponse(dayRaw, dayRequest);
+      const assignment = (osszesito.napi_beosztas || []).find((row) => row.nap === day) || {};
+      napok.push({ ...dayResult, nap_neve: day, datum: dayRequest.dateValue || '', napi_fokusz: assignment.napi_fokusz || '' });
+      previous.push(weeklySummary.digestOfDay(day, dayResult));
+      generationJobs.finishStep(job, index + 1);
+    }
+
+    const result = {
+      is_weekly: true,
+      weekly_scope: 'package',
+      summary: [osszesito.tema, request.group, 'Teljes heti csomag', request.dateValue].filter(Boolean).join(' • '),
+      heti_osszesito: osszesito,
+      napok,
+      showLiteratureAtBottom: Boolean(request.showLiteratureAtBottom)
+    };
+    telemetryService.logEvent('document_generated', { metadata: { plan_mode: 'weekly_package', age_group: request.group, theme_category: request.theme } });
+    planStore.savePlan(job.id, { ...result, request, generationId: job.id }, user ? { userId: user.id, email: user.email } : undefined);
+    const output = shouldLockPlan(request, process.env)
+      ? { ...planStore.createMirrorPlan(result), generationId: job.id }
+      : { ...result, generationId: job.id };
+    generationJobs.completeJob(job, output);
+  } catch (error) {
+    const status = error.status || 500;
+    logger.error('generation_failed', error, { details: { status, clientIp, planMode: 'weekly_package' } });
+    mailService.sendAdminErrorAlert({
+      operation: 'Heti csomag generálás (Gemini)', error, details: { model, clientIp, topic: request?.topic, planMode: 'weekly_package' }
+    }).catch((alertErr) => console.warn('Admin error alert failed:', alertErr.message));
+    generationJobs.failJob(job, {
+      message: [400, 403, 429, 503].includes(status) ? (error.message || 'A generálás sikertelen volt.') : 'A generálás sikertelen volt.',
+      status
+    });
+  } finally {
+    releaseUnits(reserved - used);
+  }
+}
+
 app.post('/api/generate', generateLimiter, async (req, res) => {
   const clientIp = getClientIp(req);
   if (activeGenerationsByIp.has(clientIp)) {
@@ -656,6 +643,35 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       });
     }
     const model = request.requestedModel ? resolveModel(request) : settingsService.resolveAiModel(settings, FAST_MODEL);
+
+    if (weeklyScope(request) === 'package') {
+      const days = getSelectedDays(request);
+      let reserved = 0;
+      while (reserved < days.length + 1 && reserveDailyGeneration(process.env)) reserved += 1;
+      if (reserved < days.length + 1) {
+        releaseUnits(reserved);
+        return res.status(429).json({
+          success: false,
+          code: 'DAILY_CAP_REACHED',
+          error: 'A mai napra beállított összes generálási keret elfogyott. Kérjük, próbáld újra holnap!'
+        });
+      }
+      const generationId = newServerGenerationId();
+      const labels = ['Heti keretterv készítése…', ...days.map((day) => `${WEEKDAY_LABELS[day] || day} napi terv…`)];
+      const job = generationJobs.createJob({ id: generationId, ip: clientIp, labels });
+      if (!job) {
+        releaseUnits(reserved);
+        return res.status(409).json({
+          success: false,
+          code: 'GENERATION_IN_PROGRESS',
+          error: 'Már folyamatban van egy heti csomag generálása erről az IP-címről. Kérjük, várd meg a befejezést!'
+        });
+      }
+      const user = await authService.optionalUser(req);
+      runWeeklyPackage({ job, request, settings, model, user, clientIp, reserved });
+      return res.status(202).json({ success: true, async: true, generationId, ...generationJobs.publicView(job) });
+    }
+
     const prompt = buildPrompt(request);
     if (!reserveDailyGeneration(process.env)) {
       return res.status(429).json({
@@ -670,8 +686,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
         model,
         systemPrompt: settings.ai_config.system_prompt,
         blacklist: normalizeFreeText(request.blacklist),
-        maxOutputTokens: academicPlan.isAcademic(request) ? academicPlan.MAX_ACADEMIC_OUTPUT_TOKENS : (isWeeklyBreakdown(request) ? WEEKLY_MAX_OUTPUT_TOKENS : undefined),
-        timeoutMs: academicPlan.isAcademic(request) ? academicPlan.ACADEMIC_TIMEOUT_MS : (isWeeklyBreakdown(request) ? WEEKLY_TIMEOUT_MS : undefined)
+        maxOutputTokens: academicPlan.isAcademic(request) ? academicPlan.MAX_ACADEMIC_OUTPUT_TOKENS : (weeklyScope(request) ? weeklySummary.SUMMARY_MAX_OUTPUT_TOKENS : undefined),
+        timeoutMs: academicPlan.isAcademic(request) ? academicPlan.ACADEMIC_TIMEOUT_MS : (weeklyScope(request) ? weeklySummary.SUMMARY_TIMEOUT_MS : undefined)
       });
     } catch (error) {
       releaseDailyGeneration();
@@ -697,8 +713,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
 
     console.info('Generated document:', result.is_thematic
       ? { weeks: result.hetek.length }
-      : result.is_weekly
-      ? { days: result.napok.length }
+      : result.is_weekly_summary
+      ? { weeklySummary: true }
       : {
         rows: result.kidolgozas_tablazat.length,
         tableCharacters: result.kidolgozas_tablazat.reduce((total, row) =>
@@ -723,6 +739,24 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
   } finally {
     activeGenerationsByIp.delete(clientIp);
   }
+});
+
+const generationStatusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { success: false, error: 'Túl sok állapotlekérdezés. Kérjük, várj egy percet.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// A heti csomag háttérfeladatának állapota; a generationId véletlen UUID, így csak a generálást indító kliens ismeri.
+app.get('/api/generate/:id/status', generationStatusLimiter, (req, res) => {
+  const job = generationJobs.getJob(req.params.id);
+  if (!job) {
+    return res.status(404).json({ success: false, error: 'Ismeretlen vagy lejárt generálás. Kérjük, indítsd újra a tervezet készítését.' });
+  }
+  res.set('Cache-Control', 'no-store');
+  return res.json(generationJobs.publicView(job));
 });
 
 const feedbackLimiter = rateLimit({
@@ -856,4 +890,4 @@ function start(port = PORT) {
 
 if (require.main === module) start();
 
-module.exports = { generateLimiter, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };
+module.exports = { generateLimiter, generationJobs, activeGenerationsByIp, getClientIp, buildPreviousPlanContextRule, verifyTurnstileToken, feedbackLimiter, getSelectedDays, WEEKDAYS, start, app, corsOrigin, allowedOrigins, resolveModel, FAST_MODEL, PREMIUM_MODEL, buildPrompt, callGemini, clampRows, normalizeResponse, planStore, shouldLockPlan, validateGeneratePayload, reserveDailyGeneration, releaseDailyGeneration, resetDailyGenerations, dailyGenerationCap, turnstileWarning, DEFAULT_DAILY_GENERATION_CAP, billingStatus };

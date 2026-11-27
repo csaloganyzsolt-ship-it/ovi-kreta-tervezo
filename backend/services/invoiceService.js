@@ -1,6 +1,7 @@
 'use strict';
 
 const { PRODUCTS } = require('./stripeService');
+const { resolveProductKey } = require('./pricing');
 const { normalizeHuTaxNumber } = require('../utils/taxNumber');
 
 const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
@@ -63,7 +64,8 @@ function orderNumber(orderId, created = new Date()) {
 }
 
 function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent, billingProfile }, env = process.env, date = new Date()) {
-  const product = PRODUCTS[plan];
+  // A régi (weekly, weekly_detailed) rendelések kulcsait is kiszolgáljuk.
+  const product = PRODUCTS[resolveProductKey(plan)];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
   // Kuponos fizetésnél a számla a ténylegesen fizetett (kedvezményes) összegről szól.
   const gross = Number.isInteger(amountHuf) && amountHuf > 0 ? amountHuf : product.amountHuf;

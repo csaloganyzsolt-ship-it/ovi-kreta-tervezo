@@ -13,7 +13,7 @@ const { LITERATURE_PRIORITY_RULE } = require('../backend/services/literatureRule
 
 const ROLE_ESSAY = /mester-óvodapedagógus vagy|szakmódszertani oktató|öt egymásra épülő fázis|Szigorú pedagógiai szabály|Ne használj elcsépelt/;
 
-const weekly = () => makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true });
+const weekly = () => makePayload({ duration: 'Heti', planMode: 'standard', planKind: 'weekly', weeklyScope: 'summary' });
 const prompts = () => ({
   daily: buildPrompt(makePayload()),
   weekly: buildPrompt(weekly()),
@@ -32,8 +32,8 @@ test('the code-side prompts keep the request data, the plan type and the JSON sc
   const all = prompts();
   const payload = makePayload();
   for (const value of [payload.theme, payload.group, 'kidolgozas_tablazat']) assert.ok(all.daily.includes(value), `daily: ${value}`);
-  assert.match(all.weekly, /heti_keretterv/);
-  assert.match(all.weekly, /pontosan 5 elem/);
+  assert.match(all.weekly, /megjegyzes_egyeb_tevekenysegek/);
+  assert.match(all.weekly, /hat nevelési terület/);
   assert.match(all.academicDaily, /"kidolgozas_tablazat"/);
   assert.match(all.thematic, /"hetek"/);
 });

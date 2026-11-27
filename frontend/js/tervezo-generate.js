@@ -121,13 +121,20 @@ function startGenerationLoader(payload) {
   const loader = document.getElementById('generationLoader');
   const status = document.getElementById('generationStatus');
   const elapsed = document.getElementById('generationElapsed');
-  const phases = payload.planMode === 'academic' ? ACADEMIC_PHASES : (payload.duration === 'Heti' && payload.includeDailyBreakdown ? WEEKLY_PHASES : DAILY_PHASES);
+  const isPackage = payload.duration === 'Heti' && payload.weeklyScope === 'package';
+  const phases = payload.planMode === 'academic' ? ACADEMIC_PHASES : (isPackage ? WEEKLY_PHASES : DAILY_PHASES);
+  generationProgress = null;
   const startedAt = Date.now();
   const tick = () => {
     const seconds = Math.floor((Date.now() - startedAt) / 1000);
     const phase = phases.filter(([from]) => seconds >= from).pop();
-    if (status) status.textContent = phase[1];
-    if (elapsed) elapsed.textContent = `Eltelt idő: ${seconds} mp${phases === WEEKLY_PHASES ? ' – a heti terv akár 2–3 percig is eltarthat' : (phases === ACADEMIC_PHASES ? ' – az oktatási célú tervezet akár 2–3 percig is eltarthat' : '')}`;
+    const progress = generationProgress;
+    if (status) {
+      status.textContent = progress && progress.label
+        ? `${progress.label} (${progress.done}/${progress.total} lépés kész)`
+        : phase[1];
+    }
+    if (elapsed) elapsed.textContent = `Eltelt idő: ${seconds} mp${isPackage ? ' – a teljes heti csomag több percig is eltarthat, ne zárd be az oldalt' : (phases === ACADEMIC_PHASES ? ' – az oktatási célú tervezet akár 2–3 percig is eltarthat' : '')}`;
   };
   tick();
   if (loader) loader.hidden = false;
@@ -139,6 +146,46 @@ function startGenerationLoader(payload) {
 }
 
 let generationInFlight = false;
+let generationProgress = null;
+
+const POLL_INTERVAL_MS = 2500;
+const POLL_MAX_MS = 15 * 60 * 1000;
+const POLL_MAX_NETWORK_ERRORS = 5;
+
+// Az aszinkron (heti csomag) generálás állapotát kérdezi le; a folyamatjelző feliratát a szerver lépéscímkéi adják.
+async function pollGenerationJob(apiBaseUrl, started) {
+  const startedAt = Date.now();
+  let networkErrors = 0;
+  let view = started;
+  for (;;) {
+    generationProgress = view.progress || generationProgress;
+    if (view.status === 'done') {
+      if (!view.result) throw new Error('A szerver befejezettnek jelezte a generálást, de nem adott vissza tervezetet.');
+      return { ...view.result, success: true };
+    }
+    if (view.status === 'error') throw new Error(view.error || 'A heti csomag generálása sikertelen volt.');
+    if (Date.now() - startedAt > POLL_MAX_MS) throw new Error('A generálás időtúllépés miatt megszakadt. Kérjük, próbáld újra.');
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    let response;
+    try {
+      response = await fetch(`${apiBaseUrl}/api/generate/${encodeURIComponent(started.generationId)}/status`, { headers: { ...authHeaders() } });
+    } catch (networkError) {
+      networkErrors += 1;
+      if (networkErrors >= POLL_MAX_NETWORK_ERRORS) throw new Error('A kapcsolat megszakadt a generálás követése közben. Kérjük, próbáld újra.');
+      continue;
+    }
+    if (response.status === 404) throw new Error('A generálás állapota nem található (a szerver újraindulhatott). Kérjük, indítsd újra a generálást.');
+    let body;
+    try { body = await response.json(); } catch (_error) { body = null; }
+    if (!response.ok || !body) {
+      networkErrors += 1;
+      if (networkErrors >= POLL_MAX_NETWORK_ERRORS) throw new Error(body?.error || `A generálás állapota nem kérdezhető le (HTTP ${response.status}).`);
+      continue;
+    }
+    networkErrors = 0;
+    view = body;
+  }
+}
 
 async function generatePlan() {
   if (generationInFlight) return;
@@ -204,6 +251,8 @@ async function generatePlan() {
       }
       throw new Error(rawDetails || `A szerver nem jelzett sikeres generálást (HTTP ${response.status}).`);
     }
+
+    if (data.async) data = await pollGenerationJob(apiBaseUrl, data);
 
     const generatedResult = { ...data, request: payload, generationId: data.generationId || newGenerationId() };
     renderResultDocument(generatedResult);

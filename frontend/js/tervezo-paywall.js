@@ -4,12 +4,12 @@
 // ===== Fizetési kapu (teaser) =====
 // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
 // Az oktatási célú (academic) tervezet napi és heti formában is 690 Ft; a szerver (services/pricing.js) a mérvadó, a teszt egyezésüket ellenőrzi.
-const PAYWALL_PRICES = { daily: 390, weekly: 390, weekly_detailed: 890, academic_daily: 690, academic_weekly: 690 };
+const PAYWALL_PRICES = { daily: 390, weekly_summary: 390, weekly_package: 890, academic_daily: 690, academic_weekly: 690 };
 
 const PLAN_LABELS = {
   daily: 'Napi tervezet',
-  weekly: 'Heti alapcsomag',
-  weekly_detailed: 'Heti részletes csomag (keretterv + 5 napi tervezet)',
+  weekly_summary: 'Heti összesítő',
+  weekly_package: 'Teljes heti csomag (összesítő + napi tervek)',
   academic_daily: 'Oktatási célú napi tervezet',
   academic_weekly: 'Oktatási célú heti tematikus terv'
 };
@@ -69,10 +69,10 @@ function isPlanLocked(result = lastResult) {
 }
 
 function planKind(result = lastResult) {
-  if (result?.is_weekly === true) return 'weekly_detailed';
+  if (result?.is_weekly === true) return 'weekly_package';
   const weekly = result?.is_thematic === true || result?.request?.duration === 'Heti';
   if (isAcademicResult(result)) return weekly ? 'academic_weekly' : 'academic_daily';
-  return weekly ? 'weekly' : 'daily';
+  return weekly ? 'weekly_summary' : 'daily';
 }
 
 function currentPlanMode(result = lastResult) {
@@ -537,7 +537,7 @@ async function downloadInvoice() {
 
 // Egyetlen közös levél a vevőnek: a tervezetfájlok (napi: PDF+DOCX, heti: ZIP) a szerveren tárolt számlával együtt.
 function planTitle() {
-  return String(lastResult?.heti_keretterv?.tema || lastResult?.request?.theme || '').trim().slice(0, 200);
+  return String(lastResult?.heti_osszesito?.tema || lastResult?.heti_keretterv?.tema || lastResult?.request?.theme || '').trim().slice(0, 200);
 }
 
 async function buildDeliveryFiles() {

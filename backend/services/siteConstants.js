@@ -6,7 +6,7 @@
 const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html', 'profil.html', 'leiratkozas.html', 'admin.html'];
 const SITE_ASSETS = [
   'styles.css', 'js/site.js', 'js/theme-init.js', 'js/telemetry.js',
-  'js/tervezo-core.js', 'js/tervezo-academic.js', 'js/tervezo-form.js', 'js/tervezo-preview.js', 'js/tervezo-export.js',
+  'js/tervezo-core.js', 'js/tervezo-academic.js', 'js/tervezo-weekly.js', 'js/tervezo-form.js', 'js/tervezo-preview.js', 'js/tervezo-export.js',
   'js/tervezo-generate.js', 'js/tervezo-paywall.js', 'js/tervezo-history.js', 'js/tervezo-init.js', 'js/barion-pixel.js', 'js/auth.js', 'js/profil.js', 'js/leiratkozas.js', 'js/admin.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
 ];

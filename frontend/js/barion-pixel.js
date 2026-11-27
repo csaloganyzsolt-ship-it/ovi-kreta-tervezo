@@ -31,7 +31,7 @@
   const CATALOG = [
     { id: 'daily', name: 'Napi tervezet', price: 390 },
     { id: 'academic_daily', name: 'Oktatási célú tervezet', price: 690 },
-    { id: 'weekly_detailed', name: 'Heti részletes csomag', price: 890 }
+    { id: 'weekly_package', name: 'Teljes heti csomag', price: 890 }
   ];
 
   function contentsOf(items) {

@@ -9,7 +9,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 const FRONTEND_JS = path.join(__dirname, '..', '..', 'frontend', 'js');
-const SCRIPTS = ['tervezo-core.js', 'tervezo-academic.js', 'tervezo-preview.js', 'tervezo-export.js'];
+const SCRIPTS = ['tervezo-core.js', 'tervezo-academic.js', 'tervezo-weekly.js', 'tervezo-preview.js', 'tervezo-export.js'];
 
 // A szerveren nincs fizetési zárolás és űrlap: a tárolt, feloldott terv teljes tartalma készül el.
 const SERVER_STUBS = `

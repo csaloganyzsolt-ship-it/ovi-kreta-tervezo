@@ -138,6 +138,12 @@
                   <button class="segment" type="button" data-group="duration" data-value="Heti">Heti</button>
                 </div>
                 <div id="weeklySettingsPanel" class="weekly-settings-panel" hidden>
+                  <span class="weekly-days-label" id="weeklyScopeLabel">Mit szeretnél kapni?</span>
+                  <div class="segmented" data-group="weeklyScope" role="group" aria-labelledby="weeklyScopeLabel">
+                    <button class="segment active" type="button" data-group="weeklyScope" data-value="summary">Csak heti összesítő</button>
+                    <button class="segment" type="button" data-group="weeklyScope" data-value="package">Teljes heti csomag (összesítő + napi tervek)</button>
+                  </div>
+                  <div id="weeklyDaysBlock" hidden>
                   <span class="weekly-days-label" id="weeklyDaysLabel">Melyik napokra készüljön részletes tervezet?</span>
                   <div class="day-picker" id="weeklyDayPicker" role="group" aria-labelledby="weeklyDaysLabel">
                     <button class="day-chip active" type="button" data-day="Hétfő" aria-pressed="true">Hétfő</button>
@@ -146,7 +152,8 @@
                     <button class="day-chip active" type="button" data-day="Csütörtök" aria-pressed="true">Csütörtök</button>
                     <button class="day-chip active" type="button" data-day="Péntek" aria-pressed="true">Péntek</button>
                   </div>
-                  <small class="field-hint" id="weeklyDaysHint" role="status">A heti keretterv mellé a kijelölt napokra készül részletes napi tervezet (egységesen a heti csomag ára). Legalább egy napot ki kell választani.</small>
+                  <small class="field-hint" id="weeklyDaysHint" role="status">A heti összesítő mellé a kijelölt napokra külön, teljes értékű napi tervezet készül (a generálás több percig is tarthat). Legalább egy napot ki kell választani.</small>
+                  </div>
                   <small class="field-hint">A heti építkezés és a pénteki lezárás a 3. lépés „Speciális beállítások” részében módosítható.</small>
                 </div>
               </div>
@@ -399,6 +406,7 @@
                 <div class="segmented" data-group="detail" role="group" aria-labelledby="detailLabel">
                   <button class="segment" type="button" data-group="detail" data-value="concise">Tömör vázlat</button>
                   <button class="segment active" type="button" data-group="detail" data-value="detailed">Részletesen kidolgozott tervezet</button>
+                  <button class="segment" type="button" data-group="detail" data-value="extended">Kibővített, mély kidolgozás (1400–2000 szó)</button>
                 </div>
               </div>
 
@@ -751,6 +759,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
     <script src="js/tervezo-core.js"></script>
     <script src="js/tervezo-academic.js"></script>
+    <script src="js/tervezo-weekly.js"></script>
     <script src="js/tervezo-form.js"></script>
     <script src="js/tervezo-preview.js"></script>
     <script src="js/tervezo-export.js"></script>

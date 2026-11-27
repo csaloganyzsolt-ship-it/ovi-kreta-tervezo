@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const { buildPrompt } = require('../backend/server');
+const weeklySummary = require('../backend/services/weeklySummary');
 const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const GOLDEN_DIR = path.join(__dirname, 'golden');
@@ -80,16 +81,26 @@ test('golden: weekly request payload', async (t) => {
 function weeklyPlan() {
   const days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
   const row = { ido: '10 perc', tevekenyseg_menete: ['Első bekezdés.', 'Második bekezdés.'], modszerek_megjegyzesek: 'Megfigyelés' };
-  return {
-    is_weekly: true,
-    summary: 'Heti projekt',
-    heti_keretterv: {
-      tema: 'Erdő', heti_fo_cel: 'Cél', nevelesi_feladatok: 'N', didaktikai_feladatok: 'D',
-      teruletek_heti_eloszlasa: days.map((nap, index) => ({ nap, fo_terulet: `Terület ${index + 1}`, csoportos_tevekenyseg: `Tevékenység ${index + 1}` })),
-      eszkozok: ['levél'], felhasznalt_irodalom: ''
+  const list = ['Tétel'];
+  const request = makePayload({ duration: 'Heti', planKind: 'weekly', weeklyScope: 'package', dateValue: '2026-W45' });
+  const summary = weeklySummary.normalizeWeeklySummary({
+    tema: 'Erdő', altema: 'Az erdő lakói',
+    teruletek: {
+      kulso_vilag: list, kulso_vilag_matematika: list, rajzolas: list, mozgas: list,
+      verseles_meseles: { versek: list, ismetles: [], mesek: list, szolasok_kozmondasok: [], talalos_kerdesek: [], nyelvtorok: [] },
+      enek_zene: { dalok: list, ismetles: [], enekes_jatekok: list, kiszamolo: [], zenei_kepessegfejlesztes: [], zenehallgatas: list }
     },
+    keretrendszer: { celok: list, feladatok: list, kiemelt_fejlesztesi_teruletek: list, modszerek: list, eszkozok: list },
+    megjegyzes_egyeb_tevekenysegek: { jatekbovites: list, anyanyelvi_jatekok: list, fejlesztojatek: list, kirandulas_setak: list },
+    felhasznalt_irodalom: 'Forrás',
+    napi_beosztas: days.map((nap, index) => ({ nap, fo_terulet: `Terület ${index + 1}`, napi_fokusz: 'Fókusz', napi_cel: 'Cél' }))
+  }, request, { withDays: true });
+  return {
+    ...summary,
+    is_weekly: true,
+    weekly_scope: 'package',
     napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'Mese és vers', napi_cel: 'C', kidolgozas_tablazat: [row] })),
-    request: makePayload({ duration: 'Heti', planMode: 'weekly', dateValue: '2026-W45' })
+    request
   };
 }
 
@@ -119,8 +130,8 @@ test('golden: rendered locked document', async (t) => {
 test('golden: generation prompts', () => {
   const weekly = makePayload({
     duration: 'Heti',
-    planMode: 'weekly',
-    includeDailyBreakdown: true,
+    planKind: 'weekly',
+    weeklyScope: 'package',
     selectedDays: ['Hétfő', 'Szerda', 'Péntek'],
     weeklyProgressionType: 'progressive',
     fridayClosingType: 'Szülői kiállítás',

@@ -11,8 +11,16 @@ function validateGeneratedPlan(result) {
     }
     return;
   }
+  if (result.is_weekly_summary === true) {
+    const body = result.heti_osszesito;
+    if (!body || typeof body.teruletek !== 'object' || typeof body.keretrendszer !== 'object' || typeof body.megjegyzes_egyeb_tevekenysegek !== 'object') {
+      throw new Error('A heti összesítőből hiányzik a területi bontás, a keretrendszer vagy a megjegyzés blokk.');
+    }
+    return;
+  }
   if (result.is_weekly === true && Array.isArray(result.napok)) {
-    if (!result.heti_keretterv || typeof result.heti_keretterv !== 'object' || !result.napok.length) {
+    const hasFrame = (result.heti_osszesito && typeof result.heti_osszesito === 'object') || (result.heti_keretterv && typeof result.heti_keretterv === 'object');
+    if (!hasFrame || !result.napok.length) {
       throw new Error('A heti tervezetből hiányzik a keretterv vagy a napi bontás.');
     }
     return;
@@ -49,15 +57,23 @@ function validateGeneratedPlan(result) {
 let activeDocId = null;
 
 function getDocumentList(result = lastResult) {
+  if (result?.is_weekly_summary === true) {
+    const req = result.request || lastResult?.request || {};
+    const mondayDateStr = getMondayDateForWeek(req.dateValue).toISOString().slice(0, 10);
+    return [{ id: 'main', label: 'Heti összesítő', fileBase: `heti-osszesito_${mondayDateStr}`, kind: 'weekly_summary' }];
+  }
   if (result?.is_weekly === true && Array.isArray(result.napok)) {
     const req = result.request || lastResult?.request || (typeof buildGenerationPayload === 'function' ? buildGenerationPayload() : {});
     const mondayDate = getMondayDateForWeek(req.dateValue);
     const mondayDateStr = mondayDate.toISOString().slice(0, 10);
     const frame = result.heti_keretterv || {};
-    const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa : [];
+    const grid = Array.isArray(frame.teruletek_heti_eloszlasa) ? frame.teruletek_heti_eloszlasa
+      : (Array.isArray(result.heti_osszesito?.napi_beosztas) ? result.heti_osszesito.napi_beosztas : []);
 
     return [
-      { id: 'keret', label: 'Heti Keretterv', fileBase: `00_heti-keretterv_${mondayDateStr}`, kind: 'frame' },
+      result.heti_osszesito
+        ? { id: 'keret', label: 'Heti összesítő', fileBase: `00_heti-osszesito_${mondayDateStr}`, kind: 'frame' }
+        : { id: 'keret', label: 'Heti Keretterv', fileBase: `00_heti-keretterv_${mondayDateStr}`, kind: 'frame' },
       ...result.napok.map((day, index) => {
         const dayName = day.nap_neve || `Nap_${index + 1}`;
         const daySlug = WEEKDAY_SLUGS[dayName] || asciiSlug(dayName).toLowerCase() || `nap-${index + 1}`;
@@ -106,9 +122,11 @@ function currentDocKey() {
   return activeDocId || 'main';
 }
 
-// A 7 oszlopos tematikus mátrix csak fekvő A4-en olvasható; minden más dokumentum álló A4. Egységes 15 mm-es margó (PAGE_MARGIN_MM).
-function getDocOrientation(result = lastResult) {
-  return result?.is_thematic === true ? 'landscape' : 'portrait';
+// A 7 oszlopos tematikus mátrix és a heti összesítő fekvő A4-en olvasható; minden más dokumentum (a heti csomag napi tervei is) álló A4. Egységes 15 mm-es margó (PAGE_MARGIN_MM).
+function getDocOrientation(result = lastResult, docId = activeDocId) {
+  if (result?.is_thematic === true || result?.is_weekly_summary === true) return 'landscape';
+  if (result?.is_weekly === true && result.heti_osszesito && docId === 'keret') return 'landscape';
+  return 'portrait';
 }
 
 function renderDocumentTabs(list) {
@@ -186,12 +204,27 @@ function buildMetaBlock(metaRows) {
 }
 
 function buildDocumentHtml(result, request, docId) {
-  const orientation = getDocOrientation(result);
-  const showLiterature = document.querySelector('[data-field="show-literature"]')?.checked ?? result.showLiteratureAtBottom ?? false;
+  const orientation = getDocOrientation(result, docId);
   const locked = isPlanLocked(result);
 
   if (result.is_thematic === true) return buildThematicHtml(result, request, { locked });
   if (result.planMode === 'academic') return buildAcademicDailyHtml(result, request, { locked });
+  if (result.is_weekly_summary === true) return buildWeeklySummaryHtml(result, request, { locked });
+
+  if (result.is_weekly === true && Array.isArray(result.napok) && result.heti_osszesito) {
+    if (docId === 'keret') return buildWeeklySummaryHtml(result, request, { locked });
+    const day = result.napok[Number(String(docId).replace('nap-', ''))] || {};
+    const assigned = Array.isArray(request.weeklyFocusAreas?.[day.nap_neve]) ? request.weeklyFocusAreas[day.nap_neve] : [];
+    const row = (result.heti_osszesito.napi_beosztas || []).find((item) => item.nap === day.nap_neve);
+    const dayRequest = {
+      ...request,
+      dateValue: day.datum || request.dateValue,
+      focusAreas: assigned.length ? assigned : (row?.fo_terulet ? [row.fo_terulet] : request.focusAreas)
+    };
+    return buildDailyHtml({ ...day, showLiteratureAtBottom: result.showLiteratureAtBottom }, dayRequest, { orientation, locked, title: `Napi tervezet – ${day.nap_neve || ''}`, lockResult: result });
+  }
+
+  const showLiterature = result.showLiteratureAtBottom ?? false;
 
   if (result.is_weekly === true && Array.isArray(result.napok)) {
     const frame = result.heti_keretterv || {};
@@ -270,15 +303,24 @@ function buildDocumentHtml(result, request, docId) {
               </div>` : ''}`;
   }
 
+  return buildDailyHtml(result, request, { orientation, locked, title: 'Napi tervezet' });
+}
+
+// Napi tervezet (önálló, illetve a heti csomag napja): teljes fejléc, cél- és feladatrendszer, kidolgozási táblázat, irodalom.
+function buildDailyHtml(result, request, { orientation, locked, title, lockResult = result }) {
+  const showLiterature = result.showLiteratureAtBottom ?? false;
   const summary = result.summary || [result.tema, request.group, request.duration, request.dateValue].filter(Boolean).join(' • ');
-  const title = request.planMode === 'weekly' ? 'Heti tervezet' : 'Napi tervezet';
   const focusAreasText = Array.isArray(request.focusAreas) && request.focusAreas.length > 0
     ? request.focusAreas.join(', ')
     : '—';
+  const specialNeeds = Array.isArray(request.specialNeeds) ? request.specialNeeds.filter(Boolean) : [];
   const metaRows = [
     ['Óvoda', request.kindergartenName || '—'],
     ['Óvodapedagógus', request.teacherName || '—'],
     ['Csoport', request.groupName || request.group || '—'],
+    ['Dátum', formatAcademicDate(request.dateValue) || '—'],
+    ['Létszám', request.childCount ? `${request.childCount} fő` : '—'],
+    ...(specialNeeds.length ? [['SNI / differenciálás', specialNeeds.join(', ')]] : []),
     ['Nevelési terület', focusAreasText],
     ['Forma', result.tevekenyseg_forma],
     ['Előzmény', result.elozmeny],
@@ -305,7 +347,7 @@ function buildDocumentHtml(result, request, docId) {
             <h3>Cél- és feladatrendszer</h3>
             ${professionalFields.map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}
           </div>
-          ${locked ? buildLockedBoundaryCard(result) : ''}
+          ${locked ? buildLockedBoundaryCard(lockResult) : ''}
           <div class="doc-section doc-table-section ${locked ? 'locked-mirror-section' : ''}">
             <h3>A tevékenység/foglalkozás kidolgozása</h3>
             ${buildActivityTable(result.kidolgozas_tablazat, orientation, locked)}
@@ -331,7 +373,7 @@ function renderResultDocument(data = lastResult) {
   if (!list.some((doc) => doc.id === activeDocId)) activeDocId = list[0].id;
   resultDocument.innerHTML = buildDocumentHtml(data, request, activeDocId);
   renderDocumentTabs(list);
-  resultDocument.dataset.orientation = getDocOrientation(data);
+  resultDocument.dataset.orientation = getDocOrientation(data, activeDocId);
   paginateDocument(resultDocument);
   applyPaywall(resultDocument);
   updateExportLock();

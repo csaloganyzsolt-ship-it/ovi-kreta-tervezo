@@ -82,9 +82,12 @@ function countLockedContent(plan) {
       activity_count: plan.hetek.reduce((total, week) => total + countStrings(week?.teruletek), 0)
     };
   }
+  if (plan.is_weekly_summary === true && plan.heti_osszesito) {
+    return { table_count: 1, activity_count: countStrings(plan.heti_osszesito.teruletek) };
+  }
   if (plan.is_weekly === true && Array.isArray(plan.napok)) {
-    let table_count = 0;
-    let activity_count = 0;
+    let table_count = plan.heti_osszesito ? 1 : 0;
+    let activity_count = plan.heti_osszesito ? countStrings(plan.heti_osszesito.teruletek) : 0;
     for (const day of plan.napok) {
       if (Array.isArray(day?.kidolgozas_tablazat) && day.kidolgozas_tablazat.length) {
         table_count += 1;
@@ -103,6 +106,36 @@ function countLockedContent(plan) {
 function formatExtentSummary(tableCount, activityCount) {
   return `A teljes dokumentum elkészült: ${tableCount} részletes táblázat és ${activityCount} kidolgozott tevékenységi egység vár feloldásra.`;
 }
+
+function maskTable(table) {
+  return Array.isArray(table)
+    ? table.map((row) => ({
+        ido: row.ido || '',
+        tevekenyseg_menete: (Array.isArray(row.tevekenyseg_menete)
+          ? row.tevekenyseg_menete
+          : [String(row.tevekenyseg_menete || '')]
+        ).map((p) => generateFillerText(p)),
+        modszerek_megjegyzesek: generateFillerText(row.modszerek_megjegyzesek || '')
+      }))
+    : [];
+}
+
+// A megadott kulcsok kivételével minden mező töltelékszöveg lesz (a szerkezet és a hossz megmarad).
+function maskExcept(object, visibleKeys) {
+  if (!object || typeof object !== 'object') return object;
+  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, visibleKeys.includes(key) ? value : mirrorValue(value)]));
+}
+
+// Fizetés előtt csak a téma, az altéma és a dátum olvasható; a területek, a cél- és feladatrendszer, a módszerek és az eszközök maszkoltak.
+function maskWeeklySummary(osszesito) {
+  const masked = maskExcept(osszesito, ['tema', 'altema', 'datum']);
+  if (Array.isArray(osszesito?.napi_beosztas)) {
+    masked.napi_beosztas = osszesito.napi_beosztas.map((row) => maskExcept(row, ['nap']));
+  }
+  return masked;
+}
+
+const DAILY_LOCKED_FIELDS = ['cel', 'nevelesi_feladatok', 'didaktikai_feladatok', 'kepessegfejlesztes', 'elozmeny', 'modszerek', 'eszkozok'];
 
 function createMirrorPlan(plan) {
   if (!plan || typeof plan !== 'object') return plan;
@@ -128,49 +161,33 @@ function createMirrorPlan(plan) {
     };
   }
 
-  if (plan.is_weekly === true && Array.isArray(plan.napok)) {
-    const mirror = {
-      ...plan,
-      locked_meta,
-      heti_keretterv: plan.heti_keretterv ? {
-        ...plan.heti_keretterv,
-        felhasznalt_irodalom: plan.heti_keretterv.felhasznalt_irodalom
-          ? generateFillerText(plan.heti_keretterv.felhasznalt_irodalom)
-          : ''
-      } : plan.heti_keretterv,
-      napok: plan.napok.map((day) => ({
-        ...day,
-        kidolgozas_tablazat: Array.isArray(day.kidolgozas_tablazat)
-          ? day.kidolgozas_tablazat.map((row) => ({
-              ido: row.ido || '',
-              tevekenyseg_menete: (Array.isArray(row.tevekenyseg_menete)
-                ? row.tevekenyseg_menete
-                : [String(row.tevekenyseg_menete || '')]
-              ).map((p) => generateFillerText(p)),
-              modszerek_megjegyzesek: generateFillerText(row.modszerek_megjegyzesek || '')
-            }))
-          : []
-      }))
-    };
-    return mirror;
+  if (plan.is_weekly_summary === true && plan.heti_osszesito) {
+    return { ...plan, locked_meta, heti_osszesito: maskWeeklySummary(plan.heti_osszesito) };
   }
 
+  if (plan.is_weekly === true && Array.isArray(plan.napok)) {
+    return {
+      ...plan,
+      locked_meta,
+      ...(plan.heti_osszesito ? { heti_osszesito: maskWeeklySummary(plan.heti_osszesito) } : {}),
+      ...(plan.heti_keretterv ? { heti_keretterv: maskExcept(plan.heti_keretterv, ['tema']) } : {}),
+      napok: plan.napok.map((day) => {
+        const masked = maskExcept(day, ['nap_neve', 'datum', 'tema', 'tevekenyseg_forma']);
+        masked.kidolgozas_tablazat = maskTable(day.kidolgozas_tablazat);
+        return masked;
+      })
+    };
+  }
+
+  // Az oktatási célú napi terv a korábbi (csak táblázat- és irodalommaszkolású) formát tartja; a standard napinál a cél-, feladat-, módszer- és eszközmezők is maszkoltak.
+  const masked = planModeOf(plan) === 'academic' ? { ...plan } : maskExcept(plan, ['tema', 'tevekenyseg_forma', ...Object.keys(plan).filter((key) => !DAILY_LOCKED_FIELDS.includes(key))]);
   return {
-    ...plan,
+    ...masked,
     locked_meta,
     felhasznalt_irodalom: plan.felhasznalt_irodalom
       ? generateFillerText(plan.felhasznalt_irodalom)
       : '',
-    kidolgozas_tablazat: Array.isArray(plan.kidolgozas_tablazat)
-      ? plan.kidolgozas_tablazat.map((row) => ({
-          ido: row.ido || '',
-          tevekenyseg_menete: (Array.isArray(row.tevekenyseg_menete)
-            ? row.tevekenyseg_menete
-            : [String(row.tevekenyseg_menete || '')]
-          ).map((p) => generateFillerText(p)),
-          modszerek_megjegyzesek: generateFillerText(row.modszerek_megjegyzesek || '')
-        }))
-      : []
+    kidolgozas_tablazat: maskTable(plan.kidolgozas_tablazat)
   };
 }
 

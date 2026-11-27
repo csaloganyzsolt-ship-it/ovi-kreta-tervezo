@@ -75,9 +75,10 @@ function setPlanMode(mode) {
   updateWeeklyDailyBreakdownVisibility();
 }
 
-// Heti időtartamnál mindig készül napi bontás (kivéve az oktatási célú tematikus tervet); a kijelölt napok hétfő–péntek sorrendben jönnek vissza.
-function getWeeklyDailyBreakdown() {
-  return getSelectedDuration() === 'Heti' && !isAcademicMode();
+// Heti módban két választás van: csak összesítő (summary) vagy teljes csomag (package: összesítő + napi tervek).
+function getWeeklyScope() {
+  if (getSelectedDuration() !== 'Heti' || isAcademicMode()) return undefined;
+  return getChoice('weeklyScope', 'summary') === 'package' ? 'package' : 'summary';
 }
 
 function getSelectedDays() {
@@ -114,7 +115,10 @@ function toggleWeekday(chip) {
 
 function describeDuration(payload) {
   if (payload.duration !== 'Heti') return payload.duration;
-  return payload.planMode === 'academic' ? 'Heti tematikus terv (egy hét)' : `Heti tervezet (${(payload.selectedDays || []).join(', ')})`;
+  if (payload.planMode === 'academic') return 'Heti tematikus terv (egy hét)';
+  return payload.weeklyScope === 'package'
+    ? `Teljes heti csomag (${(payload.selectedDays || []).join(', ')})`
+    : 'Csak heti összesítő';
 }
 
 function getWeeklyProgressionType() {
@@ -142,6 +146,8 @@ function updateWeeklyDailyBreakdownVisibility() {
   if (panel) panel.hidden = !isWeekly;
   const advancedBlock = document.getElementById('weeklyAdvancedBlock');
   if (advancedBlock) advancedBlock.hidden = !isWeekly;
+  const daysBlock = document.getElementById('weeklyDaysBlock');
+  if (daysBlock) daysBlock.hidden = !(isWeekly && getChoice('weeklyScope', 'summary') === 'package');
   const dailyFocusField = document.getElementById('dailyFocusAreaField');
   if (dailyFocusField) dailyFocusField.hidden = false;
   updateFocusAreaDayRows();
@@ -163,22 +169,9 @@ function getWeeklyFocusAreas() {
   return result;
 }
 
-function getWeeklyAreaAssignments() {
-  const result = {};
-  document.querySelectorAll('.focus-area-card').forEach((card) => {
-    const checkbox = card.querySelector('input[data-focus-area]');
-    if (!checkbox || !checkbox.checked) return;
-    const area = checkbox.dataset.focusArea;
-    const select = card.querySelector('.focus-area-day-select');
-    const day = select?.value || 'any';
-    if (area) result[area] = day;
-  });
-  return result;
-}
-
 const ENERGY_DEFAULT = 'Átlagos';
 
-const DETAIL_LEVELS = { concise: 30, detailed: 68 };
+const DETAIL_LEVELS = { concise: 30, detailed: 68, extended: 90 };
 
 function getChoice(group, fallback) {
   return document.querySelector(`.segment.active[data-group="${group}"]`)?.dataset.value || fallback;
@@ -281,8 +274,8 @@ function renderSummaryChecklist() {
       `Nevelési területek: ${isWeekly
         ? (payload.focusAreas.length
             ? payload.focusAreas.map((area) => {
-                const day = payload.weeklyAreaAssignments?.[area];
-                return `${area}${day && day !== 'any' ? ` (${day})` : ' (bármelyik nap)'}`;
+                const days = Object.entries(payload.weeklyFocusAreas || {}).filter(([, list]) => list.includes(area)).map(([day]) => day);
+                return `${area}${days.length ? ` (${days.join(', ')})` : ' (bármelyik nap)'}`;
               }).join('; ')
             : 'Nincs kiválasztva (általános heti elosztás)')
         : (payload.focusAreas.join(', ') || 'Nincs kiválasztva')}`,
@@ -304,14 +297,14 @@ function renderSummaryChecklist() {
       `Kötelező mese/vers/dal: ${customNotes.requiredText || none}`,
       `Kiválasztott célkifejezések: ${selectedGoals.length ? selectedGoals.join(', ') : 'Nincs kiválasztva'}`,
       `Külön kérés: ${customNotes.customRequest || none}`,
-      `Kidolgozottság: ${payload.detail === 'concise' ? 'Tömör vázlat' : 'Részletesen kidolgozott tervezet'}`
+      `Kidolgozottság: ${{ concise: 'Tömör vázlat', extended: 'Kibővített, mély kidolgozás' }[payload.detail] || 'Részletesen kidolgozott tervezet'}`
     ]],
     ['Speciális beállítások', [
       `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
       `Előzmény: ${payload.elozmeny || none}`,
       `Előző tervezet csatolva: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
       `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
-      `IKT / Digitális eszközök: ${payload.iktEnabled ? (payload.iktSummary || 'Igen') : 'Nem'}`,
+      `IKT / Digitális eszközök: ${payload.iktEnabled ? ([...(payload.iktTools || []), payload.iktCustomApp].filter(Boolean).join('; ') || 'Igen') : 'Nem'}`,
       `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
       `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
     ]]
@@ -387,7 +380,6 @@ function collectDraftState() {
     detail: getChoice('detail', 'detailed'),
     selectedGoals,
     weeklyFocusAreas: getWeeklyFocusAreas(),
-    weeklyAreaAssignments: getWeeklyAreaAssignments(),
     fields: {}
   };
 
@@ -453,12 +445,7 @@ function applyDraftState(draft) {
   setSelectedDays(draft.selectedDays);
   setChoice('energy', draft.energy, ENERGY_DEFAULT);
   setChoice('detail', draft.detail, 'detailed');
-  if (draft.weeklyAreaAssignments && typeof draft.weeklyAreaAssignments === 'object') {
-    Object.entries(draft.weeklyAreaAssignments).forEach(([area, day]) => {
-      const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
-      if (select) select.value = day || 'any';
-    });
-  } else if (draft.weeklyFocusAreas && typeof draft.weeklyFocusAreas === 'object') {
+  if (draft.weeklyFocusAreas && typeof draft.weeklyFocusAreas === 'object') {
     Object.entries(draft.weeklyFocusAreas).forEach(([day, val]) => {
       const list = Array.isArray(val) ? val : [val];
       list.forEach((area) => {
@@ -762,6 +749,10 @@ function restorePlanSettings(plan) {
   }
   if (plan.energyLevel) setChoice('energy', plan.energyLevel, ENERGY_DEFAULT);
   if (plan.detail) setChoice('detail', plan.detail, 'detailed');
+  if (plan.weeklyScope) {
+    setChoice('weeklyScope', plan.weeklyScope, 'summary');
+    updateWeeklyDailyBreakdownVisibility();
+  }
   if (plan.hasPreschoolers !== undefined) {
     const pres = document.querySelector('input[data-field="has-preschoolers"]');
     if (pres) pres.checked = Boolean(plan.hasPreschoolers);
@@ -786,12 +777,7 @@ function restorePlanSettings(plan) {
     cb.checked = areas.includes(cb.dataset.focusArea);
   });
 
-  if (plan.weeklyAreaAssignments && typeof plan.weeklyAreaAssignments === 'object') {
-    Object.entries(plan.weeklyAreaAssignments).forEach(([area, day]) => {
-      const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
-      if (select) select.value = day || 'any';
-    });
-  } else if (plan.weeklyFocusAreas && typeof plan.weeklyFocusAreas === 'object') {
+  if (plan.weeklyFocusAreas && typeof plan.weeklyFocusAreas === 'object') {
     Object.entries(plan.weeklyFocusAreas).forEach(([day, dayAreas]) => {
       (Array.isArray(dayAreas) ? dayAreas : [dayAreas]).forEach((area) => {
         const select = document.querySelector(`.focus-area-day-select[data-area-day="${area}"]`);
@@ -1166,19 +1152,14 @@ function buildGenerationPayload() {
   const planMode = getPlanMode();
   const isWeekly = selectedDuration === 'Heti' && planMode !== 'academic';
   const weeklyFocusAreas = isWeekly ? getWeeklyFocusAreas() : {};
-  const weeklyAreaAssignments = isWeekly ? getWeeklyAreaAssignments() : {};
   const focusAreas = Array.from(document.querySelectorAll('[data-focus-area]:checked')).map((checkbox) => checkbox.dataset.focusArea);
   const iktEnabled = getIktEnabled();
   const iktTools = getSelectedIktTools();
   const iktCustomApp = getIktCustomApp();
-  const iktParts = [...iktTools, iktCustomApp].filter(Boolean);
-  const iktSummary = iktEnabled
-    ? (iktParts.length ? iktParts.join('; ') : 'Bekapcsolva (általános óvodai IKT eszközök)')
-    : 'Nem';
 
   return {
     duration: selectedDuration,
-    includeDailyBreakdown: getWeeklyDailyBreakdown(),
+    weeklyScope: isWeekly ? getWeeklyScope() : undefined,
     selectedDays: getSelectedDays(),
     weeklyProgressionType: getWeeklyProgressionType(),
     fridayClosingType: getFridayClosingType(),
@@ -1202,21 +1183,18 @@ function buildGenerationPayload() {
     hasPreschoolers: document.querySelector('[data-field="has-preschoolers"]')?.checked ?? false,
     focusAreas,
     weeklyFocusAreas,
-    weeklyAreaAssignments,
     previousPlanContext: attachedPreviousPlan ? formatPreviousPlanContext(attachedPreviousPlan) : '',
     contact_website: document.getElementById('contact_website')?.value || '',
     turnstileToken: currentTurnstileToken || '',
     customNote: document.querySelector('textarea[data-field="custom-note"]')?.value || '',
     customNotes: getCustomNotes(),
     detailLevel: getDetailLevel(),
-    detail: getChoice('detail', 'detailed'),
     selectedGoals: Array.from(document.querySelectorAll('.chip.active:not([data-theme-option])')).map((chip) => chip.textContent.trim()),
     specialNeeds: Array.from(document.querySelectorAll('[data-sni-label]')).filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sniLabel.trim()),
     showLiteratureAtBottom: planMode === 'academic' || (document.querySelector('input[data-field="show-literature"]')?.checked || false),
     iktEnabled,
     iktTools,
-    iktCustomApp,
-    iktSummary
+    iktCustomApp
   };
 }
 

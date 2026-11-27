@@ -12,7 +12,6 @@ function makePayload(overrides = {}) {
   return {
     duration: 'Napi',
     planMode: 'daily',
-    includeDailyBreakdown: false,
     theme: 'Falevelek vizsgálata',
     group: 'Vegyes csoport',
     kindergartenName: 'Teszt Óvoda',

@@ -7,8 +7,10 @@
   const ORDER_STATUS_LABELS = { pending: 'Függőben', paid: 'Fizetve', failed: 'Sikertelen', cancelled: 'Megszakítva' };
   const PLAN_LABELS = {
     daily: 'Napi tervezet',
-    weekly: 'Heti alapcsomag',
-    weekly_detailed: 'Heti részletes csomag',
+    weekly: 'Heti összesítő',
+    weekly_summary: 'Heti összesítő',
+    weekly_detailed: 'Teljes heti csomag',
+    weekly_package: 'Teljes heti csomag',
     academic_daily: 'Oktatási célú napi tervezet',
     academic_weekly: 'Oktatási célú heti tematikus terv'
   };

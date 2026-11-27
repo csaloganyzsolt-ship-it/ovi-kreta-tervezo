@@ -1,6 +1,6 @@
 {
   "duration": "Heti",
-  "includeDailyBreakdown": true,
+  "weeklyScope": "summary",
   "selectedDays": [
     "Hétfő",
     "Kedd",
@@ -39,10 +39,6 @@
       "Ének, zene, népi játék, tánc"
     ]
   },
-  "weeklyAreaAssignments": {
-    "Verselés, mesélés": "Hétfő",
-    "Ének, zene, népi játék, tánc": "Szerda"
-  },
   "previousPlanContext": "",
   "contact_website": "",
   "turnstileToken": "",
@@ -57,7 +53,6 @@
     ]
   },
   "detailLevel": 68,
-  "detail": "detailed",
   "selectedGoals": [
     "finommotorika fejlesztése",
     "szociális kompetenciák erősítése",
@@ -75,6 +70,5 @@
   "iktTools": [
     "Padlórobotok (Bee-Bot, Andy, Edison)"
   ],
-  "iktCustomApp": "Saját fejlesztő játék",
-  "iktSummary": "Padlórobotok (Bee-Bot, Andy, Edison); Saját fejlesztő játék"
+  "iktCustomApp": "Saját fejlesztő játék"
 }

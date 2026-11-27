@@ -16,16 +16,17 @@ test('createMirrorPlan produces a 1:1 structural mirror with exact table rows an
 
   const mirror = planStore.createMirrorPlan(original);
 
-  // Introductory fields remain readable and identical
+  // Paywall: only the topic and the activity form stay readable; goals, tasks, methods and tools are masked
   assert.equal(mirror.tema, original.tema);
-  assert.equal(mirror.cel, original.cel);
   assert.equal(mirror.tevekenyseg_forma, original.tevekenyseg_forma);
-  assert.equal(mirror.elozmeny, original.elozmeny);
-  assert.equal(mirror.nevelesi_feladatok, original.nevelesi_feladatok);
-  assert.equal(mirror.didaktikai_feladatok, original.didaktikai_feladatok);
-  assert.equal(mirror.kepessegfejlesztes, original.kepessegfejlesztes);
-  assert.deepEqual(mirror.modszerek, original.modszerek);
-  assert.deepEqual(mirror.eszkozok, original.eszkozok);
+  for (const field of ['cel', 'nevelesi_feladatok', 'didaktikai_feladatok', 'kepessegfejlesztes', 'elozmeny']) {
+    assert.notEqual(mirror[field], original[field], `${field} maszkolt`);
+    assert.equal(typeof mirror[field], 'string');
+  }
+  assert.notDeepEqual(mirror.modszerek, original.modszerek);
+  assert.equal(mirror.modszerek.length, original.modszerek.length);
+  assert.notDeepEqual(mirror.eszkozok, original.eszkozok);
+  assert.equal(mirror.eszkozok.length, original.eszkozok.length);
 
   // Structural mirror: exact same table rows
   assert.equal(mirror.kidolgozas_tablazat.length, 7);

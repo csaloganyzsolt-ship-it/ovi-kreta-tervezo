@@ -1049,7 +1049,7 @@ test('profil.html loads the profile, saves billing data, lists documents and ord
   await tick();
   const orders = [...document.querySelectorAll('#ordersList li')].map((li) => li.textContent);
   assert.equal(orders.length, 2);
-  assert.ok(orders[0].includes('Heti részletes csomag') && orders[0].includes('OVI-260301-AAAAAA') && orders[0].includes('OVITE-2026-1') && orders[0].includes('Fizetve'));
+  assert.ok(orders[0].includes('Teljes heti csomag') && orders[0].includes('OVI-260301-AAAAAA') && orders[0].includes('OVITE-2026-1') && orders[0].includes('Fizetve'));
   assert.ok(orders[1].includes('Napi tervezet') && orders[1].includes('Kupon: OVI50') && orders[1].includes('Sikertelen'));
 });
 

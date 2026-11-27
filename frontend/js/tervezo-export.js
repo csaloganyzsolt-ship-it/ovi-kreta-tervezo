@@ -137,7 +137,7 @@ function buildExportModel(docId) {
     }
   };
   source.childNodes.forEach(visit);
-  return { orientation: getDocOrientation(lastResult), title: blocks.find((block) => block.type === 'title')?.text || 'OviTervező', blocks };
+  return { orientation: getDocOrientation(lastResult, docId), title: blocks.find((block) => block.type === 'title')?.text || 'OviTervező', blocks };
 }
 
 // ===== PDF (pdfmake): valódi vektoros szöveg, fix margók, ismétlődő táblázatfejléc =====

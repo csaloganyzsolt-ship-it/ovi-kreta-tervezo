@@ -54,7 +54,7 @@ test('both profiles carry the exact company data', () => {
 });
 
 test('ev profile issues AAM invoices: net equals gross, VAT is 0 Ft, prices stay 390/890', () => {
-  for (const [plan, gross] of [['daily', 390], ['weekly', 390], ['weekly_detailed', 890]]) {
+  for (const [plan, gross] of [['daily', 390], ['weekly_summary', 390], ['weekly', 390], ['weekly_package', 890], ['weekly_detailed', 890]]) {
     const xml = invoiceService.buildInvoiceXml(order(plan), { SZAMLAZZ_KEY: 'k' });
     assert.match(xml, /<afakulcs>AAM<\/afakulcs>/);
     assert.match(xml, new RegExp(`<nettoEgysegar>${gross}</nettoEgysegar>`));

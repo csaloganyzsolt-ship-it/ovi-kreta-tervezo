@@ -8,9 +8,10 @@ document.addEventListener('click', (event) => {
   toggle.setAttribute('aria-expanded', String(open));
 });
 
-document.querySelectorAll('.segment[data-group="energy"], .segment[data-group="detail"]').forEach((option) => {
+document.querySelectorAll('.segment[data-group="energy"], .segment[data-group="detail"], .segment[data-group="weeklyScope"]').forEach((option) => {
   option.addEventListener('click', () => {
     setChoice(option.dataset.group, option.dataset.value);
+    if (option.dataset.group === 'weeklyScope') updateWeeklyDailyBreakdownVisibility();
     updateSummary();
     persistDraftState();
   });
@@ -119,7 +120,7 @@ function initFooterAndModals() {
 // A nyilvános beállítások (árak, karbantartás, szezonális javaslatok) betöltése. Hiba esetén a felület hangosan jelez, nincs kamu adat.
 function applyPublicConfig(config) {
   const prices = config.pricing || {};
-  const byKind = { daily: prices.daily, weekly: prices.daily, weekly_detailed: prices.weekly, academic_daily: prices.academic_daily, academic_weekly: prices.academic_weekly };
+  const byKind = { daily: prices.daily, weekly_summary: prices.daily, weekly_package: prices.weekly, academic_daily: prices.academic_daily, academic_weekly: prices.academic_weekly };
   Object.entries(byKind).forEach(([kind, price]) => {
     if (Number.isInteger(price) && price > 0) PAYWALL_PRICES[kind] = price;
   });

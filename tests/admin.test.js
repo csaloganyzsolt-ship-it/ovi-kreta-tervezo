@@ -853,7 +853,7 @@ test('admin.js: the orders table is filtered through the API and exports a formu
   await tick();
   assert.equal(document.querySelectorAll('#ordersTable tbody tr').length, 2);
   assert.match(document.getElementById('ordersTable').textContent, /Fizetve.*OVITE-2026-1/);
-  assert.match(document.getElementById('ordersTable').textContent, /Heti részletes csomag/);
+  assert.match(document.getElementById('ordersTable').textContent, /Teljes heti csomag/);
 
   const status = document.getElementById('ordersStatus');
   status.value = 'pending';

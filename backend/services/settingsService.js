@@ -160,10 +160,10 @@ function invalidate() {
   templateCachedAt = 0;
 }
 
-// Az árak nem változnak a 4 kategóriára állításkor: a heti alapcsomag a „Napi ovis”, a heti részletes (komplex) csomag a „Heti ovis” árat használja.
+// Az árak nem változnak a 4 kategóriára állításkor: a heti összesítő a „Napi ovis”, a teljes heti csomag a „Heti ovis” árat használja (a régi weekly / weekly_detailed kulcsok is).
 function pricingTierFor(productKey) {
-  if (productKey === 'weekly') return 'daily';
-  return productKey === 'weekly_detailed' ? 'weekly' : String(productKey);
+  if (productKey === 'weekly' || productKey === 'weekly_summary') return 'daily';
+  return productKey === 'weekly_detailed' || productKey === 'weekly_package' ? 'weekly' : String(productKey);
 }
 
 const isValidEmail = (value) => typeof value === 'string' && value.length <= 254 && /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/.test(value);

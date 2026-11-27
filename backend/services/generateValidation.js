@@ -108,13 +108,14 @@ function validateGeneratePayload(payload) {
   const legacyKind = ['daily', 'weekly'].includes(payload.planMode) ? payload.planMode : undefined;
   put('planMode', oneOf(legacyKind ? undefined : payload.planMode, 'planMode', ['standard', 'academic']));
   put('planKind', oneOf(payload.planKind ?? legacyKind, 'planKind', ['daily', 'weekly']));
+  put('weeklyScope', oneOf(payload.weeklyScope, 'weeklyScope', ['summary', 'package']));
   put('weeklyProgressionType', oneOf(payload.weeklyProgressionType, 'weeklyProgressionType', ['progressive', 'area_focused']));
   put('requestedModel', text(payload.requestedModel, 'requestedModel', 60));
   for (const [key, max] of [
     ['theme', 300], ['group', 100], ['kindergartenName', 200], ['kindergartenProfile', 300],
     ['teacherName', 200], ['studentName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
     ['tevekenysegForma', 300], ['elozmeny', 4000], ['customNote', 4000], ['availableTools', 4000],
-    ['blacklist', 4000], ['iktCustomApp', 300], ['iktSummary', 600], ['detail', 30]
+    ['blacklist', 4000], ['iktCustomApp', 300]
   ]) put(key, text(payload[key], key, max));
 
   if (payload.energyLevel !== undefined && payload.energyLevel !== null) {
@@ -137,18 +138,6 @@ function validateGeneratePayload(payload) {
     if (areas === undefined) throw fail(field, 'tömb vagy szöveg szükséges');
     return areas;
   }));
-  if (payload.weeklyAreaAssignments !== undefined && payload.weeklyAreaAssignments !== null) {
-    const assignments = payload.weeklyAreaAssignments;
-    if (typeof assignments !== 'object' || Array.isArray(assignments) || Object.keys(assignments).length > 12) {
-      throw fail('weeklyAreaAssignments', 'legfeljebb 12 elemű objektum');
-    }
-    clean.weeklyAreaAssignments = {};
-    for (const [area, day] of Object.entries(assignments)) {
-      if (area.length > 200) throw fail('weeklyAreaAssignments', 'túl hosszú terület-név');
-      if (day !== 'any' && !WEEKDAYS.includes(day)) throw fail('weeklyAreaAssignments', 'a nap csak hétköznap vagy "any" lehet');
-      clean.weeklyAreaAssignments[area] = day;
-    }
-  }
   put('customNotes', validateCustomNotes(payload.customNotes));
   put('previousPlanContext', validatePreviousPlanContext(payload.previousPlanContext));
   return clean;

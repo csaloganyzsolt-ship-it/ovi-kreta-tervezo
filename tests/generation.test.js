@@ -112,7 +112,7 @@ test('empty or missing history and literature are normalized as empty strings in
 });
 
 test('the concise pedagogical prompt includes all real settings and every custom note', () => {
-  const payload = makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true });
+  const payload = makePayload({ duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary' });
   const prompt = buildPrompt(payload);
   for (const value of [payload.theme, payload.group, payload.groupName, payload.kindergartenName,
     payload.teacherName, payload.dateValue, payload.tevekenysegForma, payload.elozmeny,
@@ -121,7 +121,7 @@ test('the concise pedagogical prompt includes all real settings and every custom
     assert.ok(prompt.includes(value), `Missing prompt setting: ${value}`);
   }
   for (const [key, value] of Object.entries({ childCount: 23, energyLevel: 0,
-    hasPreschoolers: false, detailLevel: 90, includeDailyBreakdown: true, showLiteratureAtBottom: false })) {
+    hasPreschoolers: false, detailLevel: 90, showLiteratureAtBottom: false })) {
     assert.match(prompt, new RegExp(`"${key}"\\s*:\\s*${value}`));
   }
   // A szerepleírás és a pedagógiai szerkezet egyetlen helyen, az Adminban szerkeszthető rendszerpromptban él.
@@ -199,9 +199,10 @@ test('HTTP /api/generate with preview=true returns the structural mirror and hid
   assert.equal(data.locked_meta.activity_count, 6);
   assert.equal(data.kidolgozas_tablazat.length, 6);
 
-  // Introductory fields are intact
-  assert.equal(data.cel, plan.cel);
+  // Only the topic is readable; the goal is masked
+  assert.notEqual(data.cel, plan.cel);
   assert.equal(data.tema, plan.tema);
+  assert.equal(JSON.stringify(data).includes(plan.cel), false);
 
   // Locked text is NOT leaked
   const bodyText = JSON.stringify(data);
@@ -274,11 +275,11 @@ test('quota errors preserve their HTTP status and are not retried on a different
   assert.match(data.details, /Quota exceeded/);
   assert.equal(calls.length, 1);
 });
-test('weekly breakdown uses the weekly master prompt and 16384 output tokens', () => {
-  const prompt = buildPrompt(makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true,
+test('the weekly summary prompt asks for the six areas, the mandatory notes block and the chosen progression', () => {
+  const prompt = buildPrompt(makePayload({ duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary',
     weeklyProgressionType: 'area_focused', fridayClosingType: 'Projektzáró élményséta' }));
   assert.doesNotMatch(prompt, /Tapasztalt magyar mester-óvodapedagógus/);
-  assert.match(prompt, /heti_keretterv/);
+  assert.match(prompt, /megjegyzes_egyeb_tevekenysegek/);
   assert.match(prompt, /area_focused/);
   assert.match(prompt, /Projektzáró élményséta/);
 });
@@ -291,7 +292,7 @@ test('model requests are validated against the two allowed models', () => {
 });
 
 test('available tools and the blacklist reach both prompts and the system instruction', async (t) => {
-  for (const extra of [{}, { duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true }]) {
+  for (const extra of [{}, { duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary' }]) {
     const prompt = buildPrompt(makePayload({ ...extra, availableTools: 'xilofon, nagy labda', blacklist: 'gyurma, Süss fel nap' }));
     assert.match(prompt, /xilofon, nagy labda/);
     assert.match(prompt, /SZIGORÚ TILTÁS/);
@@ -311,40 +312,40 @@ test('weekly generation covers only the selected days in prompt and response val
   assert.deepEqual(getSelectedDays({ selectedDays: ['Péntek', 'Hétfő', 'Hétfő', 'Vasárnap'] }), ['Hétfő', 'Péntek']);
   assert.deepEqual(getSelectedDays({ selectedDays: [] }).length, 5);
 
-  const payload = makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true, selectedDays: ['Hétfő', 'Kedd', 'Csütörtök'] });
+  const payload = makePayload({ duration: 'Heti', planKind: 'weekly', weeklyScope: 'package', selectedDays: ['Hétfő', 'Kedd', 'Csütörtök'] });
   const prompt = buildPrompt(payload);
-  assert.match(prompt, /pontosan 3 elem, ebben a sorrendben: Hétfő, Kedd, Csütörtök/);
-  assert.match(prompt, /nem kiválasztott napokra NEM készül tervezet/);
-  assert.doesNotMatch(prompt, /pontosan 5 elem/);
+  assert.match(prompt, /Érintett napok: Hétfő, Kedd, Csütörtök\./);
+  assert.match(prompt, /A napi_beosztás pontosan 3 elemű/);
 
-  const row = { ido: '10 perc', tevekenyseg_menete: ['Bekezdés'], modszerek_megjegyzesek: 'Megjegyzés' };
-  const make = (days) => JSON.stringify({
-    is_weekly: true,
-    summary: 's',
-    heti_keretterv: {
-      tema: 'Erdő', heti_fo_cel: 'c', nevelesi_feladatok: 'n', didaktikai_feladatok: 'd',
-      teruletek_heti_eloszlasa: days.map((nap) => ({ nap, fo_terulet: 'f', mikrocsoportos_tevekenyseg: 'm' })),
-      eszkozok: ['papír'], felhasznalt_irodalom: ''
+  const weeklySummary = require('../backend/services/weeklySummary');
+  const list = ['tétel'];
+  const make = (days) => ({
+    tema: 'Erdő', altema: 'Az erdő lakói',
+    teruletek: {
+      kulso_vilag: list, kulso_vilag_matematika: list, rajzolas: list, mozgas: list,
+      verseles_meseles: { versek: list, ismetles: [], mesek: list, szolasok_kozmondasok: [], talalos_kerdesek: [], nyelvtorok: [] },
+      enek_zene: { dalok: list, ismetles: [], enekes_jatekok: list, kiszamolo: [], zenei_kepessegfejlesztes: [], zenehallgatas: list }
     },
-    napok: days.map((nap_neve) => ({ nap_neve, tevekenyseg_forma: 'játék', napi_cel: 'cél', kidolgozas_tablazat: [row] }))
+    keretrendszer: { celok: list, feladatok: list, kiemelt_fejlesztesi_teruletek: list, modszerek: list, eszkozok: list },
+    megjegyzes_egyeb_tevekenysegek: { jatekbovites: list, anyanyelvi_jatekok: list, fejlesztojatek: list, kirandulas_setak: list },
+    felhasznalt_irodalom: 'Forrás',
+    napi_beosztas: days.map((nap) => ({ nap, fo_terulet: 'f', napi_fokusz: 'x', napi_cel: 'c' }))
   });
-  const ok = normalizeResponse(make(['Hétfő', 'Kedd', 'Csütörtök']), payload);
-  assert.equal(ok.napok.length, 3);
-  assert.deepEqual(ok.napok.map((d) => d.nap_neve), ['Hétfő', 'Kedd', 'Csütörtök']);
-  assert.throws(() => normalizeResponse(make(['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek']), payload), /kiválasztott 3 napot/);
-  assert.throws(() => normalizeResponse(make(['Hétfő']), payload), /kiválasztott 3 napot/);
+  const ok = weeklySummary.normalizeWeeklySummary(make(['Hétfő', 'Kedd', 'Csütörtök']), payload, { withDays: true });
+  assert.deepEqual(ok.heti_osszesito.napi_beosztas.map((d) => d.nap), ['Hétfő', 'Kedd', 'Csütörtök']);
+  assert.throws(() => weeklySummary.normalizeWeeklySummary(make(['Hétfő', 'Kedd']), payload, { withDays: true }), /napi_beosztas/);
 });
 
 test('mixed group prompts carry the mandatory 3-level differentiation rule', () => {
   const mixed = buildPrompt(makePayload({ group: 'Vegyes csoport' }));
   assert.match(mixed, /3 szintű differenciálás korcsoportok szerint/);
-  const weekly = buildPrompt(makePayload({ group: 'Vegyes csoport', duration: 'Heti', includeDailyBreakdown: true }));
+  const weekly = buildPrompt(makePayload({ group: 'Vegyes csoport', duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary' }));
   assert.match(weekly, /3 szintű differenciálás korcsoportok szerint/);
   assert.doesNotMatch(buildPrompt(makePayload({ group: 'Nagycsoport' })), /3 szintű differenciálás/);
 });
 
 test('prompts never mention protected state systems', () => {
-  for (const payload of [makePayload(), makePayload({ duration: 'Heti', includeDailyBreakdown: true, group: 'Vegyes csoport' })]) {
+  for (const payload of [makePayload(), makePayload({ duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary', group: 'Vegyes csoport' })]) {
     assert.doesNotMatch(buildPrompt(payload), /onap|onoap|\bOAP\b|kréta/i);
   }
 });
@@ -374,7 +375,8 @@ test('kindergarten profile and IKT digital rules reach both prompts', () => {
 
   const weeklyIkt = buildPrompt(makePayload({
     duration: 'Heti',
-    includeDailyBreakdown: true,
+    planKind: 'weekly',
+    weeklyScope: 'summary',
     kindergartenProfile: 'Néphagyományőrző',
     iktEnabled: true,
     iktTools: ['Interaktív tábla és gyakorlóprogramok']
@@ -397,8 +399,8 @@ test('kindergarten profile and IKT digital rules reach both prompts', () => {
 
   const weeklyFocusPayload = makePayload({
     duration: 'Heti',
-    planMode: 'weekly',
-    includeDailyBreakdown: true,
+    planKind: 'weekly',
+    weeklyScope: 'summary',
     weeklyFocusAreas: {
       'Hétfő': ['Verselés, mesélés'],
       'Kedd': ['Mozgás']
@@ -408,29 +410,6 @@ test('kindergarten profile and IKT digital rules reach both prompts', () => {
   assert.match(promptWeeklyFocus, /SZIGORÚ NAPI NEVELÉSI TERÜLET KIOSZTÁS/);
   assert.match(promptWeeklyFocus, /Hétfő: Verselés, mesélés/);
   assert.match(promptWeeklyFocus, /Kedd: Mozgás/);
-  assert.match(promptWeeklyFocus, /Csoportos tevékenység \/ Tevékenység/);
-
-  const parsedWithNewHeader = {
-    is_weekly: true,
-    summary: 's',
-    heti_keretterv: {
-      tema: 'T', heti_fo_cel: 'c', nevelesi_feladatok: 'n', didaktikai_feladatok: 'd',
-      teruletek_heti_eloszlasa: [
-        { nap: 'Hétfő', fo_terulet: 'Verselés', csoportos_tevekenyseg: 'Csoportos mese' },
-        { nap: 'Kedd', fo_terulet: 'Mozgás', csoportos_tevekenyseg: 'Csoportos torna' },
-        { nap: 'Szerda', fo_terulet: 'Ének', csoportos_tevekenyseg: 'Dal' },
-        { nap: 'Csütörtök', fo_terulet: 'Matematika', csoportos_tevekenyseg: 'Számolás' },
-        { nap: 'Péntek', fo_terulet: 'Rajz', csoportos_tevekenyseg: 'Festés' }
-      ],
-      eszkozok: ['papír'], felhasznalt_irodalom: ''
-    },
-    napok: ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'].map((nap_neve) => ({
-      nap_neve, tevekenyseg_forma: 'játék', napi_cel: 'cél', kidolgozas_tablazat: [{ ido: '10 p', tevekenyseg_menete: ['x'], modszerek_megjegyzesek: 'm' }]
-    }))
-  };
-  const normalizedWeekly = normalizeResponse(JSON.stringify(parsedWithNewHeader), makePayload({ duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true }));
-  assert.equal(normalizedWeekly.heti_keretterv.teruletek_heti_eloszlasa[0].csoportos_tevekenyseg, 'Csoportos mese');
-  assert.equal(normalizedWeekly.heti_keretterv.teruletek_heti_eloszlasa[0].mikrocsoportos_tevekenyseg, 'Csoportos mese');
 });
 
 test('POST /api/generate answers 429 after the per-IP daily limit', async () => {
@@ -586,7 +565,8 @@ test('previousPlanContext enters the prompt and instructs avoiding repetitions',
   // Weekly prompt check as well
   const weeklyPayload = makePayload({
     duration: 'Heti',
-    includeDailyBreakdown: true,
+    planKind: 'weekly',
+    weeklyScope: 'summary',
     previousPlanContext: contextText
   });
   const weeklyPrompt = buildPrompt(weeklyPayload);
@@ -596,7 +576,7 @@ test('previousPlanContext enters the prompt and instructs avoiding repetitions',
 
 function weeklyPrompt(overrides) {
   return buildPrompt(makePayload({
-    duration: 'Heti', planMode: 'weekly', includeDailyBreakdown: true,
+    duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary',
     selectedDays: ['Hétfő', 'Kedd', 'Szerda'],
     focusAreas: ['Mozgás', 'Verselés, mesélés', 'Rajzolás'],
     ...overrides
@@ -702,4 +682,18 @@ test('POST /api/generate sends admin error alert if generation permanently fails
   assert.equal(alertCalls.length, 1);
   assert.equal(alertCalls[0].operation, 'Tervezet generálás (Gemini)');
   assert.match(alertCalls[0].error.message, /Overloaded service/);
+});
+
+test('GET /api/generate/:id/status returns 404 for an unknown generation', async (t) => {
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/generate/gen_00000000-0000-0000-0000-000000000000/status`);
+  assert.equal(response.status, 404);
+});
+
+test('legacy weekly product keys resolve to the new weekly products', () => {
+  const { resolveProductKey } = require('../backend/services/pricing');
+  assert.equal(resolveProductKey('weekly'), resolveProductKey('weekly_summary'));
+  assert.equal(resolveProductKey('weekly_detailed'), resolveProductKey('weekly_package'));
 });

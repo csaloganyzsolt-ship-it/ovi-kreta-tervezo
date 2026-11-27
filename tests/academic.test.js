@@ -34,8 +34,8 @@ test('the standard prompt does not change with an explicit standard planMode and
   const base = server.buildPrompt(makePayload());
   assert.equal(server.buildPrompt(makePayload({ planMode: 'standard', planKind: 'daily' })), base);
   assert.doesNotMatch(base, /Foglalkozási\/tevékenységi terv|Tematikus terv|Felhasznált irodalom:/);
-  const weekly = makePayload({ duration: 'Heti', planKind: 'weekly', planMode: 'standard', includeDailyBreakdown: true });
-  assert.match(server.buildPrompt(weekly), /heti_keretterv/);
+  const weekly = makePayload({ duration: 'Heti', planKind: 'weekly', planMode: 'standard', weeklyScope: 'summary' });
+  assert.match(server.buildPrompt(weekly), /megjegyzes_egyeb_tevekenysegek/);
 });
 
 test('the academic daily prompt carries the university-level structure, typography and source rules', () => {
@@ -308,7 +308,7 @@ test('choosing the academic type reveals the student name field and feeds planMo
   window.setDurationSelection('Heti');
   payload = window.buildGenerationPayload();
   assert.equal(payload.planKind, 'weekly');
-  assert.equal(payload.includeDailyBreakdown, false, 'az oktatási célú heti terv egyetlen tematikus terv');
+  assert.equal(payload.weeklyScope, undefined, 'az oktatási célú heti terv egyetlen tematikus terv');
   assert.equal(document.querySelector('#weeklySettingsPanel').hidden, true);
   assert.equal(document.querySelector('#weeklyAdvancedBlock').hidden, true);
 
@@ -316,8 +316,7 @@ test('choosing the academic type reveals the student name field and feeds planMo
   payload = window.buildGenerationPayload();
   assert.equal(payload.planMode, 'standard');
   assert.equal(payload.studentName, '');
-  assert.equal(payload.includeDailyBreakdown, true);
-  assert.equal(document.querySelector('#weeklySettingsPanel').hidden, false);
+  assert.equal(payload.weeklyScope, 'summary');
 });
 
 test('the plan type and student name survive a draft round trip and the history, and the clean slate resets them', async (t) => {

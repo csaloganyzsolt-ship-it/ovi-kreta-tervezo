@@ -36,7 +36,7 @@ test('live checkout sends HUF minor units and metadata to Stripe', async () => {
   assert.equal(result.url, 'https://stripe/x');
   assert.equal(params.line_items[0].price_data.unit_amount, 89000);
   assert.equal(params.line_items[0].price_data.currency, 'huf');
-  assert.equal(params.metadata.plan, 'weekly_detailed');
+  assert.equal(params.metadata.plan, 'weekly_package');
 });
 
 test('invoice XML escapes input and splits VAT', () => {
@@ -195,7 +195,7 @@ test('invoice carries software line items, ovitervezo.hu note and sends an e-inv
   const daily = invoiceService.buildInvoiceXml({ ...base, plan: 'daily' }, env);
   const weekly = invoiceService.buildInvoiceXml({ ...base, plan: 'weekly' }, env);
   assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
-  assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti alapcsomag<\/megnevezes>/);
+  assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti összesítő<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
   assert.match(daily, /<megjegyzes>Szolgáltató weboldal: https:\/\/ovitervezo\.hu \| Ügyfélszolgálat: info@ovitervezo\.hu \| Köszönjük a vásárlást!<\/megjegyzes>/);
   assert.match(daily, /<eszamla>false<\/eszamla>/);
@@ -252,10 +252,10 @@ test('Stripe checkout names match the invoice software line items', async () => 
   await stripeService.createCheckoutSession({ plan: 'daily', email: 'a@b.hu' }, { env, client });
   assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj (1 alkalom)');
   await stripeService.createCheckoutSession({ plan: 'weekly', email: 'a@b.hu' }, { env, client });
-  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti alapcsomag');
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti összesítő');
   assert.equal(params.line_items[0].price_data.unit_amount, 39000);
   await stripeService.createCheckoutSession({ plan: 'weekly_detailed', email: 'a@b.hu' }, { env, client });
-  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti részletes csomag');
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – teljes heti csomag');
   assert.equal(params.line_items[0].price_data.unit_amount, 89000);
   assert.doesNotMatch(JSON.stringify(params), /pedagógiai/);
 });
@@ -396,8 +396,8 @@ test('locked preview renders 1:1 mirror activity section with blur and shows the
 test('plan kinds map to the three price tiers', async (t) => {
   const window = await loadLockedApp(t);
   assert.equal(window.planKind({ request: { duration: 'Napi' } }), 'daily');
-  assert.equal(window.planKind({ request: { duration: 'Heti', includeDailyBreakdown: false } }), 'weekly');
-  assert.equal(window.planKind({ is_weekly: true, request: { duration: 'Heti', includeDailyBreakdown: true } }), 'weekly_detailed');
+  assert.equal(window.planKind({ request: { duration: 'Heti', weeklyScope: 'summary' } }), 'weekly_summary');
+  assert.equal(window.planKind({ is_weekly: true, request: { duration: 'Heti', weeklyScope: 'package' } }), 'weekly_package');
   const price = (result) => { window.renderResultDocument({ ...makePlan(8), ...result, generationId: 'gp' + Math.random() }); return window.document.getElementById('unlockBtn').textContent; };
   assert.match(price({ request: { ...makePayload(), duration: 'Napi' } }), /390 Ft/);
   assert.match(price({ request: { ...makePayload(), duration: 'Heti' } }), /390 Ft/);
@@ -1087,7 +1087,7 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
   }
 });
 
-const PLANNER_SCRIPTS = ['core', 'academic', 'form', 'preview', 'export', 'generate', 'paywall', 'history', 'init'].map((name) => `tervezo-${name}.js`);
+const PLANNER_SCRIPTS = ['core', 'academic', 'weekly', 'form', 'preview', 'export', 'generate', 'paywall', 'history', 'init'].map((name) => `tervezo-${name}.js`);
 
 test('tervezo.html loads the planner scripts in order and the single static list covers every shipped file', async () => {
   const { SITE_ASSETS, PAGES } = require('../backend/services/siteConstants');

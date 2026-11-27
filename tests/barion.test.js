@@ -19,7 +19,7 @@ const PIXEL_ID = 'BP-U0p5Sp7I1Q-EF';
 
 test('the price table is one source: standard 390/890 Ft, academic 690 Ft for daily and weekly', () => {
   assert.deepEqual(Object.fromEntries(Object.entries(PRODUCTS).map(([key, product]) => [key, product.amountHuf])), {
-    daily: 390, weekly: 390, weekly_detailed: 890, academic_daily: 690, academic_weekly: 690
+    daily: 390, weekly_summary: 390, weekly_package: 890, academic_daily: 690, academic_weekly: 690
   });
   assert.equal(stripeService.PRODUCTS, PRODUCTS, 'a Stripe, a számlázás és a Barion ugyanazt a táblát használja');
   for (const product of Object.values(PRODUCTS)) assert.equal(product.planMode, product.key.startsWith('academic_') ? 'academic' : 'standard');
@@ -28,8 +28,9 @@ test('the price table is one source: standard 390/890 Ft, academic 690 Ft for da
 
 test('planMode decides the product: academic never pays a standard price, unknown plans are rejected', () => {
   for (const [plan, mode, expected] of [
-    ['daily', 'standard', 'daily'], ['weekly', 'standard', 'weekly'], ['weekly_detailed', 'standard', 'weekly_detailed'], ['daily', undefined, 'daily'],
-    ['daily', 'academic', 'academic_daily'], ['weekly', 'academic', 'academic_weekly'], ['weekly_detailed', 'academic', 'academic_weekly'],
+    ['daily', 'standard', 'daily'], ['weekly_summary', 'standard', 'weekly_summary'], ['weekly_package', 'standard', 'weekly_package'],
+    ['weekly', 'standard', 'weekly_summary'], ['weekly_detailed', 'standard', 'weekly_package'], ['daily', undefined, 'daily'],
+    ['daily', 'academic', 'academic_daily'], ['weekly', 'academic', 'academic_weekly'], ['weekly_detailed', 'academic', 'academic_weekly'], ['weekly_package', 'academic', 'academic_weekly'],
     ['academic_daily', 'standard', 'academic_daily'], ['academic_weekly', undefined, 'academic_weekly'], ['academic_weekly', 'academic', 'academic_weekly']
   ]) assert.equal(resolveProductKey(plan, mode), expected, `${plan}/${mode}`);
   for (const bad of ['', undefined, 'monthly', '__proto__', 'constructor', 'academic']) assert.equal(resolveProductKey(bad, 'academic'), null, String(bad));
@@ -47,7 +48,7 @@ test('Stripe charges 690 Ft for the academic plans and 390/890 Ft for the standa
   };
   for (const [plan, mode, key, huf] of [
     ['daily', 'academic', 'academic_daily', 690], ['weekly', 'academic', 'academic_weekly', 690], ['weekly_detailed', 'academic', 'academic_weekly', 690],
-    ['academic_daily', 'standard', 'academic_daily', 690], ['daily', 'standard', 'daily', 390], ['weekly_detailed', 'standard', 'weekly_detailed', 890]
+    ['academic_daily', 'standard', 'academic_daily', 690], ['daily', 'standard', 'daily', 390], ['weekly_detailed', 'standard', 'weekly_package', 890]
   ]) {
     const { params, result } = await charge(plan, mode);
     assert.equal(params.line_items[0].price_data.unit_amount, huf * 100, `${plan}/${mode}`);
@@ -410,7 +411,7 @@ test('the Barion checkout sends the plan and plan mode of the document, and the 
   const window = await loadPlanner(t);
   const cases = [
     [standardResult({ duration: 'Napi' }), 'daily', 'standard', 'Napi tervezet – 390 Ft'],
-    [standardResult({ duration: 'Heti' }), 'weekly', 'standard', 'Heti alapcsomag – 390 Ft'],
+    [standardResult({ duration: 'Heti' }), 'weekly_summary', 'standard', 'Heti összesítő – 390 Ft'],
     [academicResult(), 'academic_daily', 'academic', 'Oktatási célú napi tervezet – 690 Ft'],
     [thematicResult(), 'academic_weekly', 'academic', 'Oktatási célú heti tematikus terv – 690 Ft']
   ];

@@ -1,6 +1,7 @@
 'use strict';
 
 const { PRODUCTS } = require('./stripeService');
+const { resolveProductKey } = require('./pricing');
 const { orderNumber } = require('./invoiceService');
 
 const TIMEOUT_MS = 15000;
@@ -23,7 +24,7 @@ function safeFilePart(value) {
 
 function buildPayload({ session, invoiceNumber, customer, invoicePdf }, now = new Date(), env = process.env) {
   const plan = session.metadata?.plan;
-  const product = PRODUCTS[plan];
+  const product = PRODUCTS[resolveProductKey(plan)];
   const created = session.created ? new Date(session.created * 1000) : now;
   const address = [customer.zip, customer.city, customer.address].filter(Boolean).join(', ');
   const orderNo = orderNumber(session.id, created);
