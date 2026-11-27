@@ -1,6 +1,51 @@
 // Közös konstansok, DOM-hivatkozások, tárolókulcsok, napi számláló és segédfüggvények.
 // Klasszikus script (nem ES modul): a felső szintű deklarációk közös globális hatókörben élnek.
 
+// ===== Egyetlen közös elrendezés-készlet az előnézethez (CSS), a PDF-hez (pdfmake) és a DOCX-hez =====
+// Minden érték pontban (pt) vagy milliméterben van megadva; a CSS a lenti változókon (--doc-*), a PDF és a DOCX közvetlenül ezen az objektumon keresztül olvassa.
+const DOC_LAYOUT = Object.freeze({
+  marginMm: 15,
+  pageMm: Object.freeze({ portrait: [210, 297], landscape: [297, 210] }),
+  fontFamily: 'Arial',
+  // Betűméretek (pt): cím, alcím (H3), törzsszöveg, táblázatszöveg, sűrű (tematikus) táblázat, meta-táblázat.
+  fontPt: Object.freeze({ title: 16, heading: 11.5, body: 10, table: 9.5, thematic: 8, meta: 9.5 }),
+  // Sormagasság a betűméret többszöröseként (CSS line-height); a PDF és a DOCX ebből számol a saját alapsormagasságához.
+  lineHeight: Object.freeze({ body: 1.3, table: 1.2, meta: 1.25 }),
+  // Térközök (pt).
+  spacingPt: Object.freeze({ titleAfter: 10, headingBefore: 10, headingAfter: 5, paragraphAfter: 4, cellParagraphAfter: 2.5, blockGap: 10 }),
+  // Cellamargók (pt): vízszintes (x) és függőleges (y).
+  cellPadPt: Object.freeze({ table: Object.freeze({ x: 5, y: 4 }), thematic: Object.freeze({ x: 3.5, y: 3 }), meta: Object.freeze({ x: 5, y: 4 }) }),
+  // A meta-táblázat címkeoszlopának aránya.
+  metaLabelShare: Object.freeze({ standard: 0.28, academic: 0.3 }),
+  borderPt: 0.5,
+  // A Word "egyszeres" és a pdfmake 1.0-s sormagassága a betűméret ennyiszerese (Arial / Roboto), ebből számoljuk át a közös sormagasságot.
+  nativeLineFactor: Object.freeze({ word: 1.15, pdf: 1.17 })
+});
+
+const PT_PER_MM = 72 / 25.4;
+const TWIP_PER_PT = 20;
+const TWIP_PER_MM = TWIP_PER_PT * PT_PER_MM;
+
+function applyDocLayoutVars(root = document.documentElement) {
+  const L = DOC_LAYOUT;
+  const vars = {
+    margin: `${L.marginMm}mm`,
+    'title-pt': `${L.fontPt.title}pt`, 'heading-pt': `${L.fontPt.heading}pt`, 'body-pt': `${L.fontPt.body}pt`,
+    'table-pt': `${L.fontPt.table}pt`, 'thematic-pt': `${L.fontPt.thematic}pt`, 'meta-pt': `${L.fontPt.meta}pt`,
+    'lh-body': L.lineHeight.body, 'lh-table': L.lineHeight.table, 'lh-meta': L.lineHeight.meta,
+    'title-after': `${L.spacingPt.titleAfter}pt`, 'heading-before': `${L.spacingPt.headingBefore}pt`, 'heading-after': `${L.spacingPt.headingAfter}pt`,
+    'par-after': `${L.spacingPt.paragraphAfter}pt`, 'cell-par-after': `${L.spacingPt.cellParagraphAfter}pt`, 'block-gap': `${L.spacingPt.blockGap}pt`,
+    'pad-x': `${L.cellPadPt.table.x}pt`, 'pad-y': `${L.cellPadPt.table.y}pt`,
+    'thematic-pad-x': `${L.cellPadPt.thematic.x}pt`, 'thematic-pad-y': `${L.cellPadPt.thematic.y}pt`,
+    'meta-pad-x': `${L.cellPadPt.meta.x}pt`, 'meta-pad-y': `${L.cellPadPt.meta.y}pt`,
+    'meta-label': `${L.metaLabelShare.standard * 100}%`, 'academic-meta-label': `${L.metaLabelShare.academic * 100}%`,
+    border: `${L.borderPt}pt`
+  };
+  Object.entries(vars).forEach(([name, value]) => root.style.setProperty(`--doc-${name}`, String(value)));
+}
+
+applyDocLayoutVars();
+
 const steps = Array.from(document.querySelectorAll('.step-panel'));
 
 const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));

@@ -86,3 +86,27 @@ test('the literature migration only upgrades the untouched old default prompt an
   const rules = sql.match(/\$rules\$([\s\S]*?)\$rules\$/)[1];
   assert.equal(`${seed}\n\n${rules}`, defaultSystemPrompt);
 });
+
+test('every request carries the mandatory APA 7 reference format, even with a custom admin system prompt', () => {
+  const { APA7_RULE } = require('../backend/services/literatureRules');
+  assert.match(APA7_RULE, /APA 7/);
+  assert.match(APA7_RULE, /Forrai, K\. \(2016\)\. \*Ének az óvodában\*\. Editio Musica Budapest\./);
+  assert.match(APA7_RULE, /363\/2012\. \(XII\. 17\.\) Korm\. rendelet az Óvodai nevelés országos alapprogramjáról\./);
+  assert.match(APA7_RULE, /ábécé/);
+  assert.match(APA7_RULE, /\(é\. n\.\)/);
+  const on = { showLiteratureAtBottom: true };
+  assert.ok(buildPrompt(makePayload(on)).includes(APA7_RULE), 'napi');
+  assert.ok(buildPrompt(makePayload({ ...on, duration: 'Heti', planKind: 'weekly', weeklyScope: 'summary' })).includes(APA7_RULE), 'csak heti összesítő');
+  assert.ok(buildPrompt(makePayload({ ...on, duration: 'Heti', planKind: 'weekly', weeklyScope: 'package' })).includes(APA7_RULE), 'teljes heti csomag');
+  for (const [name, prompt] of [['oktatási napi', buildPrompt(makeAcademicPayload())], ['oktatási tematikus', buildPrompt(makeThematicPayload())]]) {
+    assert.match(prompt, /APA 7/, name);
+    assert.match(prompt, /\*Mű címe\*/, name);
+  }
+});
+
+test('academic plans always keep the literature list on, whatever the client sends', () => {
+  const { validateGeneratePayload } = require('../backend/services/generateValidation');
+  assert.equal(validateGeneratePayload({ planMode: 'academic', showLiteratureAtBottom: false }).showLiteratureAtBottom, true);
+  assert.equal(validateGeneratePayload({ planMode: 'academic' }).showLiteratureAtBottom, true);
+  assert.equal(validateGeneratePayload({ planMode: 'standard', showLiteratureAtBottom: false }).showLiteratureAtBottom, false);
+});

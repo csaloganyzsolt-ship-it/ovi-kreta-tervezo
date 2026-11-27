@@ -41,12 +41,14 @@ async function downloadBlob(blob, filename) {
   anchorDownload(blob, filename);
 }
 
-// Egységes oldalmargó minden formátumban és minden oldalon (az előnézet, a PDF és a DOCX is ezt használja).
-const PAGE_MARGIN_MM = 15;
+// Egységes oldalmargó és lapméret minden formátumban (az előnézet, a PDF és a DOCX is a közös DOC_LAYOUT-ból olvassa).
+const PAGE_MARGIN_MM = DOC_LAYOUT.marginMm;
 
-const PAGE_MM = { portrait: [210, 297], landscape: [297, 210] };
+const PAGE_MM = DOC_LAYOUT.pageMm;
 
-const PT_PER_MM = 72 / 25.4;
+// A közös sormagasság (a betűméret többszöröse) átszámítása a Word és a pdfmake saját alapsormagasságára.
+const docxLineSpacing = (lineHeight) => Math.round(lineHeight / DOC_LAYOUT.nativeLineFactor.word * 240);
+const pdfLineHeight = (lineHeight) => Math.round(lineHeight / DOC_LAYOUT.nativeLineFactor.pdf * 1000) / 1000;
 
 // ===== Közös dokumentummodell =====
 // Az előnézet HTML-jéből (buildDocumentHtml) egyetlen, formátumfüggetlen blokklista készül; a DOCX és a PDF is ebből épül.
@@ -158,7 +160,7 @@ function pdfEstimateHeight(paragraph, widthPt, fontSize) {
   const charsPerLine = Math.max(4, widthPt / (fontSize * 0.52));
   const text = paragraph.runs.map((run) => run.text).join('');
   const lines = text.split('\n').reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
-  return lines * fontSize * 1.25 + 2.5;
+  return lines * fontSize * DOC_LAYOUT.lineHeight.table + DOC_LAYOUT.spacingPt.cellParagraphAfter;
 }
 
 // Egy oszlop bekezdéseit legfeljebb `budget` becsült magasságú részekre osztja; a címke nem marad a rész végén.
@@ -182,18 +184,18 @@ function pdfChunkParagraphs(items, budget) {
 }
 
 function pdfTable(block, contentWidth, contentHeight) {
-  const fontSize = block.thematic ? 7.5 : 9.5;
-  const padX = block.thematic ? 3.5 : 5;
-  const padY = block.thematic ? 3 : 4;
+  const fontSize = block.thematic ? DOC_LAYOUT.fontPt.thematic : DOC_LAYOUT.fontPt.table;
+  const { x: padX, y: padY } = block.thematic ? DOC_LAYOUT.cellPadPt.thematic : DOC_LAYOUT.cellPadPt.table;
+  const border = DOC_LAYOUT.borderPt;
   // A pdfmake oszlopszélessége a belső tartalomé: a cellamargó és a keretvonal ráadódik, ezért levonjuk, hogy a táblázat a margókon belül maradjon.
-  const usable = contentWidth - (block.widths.length + 1) * 0.5 - 0.5;
+  const usable = contentWidth - (block.widths.length + 1) * border - border;
   const widths = block.widths.map((pct) => Math.floor((usable * pct / 100 - 2 * padX) * 100) / 100);
 
   const paragraphNode = (paragraph, bold) => ({
     text: pdfRuns(paragraph.runs, { bold: bold || paragraph.label }),
     fontSize,
-    lineHeight: 1.2,
-    margin: [0, 0, 0, 2.5]
+    lineHeight: pdfLineHeight(DOC_LAYOUT.lineHeight.table),
+    margin: [0, 0, 0, DOC_LAYOUT.spacingPt.cellParagraphAfter]
   });
   const cellNode = (cell, bold) => (cell.paragraphs.length ? { stack: cell.paragraphs.map((paragraph) => paragraphNode(paragraph, bold)) } : '');
 
@@ -228,8 +230,8 @@ function pdfTable(block, contentWidth, contentHeight) {
     table: { headerRows: block.header.length || 0, ...(block.header.length ? { keepWithHeaderRows: 1 } : {}), dontBreakRows: true, widths, body },
     layout: {
       // Fehér háttér, vékony fekete keret; az egy sorból származó szeletek között nincs vízszintes vonal.
-      hLineWidth: (index, node) => (index > 0 && index < node.table.body.length && continuation[index] ? 0 : 0.5),
-      vLineWidth: () => 0.5,
+      hLineWidth: (index, node) => (index > 0 && index < node.table.body.length && continuation[index] ? 0 : border),
+      vLineWidth: () => border,
       hLineColor: () => '#000000',
       vLineColor: () => '#000000',
       paddingLeft: () => padX,
@@ -237,29 +239,33 @@ function pdfTable(block, contentWidth, contentHeight) {
       paddingTop: () => padY,
       paddingBottom: () => padY
     },
-    margin: [0, 0, 0, 10]
+    margin: [0, 0, 0, DOC_LAYOUT.spacingPt.blockGap]
   };
 }
 
 function pdfMetaTable(block, contentWidth) {
-  const usable = contentWidth - 3 * 0.5 - 0.5;
-  const labelShare = block.academic ? 0.3 : 0.28;
-  const labelWidth = Math.floor((usable * labelShare - 10) * 100) / 100;
-  const paragraphNode = (paragraph) => ({ text: pdfRuns(paragraph.runs), fontSize: 9.5, lineHeight: 1.25, margin: [0, 0, 0, 2] });
+  const border = DOC_LAYOUT.borderPt;
+  const { x: padX, y: padY } = DOC_LAYOUT.cellPadPt.meta;
+  const fontSize = DOC_LAYOUT.fontPt.meta;
+  const usable = contentWidth - 3 * border - border;
+  const labelShare = block.academic ? DOC_LAYOUT.metaLabelShare.academic : DOC_LAYOUT.metaLabelShare.standard;
+  const labelWidth = Math.floor((usable * labelShare - 2 * padX) * 100) / 100;
+  const lineHeight = pdfLineHeight(DOC_LAYOUT.lineHeight.meta);
+  const paragraphNode = (paragraph) => ({ text: pdfRuns(paragraph.runs), fontSize, lineHeight, margin: [0, 0, 0, DOC_LAYOUT.spacingPt.cellParagraphAfter] });
   return {
     table: {
-      widths: [labelWidth, Math.floor((usable * (1 - labelShare) - 10) * 100) / 100],
+      widths: [labelWidth, Math.floor((usable * (1 - labelShare) - 2 * padX) * 100) / 100],
       dontBreakRows: true,
       body: block.rows.map((row) => [
-        { text: row.label, bold: true, fontSize: 9.5, lineHeight: 1.25 },
+        { text: row.label, bold: true, fontSize, lineHeight },
         row.value.paragraphs.length ? { stack: row.value.paragraphs.map(paragraphNode) } : ''
       ])
     },
     layout: {
-      hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#000000', vLineColor: () => '#000000',
-      paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 4, paddingBottom: () => 2
+      hLineWidth: () => border, vLineWidth: () => border, hLineColor: () => '#000000', vLineColor: () => '#000000',
+      paddingLeft: () => padX, paddingRight: () => padX, paddingTop: () => padY, paddingBottom: () => padY
     },
-    margin: [0, 0, 0, 12]
+    margin: [0, 0, 0, DOC_LAYOUT.spacingPt.blockGap]
   };
 }
 
@@ -269,19 +275,20 @@ function buildPdfDefinition(docId) {
   const margin = PAGE_MARGIN_MM * PT_PER_MM;
   const contentWidth = pageWidth - 2 * margin;
   const contentHeight = pageHeight - 2 * margin;
+  const { fontPt, spacingPt } = DOC_LAYOUT;
   const content = model.blocks.map((block) => {
-    if (block.type === 'title') return { text: block.text, fontSize: 16, bold: true, margin: [0, 0, 0, 10], headlineLevel: 1 };
-    if (block.type === 'heading') return { text: block.text, fontSize: 11.5, bold: true, margin: [0, 10, 0, 5], headlineLevel: 1 };
+    if (block.type === 'title') return { text: block.text, fontSize: fontPt.title, bold: true, margin: [0, 0, 0, spacingPt.titleAfter], headlineLevel: 1 };
+    if (block.type === 'heading') return { text: block.text, fontSize: fontPt.heading, bold: true, margin: [0, spacingPt.headingBefore, 0, spacingPt.headingAfter], headlineLevel: 1 };
     if (block.type === 'meta') return pdfMetaTable(block, contentWidth);
     if (block.type === 'table') return pdfTable(block, contentWidth, contentHeight);
-    return { text: pdfRuns(block.runs), fontSize: 10, lineHeight: 1.3, margin: [0, 0, 0, 4] };
+    return { text: pdfRuns(block.runs), fontSize: fontPt.body, lineHeight: pdfLineHeight(DOC_LAYOUT.lineHeight.body), margin: [0, 0, 0, spacingPt.paragraphAfter] };
   });
   return {
     info: { title: model.title, creator: 'OviTervező' },
     pageSize: 'A4',
     pageOrientation: model.orientation,
     pageMargins: [margin, margin, margin, margin],
-    defaultStyle: { font: 'Roboto', fontSize: 10, color: '#000000' },
+    defaultStyle: { font: 'Roboto', fontSize: fontPt.body, color: '#000000' },
     // Címsor nem maradhat a lap alján a következő tartalom nélkül.
     pageBreakBefore: (node, following) => node.headlineLevel === 1 && following.length === 0,
     content
@@ -315,22 +322,24 @@ function docxRuns(runs, base = {}) {
 function docxTable(block, contentWidth) {
   const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, TableLayoutType } = window.docx;
   const widths = block.widths.map((pct) => Math.round(contentWidth * pct / 100));
-  // Színezés nélkül, fehér háttéren, vékony fekete szegéllyel.
-  const line = { style: BorderStyle.SINGLE, size: block.academic ? 4 : 6, color: '000000' };
+  // Színezés nélkül, fehér háttéren, vékony fekete szegéllyel (a méret nyolcad pontban).
+  const line = { style: BorderStyle.SINGLE, size: Math.round(DOC_LAYOUT.borderPt * 8), color: '000000' };
   const borders = { top: line, bottom: line, left: line, right: line };
-  const fontSize = block.thematic ? 16 : 20;
+  const fontSize = Math.round((block.thematic ? DOC_LAYOUT.fontPt.thematic : DOC_LAYOUT.fontPt.table) * 2);
+  const pad = block.thematic ? DOC_LAYOUT.cellPadPt.thematic : DOC_LAYOUT.cellPadPt.table;
+  const margins = { top: pad.y * TWIP_PER_PT, bottom: pad.y * TWIP_PER_PT, left: pad.x * TWIP_PER_PT, right: pad.x * TWIP_PER_PT };
   const buildRow = (cells, header) => new TableRow({
     tableHeader: header,
     cantSplit: !block.academic,
     children: cells.map((cell, index) => new TableCell({
       borders,
       width: { size: widths[index], type: WidthType.DXA },
-      margins: block.thematic ? { top: 60, bottom: 60, left: 70, right: 70 } : { top: 80, bottom: 80, left: 110, right: 110 },
+      margins,
       children: cell.paragraphs.length
         ? cell.paragraphs.map((paragraph) => new Paragraph({
-          spacing: { after: block.thematic ? 50 : 100, line: block.thematic ? 240 : 276 },
+          spacing: { after: DOC_LAYOUT.spacingPt.cellParagraphAfter * TWIP_PER_PT, line: docxLineSpacing(DOC_LAYOUT.lineHeight.table) },
           keepNext: paragraph.label,
-          children: docxRuns(paragraph.runs, { size: fontSize, bold: header, font: 'Arial' })
+          children: docxRuns(paragraph.runs, { size: fontSize, bold: header, font: DOC_LAYOUT.fontFamily })
         }))
         : [new Paragraph({ children: [] })]
     }))
@@ -346,26 +355,32 @@ function docxTable(block, contentWidth) {
 
 function docxMetaTable(block, contentWidth) {
   const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle, TableLayoutType } = window.docx;
-  const line = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
+  const line = { style: BorderStyle.SINGLE, size: Math.round(DOC_LAYOUT.borderPt * 8), color: '000000' };
   const borders = { top: line, bottom: line, left: line, right: line };
-  const widths = block.academic
-    ? [Math.round(contentWidth * 0.3), Math.round(contentWidth * 0.7)]
-    : [Math.round(contentWidth * 0.28), Math.round(contentWidth * 0.72)];
+  const labelShare = block.academic ? DOC_LAYOUT.metaLabelShare.academic : DOC_LAYOUT.metaLabelShare.standard;
+  const widths = [Math.round(contentWidth * labelShare), Math.round(contentWidth * (1 - labelShare))];
+  const size = Math.round(DOC_LAYOUT.fontPt.meta * 2);
+  const { x, y } = DOC_LAYOUT.cellPadPt.meta;
+  const margins = { top: y * TWIP_PER_PT, bottom: y * TWIP_PER_PT, left: x * TWIP_PER_PT, right: x * TWIP_PER_PT };
+  const lineSpacing = docxLineSpacing(DOC_LAYOUT.lineHeight.meta);
   const rows = block.rows.map((row) => new TableRow({
-    cantSplit: !block.academic,
+    cantSplit: true,
     children: [
       new TableCell({
         borders,
         width: { size: widths[0], type: WidthType.DXA },
-        margins: { top: 70, bottom: 70, left: 110, right: 110 },
-        children: [new Paragraph({ children: [new TextRun({ text: row.label, bold: true, size: 21, font: 'Arial', color: '000000' })] })]
+        margins,
+        children: [new Paragraph({ spacing: { line: lineSpacing }, children: [new TextRun({ text: row.label, bold: true, size, font: DOC_LAYOUT.fontFamily, color: '000000' })] })]
       }),
       new TableCell({
         borders,
         width: { size: widths[1], type: WidthType.DXA },
-        margins: { top: 70, bottom: 70, left: 110, right: 110 },
+        margins,
         children: row.value.paragraphs.length
-          ? row.value.paragraphs.map((paragraph) => new Paragraph({ spacing: { after: 40 }, children: docxRuns(paragraph.runs, { size: 21, font: 'Arial' }) }))
+          ? row.value.paragraphs.map((paragraph) => new Paragraph({
+            spacing: { after: DOC_LAYOUT.spacingPt.cellParagraphAfter * TWIP_PER_PT, line: lineSpacing },
+            children: docxRuns(paragraph.runs, { size, font: DOC_LAYOUT.fontFamily })
+          }))
           : [new Paragraph({ children: [] })]
       })
     ]
@@ -381,19 +396,22 @@ function docxMetaTable(block, contentWidth) {
 
 async function renderDocxBlob(docId) {
   if (!window.docx) throw new Error('A DOCX könyvtár nem tölthető be.');
-  const { Document, Packer, Paragraph, TextRun, PageOrientation, HeadingLevel } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, PageOrientation, HeadingLevel, LineRuleType } = window.docx;
   const model = buildExportModel(docId);
-  const marginTw = Math.round(PAGE_MARGIN_MM * 56.7);
-  const contentWidth = Math.round(PAGE_MM[model.orientation][0] * 56.7) - marginTw * 2;
+  const { fontPt, spacingPt, fontFamily } = DOC_LAYOUT;
+  const marginTw = Math.round(PAGE_MARGIN_MM * TWIP_PER_MM);
+  const contentWidth = Math.round(PAGE_MM[model.orientation][0] * TWIP_PER_MM) - marginTw * 2;
 
   const children = [];
-  const spacer = () => new Paragraph({ spacing: { after: 120 }, children: [] });
+  // A táblázatok közti térköz pontosan a közös blockGap (a PDF-ben és az előnézetben is ennyi).
+  const spacer = () => new Paragraph({ spacing: { before: 0, after: 0, line: spacingPt.blockGap * TWIP_PER_PT, ...(LineRuleType ? { lineRule: LineRuleType.EXACT } : {}) }, children: [] });
   model.blocks.forEach((block) => {
     if (block.type === 'title') {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        spacing: { before: 0, after: 140 },
-        children: [new TextRun({ text: block.text, bold: true, size: 34, font: 'Arial', color: '000000' })]
+        keepNext: true,
+        spacing: { before: 0, after: spacingPt.titleAfter * TWIP_PER_PT },
+        children: [new TextRun({ text: block.text, bold: true, size: Math.round(fontPt.title * 2), font: fontFamily, color: '000000' })]
       }));
     } else if (block.type === 'meta') {
       children.push(docxMetaTable(block, contentWidth), spacer());
@@ -401,13 +419,16 @@ async function renderDocxBlob(docId) {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         keepNext: true,
-        spacing: { before: 200, after: 120 },
-        children: [new TextRun({ text: block.text, bold: true, size: 26, font: 'Arial', color: '000000' })]
+        spacing: { before: spacingPt.headingBefore * TWIP_PER_PT, after: spacingPt.headingAfter * TWIP_PER_PT },
+        children: [new TextRun({ text: block.text, bold: true, size: Math.round(fontPt.heading * 2), font: fontFamily, color: '000000' })]
       }));
     } else if (block.type === 'table') {
       children.push(docxTable(block, contentWidth), spacer());
     } else {
-      children.push(new Paragraph({ spacing: { after: 120, line: 288 }, children: docxRuns(block.runs, { size: 22, font: 'Arial' }) }));
+      children.push(new Paragraph({
+        spacing: { after: spacingPt.paragraphAfter * TWIP_PER_PT, line: docxLineSpacing(DOC_LAYOUT.lineHeight.body) },
+        children: docxRuns(block.runs, { size: Math.round(fontPt.body * 2), font: fontFamily })
+      }));
     }
   });
 

@@ -22,6 +22,7 @@ const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISH
 const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
+const { APA7_RULE } = require('./services/literatureRules');
 const telemetryService = require('./services/telemetryService');
 const settingsService = require('./services/settingsService');
 const barionService = require('./services/barionService');
@@ -298,7 +299,7 @@ KÖTELEZŐ SZABÁLYOK:
 // A szakirodalom-kapcsoló állapota: a tartalmi szabályokat a rendszerutasítás adja, itt csak a kérés kapcsolója szerepel.
 function buildLiteratureSwitchLine(settings = {}) {
   return settings.showLiteratureAtBottom
-    ? 'Szakirodalom-kapcsoló (showLiteratureAtBottom): BEKAPCSOLVA – a felhasznalt_irodalom mezőbe csak a tervben ténylegesen szereplő, valós magyar művek és magyar szakirodalom kerülhetnek.'
+    ? 'Szakirodalom-kapcsoló (showLiteratureAtBottom): BEKAPCSOLVA – a felhasznalt_irodalom mezőbe csak a tervben ténylegesen szereplő, valós magyar művek és magyar szakirodalom kerülhetnek. ' + APA7_RULE
     : 'Szakirodalom-kapcsoló (showLiteratureAtBottom): KIKAPCSOLVA – a felhasznalt_irodalom üres szöveg legyen.';
 }
 
@@ -354,7 +355,7 @@ function buildPrompt(payload = {}, { dayContext = '' } = {}) {
     detailLevel: detail.level,
     outputMode: 'Szakmai tervezet',
     previousPlanContext: normalizeFreeText(payload.previousPlanContext, 3000),
-    showLiteratureAtBottom: Boolean(payload.showLiteratureAtBottom)
+    showLiteratureAtBottom: academicPlan.isAcademic(payload) || Boolean(payload.showLiteratureAtBottom)
   };
 
   const extraRules = [settings.group === 'Vegyes csoport' ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');

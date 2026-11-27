@@ -297,11 +297,7 @@ function buildDocumentHtml(result, request, docId) {
                 </tbody>
               </table>
             </div>
-            ${showLiterature && String(frame.felhasznalt_irodalom || '').trim() ? `
-              <div class="doc-section">
-                <h3>Felhasznált irodalom</h3>
-                ${formatTableCell(frame.felhasznalt_irodalom)}
-              </div>` : ''}`;
+            ${showLiterature && String(frame.felhasznalt_irodalom || '').trim() ? academicLiteratureHtml(frame.felhasznalt_irodalom, locked) : ''}`;
   }
 
   return buildDailyHtml(result, request, { orientation, locked, title: 'Napi tervezet' });
@@ -353,11 +349,7 @@ function buildDailyHtml(result, request, { orientation, locked, title, lockResul
             <h3>A tevékenység/foglalkozás kidolgozása</h3>
             ${buildActivityTable(result.kidolgozas_tablazat, orientation, locked)}
           </div>
-          ${showLiterature && result.felhasznalt_irodalom.trim() ? `
-            <div class="doc-section">
-              <h3>Felhasznált irodalom</h3>
-              <div${locked ? ' class="locked-mirror-text"' : ''}>${formatTableCell(result.felhasznalt_irodalom)}</div>
-            </div>` : ''}`;
+          ${showLiterature && result.felhasznalt_irodalom.trim() ? academicLiteratureHtml(result.felhasznalt_irodalom, locked) : ''}`;
 }
 
 function renderResultDocument(data = lastResult) {

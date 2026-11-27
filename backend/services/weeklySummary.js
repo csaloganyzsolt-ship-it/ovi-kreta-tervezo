@@ -168,7 +168,7 @@ const SHAPE = `{
   "megjegyzes_egyeb_tevekenysegek": {
     "jatekbovites": ["string"], "anyanyelvi_jatekok": ["string"], "fejlesztojatek": ["string"], "kirandulas_setak": ["string"]
   },
-  "felhasznalt_irodalom": "string (soronként egy tétel)"`;
+  "felhasznalt_irodalom": "string (soronként egy tétel, APA 7 magyar formátumban, szerző szerinti ábécésorrendben; a műcím *dőlt*)"`;
 
 const DAYS_SHAPE = `,
   "napi_beosztas": [

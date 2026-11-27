@@ -45,7 +45,7 @@ test('the academic daily prompt carries the university-level structure, typograp
     'Nevelési feladatok', 'Didaktikai feladatok', 'Képesség- és készségfejlesztés', 'modszerek', 'eszkozok',
     '"N p"', '**Szervezési feladatok:**', '**Motiváció:**', '**Elköszönés:**', 'Tanulásszervezés módja: kötetlen.', 'Az ügyesebbek',
     '*szöveg* = dőlt betű', '**szöveg** = félkövér', '(ÉNÓ 173.)', 'KEE', 'ONAP', 'Felhasznált irodalom:',
-    'Szerző: Cím. Kiadó, Város, Évszám. (Rövidítés)', 'Óvodai nevelés országos alapprogramja (ONAP)', 'SZERZŐI JOG', 'ne találj ki'
+    'Szerző, V. (Év). *Mű címe*. Kiadó.', 'APA 7', '363/2012. (XII. 17.) Korm. rendelet az Óvodai nevelés országos alapprogramjáról.', 'SZERZŐI JOG', 'ne találj ki'
   ]) assert.ok(prompt.includes(required), required);
   assert.match(prompt, /"planMode":"academic"/);
   assert.match(prompt, /"studentName":"Minta Hallgató"/);
@@ -552,7 +552,7 @@ test('the academic daily DOCX is portrait with real tables, repeating header row
   assert.doesNotMatch(xml, /<w:shd /, 'nincs háttérkitöltés sehol');
   assert.doesNotMatch(xml, /w:fill=/);
   assert.match(process, /w:color="000000" w:sz="4"/, 'vékony fekete szegély');
-  assert.equal((xml.match(/<w:pgMar [^>]*\/>/) || [''])[0].match(/w:(top|right|bottom|left)="851"/g)?.length, 4, '15 mm = 851 twip minden oldalon');
+  assert.equal((xml.match(/<w:pgMar [^>]*\/>/) || [''])[0].match(/w:(top|right|bottom|left)="850"/g)?.length, 4, '15 mm = 850 twip minden oldalon');
   assert.doesNotMatch(process, /<w:cantSplit\/>/);
   assert.match(xml, /<w:i\/>/);
   assert.match(xml, /<w:b\/>/);

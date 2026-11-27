@@ -1008,3 +1008,92 @@ test('the landing page carries the new headline, the sixth activity area and the
   assert.match(index, /ONOAP \(Óvodai Nevelés Országos Alapprogramja\)/);
   assert.match(index, /egyszerű és gyors/);
 });
+
+// ---------- Oktatási irodalom-pipa, APA 7 megjelenítés, közös elrendezés ----------
+
+test('the literature checkbox is forced on and locked in academic mode and free again in standard mode', async (t) => {
+  const window = await loadApp(t);
+  const box = window.document.querySelector('input[data-field="show-literature"]');
+  const hint = window.document.getElementById('literatureRequiredHint');
+  assert.equal(box.disabled, false);
+  box.checked = false;
+  window.setPlanMode('academic');
+  assert.equal(box.checked, true);
+  assert.equal(box.disabled, true);
+  assert.equal(hint.hidden, false);
+  assert.match(hint.textContent, /oktatási tervezetnél kötelező/);
+  assert.equal(window.buildGenerationPayload().showLiteratureAtBottom, true);
+  window.updateSummary();
+  assert.match(window.document.querySelector('#summaryChecklist').textContent, /Irodalomjegyzék megjelenítése: igen/);
+  window.setPlanMode('standard');
+  assert.equal(box.disabled, false);
+  assert.equal(box.checked, false, 'a felhasználó korábbi választása áll vissza');
+  assert.equal(hint.hidden, true);
+  box.checked = true;
+  window.setPlanMode('academic');
+  window.setPlanMode('standard');
+  assert.equal(box.checked, true);
+});
+
+test('APA 7 italic titles render as real italics in the preview, the PDF and the DOCX, one reference per line', async (t) => {
+  const window = await loadApp(t);
+  window.docx = require('docx');
+  const plan = makePlan(3);
+  plan.felhasznalt_irodalom = 'Forrai, K. (2016). *Ének az óvodában*. Editio Musica Budapest.\n363/2012. (XII. 17.) Korm. rendelet az Óvodai nevelés országos alapprogramjáról.';
+  window.renderResultDocument({ ...plan, showLiteratureAtBottom: true, request: makePayload({ showLiteratureAtBottom: true }) });
+  const root = window.document.querySelector('#resultDocument');
+  const items = Array.from(root.querySelectorAll('.lit-item'));
+  assert.equal(items.length, 2);
+  assert.equal(items[0].querySelector('em').textContent, 'Ének az óvodában');
+  assert.equal(root.textContent.includes('*'), false);
+  const definition = window.buildPdfDefinition('main');
+  const runs = [];
+  const collect = (node) => { if (!node) return; if (Array.isArray(node)) node.forEach(collect); else if (typeof node === 'object') { if (node.text !== undefined && Array.isArray(node.text)) node.text.forEach((r) => runs.push(r)); [node.stack, node.table?.body, node.content].forEach(collect); } };
+  collect(definition.content);
+  assert.ok(runs.some((run) => run.italics && run.text === 'Ének az óvodában'), 'a PDF-ben dőlt a műcím');
+  assert.equal(runs.some((run) => String(run.text).includes('*')), false);
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(Buffer.from(await (await window.renderDocxBlob('main')).arrayBuffer()));
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.match(xml, /<w:i\/>/);
+  assert.equal(xml.includes('*Ének'), false);
+});
+
+test('the preview CSS variables, the PDF definition and the DOCX XML all come from the single DOC_LAYOUT set', async (t) => {
+  const window = await loadApp(t);
+  window.docx = require('docx');
+  const L = window.eval('DOC_LAYOUT');
+  const root = window.document.documentElement.style;
+  assert.equal(root.getPropertyValue('--doc-body-pt'), `${L.fontPt.body}pt`);
+  assert.equal(root.getPropertyValue('--doc-table-pt'), `${L.fontPt.table}pt`);
+  assert.equal(root.getPropertyValue('--doc-pad-x'), `${L.cellPadPt.table.x}pt`);
+  assert.equal(root.getPropertyValue('--doc-meta-label'), `${L.metaLabelShare.standard * 100}%`);
+  window.renderResultDocument({ ...makePlan(3), request: makePayload() });
+  const definition = window.buildPdfDefinition('main');
+  const marginPt = L.marginMm * 72 / 25.4;
+  assert.deepEqual(Array.from(definition.pageMargins), [marginPt, marginPt, marginPt, marginPt]);
+  const title = definition.content.find((node) => node.headlineLevel === 1);
+  assert.equal(title.fontSize, L.fontPt.title);
+  const table = definition.content.find((node) => node.table?.headerRows === 1 && node.table.widths.length === 3);
+  assert.ok(table, 'a háromoszlopos kidolgozási táblázat fejléce ismétlődik');
+  assert.equal(table.table.dontBreakRows, true);
+  assert.equal(table.layout.paddingLeft(), L.cellPadPt.table.x);
+  assert.equal(table.layout.hLineWidth(0, table), L.borderPt);
+  const cols = Array.from(window.document.querySelectorAll('#resultDocument col')).map((col) => parseFloat(col.style.width));
+  const pdfTotal = table.table.widths.reduce((sum, width) => sum + width + 2 * L.cellPadPt.table.x, 0);
+  table.table.widths.forEach((width, index) => {
+    const share = (width + 2 * L.cellPadPt.table.x) / pdfTotal * 100;
+    assert.ok(Math.abs(share - cols[index]) < 0.5, `oszlop ${index}: ${share.toFixed(1)}% ≈ ${cols[index]}%`);
+  });
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(Buffer.from(await (await window.renderDocxBlob('main')).arrayBuffer()));
+  const xml = await zip.file('word/document.xml').async('string');
+  const margin = Math.round(L.marginMm * 1440 / 25.4);
+  assert.equal((xml.match(/<w:pgMar [^>]*\/>/) || [''])[0].match(new RegExp(`w:(top|right|bottom|left)="${margin}"`, 'g'))?.length, 4);
+  assert.match(xml, new RegExp(`<w:sz w:val="${L.fontPt.title * 2}"/>`));
+  assert.match(xml, new RegExp(`<w:sz w:val="${L.fontPt.table * 2}"/>`));
+  assert.match(xml, new RegExp(`<w:left w:type="dxa" w:w="${L.cellPadPt.table.x * 20}"/>`));
+  assert.match(xml, /<w:cantSplit\/>/);
+  assert.match(xml, /<w:tblHeader\/>/);
+  assert.match(xml, /<w:keepNext\/>/);
+});

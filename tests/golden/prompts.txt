@@ -109,7 +109,7 @@ Válasz: egyetlen valid JSON objektum, markdown nélkül, pontosan ebben a szerk
   "megjegyzes_egyeb_tevekenysegek": {
     "jatekbovites": ["string"], "anyanyelvi_jatekok": ["string"], "fejlesztojatek": ["string"], "kirandulas_setak": ["string"]
   },
-  "felhasznalt_irodalom": "string (soronként egy tétel)",
+  "felhasznalt_irodalom": "string (soronként egy tétel, APA 7 magyar formátumban, szerző szerinti ábécésorrendben; a műcím *dőlt*)",
   "napi_beosztas": [
     { "nap": "Hétfő", "fo_terulet": "az adott nap fő nevelési területe", "napi_fokusz": "mi áll a nap középpontjában (1–2 mondat)", "napi_cel": "a nap konkrét célja" }
   ]

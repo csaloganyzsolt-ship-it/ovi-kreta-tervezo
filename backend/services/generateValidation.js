@@ -126,6 +126,9 @@ function validateGeneratePayload(payload) {
     put(key, bool(payload[key], key));
   }
 
+  // Oktatási tervnél az irodalomjegyzék kötelező, a kliens kapcsolójától függetlenül.
+  if (clean.planMode === 'academic') clean.showLiteratureAtBottom = true;
+
   clean.childCount = validateChildCount(payload.childCount);
   put('detailLevel', validateDetailLevel(payload.detailLevel));
   put('selectedDays', validateSelectedDays(payload.selectedDays));

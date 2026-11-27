@@ -72,7 +72,24 @@ function setPlanMode(mode) {
   });
   const extra = document.getElementById('planModeAcademicExtra');
   if (extra) extra.hidden = next !== 'academic';
+  syncLiteratureCheckbox(next === 'academic');
   updateWeeklyDailyBreakdownVisibility();
+}
+
+// Oktatási tervnél az irodalomjegyzék kötelező: bepipálva és zárolva; normál módban visszaáll a felhasználó választása.
+function syncLiteratureCheckbox(academic) {
+  const literature = document.querySelector('input[data-field="show-literature"]');
+  if (!literature) return;
+  const hint = document.getElementById('literatureRequiredHint');
+  if (hint) hint.hidden = !academic;
+  if (academic) {
+    if (!literature.disabled) literature.dataset.userChoice = literature.checked ? '1' : '0';
+    literature.checked = true;
+    literature.disabled = true;
+  } else if (literature.disabled) {
+    literature.checked = literature.dataset.userChoice === '1';
+    literature.disabled = false;
+  }
 }
 
 // Heti módban két választás van: csak összesítő (summary) vagy teljes csomag (package: összesítő + napi tervek).

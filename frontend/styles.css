@@ -717,7 +717,7 @@
     min-height: 297mm;
     max-width: 100%;
     height: auto;
-    padding: 15mm;
+    padding: var(--doc-margin);
     background: white;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     margin: 0 auto;
@@ -744,13 +744,13 @@
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: var(--doc-title-after);
   }
 
   .document-sheet .doc-header h2 {
     margin: 0;
-    font-size: 1.65rem;
-    letter-spacing: 0.02em;
+    font-size: var(--doc-title-pt);
+    line-height: var(--doc-lh-body);
     color: #000000;
   }
 
@@ -758,15 +758,15 @@
     display: none;
   }
 
+  /* Az előnézet méretei a közös DOC_LAYOUT-ból jönnek (tervezo-core.js, --doc-* változók): ugyanezekkel dolgozik a PDF és a DOCX is. */
   .document-sheet .doc-section {
-    margin-bottom: 28px;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    margin-bottom: 0;
   }
 
   .document-sheet .doc-section h3 {
-    margin: 0 0 10px;
-    font-size: 1.05rem;
+    margin: var(--doc-heading-before) 0 var(--doc-heading-after);
+    font-size: var(--doc-heading-pt);
+    line-height: var(--doc-lh-body);
     color: #000000;
     break-inside: avoid;
     page-break-inside: avoid;
@@ -775,61 +775,76 @@
   .document-sheet .doc-section p,
   .document-sheet .doc-section li {
     color: #000000;
-    line-height: 1.7;
-    margin: 0 0 10px;
-    font-size: 0.98rem;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    line-height: var(--doc-lh-body);
+    margin: 0 0 var(--doc-par-after);
+    font-size: var(--doc-body-pt);
+  }
+
+  .document-sheet .doc-section p {
+    orphans: 2;
+    widows: 2;
   }
 
   .document-sheet .official-meta {
     display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 8px 18px;
-    border: 1px solid #000000;
-    border-radius: 4px;
-    padding: 12px 14px;
+    grid-template-columns: var(--doc-meta-label) 1fr;
+    gap: 0;
+    border: var(--doc-border) solid #000000;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: var(--doc-block-gap);
     background: transparent;
+    font-size: var(--doc-meta-pt);
+    line-height: var(--doc-lh-meta);
   }
 
   .document-sheet .meta-row {
     display: contents;
   }
 
-  .document-sheet .meta-label {
-    font-weight: 700;
+  .document-sheet .meta-label,
+  .document-sheet .meta-value {
+    padding: var(--doc-meta-pad-y) var(--doc-meta-pad-x);
+    border-bottom: var(--doc-border) solid #000000;
     color: #000000;
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
 
-  .document-sheet .meta-value {
-    color: #000000;
+  .document-sheet .meta-label {
+    font-weight: 700;
+    border-right: var(--doc-border) solid #000000;
   }
+
+  .document-sheet .meta-row:last-child .meta-label,
+  .document-sheet .meta-row:last-child .meta-value { border-bottom: 0; }
 
   .document-sheet .official-table {
     width: 100%;
     border-collapse: collapse;
-    border: 1px solid #000000;
-    font-size: 0.92rem;
+    border: var(--doc-border) solid #000000;
+    font-size: var(--doc-table-pt);
     table-layout: fixed;
     background: transparent;
+    margin-bottom: var(--doc-block-gap);
   }
 
   .document-sheet .official-table th,
   .document-sheet .official-table td {
-    border: 1px solid #000000;
+    border: var(--doc-border) solid #000000;
     vertical-align: top;
-    padding: 10px 8px;
+    padding: var(--doc-pad-y) var(--doc-pad-x);
     text-align: left;
     color: #000000;
     background: transparent;
     background-color: transparent;
     overflow-wrap: anywhere;
-    hyphens: auto;
-    line-height: 1.6;
+    line-height: var(--doc-lh-table);
     break-inside: auto;
     page-break-inside: auto;
   }
 
+  /* Táblázatsor lapközben csak akkor törik, ha nem fér el egyben (a DOCX-ben cantSplit, a PDF-ben dontBreakRows). */
   .document-sheet .official-table tr {
     background: transparent;
     background-color: transparent;
@@ -845,19 +860,13 @@
   }
 
   .document-sheet .doc-table-section,
-  .document-sheet .official-table,
-  .document-sheet .official-table tr {
+  .document-sheet .official-table {
     break-inside: auto;
     page-break-inside: auto;
   }
 
   .document-sheet .official-table thead {
     display: table-header-group;
-  }
-
-  .document-sheet .official-table tr {
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
   .document-sheet h2,
@@ -877,7 +886,6 @@
   .document-sheet {
     word-break: normal;
     overflow-wrap: break-word;
-    hyphens: auto;
   }
 
   .document-sheet[data-orientation="landscape"] {
@@ -888,9 +896,9 @@
   .document-sheet .official-table p {
     font-size: inherit;
     line-height: inherit;
-    margin: 0 0 0.8em;
-    orphans: 3;
-    widows: 3;
+    margin: 0 0 var(--doc-cell-par-after);
+    orphans: 2;
+    widows: 2;
   }
 
   .document-sheet .doc-section ul,
@@ -903,11 +911,6 @@
 
   .document-sheet .doc-section strong {
     color: #000000;
-  }
-
-  .document-sheet .doc-section p:last-child,
-  .document-sheet .doc-section li:last-child {
-    margin-bottom: 0;
   }
 
   .download-row {
@@ -1431,7 +1434,7 @@
       box-sizing: border-box;
       width: 210mm;
       min-height: 297mm;
-      padding: 15mm;
+      padding: var(--doc-margin);
       background: #fff;
       color: #1d2329;
       box-shadow: 0 8px 28px rgba(40, 30, 20, 0.22);
@@ -2021,7 +2024,7 @@ a.brand { text-decoration: none; color: inherit; }
 
     @page {
       size: A4 portrait;
-      margin: 12mm;
+      margin: 0;
     }
 
     body {
@@ -2156,64 +2159,18 @@ a.brand { text-decoration: none; color: inherit; }
 /* ===== Oktatási célú dokumentumok (táblázatok, fejléc, dőlt szöveg) ===== */
 .document-sheet em { font-style: italic; }
 
-.document-sheet .academic-meta {
-  grid-template-columns: 30% 70%;
-  gap: 0;
-  padding: 0;
-  border: 1px solid #000000;
-  border-radius: 0;
-}
-.document-sheet .academic-meta .meta-label {
-  padding: 6px 10px;
-  border-right: 1px solid #000000;
-  border-bottom: 1px solid #000000;
-}
-.document-sheet .academic-meta .meta-value {
-  padding: 6px 10px;
-  border-bottom: 1px solid #000000;
-  overflow-wrap: anywhere;
-}
-.document-sheet .academic-meta .meta-row:last-child .meta-label,
-.document-sheet .academic-meta .meta-row:last-child .meta-value { border-bottom: 0; }
-.document-sheet .academic-meta .meta-value p {
-  margin: 0 0 4px;
-  font-size: inherit;
-  line-height: 1.5;
-}
-.document-sheet .academic-meta .meta-value p:last-child { margin-bottom: 0; }
+.document-sheet .academic-meta { grid-template-columns: var(--doc-academic-meta-label) 1fr; }
 
-.document-sheet .official-table.academic-table { border: 1px solid #000000; }
-.document-sheet .official-table.academic-table th,
-.document-sheet .official-table.academic-table td {
-  border: 1px solid #000000;
-  padding: 6px 8px;
-}
-.document-sheet .official-table.academic-table th {
-  background: transparent;
-}
-.document-sheet .official-table.academic-table th,
-.document-sheet .official-table.academic-table td { break-inside: auto; page-break-inside: auto; }
-
-.document-sheet .thematic-table { font-size: 0.7rem; }
+.document-sheet .official-table.thematic-table { font-size: var(--doc-thematic-pt); }
 .document-sheet .official-table.thematic-table th,
 .document-sheet .official-table.thematic-table td {
-  padding: 4px 5px;
-  line-height: 1.35;
+  padding: var(--doc-thematic-pad-y) var(--doc-thematic-pad-x);
 }
-.document-sheet .official-table.thematic-table td p { margin: 0 0 0.3em; }
-.document-sheet .official-table .cell-label { margin: 0.5em 0 0.15em; }
-.document-sheet .official-table td > .cell-label:first-child { margin-top: 0; }
 
-.document-sheet .academic-frame h3 { margin: 12px 0 6px; }
-.document-sheet .academic-frame p {
-  margin: 0 0 4px;
-  line-height: 1.5;
-}
+.document-sheet .academic-frame p,
 .document-sheet .academic-literature .lit-item {
-  margin: 0 0 6px;
-  padding-left: 1.4em;
-  text-indent: -1.4em;
-  line-height: 1.5;
+  margin: 0 0 var(--doc-par-after);
+  line-height: var(--doc-lh-body);
 }
 
 /* ===== Barion fizetési gomb és kötelező Barion Payment logócsík ===== */
