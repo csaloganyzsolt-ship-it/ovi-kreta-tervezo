@@ -216,6 +216,8 @@ async function generatePlan() {
   nextBtn.textContent = 'Tervezet generálása folyamatban...';
   const payload = buildGenerationPayload();
   window.telemetry?.logEvent('generator_started', { plan_mode: String(payload.duration).toLowerCase() === 'heti' ? 'weekly' : 'daily', age_group: payload.group, theme_category: payload.theme });
+  window.telemetry?.logFunnel?.('generator_started');
+  window.OviTracking?.track('generate_plan');
   const stopLoader = startGenerationLoader(payload);
   document.getElementById('generationLoader')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -270,6 +272,14 @@ async function generatePlan() {
       console.warn('A gyorsítótár nem menthető:', storageError);
     }
     renderPreview();
+    window.telemetry?.logFunnel?.('document_generated');
+    try {
+      const kind = typeof planKind === 'function' ? planKind() : 'daily';
+      const price = paywallPrice(kind);
+      window.OviTracking?.track('view_item', { value: price, items: [{ item_id: kind, price, quantity: 1 }] });
+    } catch (trackError) {
+      console.warn('A view_item esemény nem küldhető:', trackError.message);
+    }
     setTimeout(() => {
       const previewEl = document.getElementById('previewPanel') || document.getElementById('previewBox');
       if (previewEl) previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });

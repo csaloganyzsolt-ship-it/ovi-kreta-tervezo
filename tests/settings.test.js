@@ -651,3 +651,20 @@ test('admin.html and admin.js agree on the 100 000 character prompt limit with a
   assert.match(js, /PROMPT_MAX = 100000/);
   assert.match(js, /setAiPrompt'\)\?\.addEventListener\('input', updatePromptCount\)/);
 });
+
+test('GET /api/config serves tracking_config and derives the legacy barionPixelId from it (env overrides)', async (t) => {
+  const saved = process.env.BARION_PIXEL_ID;
+  delete process.env.BARION_PIXEL_ID;
+  t.after(() => { if (saved === undefined) delete process.env.BARION_PIXEL_ID; else process.env.BARION_PIXEL_ID = saved; });
+  fakeDb(t, { settings: { pricing: DB_PRICING, tracking_config: { barion_pixel_id: 'BP-Admin1-AB', ga4_measurement_id: 'G-ADMIN12345', meta_pixel_id: '1234567890123' } } });
+  const base = await listen(t);
+  settingsService.invalidate();
+  const data = await (await fetch(`${base}/api/config`)).json();
+  assert.deepEqual(data.tracking_config, { barion_pixel_id: 'BP-Admin1-AB', ga4_measurement_id: 'G-ADMIN12345', meta_pixel_id: '1234567890123' });
+  assert.equal(data.barionPixelId, 'BP-Admin1-AB');
+  process.env.BARION_PIXEL_ID = 'BP-Env12345-X';
+  settingsService.invalidate();
+  const overridden = await (await fetch(`${base}/api/config`)).json();
+  assert.equal(overridden.barionPixelId, 'BP-Env12345-X');
+  assert.equal(overridden.tracking_config.barion_pixel_id, 'BP-Env12345-X');
+});

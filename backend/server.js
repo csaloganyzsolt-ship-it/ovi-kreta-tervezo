@@ -191,12 +191,14 @@ app.get('/api/config', async (_req, res) => {
     const env = process.env;
     const paymentProvider = settings.payment_provider === 'stripe' ? 'stripe' : 'barion';
     const profileType = getBillingProfile(env).type;
+    const effectiveBarionId = barionPixelId(env, settings.tracking_config?.barion_pixel_id);
     res.json({
       success: true,
       ...settingsService.publicConfig(settings),
+      tracking_config: { ...settings.tracking_config, barion_pixel_id: effectiveBarionId },
       company: { ...publicCompany(env, profileType), email: String(env.SUPPORT_EMAIL || '').trim() || SUPPORT_EMAIL },
       paymentProvider,
-      barionPixelId: paymentProvider === 'barion' ? barionPixelId(env) : '',
+      barionPixelId: paymentProvider === 'barion' ? effectiveBarionId : '',
       stripePublishableKey: stripeService.stripePublishableKey(env, profileType),
       stripeTestMode: stripeService.isTestMode(env)
     });
@@ -855,11 +857,14 @@ const telemetryLimiter = rateLimit({
 
 app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
   try {
-    const { eventName, deviceType, referrerDomain, metadata } = req.body || {};
+    const { eventName, deviceType, referrerDomain, metadata, sessionId } = req.body || {};
 
     // Validáció
     if (!eventName || typeof eventName !== 'string') {
       return res.status(400).json({ success: false, error: 'Érvénytelen vagy hiányzó eseménynév.' });
+    }
+    if (sessionId !== undefined && sessionId !== null && !telemetryService.sanitizeSessionId(sessionId)) {
+      return res.status(400).json({ success: false, error: 'Érvénytelen munkamenet-azonosító.' });
     }
 
     // Whitelist ellenőrzés
@@ -867,10 +872,11 @@ app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: `Érvénytelen eseménynév: ${eventName}` });
     }
 
-    // Telemetria naplózása
+    // Telemetria naplózása (IP-cím és böngészőazonosító soha nem kerül tárolásra)
     const result = await telemetryService.logEvent(eventName, {
       deviceType: deviceType || null,
       referrerDomain: referrerDomain || null,
+      sessionId: sessionId || null,
       metadata: (typeof metadata === 'object' && metadata !== null) ? metadata : {}
     });
 

@@ -87,6 +87,48 @@
 
   // ---------- Táblázat-segédek ----------
 
+  const FUNNEL_LABELS = {
+    landing_view: 'Főoldal megtekintése', pricing_view: 'Árak megtekintése', planner_step_1: 'Tervező 1. lépés', planner_step_2: 'Tervező 2. lépés',
+    planner_step_3: 'Tervező 3. lépés', planner_step_4: 'Tervező 4. lépés', generator_started: 'Generálás indítva', document_generated: 'Tervezet kész',
+    paywall_opened: 'Fizetési ablak', checkout_started: 'Fizetés indítva', payment_succeeded: 'Sikeres fizetés'
+  };
+
+  function renderFunnelPath(funnel) {
+    const body = byId('funnelTable').tBodies[0];
+    body.replaceChildren();
+    const note = byId('funnelNote');
+    if (!funnel || !Array.isArray(funnel.steps)) {
+      note.textContent = 'A látogatói útvonal nem érhető el (hiányzó adat vagy az analytics_funnel migráció nincs lefuttatva).';
+      return;
+    }
+    const maxReached = Math.max(1, ...funnel.steps.map((s) => s.reached));
+    for (const step of funnel.steps) {
+      const row = document.createElement('tr');
+      if (step.biggest_drop) row.className = 'funnel-worst';
+      const label = document.createElement('td');
+      label.textContent = FUNNEL_LABELS[step.step] || step.step;
+      const track = document.createElement('div');
+      track.className = 'funnel-bar-track';
+      const bar = document.createElement('div');
+      bar.className = 'funnel-bar';
+      bar.style.width = `${Math.round((step.reached / maxReached) * 100)}%`;
+      track.append(bar);
+      label.append(track);
+      row.append(label);
+      for (const text of [String(step.reached), `${step.continued_pct}%`, String(step.dropped), `${step.dropped_pct}%`]) {
+        const cell = document.createElement('td');
+        cell.textContent = text;
+        row.append(cell);
+      }
+      body.append(row);
+    }
+    const parts = [`Összes mért munkamenet: ${funnel.total_sessions}.`];
+    if (funnel.truncated) parts.push(`Figyelem: csak az első ${funnel.row_limit} esemény került feldolgozásra, az adat részleges.`);
+    const worst = funnel.steps.find((s) => s.biggest_drop);
+    if (worst) parts.push(`Legnagyobb lemorzsolódás: ${FUNNEL_LABELS[worst.step] || worst.step}.`);
+    note.textContent = parts.join(' ');
+  }
+
   function fillTable(tableId, rows, columns, emptyText) {
     const body = byId(tableId).tBodies[0];
     body.replaceChildren();
@@ -290,6 +332,7 @@
         // Top referrerek
         const referrersRows = (analytics.top_referrers || []).map((r) => [r.domain || '(közvetlen)', String(r.count)]);
         fillTable('referrersTable', referrersRows, 2, 'Nincsenek adatok');
+        renderFunnelPath(analytics.funnel_path);
       }
     } catch (error) {
       setText('overviewError', `A statisztika nem tölthető be: ${errorMessage(error)}`);
@@ -1095,6 +1138,8 @@
         ? 'Jelenleg ez a cím él (az Admin Központban mentve).'
         : 'Nincs mentett cím: a Render környezeti változók (vagy az ügyfélszolgálati cím) az érvényesek.';
       for (const [key, id] of LINK_FIELDS) byId(id).value = settings.external_links?.[key] || '';
+      for (const [key, id] of TRACKING_FIELDS) byId(id).value = settings.tracking_config?.[key] || '';
+      renderTrackingBadges();
       renderToolLinks(settings.external_links);
     } catch (error) {
       flash('generalStatus', 'generalError', `A beállítások nem tölthetők be: ${errorMessage(error)}`, true);
@@ -1197,6 +1242,25 @@
   const saveLinks = (event) => saveSettings(event, () => ({
     external_links: Object.fromEntries(LINK_FIELDS.map(([key, id]) => [key, byId(id).value.trim()]))
   }), { status: 'linksStatus', error: 'linksError', button: 'linksSave' });
+
+  const TRACKING_FIELDS = [
+    ['barion_pixel_id', 'setTrackingBarion', 'trackingBarionBadge'],
+    ['ga4_measurement_id', 'setTrackingGa4', 'trackingGa4Badge'],
+    ['meta_pixel_id', 'setTrackingMeta', 'trackingMetaBadge']
+  ];
+
+  function renderTrackingBadges() {
+    for (const [, inputId, badgeId] of TRACKING_FIELDS) {
+      const active = byId(inputId).value.trim() !== '';
+      const badge = byId(badgeId);
+      badge.textContent = active ? 'Aktív' : 'Nincs megadva';
+      badge.className = active ? 'admin-badge-on' : 'admin-badge-off';
+    }
+  }
+
+  const saveTracking = (event) => saveSettings(event, () => ({
+    tracking_config: Object.fromEntries(TRACKING_FIELDS.map(([key, id]) => [key, byId(id).value.trim()]))
+  }), { status: 'trackingStatus', error: 'trackingError', button: 'trackingSave' });
 
   const saveAi = (event) => saveSettings(event, () => ({
     ai_config: { model: byId('setAiModel').value, system_prompt: byId('setAiPrompt').value }
@@ -1871,6 +1935,8 @@
     byId('notificationForm').addEventListener('submit', saveNotification);
     byId('notificationSplitForm').addEventListener('submit', saveNotificationSplit);
     byId('linksForm').addEventListener('submit', saveLinks);
+    byId('trackingForm').addEventListener('submit', saveTracking);
+    TRACKING_FIELDS.forEach(([, id]) => byId(id).addEventListener('input', renderTrackingBadges));
     document.querySelectorAll('[data-history-key]').forEach((button) => button.addEventListener('click', () => openHistory(button.dataset.historyKey)));
     byId('historyKey').addEventListener('change', () => openHistory());
     byId('historyClose').addEventListener('click', () => byId('historyDialog').close());

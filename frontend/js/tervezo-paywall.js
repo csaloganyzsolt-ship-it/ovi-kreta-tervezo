@@ -175,6 +175,17 @@ function pixelItem(kind = planKind()) {
   return { id: kind, name: PLAN_LABELS[kind], price: paywallPrice(kind) };
 }
 
+// GA4 / Meta eseményadatok a csomagból; a követés hibája soha nem akaszthatja meg a fizetési folyamatot.
+function trackCommerce(name, { kind = planKind(), value, extra = {} } = {}) {
+  try {
+    const price = value ?? paywallPrice(kind);
+    return window.OviTracking?.track(name, { value: price, items: [{ item_id: kind, item_name: PLAN_LABELS[kind], price, quantity: 1 }], ...extra });
+  } catch (error) {
+    console.warn('A követési esemény adatai nem állíthatók össze:', error.message);
+    return false;
+  }
+}
+
 function openCheckoutModal() {
   if (generationInFlight || !lastResult) return;
   renderCheckoutPrice();
@@ -182,6 +193,7 @@ function openCheckoutModal() {
   syncCheckoutButtons();
   document.getElementById('checkoutTestNote').hidden = window.APP_CONFIG?.company?.stripeTestMode !== true;
   window.telemetry?.logEvent('paywall_opened');
+  window.telemetry?.logFunnel?.('paywall_opened');
   window.barionPixel?.addToCart(pixelItem());
   openModal('checkoutModal');
   document.getElementById('checkoutEmail').focus();
@@ -304,6 +316,8 @@ async function startBarionCheckout() {
     }
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
     window.barionPixel?.initiateCheckout({ ...pixelItem(), price: data.amountHuf ?? paywallPrice(planKind()) });
+    window.telemetry?.logFunnel?.('checkout_started');
+    trackCommerce('begin_checkout', { value: data.amountHuf });
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
     redirectTo(data.gatewayUrl);
@@ -329,6 +343,8 @@ async function startStripeCheckout() {
   if (!form) return;
   const errorEl = document.getElementById('checkoutError');
   document.getElementById('checkoutStripe').disabled = true;
+  window.telemetry?.logFunnel?.('checkout_started');
+  trackCommerce('begin_checkout');
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/create-checkout-session`, {
       method: 'POST',
@@ -403,6 +419,7 @@ async function applyCouponCode() {
       return;
     }
     localStorage.removeItem(APPLIED_COUPON_KEY);
+    window.telemetry?.logFunnel?.('payment_succeeded');
     closeModals();
     document.getElementById('couponCode').value = '';
     showUnlockedPlan(lastResult.generationId, data.sessionId, data.planData);
@@ -494,6 +511,11 @@ async function handleCheckoutReturn() {
     localStorage.removeItem('oviKretaPendingCheckout');
     localStorage.removeItem(PENDING_BARION_KEY);
     showPurchaseNotice('');
+    window.telemetry?.logFunnel?.('payment_succeeded');
+    {
+      const kind = PLAN_LABELS[data.plan] ? data.plan : planKind();
+      if (!isCouponSession(sessionId)) trackCommerce('purchase', { kind, value: data.amountHuf ?? paywallPrice(kind), extra: { transaction_id: String(data.orderNumber || sessionId), currency: 'HUF' } });
+    }
     if (!isCouponSession(sessionId)) {
       const kind = PLAN_LABELS[data.plan] ? data.plan : planKind();
       window.barionPixel?.purchase({ id: sessionId, itemId: kind, name: PLAN_LABELS[kind], price: data.amountHuf ?? paywallPrice(kind) });

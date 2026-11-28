@@ -103,6 +103,16 @@
               <div class="admin-kpi"><span class="admin-kpi-label">PDF letöltés</span><strong class="admin-kpi-value" id="analyticsDownloadPdf">–</strong></div>
             </div>
 
+            <h3>Látogatói útvonal és lemorzsolódás</h3>
+            <p class="profile-hint">Csak statisztikai süti-hozzájárulással mért, névtelen munkamenetek. „Elakadt”: ebben a lépésben ért véget a látogatás.</p>
+            <div class="admin-table-wrap">
+              <table class="funnel-table" id="funnelTable">
+                <thead><tr><th>Lépés</th><th>Elérte</th><th>Tovább %</th><th>Elakadt</th><th>Elakadt % (összes)</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="funnel-note" id="funnelNote"></p>
+
             <h3>Eszközmegoszlás</h3>
             <div class="admin-kpis" id="deviceGrid">
               <div class="admin-kpi"><span class="admin-kpi-label">Mobil (%)</span><strong class="admin-kpi-value" id="deviceMobile">–</strong></div>
@@ -676,6 +686,7 @@
               <button type="button" role="tab" class="profile-tab" id="subTabAi" data-settings-tab="ai" aria-selected="false">AI Beállítások</button>
               <button type="button" role="tab" class="profile-tab" id="subTabBilling" data-settings-tab="billing" aria-selected="false">Számlázás &amp; fizetés</button>
               <button type="button" role="tab" class="profile-tab" id="subTabLinks" data-settings-tab="links" aria-selected="false">Külső linkek</button>
+              <button type="button" role="tab" class="profile-tab" id="subTabTracking" data-settings-tab="tracking" aria-selected="false">Analitika &amp; Pixelek</button>
               <button type="button" role="tab" class="profile-tab" id="subTabEmail" data-settings-tab="email" aria-selected="false">E-mail Sablonok</button>
             </div>
 
@@ -832,6 +843,21 @@
               </form>
             </div>
 
+            <div id="settingsTracking" data-settings-panel="tracking" hidden>
+              <form class="profile-form" id="trackingForm" novalidate>
+                <p class="profile-hint span-2">A mérőkódok a látogatók süti-hozzájárulása után működnek (Google Analytics: statisztikai, Meta Pixel: marketing hozzájárulás). Üresen hagyva az adott mérés ki van kapcsolva.</p>
+                <div class="span-2"><label for="setTrackingBarion">Barion Pixel azonosító <span id="trackingBarionBadge" class="admin-badge warn">Nincs megadva</span></label><input id="setTrackingBarion" type="text" maxlength="60" autocomplete="off" placeholder="BP-xxxxxxxxxx-XX" /><small class="profile-hint">Formátum: BP-, majd 6–25 betű/szám, kötőjel és 1–6 betű/szám. A BARION_PIXEL_ID környezeti változó felülírja.</small></div>
+                <div class="span-2"><label for="setTrackingGa4">Google Analytics 4 mérési azonosító <span id="trackingGa4Badge" class="admin-badge warn">Nincs megadva</span></label><input id="setTrackingGa4" type="text" maxlength="30" autocomplete="off" placeholder="G-XXXXXXXXXX" /><small class="profile-hint">Formátum: G-, majd 6–20 nagybetű/szám.</small></div>
+                <div class="span-2"><label for="setTrackingMeta">Meta Pixel azonosító <span id="trackingMetaBadge" class="admin-badge warn">Nincs megadva</span></label><input id="setTrackingMeta" type="text" maxlength="30" autocomplete="off" inputmode="numeric" placeholder="1234567890123456" /><small class="profile-hint">Formátum: 10–20 számjegy.</small></div>
+                <div class="profile-actions">
+                  <button type="submit" class="profile-btn primary" id="trackingSave">Mentés</button>
+                  <button type="button" class="profile-btn" data-history-key="tracking_config" id="trackingHistory">Előzmények</button>
+                  <span class="profile-status" id="trackingStatus" role="status" hidden></span>
+                  <span class="profile-error" id="trackingError" role="alert" hidden></span>
+                </div>
+              </form>
+            </div>
+
             <dialog class="admin-dialog admin-history-dialog" id="historyDialog" aria-labelledby="historyTitle">
               <h3 id="historyTitle">Előzmények</h3>
               <div class="profile-field">
@@ -841,6 +867,7 @@
                   <option value="daily_generation_cap">Napi szerverplafon</option>
                   <option value="announcement_bar">Főoldali akciós sáv</option>
                   <option value="external_links">Külső linkek</option>
+                  <option value="tracking_config">Analitika és pixelek</option>
                   <option value="notification_email">Értesítési e-mail cím</option>
                   <option value="billing_notification_email">Számlázási értesítési e-mail cím</option>
                   <option value="error_notification_email">Hibariasztási értesítési e-mail cím</option>

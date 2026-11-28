@@ -100,6 +100,11 @@ function describeChange(key, before, after) {
   if (key === 'billing_profile') return `Számlázási profil: ${before ?? '–'} → ${after ?? '–'}.`;
   if (key === 'daily_generation_cap') return `Napi generálási keret: ${before ?? '–'} → ${after ?? '–'}.`;
   if (key === 'announcement_bar') return `Hirdetősáv ${onOff(after?.enabled)}${after?.text ? `: „${String(after.text).slice(0, 80)}”` : ''}.`;
+  if (key === 'tracking_config') {
+    const labels = { barion_pixel_id: 'Barion Pixel', ga4_measurement_id: 'GA4', meta_pixel_id: 'Meta Pixel' };
+    const changed = Object.keys(labels).filter((field) => !isEqual(before?.[field], after?.[field])).map((field) => `${labels[field]}: ${before?.[field] || '–'} → ${after?.[field] || '–'}`);
+    return `Analitika és pixelek módosítva${changed.length ? ` (${changed.join('; ')})` : ' (nincs látható eltérés)'}.`;
+  }
   if (key === 'ai_config') {
     const parts = [];
     if (before?.model !== after?.model) parts.push(`modell: ${before?.model ?? '–'} → ${after?.model ?? '–'}`);
@@ -110,7 +115,7 @@ function describeChange(key, before, after) {
 }
 
 // Az egykattintásos visszaállítást támogató beállítások (mind a validatePatch-en át íródik vissza).
-const RESTORABLE_SETTING_KEYS = Object.freeze(['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email']);
+const RESTORABLE_SETTING_KEYS = Object.freeze(['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'tracking_config', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email']);
 const isRestorableKey = (key) => RESTORABLE_SETTING_KEYS.includes(key) || isThemeKey(key);
 
 module.exports = { recordChange, describeChange, themeKey, isThemeKey, themeSnapshot, couponKey, isCouponKey, couponSnapshot, isRestorableKey, isEqual, THEME_FIELDS, THEME_KEY_PREFIX, COUPON_KEY_PREFIX, RESTORABLE_SETTING_KEYS, isMissingColumn };

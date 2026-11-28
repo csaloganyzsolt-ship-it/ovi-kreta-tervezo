@@ -93,7 +93,7 @@ async function recordDeliveryFailure(order, error, req) {
 
 // A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri (lásd productFromStoredPlan).
 // 45/2014. (II. 26.) Korm. rendelet 29. § (1) m): digitális adattartalomnál a vevő kifejezett nyilatkozata nélkül nem indul fizetés; a nyilatkozat bizonyítékként a rendszernaplóba kerül.
-const CONSENT_VERSION = '2026-11-28';
+const CONSENT_VERSION = '2026-11-29';
 function requireConsent(req, body, email) {
   const consent = body.consent || {};
   if (consent.terms !== true || consent.digitalContent !== true) {

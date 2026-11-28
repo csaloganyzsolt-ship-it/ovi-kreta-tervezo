@@ -6,6 +6,7 @@
     <title>Értékelés és visszajelzés – OviTervező</title>
     <!--GOOGLE_SITE_VERIFICATION-->
     <script src="js/theme-init.js"></script>
+    <script src="js/cookie-consent.js" defer></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="favicon.ico" />
     <link rel="stylesheet" href="styles.css" />
@@ -72,6 +73,23 @@
           <a href="index.html" class="btn primary fb-link-btn">Vissza a főoldalra</a>
         </div>
       </main>
+
+      <footer class="site-footer-mini" id="siteFooter">
+        <div class="footer-links">
+          <a href="index.html">Főoldal</a>
+          <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
+          <a data-legal="imprint">Impresszum és partnerek</a>
+          <button type="button" class="footer-link-btn" id="cookieSettingsBtn" data-cookie-settings>Süti beállítások</button>
+        </div>
+      </footer>
+      <div class="modal-backdrop" id="legalModal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
+        <div class="modal-box">
+          <button type="button" class="modal-x" data-close-modal aria-label="Bezárás">×</button>
+          <h2 id="legalModalTitle"></h2>
+          <div id="legalModalBody"></div>
+          <div class="modal-actions"><button type="button" data-close-modal>Bezárás</button></div>
+        </div>
+      </div>
     </div>
 
     <script src="js/config.js"></script>

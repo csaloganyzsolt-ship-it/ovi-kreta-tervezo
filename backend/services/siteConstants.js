@@ -5,7 +5,7 @@
 // Egyetlen statikus fájllista: a server.js, a build scriptek és a check-site.js is innen dolgoznak.
 const PAGES = ['index.html', 'tervezo.html', 'ertekeles.html', 'profil.html', 'leiratkozas.html', 'admin.html'];
 const SITE_ASSETS = [
-  'styles.css', 'js/site.js', 'js/theme-init.js', 'js/telemetry.js',
+  'styles.css', 'js/site.js', 'js/theme-init.js', 'js/cookie-consent.js', 'js/telemetry.js', 'js/tracking.js',
   'js/tervezo-core.js', 'js/tervezo-academic.js', 'js/tervezo-weekly.js', 'js/tervezo-form.js', 'js/tervezo-config.js', 'js/tervezo-preview.js', 'js/tervezo-export.js',
   'js/tervezo-generate.js', 'js/tervezo-paywall.js', 'js/tervezo-history.js', 'js/tervezo-init.js', 'js/pricing-ui.js', 'js/barion-pixel.js', 'js/auth.js', 'js/profil.js', 'js/leiratkozas.js', 'js/admin.js',
   'favicon.svg', 'favicon.ico', 'logo.svg'
@@ -19,11 +19,11 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_b5CmhcG0zDzDlR8aMQyoZA_aMUDp8AP
 // Egyetlen CSP: a server.js Report-Only fejlécként küldi, a .htaccess ezzel azonos szöveget tartalmaz (tesztelt).
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com",
+  "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://js.stripe.com https://pixel.barion.com https://www.googletagmanager.com https://connect.facebook.net",
   "style-src 'self' 'unsafe-inline'",
-  `connect-src 'self' https://*.onrender.com ${SUPABASE_PUBLIC_URL} https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com`,
+  `connect-src 'self' https://*.onrender.com ${SUPABASE_PUBLIC_URL} https://challenges.cloudflare.com https://api.stripe.com https://pixel.barion.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://www.facebook.com https://connect.facebook.net`,
   'frame-src https://challenges.cloudflare.com https://checkout.stripe.com https://pixel.barion.com',
-  "img-src 'self' data: blob: https://pixel.barion.com",
+  "img-src 'self' data: blob: https://pixel.barion.com https://www.googletagmanager.com https://*.google-analytics.com https://www.facebook.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://checkout.stripe.com",
@@ -86,8 +86,9 @@ function applyCompanyToHtml(html, env = process.env) {
 // A Barion Pixel azonosítója nyilvános (a böngészőben is látszik). A BARION_PIXEL_ID környezeti változó felülírja, üres értékkel a Pixel kikapcsolható.
 const DEFAULT_BARION_PIXEL_ID = 'BP-U0p5Sp7I1Q-EF';
 
-function barionPixelId(env = process.env) {
-  const configured = env.BARION_PIXEL_ID === undefined ? DEFAULT_BARION_PIXEL_ID : String(env.BARION_PIXEL_ID).trim();
+function barionPixelId(env = process.env, adminValue) {
+  const fallback = typeof adminValue === 'string' ? adminValue.trim() : DEFAULT_BARION_PIXEL_ID;
+  const configured = env.BARION_PIXEL_ID === undefined ? fallback : String(env.BARION_PIXEL_ID).trim();
   return /^BP-[A-Za-z0-9-]{4,60}$/.test(configured) ? configured : '';
 }
 

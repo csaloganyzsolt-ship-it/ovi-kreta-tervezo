@@ -4,7 +4,8 @@
   function start(config) {
     try {
       if (config.paymentProvider !== undefined && config.paymentProvider !== 'barion') return;
-      const pixelId = String(config.barionPixelId || '').trim();
+      const tracking = config.trackingConfig;
+      const pixelId = String(tracking && Object.prototype.hasOwnProperty.call(tracking, 'barion_pixel_id') ? tracking.barion_pixel_id : config.barionPixelId || '').trim();
       if (!/^BP-[A-Za-z0-9-]{4,60}$/.test(pixelId)) return;
       window.bp = window.bp || function bp() {
         (window.bp.q = window.bp.q || []).push(arguments);
@@ -46,8 +47,14 @@
     return items.map((item) => ({ id: String(item.id), name: String(item.name), quantity: 1, unitPrice: Number(item.price), price: Number(item.price), currency: CURRENCY }));
   }
 
+  // Az alap Pixel csökkenti a csalás kockázatát, ezért hozzájárulás nélkül is betölthet; az e-kereskedelmi események viszont csak marketing-hozzájárulással mennek el.
+  function marketingAllowed() {
+    return Boolean(root.OviConsent?.has?.('marketing'));
+  }
+
   function track(eventName, params) {
     try {
+      if (!marketingAllowed()) return false;
       if (typeof root.bp !== 'function') return false;
       root.bp('track', eventName, params);
       return true;
@@ -95,11 +102,12 @@
     // Az árak a /api/config-ból érkeznek; a megtekintés egyszer, az árak betöltése után megy el.
     let sent = false;
     const send = () => {
-      if (sent || !root.OviPricing?.isLoaded()) return;
+      if (sent || !root.OviPricing?.isLoaded() || !marketingAllowed()) return;
       sent = true;
       api.contentView();
     };
     root.document.addEventListener('pricing-loaded', send);
+    root.document.addEventListener('ovi:consent-changed', send);
     send();
   }
 }(typeof window !== 'undefined' ? window : globalThis));

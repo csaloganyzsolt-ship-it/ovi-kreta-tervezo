@@ -2130,7 +2130,7 @@ const HID = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 test('isRestorableKey covers every restorable setting and the theme keys, nothing else', () => {
   const auditLog = require('../backend/services/auditLog');
-  const expected = ['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email'];
+  const expected = ['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email', 'tracking_config'];
   assert.deepEqual([...auditLog.RESTORABLE_SETTING_KEYS].sort(), [...expected].sort());
   for (const key of expected) assert.equal(auditLog.isRestorableKey(key), true, key);
   assert.equal(auditLog.isRestorableKey('theme_suggestion:abc'), true);
@@ -2192,6 +2192,26 @@ test('restoring ai_config and maintenance_mode writes the old value back; non-re
   assert.equal((await restore(HID(12))).status, 200);
   assert.equal(client.db.system_settings.find((row) => row.key === 'maintenance_mode').value, false);
   assert.equal((await restore(HID(13))).status, 400);
+});
+
+test('restoring tracking_config writes the old pixel IDs back and rejects an invalid old value with 409', async (t) => {
+  const good = { barion_pixel_id: 'BP-Old12345-A', ga4_measurement_id: 'G-OLD123456', meta_pixel_id: '1234567890' };
+  const client = useAdminEnv(t, fakeAdmin({
+    profiles: adminProfiles(),
+    system_settings: [{ key: 'tracking_config', value: { barion_pixel_id: '', ga4_measurement_id: '', meta_pixel_id: '' } }],
+    system_settings_history: [
+      { id: HID(21), setting_key: 'tracking_config', old_value: good, new_value: { barion_pixel_id: '', ga4_measurement_id: '', meta_pixel_id: '' }, changed_at: new Date().toISOString(), changed_by: 'x' },
+      { id: HID(22), setting_key: 'tracking_config', old_value: { ...good, ga4_measurement_id: 'rossz' }, new_value: good, changed_at: new Date().toISOString(), changed_by: 'x' }
+    ]
+  }));
+  const settingsService = require('../backend/services/settingsService');
+  settingsService.invalidate();
+  t.after(() => settingsService.invalidate());
+  const base = await listen(t);
+  const restore = (id) => call(base, `/api/admin/audit/${id}/restore`, { token: 'token-admin', method: 'POST' });
+  assert.equal((await restore(HID(21))).status, 200);
+  assert.deepEqual(client.db.system_settings.find((row) => row.key === 'tracking_config').value, good);
+  assert.ok((await restore(HID(22))).status >= 400);
 });
 
 test('coupon create / update / delete / archive write audit entries with Hungarian summaries', async (t) => {

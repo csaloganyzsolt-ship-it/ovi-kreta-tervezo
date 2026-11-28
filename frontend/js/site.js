@@ -12,13 +12,14 @@ const DEFAULT_COMPANY = {
   vatNote: 'Alanyi adómentes (AAM) értékesítés, az árak 0 Ft ÁFÁ-t tartalmaznak.'
 };
 const PROCESSORS_LIST = `<ol>
-<li>Nethely Kft. (1115 Budapest, Halmi utca 29., info@nethely.hu) – tárhelyszolgáltató: domain, DNS és a statikus weboldal kiszolgálása.</li>
-<li>Render Services, Inc. (525 Brannan Street, Suite 300, San Francisco, CA 94107, USA) – a backend (API) szerverkörnyezet futtatása.</li>
-<li>Supabase, Inc. (USA) – adatbázis, felhasználói fiókok és hitelesítés, tervezet- és rendeléstárolás.</li>
-<li>Google Ireland Limited (Gordon House, Barrow Street, Dublin 4, Írország) / Google LLC – Gemini API: a tervezetszövegek mesterséges intelligenciával történő generálása; Google Táblázatok és Drive: vásárlási nyilvántartás.</li>
-<li>Barion Payment Zrt. (1117 Budapest, Infopark sétány 1. I. ép. 5. em.) – bankkártyás fizetés és csalásmegelőzés (Barion Pixel).</li>
-<li>KBOSS.hu Kft. (Számlázz.hu, 1031 Budapest, Záhony utca 7.) – számlakiállítás és számlaarchiválás.</li>
-<li>Cloudflare, Inc. (101 Townsend St, San Francisco, CA 94107, USA) – Turnstile robotvédelem.</li>
+<li><strong>Barion Payment Zrt.</strong> (1117 Budapest, Irinyi József utca 4–20. 2. em.; Cg. 01-10-048552; MNB engedélyszám: H-EN-I-1064/2013) – elektronikus fizetés lebonyolítása és a Barion csalásmegelőzési (fraud prevention) Pixel.</li>
+<li><strong>KBOSS.hu Kft. – Számlázz.hu</strong> (1031 Budapest, Záhony utca 7.; Cg. 01-09-303201) – számlakiállítás, számlaarchiválás és a számla kézbesítése.</li>
+<li><strong>Nethely Kft.</strong> (1115 Budapest, Halmi utca 29.; Cg. 01-09-961790; info@nethely.hu) – webtárhely és e-mail kézbesítés.</li>
+<li><strong>Supabase, Inc.</strong> (970 Toa Payoh North #07-04, Singapore 318992; a tárolás az EU-ban lévő adatközpontban történik) – felhős adatbázis és felhasználói hitelesítés.</li>
+<li><strong>Render Services, Inc.</strong> (525 Brannan Street, Suite 300, San Francisco, CA 94107, USA; SCC garanciák) – a szerveroldali alkalmazás (API) futtatása.</li>
+<li><strong>Cloudflare, Inc.</strong> (101 Townsend St, San Francisco, CA 94107, USA; SCC garanciák) – DNS, CDN és a Cloudflare Turnstile robotvédelem.</li>
+<li><strong>Google Ireland Limited</strong> (Gordon House, Barrow Street, Dublin 4, Írország) – a Google Gemini alapú szakmai tervezetgenerálás (a vásárló személyes adatainak átadása nélkül), valamint a statisztikai sütik elfogadása esetén a Google Analytics 4.</li>
+<li><strong>Meta Platforms Ireland Limited</strong> (Merrion Road, Dublin 4, D04 X2K5, Írország) – kizárólag a marketing sütik elfogadása esetén, a Meta Pixel általi konverziómérés.</li>
 </ol>`;
 const LEGAL_TEXTS = {
   terms: ['Általános Szerződési Feltételek (ÁSZF)', `
@@ -91,7 +92,8 @@ const LEGAL_TEXTS = {
 <ul>
 <li>A helyi beállítások (pl. világos/sötét mód, az űrlap ideiglenes állapota) a böngésző saját helyi tárhelyén (localStorage) tárolódnak, ezekhez az Adatkezelő szervere nem fér hozzá.</li>
 <li>Az oldal a Barion Base Pixelt használja csalásmegelőzési (fraud prevention) célból, a Barion Payment Zrt. előírásainak megfelelően. A pixel a böngésző és az eszköz technikai adatait (pl. IP-cím, böngészőazonosító) továbbítja a Barion Payment Zrt.-nek, kizárólag a fizetések biztonságos lebonyolítása és a visszaélések kiszűrése érdekében; marketing célra nem használjuk. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési csalások megelőzése.</li>
-<li>A Teljes (Full) Barion Pixel a fizetési folyamat e-kereskedelmi eseményeit (tervezet megtekintése, csomag kosárba helyezése, fizetés indítása, sikeres vásárlás) küldi a Barion Payment Zrt.-nek a csomag nevével, azonosítójával és árával; a megadott név, e-mail cím és számlázási adat nem kerül továbbításra. Jogalap: jogos érdek (GDPR 6. cikk (1) bek. f) pont), a fizetési szolgáltatás biztonságos és ellenőrizhető nyújtása.</li>
+<li>A Teljes (Full) Barion Pixel a fizetési folyamat e-kereskedelmi eseményeit (tervezet megtekintése, csomag kosárba helyezése, fizetés indítása, sikeres vásárlás) csak a <strong>marketing sütik elfogadása</strong> esetén küldi a Barion Payment Zrt.-nek a csomag nevével, azonosítójával és árával; a megadott név, e-mail cím és számlázási adat nem kerül továbbításra. Jogalap: önkéntes hozzájárulás (GDPR 6. cikk (1) bek. a) pont), amely a „Süti beállítások” gombbal bármikor visszavonható.</li>
+<li>A sütikről, a helyi tárhelyről és a hozzájárulás kezeléséről a 7. pont ad részletes tájékoztatást.</li>
 </ul>
 <p><strong>d) Hírlevél (önkéntes hozzájárulás)</strong></p>
 <ul>
@@ -121,7 +123,26 @@ ${PROCESSORS_LIST}
 <li>E-mail: ugyfelszolgalat@naih.hu</li>
 <li>Weboldal: <a href="https://naih.hu" target="_blank" rel="noopener">naih.hu</a></li>
 </ul>
-<p>Jogaidat bírósági úton (a lakóhelyed szerinti törvényszék előtt) is érvényesítheted.</p>`],
+<p>Jogaidat bírósági úton (a lakóhelyed szerinti törvényszék előtt) is érvényesítheted.</p>
+<h3>7. Sütik és helyi tárhely (cookie-tájékoztató)</h3>
+<p>Az első látogatáskor megjelenő sávban dönthetsz arról, hogy az elengedhetetlen sütiken kívül engedélyezed-e a statisztikai és a marketing sütiket. A három lehetőség (Összes elfogadása, Csak a szükségesek, Beállítások) egyenrangú. A döntésedet bármikor megváltoztathatod, illetve a hozzájárulást visszavonhatod az oldalak alján található <strong>„Süti beállítások”</strong> gombbal; visszavonáskor a már elhelyezett statisztikai és marketing sütiket töröljük. A hozzájárulás visszavonása nem érinti a visszavonás előtti adatkezelés jogszerűségét. A hozzájárulás-nyilatkozatot szolgáltatásunk a böngésződ helyi tárhelyén (<code>ovi_cookie_consent</code>) őrzi, a tájékoztató módosulásakor újra rákérdezünk.</p>
+<div class="legal-table-wrap"><table class="legal-table">
+<thead><tr><th>Név / szolgáltató</th><th>Cél</th><th>Jogalap</th><th>Megőrzési idő</th></tr></thead>
+<tbody>
+<tr class="legal-table-group"><th colspan="4">Elengedhetetlen (mindig aktív)</th></tr>
+<tr><td>Bejelentkezési munkamenet (Supabase, helyi tárhely: <code>sb-…-auth-token</code>)</td><td>Opcionális felhasználói fiók, belépve maradás</td><td>Szerződés teljesítése (GDPR 6. cikk (1) bek. b) pont)</td><td>A munkamenet lejáratáig vagy kijelentkezésig</td></tr>
+<tr><td><code>ovi_cookie_consent</code> (helyi tárhely)</td><td>A süti-hozzájárulás döntésének megőrzése</td><td>Jogi kötelezettség és jogos érdek (GDPR 6. cikk (1) bek. c) és f) pont)</td><td>Legfeljebb 12 hónap, vagy a tájékoztató módosulásáig</td></tr>
+<tr><td>Cloudflare Turnstile sütik (Cloudflare, Inc.)</td><td>Robotvédelem a tervezet generálásakor</td><td>Jogos érdek (GDPR 6. cikk (1) bek. f) pont) – a szolgáltatás védelme</td><td>Munkamenet, illetve a szolgáltató által megadott rövid idő</td></tr>
+<tr><td>Barion alap csalásmegelőzési Pixel, pl. <code>ba_vid</code> (Barion Payment Zrt.)</td><td>Fizetési csalások megelőzése a bankkártyás fizetés biztonsága érdekében</td><td>Jogos érdek (GDPR 6. cikk (1) bek. f) pont)</td><td>A Barion Payment Zrt. tájékoztatója szerint, legfeljebb 1 év</td></tr>
+<tr><td>Űrlapvázlat, profil és téma (helyi tárhely)</td><td>Az űrlap ideiglenes állapota, világos/sötét mód, a tervező beállításai; a szerverhez nem jutnak el</td><td>Szerződés teljesítése és jogos érdek (GDPR 6. cikk (1) bek. b) és f) pont)</td><td>A böngésző adatainak törléséig</td></tr>
+<tr class="legal-table-group"><th colspan="4">Statisztikai és teljesítmény (hozzájárulással)</th></tr>
+<tr><td><code>ovi_analytics_sid</code> (munkamenet-tárhely)</td><td>Névtelen, véletlen munkamenet-azonosító a belső látogatói útvonal és lemorzsolódás elemzéséhez; IP-címet és ujjlenyomatot nem tárolunk</td><td>Önkéntes hozzájárulás (GDPR 6. cikk (1) bek. a) pont)</td><td>A böngészőlap bezárásáig</td></tr>
+<tr><td><code>_ga</code>, <code>_ga_*</code> (Google Analytics 4, Google Ireland Limited)</td><td>Látogatottsági statisztika, az oldal használatának megértése</td><td>Önkéntes hozzájárulás (GDPR 6. cikk (1) bek. a) pont)</td><td>Legfeljebb 13 hónap</td></tr>
+<tr class="legal-table-group"><th colspan="4">Marketing (hozzájárulással)</th></tr>
+<tr><td><code>_fbp</code>, <code>_fbc</code> (Meta Pixel, Meta Platforms Ireland Limited)</td><td>Konverziómérés (megtekintés, fizetés indítása, vásárlás)</td><td>Önkéntes hozzájárulás (GDPR 6. cikk (1) bek. a) pont)</td><td>Legfeljebb 90 nap</td></tr>
+<tr><td>Barion marketing események (Barion Payment Zrt.)</td><td>E-kereskedelmi események (tervezet megtekintése, kosár, fizetés indítása, vásárlás) továbbítása</td><td>Önkéntes hozzájárulás (GDPR 6. cikk (1) bek. a) pont)</td><td>A Barion Payment Zrt. tájékoztatója szerint</td></tr>
+</tbody></table></div>
+<p>A statisztikai és marketing célú adatkezelések kizárólag a hozzájárulásod után indulnak el; ennek hiányában sem a Google Analytics, sem a Meta Pixel szkriptje nem töltődik be, és a belső elemzés sem küld munkamenet-azonosítót.</p>`],
   imprint: ['Impresszum és partnerek', `
 <h3>Szolgáltató (üzemeltető)</h3>
 <ul>
@@ -221,6 +242,7 @@ function loadRuntimeConfig() {
         if (data.company && typeof data.company === 'object') config.company = { ...(config.company || {}), ...data.company };
         config.paymentProvider = data.paymentProvider === 'stripe' ? 'stripe' : 'barion';
         config.barionPixelId = String(data.barionPixelId || '');
+        if (data.tracking_config && typeof data.tracking_config === 'object') config.trackingConfig = { ...data.tracking_config };
         if (data.pricing && window.OviPricing && !window.OviPricing.setPricing(data.pricing)) console.error('A /api/config árai hiányosak vagy érvénytelenek:', data.pricing);
         if (data.announcement_bar && typeof data.announcement_bar === 'object') config.announcementBar = { enabled: data.announcement_bar.enabled === true, text: String(data.announcement_bar.text || '') };
         if (data.stripePublishableKey !== undefined) config.stripePublishableKey = data.stripePublishableKey;

@@ -558,7 +558,16 @@ function updateWizardProgress() {
   document.getElementById('wizardProgressToggle')?.setAttribute('aria-expanded', 'false');
 }
 
+let lastTrackedStep = -1;
+function trackPlannerStep() {
+  if (currentStep === lastTrackedStep || currentStep > 3) return;
+  lastTrackedStep = currentStep;
+  window.telemetry?.logFunnel?.(`planner_step_${currentStep + 1}`);
+  window.OviTracking?.track('planner_step', { step_number: currentStep + 1 });
+}
+
 function renderStep() {
+  trackPlannerStep();
   steps.forEach((panel, index) => {
     panel.classList.toggle('active', index === currentStep);
   });

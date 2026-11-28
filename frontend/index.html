@@ -29,6 +29,8 @@
     {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Hogyan működik az OviTervező?","acceptedAnswer":{"@type":"Answer","text":"A rendszer egy mesterséges intelligencia alapú (AI) óvodai tervező, amely a megadott paramétereid (pl. korcsoport, téma, tevékenység) alapján egyedi, szakmailag lektorálható vázlatot készít, így nem egy előre megírt, merev sablont kapsz."}},{"@type":"Question","name":"Milyen óvodai tervezet készíthető az oldalon?","acceptedAnswer":{"@type":"Answer","text":"Napi tematikus foglalkozásterv és komplex heti tervezet az összes tevékenységi területre."}},{"@type":"Question","name":"Milyen formátumban kapom meg a tervezetet?","acceptedAnswer":{"@type":"Answer","text":"Szerkeszthető Microsoft Word (.docx) és nyomtatható PDF formátumban, e-mailben a megadott címedre, és közvetlenül a felületről is letöltheted."}},{"@type":"Question","name":"Mennyibe kerül a tervezet elkészítése?","acceptedAnswer":{"@type":"Answer","text":"Egyszeri díj, havidíj nélkül: a napi tervezet 390 Ft, a heti összesítő 590 Ft, a teljes heti csomag a heti összesítő árához kidolgozott naponként 100 Ft felárat számít (5 nap esetén 1 090 Ft), az oktatási célú (egyetemi) tervezet napi formában 690 Ft, heti formában 690 Ft, bruttó."}},{"@type":"Question","name":"Módosíthatom az elkészült vázlatot a vásárlás után?","acceptedAnswer":{"@type":"Answer","text":"Igen. A Word fájl teljesen szerkeszthető, így bármikor hozzáigazíthatod a saját csoportod igényeihez."}}]}
     </script>
     <script src="js/theme-init.js"></script>
+    <script src="js/cookie-consent.js" defer></script>
+    <script src="js/tracking.js" defer></script>
     <script src="js/barion-pixel.js" defer></script>
     <script src="js/telemetry.js" defer></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -67,7 +69,7 @@
           <a class="landing-cta" href="tervezo.html">Kezdjük a tervezést</a>
           <button type="button" class="landing-secondary-cta" data-sample-modal>Mintatervezet megtekintése</button>
         </div>
-        <p class="landing-note">Egyszeri díj, havidíj nélkül: napi tervezet <strong data-price="daily">390 Ft</strong>, heti összesítő <strong data-price="weekly_summary">590 Ft</strong>, kidolgozott napi tervek heti csomagban <strong data-price="weekly_extra_day">100 Ft</strong> / nap felárral (5 nappal <strong data-price="weekly_max">1 090 Ft</strong>), oktatási célú (egyetemi) tervezet <strong data-price="academic_daily">690 Ft</strong> (bruttó). Az előnézet fizetés előtt is kipróbálható.</p>
+        <p class="landing-note" id="pricingTable">Egyszeri díj, havidíj nélkül: napi tervezet <strong data-price="daily">390 Ft</strong>, heti összesítő <strong data-price="weekly_summary">590 Ft</strong>, kidolgozott napi tervek heti csomagban <strong data-price="weekly_extra_day">100 Ft</strong> / nap felárral (5 nappal <strong data-price="weekly_max">1 090 Ft</strong>), oktatási célú (egyetemi) tervezet <strong data-price="academic_daily">690 Ft</strong> (bruttó). Az előnézet fizetés előtt is kipróbálható.</p>
       </section>
 
       <section class="seo-content" id="seoContent" aria-label="Előnyök és gyakori kérdések">
@@ -126,6 +128,7 @@
               <a data-legal="privacy">Adatkezelési Tájékoztató (GDPR)</a>
               <a data-legal="billing">Fizetési és Számlázási Tájékoztató</a>
               <a data-legal="imprint">Impresszum és partnerek</a>
+              <button type="button" class="footer-link-btn" id="cookieSettingsBtn" data-cookie-settings>Süti beállítások</button>
             </div>
             <span>Fogyasztói jogvita esetén: Győr-Moson-Sopron Vármegyei Békéltető Testület (9021 Győr, Szent István út 10/a)</span>
             <span class="footer-note">Az oldalt a Cloudflare Turnstile védi a botok ellen: <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Adatvédelmi irányelvek</a> és <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener">Szolgáltatási feltételek</a>.</span>

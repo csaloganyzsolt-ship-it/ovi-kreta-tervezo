@@ -343,6 +343,7 @@ const SETTING_LABELS = {
   daily_generation_cap: 'Napi generálási keret',
   announcement_bar: 'Bejelentősáv',
   external_links: 'Külső eszközök linkjei',
+  tracking_config: 'Analitika és pixelek',
   ai_config: 'AI beállítások (modell és prompt)',
   maintenance_mode: 'Karbantartási mód',
   notification_email: 'Rendszerértesítési e-mail',

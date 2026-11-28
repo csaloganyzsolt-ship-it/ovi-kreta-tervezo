@@ -5,14 +5,31 @@ const supabase = require('./supabaseService');
 // Engedélyezett eseménynevek (whitelist)
 const ALLOWED_EVENTS = new Set([
   'page_view',
+  'landing_view',
+  'pricing_view',
+  'planner_step_1',
+  'planner_step_2',
+  'planner_step_3',
+  'planner_step_4',
   'generator_started',
   'document_generated',
   'paywall_opened',
+  'checkout_started',
+  'payment_succeeded',
   'coupon_box_opened',
   'download_docx',
   'download_pdf',
   'auth_modal_opened'
 ]);
+
+// A látogatói útvonal (tölcsér) lépései sorrendben; az analyticsService ezt használja.
+const FUNNEL_STEPS = Object.freeze(['landing_view', 'pricing_view', 'planner_step_1', 'planner_step_2', 'planner_step_3', 'planner_step_4', 'generator_started', 'document_generated', 'paywall_opened', 'checkout_started', 'payment_succeeded']);
+
+// Véletlen, nem azonosító jellegű munkamenet-azonosító; csak analitikai hozzájárulással küldi a böngésző.
+const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
+function sanitizeSessionId(value) {
+  return typeof value === 'string' && SESSION_ID_PATTERN.test(value) ? value : null;
+}
 
 // Eszköztípus meghatározása a viewport szélességéből
 function detectDeviceType(viewportWidth) {
@@ -95,6 +112,8 @@ async function logEvent(eventName, options = {}) {
       referrer_domain: sanitizeReferrerDomain(referrerDomain),
       metadata: cleanMetadata
     };
+    const sessionId = sanitizeSessionId(options.sessionId);
+    if (sessionId) record.session_id = sessionId;
 
     const { error } = await client
       .from('analytics_events')
@@ -136,6 +155,8 @@ module.exports = {
   detectDeviceType,
   extractReferrerDomain,
   sanitizeMetadata,
+  sanitizeSessionId,
+  FUNNEL_STEPS,
   isPIIDetected,
   ALLOWED_EVENTS
 };

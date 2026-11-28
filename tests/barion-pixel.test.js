@@ -10,10 +10,11 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'bar
 const pricingSource = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pricing-ui.js'), 'utf8');
 const PRICING = { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 };
 
-function pixelWindow({ ba, pathname = '/', pricing = false } = {}) {
+function pixelWindow({ ba, pathname = '/', pricing = false, marketing = true } = {}) {
   const dom = new JSDOM('<!doctype html><body></body>', { url: `http://localhost${pathname}`, runScripts: 'outside-only' });
   const { window } = dom;
   const calls = [];
+  window.OviConsent = { has: (category) => category === 'marketing' && marketing };
   if (ba !== 'blocked') window.bp = ba || function bp() { calls.push([...arguments]); };
   window.eval(pricingSource);
   if (pricing) window.OviPricing.setPricing(PRICING);
@@ -42,6 +43,17 @@ test('Full Barion Pixel: árak nélkül nem megy el a contentView, az árak bet�
   window.OviPricing.setPricing(PRICING);
   window.OviPricing.setPricing(PRICING);
   assert.equal(calls.filter((c) => c[1] === 'contentView').length, 1);
+});
+
+test('Full Barion Pixel: marketing-hozzájárulás nélkül egyetlen kereskedelmi esemény sem megy el (hiba nélkül)', () => {
+  const { window, calls } = pixelWindow({ pathname: '/tervezo.html', pricing: true, marketing: false });
+  const item = { id: 'daily', name: 'Napi', price: 390 };
+  assert.equal(window.barionPixel.contentView(), false);
+  assert.equal(window.barionPixel.addToCart(item), false);
+  assert.equal(window.barionPixel.initiateCheckout(item), false);
+  assert.equal(window.barionPixel.purchase({ id: 'S1', itemId: 'daily', name: 'Napi', price: 390 }), false);
+  assert.equal(calls.length, 0);
+  assert.equal(window.localStorage.getItem('oviKretaBarionPurchases'), null, 'elutasított vásárlás nem kerül a duplikációvédelembe');
 });
 
 test('Full Barion Pixel: addToCart és initiateCheckout adatai', () => {

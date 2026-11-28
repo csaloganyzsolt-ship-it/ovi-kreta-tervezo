@@ -50,6 +50,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     model: 'gemini-3.1-pro-preview',
     system_prompt: DEFAULT_SYSTEM_PROMPT
   }),
+  // Nyilvános követőkódok (a böngészőben is láthatók, nem titkosak); a betöltésüket a látogatói hozzájárulás vezérli.
+  tracking_config: Object.freeze({ barion_pixel_id: 'BP-U0p5Sp7I1Q-EF', ga4_measurement_id: 'G-P47M4MVRM6', meta_pixel_id: '' }),
   maintenance_mode: false,
   notification_email: '',
   billing_notification_email: '',
@@ -82,7 +84,15 @@ function defaults() {
   return clone(DEFAULT_SETTINGS);
 }
 
-const OBJECT_SETTINGS = Object.freeze(['pricing', 'ai_config', 'announcement_bar', 'external_links']);
+const OBJECT_SETTINGS = Object.freeze(['pricing', 'ai_config', 'announcement_bar', 'external_links', 'tracking_config']);
+
+const TRACKING_FIELDS = Object.freeze({
+  barion_pixel_id: { pattern: /^BP-[A-Za-z0-9]{6,25}-[A-Za-z0-9]{1,6}$/, label: 'Barion Pixel azonosító', example: 'BP-xxxxxxxxxx-XX' },
+  ga4_measurement_id: { pattern: /^G-[A-Z0-9]{6,20}$/, label: 'GA4 mérési azonosító', example: 'G-XXXXXXXXXX' },
+  meta_pixel_id: { pattern: /^[0-9]{10,20}$/, label: 'Meta Pixel azonosító', example: '1234567890123456' }
+});
+const TRACKING_KEYS = Object.freeze(Object.keys(TRACKING_FIELDS));
+const isValidTrackingValue = (key, value) => typeof value === 'string' && (value === '' || TRACKING_FIELDS[key].pattern.test(value));
 
 // A régi árazások ({ standard, academic, weekly } és { daily, weekly, academic_* }) az új 5 elemű alakra képeződnek: az egyedi daily / academic_* érték megmarad,
 // a régi „weekly” (teljes csomag fix ár) kimarad, a hiányzó weekly_summary / weekly_extra_day az alapértékből töltődik (lásd normalizeRows).
@@ -123,6 +133,7 @@ function normalizeRows(rows) {
   if (!Number.isInteger(out.daily_generation_cap) || out.daily_generation_cap < 1 || out.daily_generation_cap > MAX_DAILY_GENERATION_CAP) out.daily_generation_cap = DEFAULT_DAILY_GENERATION_CAP;
   out.announcement_bar = { enabled: out.announcement_bar.enabled === true, text: typeof out.announcement_bar.text === 'string' ? out.announcement_bar.text : '' };
   out.external_links = Object.fromEntries(LINK_KEYS.map((key) => [key, isValidHttpsUrl(out.external_links[key]) ? out.external_links[key] : '']));
+  out.tracking_config = Object.fromEntries(TRACKING_KEYS.map((key) => [key, isValidTrackingValue(key, out.tracking_config[key]) ? out.tracking_config[key] : DEFAULT_SETTINGS.tracking_config[key]]));
   out.maintenance_mode = out.maintenance_mode === true;
   if (!BILLING_PROFILE_TYPES.includes(out.billing_profile)) out.billing_profile = defaults().billing_profile;
   if (!PAYMENT_PROVIDERS.includes(out.payment_provider)) out.payment_provider = defaults().payment_provider;
@@ -205,6 +216,7 @@ function publicConfig(settings) {
   return {
     pricing: { ...settings.pricing },
     announcement_bar: { ...settings.announcement_bar },
+    tracking_config: { ...settings.tracking_config },
     maintenance_mode: settings.maintenance_mode === true,
     billing_profile: settings.billing_profile,
     payment_provider: settings.payment_provider,
@@ -307,6 +319,20 @@ function validatePatch(patch, current, options = {}) {
       if (url === null) throw new SettingsError(`A(z) ${key} link szöveg legyen.`);
       if (url && !isValidHttpsUrl(url)) throw new SettingsError(`A(z) ${key} link érvényes https:// címet tartalmazzon (legfeljebb ${MAX_LINK_LENGTH} karakter).`);
       updates.external_links[key] = url;
+    }
+  }
+  if ('tracking_config' in patch) {
+    const source = patch.tracking_config;
+    if (!source || typeof source !== 'object' || Array.isArray(source)) throw new SettingsError('A követőkódok JSON objektum legyenek.');
+    const extra = Object.keys(source).filter((key) => !TRACKING_KEYS.includes(key));
+    if (extra.length) throw new SettingsError(`Ismeretlen követőkód: ${extra.slice(0, 3).join(', ')}.`);
+    updates.tracking_config = {};
+    for (const key of TRACKING_KEYS) {
+      const raw = key in source ? source[key] : current.tracking_config[key];
+      if (typeof raw !== 'string') throw new SettingsError(`A(z) ${TRACKING_FIELDS[key].label} szöveg legyen.`);
+      const value = raw.trim();
+      if (!isValidTrackingValue(key, value)) throw new SettingsError(`Érvénytelen ${TRACKING_FIELDS[key].label} (formátum: ${TRACKING_FIELDS[key].example}). Üresen hagyva kikapcsolt.`);
+      updates.tracking_config[key] = value;
     }
   }
   if ('planner_config' in patch) {
@@ -580,7 +606,7 @@ function composeEmail(templates, id, values = {}) {
 }
 
 module.exports = {
-  isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
+  isValidModelName, TRACKING_KEYS, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
   MAX_PROMPT_LENGTH, validatePatch, getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
   listTemplates, listHistory, updateTemplate, createTemplate, deleteTemplate, resetTemplate, DEFAULT_TEMPLATES, getTemplates, fillPlaceholders, composeEmail, plannerConfig
 };
