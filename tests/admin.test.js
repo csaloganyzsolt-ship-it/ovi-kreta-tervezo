@@ -1357,7 +1357,7 @@ test('admin.html: the settings tab has four prices, cap, announcement bar, exter
 });
 
 test('admin.js: the settings form saves four prices, the cap and the announcement; the links form saves only https URLs and refreshes the toolbar', async (t) => {
-  const settings = { maintenance_mode: false, pricing: { daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }, daily_generation_cap: 250, announcement_bar: { enabled: false, text: '' }, seasonal_hints: [], ai_config: { model: 'gemini-3.1-pro-preview', system_prompt: 'x' }, billing_profile: 'ev', payment_provider: 'barion', external_links: { cloudflare: '', google_analytics: '', search_console: '', barion: '', szamlazz: '' } };
+  const settings = { maintenance_mode: false, pricing: { daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }, daily_generation_cap: 250, announcement_bar: { enabled: false, text: '' }, ai_config: { model: 'gemini-3.1-pro-preview', system_prompt: 'x' }, billing_profile: 'ev', payment_provider: 'barion', external_links: { cloudflare: '', google_analytics: '', search_console: '', barion: '', szamlazz: '' } };
   const patches = [];
   const { document } = await loadPage(t, {
     routes: {

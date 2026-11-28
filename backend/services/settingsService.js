@@ -23,8 +23,6 @@ const TEMPLATE_IDS = Object.freeze(['base_layout', 'welcome_email', 'payment_suc
 const CUSTOM_TEMPLATE_ID = /^[a-z][a-z0-9_]{2,39}$/;
 const MAX_TEMPLATE_NAME_LENGTH = 80;
 const MAX_PRICE_HUF = 100000;
-const MAX_HINTS = 12;
-const MAX_HINT_LENGTH = 120;
 const MAX_PROMPT_LENGTH = 100000;
 const MAX_TEMPLATE_LENGTH = 100000;
 
@@ -48,8 +46,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   billing_notification_email: '',
   error_notification_email: '',
   billing_profile: process.env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev',
-  payment_provider: 'barion',
-  seasonal_hints: Object.freeze(['őszi falevelek gyűjtése', 'Márton-napi lámpáskészítés', 'farsangi mulatság'])
+  payment_provider: 'barion'
 });
 
 class SettingsError extends Error {
@@ -114,7 +111,6 @@ function normalizeRows(rows) {
   out.maintenance_mode = out.maintenance_mode === true;
   if (!BILLING_PROFILE_TYPES.includes(out.billing_profile)) out.billing_profile = defaults().billing_profile;
   if (!PAYMENT_PROVIDERS.includes(out.payment_provider)) out.payment_provider = defaults().payment_provider;
-  if (!Array.isArray(out.seasonal_hints)) out.seasonal_hints = defaults().seasonal_hints;
   return out;
 }
 
@@ -196,8 +192,7 @@ function publicConfig(settings) {
     announcement_bar: { ...settings.announcement_bar },
     maintenance_mode: settings.maintenance_mode === true,
     billing_profile: settings.billing_profile,
-    payment_provider: settings.payment_provider,
-    seasonal_hints: [...settings.seasonal_hints]
+    payment_provider: settings.payment_provider
   };
 }
 
@@ -217,14 +212,6 @@ function parsePrice(value, label) {
     throw new SettingsError(`A(z) ${label} ár egész szám legyen 1 és ${MAX_PRICE_HUF} Ft között.`);
   }
   return number;
-}
-
-function parseHints(value) {
-  const list = Array.isArray(value) ? value : String(value || '').split(';');
-  const hints = [...new Set(list.map((item) => String(item || '').replace(/\s+/g, ' ').trim()).filter(Boolean))];
-  if (hints.length > MAX_HINTS) throw new SettingsError(`Legfeljebb ${MAX_HINTS} szezonális javaslat adható meg.`);
-  if (hints.some((hint) => hint.length > MAX_HINT_LENGTH)) throw new SettingsError(`Egy javaslat legfeljebb ${MAX_HINT_LENGTH} karakter lehet.`);
-  return hints;
 }
 
 // A részleges módosítás (PATCH) csak az ismert kulcsokat engedi, és az összevont értéket validálja.
@@ -306,7 +293,6 @@ function validatePatch(patch, current) {
       updates.external_links[key] = url;
     }
   }
-  if ('seasonal_hints' in patch) updates.seasonal_hints = parseHints(patch.seasonal_hints);
   if (!Object.keys(updates).length) throw new SettingsError('Nincs módosítandó beállítás.');
   return updates;
 }

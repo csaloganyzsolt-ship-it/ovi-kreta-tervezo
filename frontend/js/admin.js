@@ -1055,7 +1055,6 @@
         : '';
       byId('setAnnouncementEnabled').checked = settings.announcement_bar?.enabled === true;
       byId('setAnnouncementText').value = settings.announcement_bar?.text || '';
-      byId('setHints').value = settings.seasonal_hints.join('; ');
       byId('setAiModel').value = settings.ai_config.model;
       byId('setAiPrompt').value = settings.ai_config.system_prompt;
       updatePromptCount();
@@ -1133,8 +1132,7 @@
       academic_weekly: Number(byId('setPriceAcademicWeekly').value)
     },
     daily_generation_cap: Number(byId('setDailyCap').value),
-    announcement_bar: { enabled: byId('setAnnouncementEnabled').checked, text: byId('setAnnouncementText').value },
-    seasonal_hints: byId('setHints').value
+    announcement_bar: { enabled: byId('setAnnouncementEnabled').checked, text: byId('setAnnouncementText').value }
   }), { status: 'generalStatus', error: 'generalError', button: 'generalSave' });
 
   const saveLinks = (event) => saveSettings(event, () => ({
@@ -1362,6 +1360,167 @@
     document.querySelectorAll('[data-settings-panel]').forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== name; });
   }
 
+  // ---------- Téma-ajánlók ----------
+
+  const THEME_CATEGORY_LABELS = { event: 'Jeles nap', season: 'Évszak', general: 'Általános' };
+  const THEME_SEASON_LABELS = { tavasz: 'Tavasz', nyar: 'Nyár', osz: 'Ősz', tel: 'Tél' };
+  const THEME_SEARCH_DELAY_MS = 300;
+  let themeEditId = null;
+  let themeSearchTimer = null;
+  let themeRows = [];
+
+  function themeQuery() {
+    const params = new URLSearchParams();
+    const text = byId('themesSearch').value.trim();
+    if (text) params.set('q', text);
+    if (byId('themesCategory').value) params.set('category', byId('themesCategory').value);
+    const [kind, value] = byId('themesPeriod').value.split(':');
+    if (kind === 'season' || kind === 'month') params.set(kind, value);
+    return params.toString();
+  }
+
+  function themePeriodLabel(row) {
+    if (row.start_mmdd && row.end_mmdd) {
+      return `${row.start_mmdd} – ${row.end_mmdd}${row.start_mmdd > row.end_mmdd ? ' (évforduló felett)' : ''}`;
+    }
+    return THEME_SEASON_LABELS[row.season] || '–';
+  }
+
+  async function toggleTheme(row, checkbox) {
+    checkbox.disabled = true;
+    try {
+      await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'PUT', body: { is_active: checkbox.checked } });
+      showToast(checkbox.checked ? 'A téma aktív, megjelenhet a tervezőben.' : 'A téma inaktív, nem jelenik meg a tervezőben.');
+      row.is_active = checkbox.checked;
+      previewThemes();
+    } catch (error) {
+      checkbox.checked = !checkbox.checked;
+      showToast(`Az állapot nem módosítható: ${errorMessage(error)}`, true);
+    } finally {
+      checkbox.disabled = false;
+    }
+  }
+
+  async function deleteTheme(row, button) {
+    if (!window.confirm(`Véglegesen törlöd ezt a témát: „${row.title}”? Ez nem vonható vissza.`)) return;
+    button.disabled = true;
+    try {
+      await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+      showToast('A téma törölve.');
+      await loadThemes();
+      previewThemes();
+    } catch (error) {
+      showToast(`A téma nem törölhető: ${errorMessage(error)}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function renderThemes(rows, total) {
+    byId('themesCount').textContent = rows.length === total ? `${total} téma` : `${rows.length} találat / ${total} téma`;
+    fillTable('themesTable', rows.map((row) => {
+      const toggle = el('input');
+      toggle.type = 'checkbox';
+      toggle.checked = row.is_active === true;
+      toggle.setAttribute('aria-label', `Aktív: ${row.title}`);
+      toggle.addEventListener('change', () => toggleTheme(row, toggle));
+      const state = el('label', 'admin-theme-toggle');
+      state.append(toggle, document.createTextNode(' aktív'));
+      const edit = el('button', 'profile-btn', 'Szerkesztés');
+      edit.type = 'button';
+      edit.addEventListener('click', () => openThemeDialog(row));
+      const remove = el('button', 'profile-btn danger', 'Törlés');
+      remove.type = 'button';
+      remove.addEventListener('click', () => deleteTheme(row, remove));
+      const actions = el('span', 'admin-actions');
+      actions.append(edit, ' ', remove);
+      return [row.title, THEME_CATEGORY_LABELS[row.category] || row.category, themePeriodLabel(row), String(row.priority), state, actions];
+    }), 6, 'Nincs a szűrésnek megfelelő téma.');
+  }
+
+  async function loadThemes() {
+    const query = themeQuery();
+    try {
+      const data = await api(`/api/admin/theme-suggestions${query ? `?${query}` : ''}`);
+      themeRows = data.suggestions;
+      setText('themesError', '');
+      renderThemes(themeRows, data.total);
+    } catch (error) {
+      setText('themesError', `A téma-ajánlók nem tölthetők be: ${errorMessage(error)}`);
+    }
+  }
+
+  // Ugyanaz a nyilvános végpont, amelyet a tervező is hív: pontosan azt a (max. 8) chipet mutatja, amit a vásárló az adott napon látna.
+  async function previewThemes() {
+    const date = byId('themesPreviewDate').value;
+    try {
+      const data = await api(`/api/theme-suggestions${date ? `?date=${encodeURIComponent(date)}` : ''}`);
+      const chips = byId('themesPreviewChips');
+      chips.replaceChildren(...data.suggestions.map((item) => {
+        const chip = el('span', 'chip', item.title);
+        chip.title = `${THEME_CATEGORY_LABELS[item.category] || item.category} · prioritás: ${item.priority}`;
+        return chip;
+      }));
+      byId('themesPreviewInfo').textContent = `${data.suggestions.length} ajánlás (${data.date}, ${THEME_SEASON_LABELS[data.season] || data.season})${data.source === 'fallback' ? ' – FIGYELEM: a beépített alap szolgált ki, az adatbázis nem érhető el vagy üres.' : ''}`;
+      setText('themesPreviewError', '');
+    } catch (error) {
+      byId('themesPreviewChips').replaceChildren();
+      setText('themesPreviewError', `Az előnézet nem tölthető be: ${errorMessage(error)}`);
+    }
+  }
+
+  function openThemeDialog(row) {
+    themeEditId = row?.id || null;
+    byId('themeDialogTitle').textContent = row ? 'Téma szerkesztése' : 'Új téma';
+    byId('themeTitle').value = row?.title || '';
+    byId('themeCategory').value = row?.category || 'event';
+    byId('themeSeason').value = row?.season || '';
+    byId('themeStart').value = row?.start_mmdd || '';
+    byId('themeEnd').value = row?.end_mmdd || '';
+    byId('themePriority').value = row ? row.priority : 50;
+    byId('themeActive').checked = row ? row.is_active === true : true;
+    setText('themeFormError', '');
+    byId('themeDialog').showModal();
+  }
+
+  async function saveTheme(event) {
+    event.preventDefault();
+    const button = byId('themeSave');
+    const body = {
+      title: byId('themeTitle').value,
+      category: byId('themeCategory').value,
+      season: byId('themeSeason').value || null,
+      start_mmdd: byId('themeStart').value.trim() || null,
+      end_mmdd: byId('themeEnd').value.trim() || null,
+      priority: byId('themePriority').value,
+      is_active: byId('themeActive').checked
+    };
+    button.disabled = true;
+    try {
+      await api(themeEditId ? `/api/admin/theme-suggestions/${encodeURIComponent(themeEditId)}` : '/api/admin/theme-suggestions', { method: themeEditId ? 'PUT' : 'POST', body });
+      byId('themeDialog').close();
+      showToast(themeEditId ? 'A téma módosítva.' : 'A téma felvéve.');
+      await loadThemes();
+      previewThemes();
+    } catch (error) {
+      setText('themeFormError', `A téma nem menthető: ${errorMessage(error)}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function initThemes() {
+    byId('themesPreviewDate').value = today();
+    byId('themesPreviewDate').addEventListener('change', previewThemes);
+    byId('themesSearch').addEventListener('input', () => { clearTimeout(themeSearchTimer); themeSearchTimer = setTimeout(loadThemes, THEME_SEARCH_DELAY_MS); });
+    byId('themesCategory').addEventListener('change', loadThemes);
+    byId('themesPeriod').addEventListener('change', loadThemes);
+    byId('themesRefresh').addEventListener('click', () => { loadThemes(); previewThemes(); });
+    byId('themesNew').addEventListener('click', () => openThemeDialog(null));
+    byId('themeForm').addEventListener('submit', saveTheme);
+    byId('themeCancel').addEventListener('click', () => byId('themeDialog').close());
+  }
+
   // ---------- Lapok ----------
 
   const TAB_LOADERS = {
@@ -1370,6 +1529,7 @@
     orders: [loadOrders],
     users: [loadUsers],
     reviews: [loadReviews],
+    themes: [loadThemes, previewThemes],
     newsletter: [loadCampaigns, refreshPreview],
     logs: [loadLogs],
     settings: [loadSettings, loadTemplates]
@@ -1414,6 +1574,7 @@
     byId('reviewReplyForm').addEventListener('submit', sendReviewReply);
     byId('reviewReplyCancel').addEventListener('click', () => byId('reviewReplyDialog').close());
     loadReviewsSummary();
+    initThemes();
     byId('newsletterForm').addEventListener('submit', sendNewsletter);
     byId('newsletterForm').addEventListener('input', schedulePreview);
     document.querySelectorAll('input[name="recipients"]').forEach((radio) => radio.addEventListener('change', syncRecipientMode));

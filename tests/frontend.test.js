@@ -7,6 +7,8 @@ const { makePayload, makePlan, readPage } = require('./fixtures');
 
 const html = readPage('tervezo.html');
 
+const THEME_SUGGESTIONS_MOCK = ['Márton-nap – libás népszokások', 'Őszi termések gyűjtése'];
+
 async function loadApp(t) {
   const dom = new JSDOM(html, {
     url: 'http://localhost:8000',
@@ -17,9 +19,15 @@ async function loadApp(t) {
       window.alert = (message) => { throw new Error(message); };
       // A nyilvános beállításokat (GET /api/config) a teszt adja; más kérés itt nincs.
       window.fetch = async (url) => {
-        if (!String(url).endsWith('/api/config')) throw new Error(`váratlan kérés: ${url}`);
-        return { ok: true, status: 200, json: async () => ({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false, seasonal_hints: ['őszi falevelek gyűjtése', 'farsangi mulatság'] }) };
+        const target = String(url);
+        window.__fetchedUrls.push(target);
+        if (target.includes('/api/theme-suggestions')) {
+          return { ok: true, status: 200, json: async () => ({ success: true, suggestions: THEME_SUGGESTIONS_MOCK.map((title) => ({ title })) }) };
+        }
+        if (!target.endsWith('/api/config')) throw new Error(`váratlan kérés: ${url}`);
+        return { ok: true, status: 200, json: async () => ({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false }) };
       };
+      window.__fetchedUrls = [];
     }
   });
   t.after(() => dom.window.close());
@@ -222,6 +230,36 @@ test('theme suggestions are not sent as goals and the retired goal chips are gon
   assert.equal(payload.theme, suggestion.dataset.themeOption);
   assert.equal('selectedGoals' in payload, false);
   assert.equal(window.document.body.textContent.includes('Célkifejezések'), false);
+});
+
+test('the theme chips come from /api/theme-suggestions and refresh when the date or the week changes', async (t) => {
+  const window = await loadApp(t);
+  const document = window.document;
+  const chips = () => [...document.querySelectorAll('[data-theme-option]')].map((el) => el.dataset.themeOption);
+  assert.deepEqual(chips(), THEME_SUGGESTIONS_MOCK);
+  assert.ok(window.__fetchedUrls.some((url) => url.includes('/api/theme-suggestions')), 'induláskor is lekéri');
+
+  const before = window.__fetchedUrls.length;
+  const daily = document.querySelector('input[data-field="date-value"]');
+  daily.value = '2026-11-11';
+  daily.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.ok(window.__fetchedUrls.slice(before).some((url) => url.endsWith('/api/theme-suggestions?date=2026-11-11')));
+
+  window.setDurationSelection('Heti');
+  const weekly = document.querySelector('input[data-field="week-value"]');
+  weekly.value = '2026-W46';
+  weekly.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.ok(window.__fetchedUrls.some((url) => url.endsWith('/api/theme-suggestions?date=2026-W46')));
+
+  window.fetch = async () => ({ ok: false, status: 500, json: async () => ({ success: false, error: 'hiba' }) });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    await window.refreshThemeSuggestions();
+  } finally { console.error = error; }
+  assert.deepEqual(chips(), [], 'hiba esetén nem marad elavult vagy kamu lista');
 });
 
 test('the preview has no margin or section controls and always shows the full fixed A4 document', async (t) => {

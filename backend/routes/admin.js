@@ -13,6 +13,7 @@ const orderService = require('../services/orderService');
 const invoiceService = require('../services/invoiceService');
 const planStore = require('../services/planStore');
 const reviewService = require('../services/reviewService');
+const themeSuggestions = require('../services/themeSuggestionsService');
 const documentExport = require('../services/documentExport');
 const { billingStatus } = require('../services/billingStatus');
 const { dailyGenerationStatus } = require('../services/generationCap');
@@ -206,7 +207,7 @@ router.post('/admin/newsletter/send', sendLimiter, handle('A hírlevél indítá
 }));
 router.get('/admin/newsletter/campaigns', handle('A kampányok lekérdezése', (client) => newsletter.listCampaigns(client)));
 
-// Rendszerbeállítások (árak, AI, karbantartás, szezonális javaslatok) és e-mail sablonok.
+// Rendszerbeállítások (árak, AI, karbantartás) és e-mail sablonok.
 router.get('/admin/settings', handle('A beállítások lekérdezése', async () => ({
   settings: await settingsService.getSettings({ force: true }),
   dailyGeneration: await currentDailyGeneration()
@@ -219,6 +220,23 @@ router.patch('/admin/settings', handle('A beállítások mentése', async (clien
   const settings = await settingsService.updateSettings(client, req.body, req.user?.email);
   logger.info('admin_settings', 'Rendszerbeállítások módosítva', { details: { keys: Object.keys(req.body || {}), admin: req.user?.email } });
   return { settings };
+}));
+// Téma-ajánlók (dátum- és évszakfüggő chipek a tervezőben): teljes CRUD, kizárólag adminnak.
+router.get('/admin/theme-suggestions', handle('A téma-ajánlók lekérdezése', (client, req) => themeSuggestions.listSuggestions(client, req.query)));
+router.post('/admin/theme-suggestions', handle('A téma létrehozása', async (client, req, res) => {
+  const suggestion = await themeSuggestions.createSuggestion(client, req.body);
+  logger.info('admin_themes', 'Téma-ajánló létrehozva', { details: { id: suggestion.id, title: suggestion.title, admin: req.user?.email } });
+  res.status(201).json({ success: true, suggestion });
+}));
+router.put('/admin/theme-suggestions/:id', handle('A téma módosítása', async (client, req) => {
+  const suggestion = await themeSuggestions.updateSuggestion(client, req.params.id, req.body);
+  logger.info('admin_themes', 'Téma-ajánló módosítva', { details: { id: suggestion.id, admin: req.user?.email } });
+  return { suggestion };
+}));
+router.delete('/admin/theme-suggestions/:id', handle('A téma törlése', async (client, req) => {
+  const result = await themeSuggestions.deleteSuggestion(client, req.params.id);
+  logger.info('admin_themes', 'Téma-ajánló törölve', { details: { id: result.deleted, admin: req.user?.email } });
+  return result;
 }));
 router.get('/admin/email-templates', handle('Az e-mail sablonok lekérdezése', async (client) => ({ templates: await settingsService.listTemplates(client) })));
 router.patch('/admin/email-templates/:id', handle('Az e-mail sablon mentése', async (client, req) => {

@@ -125,7 +125,6 @@ function applyPublicConfig(config) {
     if (Number.isInteger(price) && price > 0) PAYWALL_PRICES[kind] = price;
   });
   appConfig.maintenance = config.maintenance_mode === true;
-  appConfig.seasonalHints = Array.isArray(config.seasonal_hints) ? config.seasonal_hints.filter((hint) => typeof hint === 'string' && hint.trim()) : [];
   appConfig.loaded = true;
   renderSeasonalThemeSuggestions();
   renderStep();
@@ -161,6 +160,7 @@ function initializeApp() {
   loadGeneratedPlanFromStorage();
   bindAutoSaveListeners();
   updateDateInputsForDuration();
+  refreshThemeSuggestions();
   updateWeeklyDailyBreakdownVisibility();
   renderHistoryPanel();
   renderStep();

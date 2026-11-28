@@ -2449,6 +2449,12 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-listbar-tools .profile-btn { min-height: 40px; }
 .admin-pagesize { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted, inherit); }
 .admin-pagesize select { min-height: 40px; }
+.admin-pagesize input[type="search"], .admin-pagesize input[type="date"] { min-height: 40px; }
+.admin-theme-preview { border: 1px solid var(--border, #d9ebe0); border-radius: 14px; padding: 12px 16px; margin: 10px 0 14px; display: grid; gap: 8px; }
+.admin-theme-preview legend { font-weight: 700; padding: 0 6px; }
+.admin-theme-preview .theme-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-theme-preview .chip { cursor: default; }
+.admin-theme-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .admin-listbar .profile-btn.has-filters { border-color: var(--primary); color: var(--primary); font-weight: 700; }
 .admin-filters[hidden], .admin-filter-row[hidden], .admin-menu-list[hidden] { display: none; }
 .admin-menu { position: relative; display: inline-block; }

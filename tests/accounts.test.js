@@ -645,10 +645,11 @@ async function loadPage(t, { withSupabase, page = pageHtml, pageName = 'tervezo.
         const path = new URL(url).pathname;
         const method = options.method || 'GET';
         // A site.js futásidőben lekéri a nyilvános konfigot; ez nem számít account API-hívásnak.
-        if (path !== '/api/config') state.fetches.push({ path, method, headers: options.headers || {}, body: options.body });
+        if (path !== '/api/config' && path !== '/api/theme-suggestions') state.fetches.push({ path, method, headers: options.headers || {}, body: options.body });
         const json = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
         if (routes[path]) return json(...[].concat(routes[path](method, options.body ? JSON.parse(options.body) : null)));
-        if (path === '/api/config') return json({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false, seasonal_hints: ['őszi falevelek gyűjtése'] });
+        if (path === '/api/config') return json({ success: true, pricing: { standard: 390, academic: 690, weekly: 890 }, maintenance_mode: false });
+        if (path === '/api/theme-suggestions') return json({ success: true, suggestions: [{ title: 'Őszi falevelek gyűjtése' }] });
         if (path === '/api/sync-documents') return json({ success: true, claimed: ['gen_local1'] });
         if (path === '/api/my-documents') {
           return json({ success: true, documents: [

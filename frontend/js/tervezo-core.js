@@ -53,7 +53,7 @@ const wizardItems = Array.from(document.querySelectorAll('.wizard-item'));
 const nextBtn = document.getElementById('nextBtn');
 
 // A szerver nyilvános beállításai (GET /api/config): árak, karbantartás, szezonális javaslatok. A betöltés a tervezo-init.js-ben történik.
-const appConfig = { loaded: false, maintenance: false, seasonalHints: [] };
+const appConfig = { loaded: false, maintenance: false, themeSuggestions: [], themeSuggestionsError: false };
 
 const MAINTENANCE_LABEL = 'Karbantartás alatt – a generálás átmenetileg szünetel';
 

@@ -45,6 +45,7 @@
               <button type="button" role="tab" class="profile-tab" id="tabOrders" data-admin-tab="orders" aria-selected="false" aria-controls="panelOrders">Rendelések &amp; Számlák</button>
               <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók</button>
               <button type="button" role="tab" class="profile-tab" id="tabReviews" data-admin-tab="reviews" aria-selected="false" aria-controls="panelReviews">Értékelések <span class="admin-nav-badge" id="reviewsBadge" hidden></span></button>
+              <button type="button" role="tab" class="profile-tab" id="tabThemes" data-admin-tab="themes" aria-selected="false" aria-controls="panelThemes">Téma-ajánlók</button>
               <button type="button" role="tab" class="profile-tab" id="tabNewsletter" data-admin-tab="newsletter" aria-selected="false" aria-controls="panelNewsletter">Hírlevél</button>
               <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
               <button type="button" role="tab" class="profile-tab" id="tabSettings" data-admin-tab="settings" aria-selected="false" aria-controls="panelSettings">Beállítások</button>
@@ -383,6 +384,92 @@
             </dialog>
           </section>
 
+          <section class="profile-panel" id="panelThemes" role="tabpanel" aria-labelledby="tabThemes" hidden>
+            <h2>Téma-ajánlók</h2>
+            <p class="profile-hint">A tervező „Projekt témája” alatti chipek a kiválasztott dátum (vagy hét) alapján innen jönnek: előbb a dátumra eső jeles napok, majd az évszak témái, végül az általános tartalék (legfeljebb 8 ajánlás, prioritás szerint).</p>
+            <fieldset class="admin-theme-preview">
+              <legend>Előnézet dátumra</legend>
+              <label class="admin-pagesize">Dátum <input type="date" id="themesPreviewDate" /></label>
+              <span class="profile-hint" id="themesPreviewInfo" role="status"></span>
+              <div class="theme-suggestions" id="themesPreviewChips" aria-live="polite"></div>
+              <p class="profile-error" id="themesPreviewError" role="alert" hidden></p>
+            </fieldset>
+            <div class="admin-listbar">
+              <p class="profile-hint" id="themesCount" role="status"></p>
+              <span class="admin-listbar-tools">
+                <label class="admin-pagesize">Keresés <input type="search" id="themesSearch" maxlength="100" autocomplete="off" placeholder="Téma szövege" /></label>
+                <label class="admin-pagesize">Típus <select id="themesCategory">
+                  <option value="">Mind</option>
+                  <option value="event">Jeles nap</option>
+                  <option value="season">Évszak</option>
+                  <option value="general">Általános</option>
+                </select></label>
+                <label class="admin-pagesize">Hónap / évszak <select id="themesPeriod">
+                  <option value="">Mind</option>
+                  <optgroup label="Évszak">
+                    <option value="season:tavasz">Tavasz</option>
+                    <option value="season:nyar">Nyár</option>
+                    <option value="season:osz">Ősz</option>
+                    <option value="season:tel">Tél</option>
+                  </optgroup>
+                  <optgroup label="Hónap">
+                    <option value="month:1">Január</option>
+                    <option value="month:2">Február</option>
+                    <option value="month:3">Március</option>
+                    <option value="month:4">Április</option>
+                    <option value="month:5">Május</option>
+                    <option value="month:6">Június</option>
+                    <option value="month:7">Július</option>
+                    <option value="month:8">Augusztus</option>
+                    <option value="month:9">Szeptember</option>
+                    <option value="month:10">Október</option>
+                    <option value="month:11">November</option>
+                    <option value="month:12">December</option>
+                  </optgroup>
+                </select></label>
+                <button type="button" class="profile-btn" id="themesRefresh">Frissítés</button>
+                <button type="button" class="profile-btn primary" id="themesNew">Új téma</button>
+              </span>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="themesTable">
+                <thead>
+                  <tr><th>Téma</th><th>Típus</th><th>Időszak / Évszak</th><th>Prioritás</th><th>Állapot</th><th>Műveletek</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="profile-error" id="themesError" role="alert" hidden></p>
+            <dialog class="admin-dialog" id="themeDialog" aria-labelledby="themeDialogTitle">
+              <form class="profile-form" id="themeForm" method="dialog" novalidate>
+                <h3 id="themeDialogTitle">Új téma</h3>
+                <div class="profile-field"><label for="themeTitle">Téma szövege</label><input id="themeTitle" type="text" maxlength="200" autocomplete="off" placeholder="Márton-nap – libás népszokások és lámpáskészítés" /></div>
+                <div class="profile-field"><label for="themeCategory">Típus</label>
+                  <select id="themeCategory">
+                    <option value="event">Jeles nap</option>
+                    <option value="season">Évszak</option>
+                    <option value="general">Általános</option>
+                  </select>
+                </div>
+                <div class="profile-field"><label for="themeSeason">Évszak (évszakos témánál kötelező)</label>
+                  <select id="themeSeason">
+                    <option value="">–</option>
+                    <option value="tavasz">Tavasz</option>
+                    <option value="nyar">Nyár</option>
+                    <option value="osz">Ősz</option>
+                    <option value="tel">Tél</option>
+                  </select>
+                </div>
+                <div class="profile-field"><label for="themeStart">Időszak kezdete (HH-NN, jeles napnál kötelező)</label><input id="themeStart" type="text" maxlength="5" inputmode="numeric" autocomplete="off" placeholder="10-28" /></div>
+                <div class="profile-field"><label for="themeEnd">Időszak vége (HH-NN; az évforduló feletti átnyúlás is jó, pl. 12-28 – 01-08)</label><input id="themeEnd" type="text" maxlength="5" inputmode="numeric" autocomplete="off" placeholder="11-14" /></div>
+                <div class="profile-field"><label for="themePriority">Prioritás (0–1000, magasabb = előrébb)</label><input id="themePriority" type="number" min="0" max="1000" step="1" inputmode="numeric" value="50" /></div>
+                <div class="profile-field"><label><input type="checkbox" id="themeActive" checked /> Aktív (megjelenik a tervezőben)</label></div>
+                <p class="profile-error" id="themeFormError" role="alert" hidden></p>
+                <div class="admin-dialog-actions"><button type="submit" class="btn" id="themeSave">Mentés</button> <button type="button" class="btn secondary" id="themeCancel">Mégse</button></div>
+              </form>
+            </dialog>
+          </section>
+
           <section class="profile-panel" id="panelNewsletter" role="tabpanel" aria-labelledby="tabNewsletter" hidden>
             <h2>Hírlevél</h2>
             <h3>Hírlevél küldése</h3>
@@ -593,10 +680,6 @@
                   <label for="setAnnouncementText">Szöveg (legfeljebb 200 karakter)</label>
                   <input id="setAnnouncementText" type="text" maxlength="200" autocomplete="off" placeholder="pl. Őszi akció: minden tervezet 20% kedvezménnyel!" />
                 </fieldset>
-                <div class="span-2">
-                  <label for="setHints">Szezonális javaslatok (pontosvesszővel ; elválasztva – a javaslatokon belül használható vessző)</label>
-                  <input id="setHints" type="text" maxlength="1200" autocomplete="off" placeholder="Őszi termések gyűjtése, falevelek préselése; Márton-napi lámpás;" />
-                </div>
                 <div class="profile-actions">
                   <button type="submit" class="profile-btn primary" id="generalSave">Mentés</button>
                   <button type="button" class="profile-btn" data-history-key="pricing" id="generalHistory">Előzmények</button>
@@ -724,7 +807,6 @@
                   <option value="error_notification_email">Hibariasztási értesítési e-mail cím</option>
                   <option value="ai_config">AI beállítások (modell, rendszer prompt)</option>
                   <option value="maintenance_mode">Karbantartás mód</option>
-                  <option value="seasonal_hints">Szezonális javaslatok</option>
                   <option value="billing_profile">Számlázási profil (EV / Kft.)</option>
                   <option value="payment_provider">Fizetési szolgáltató (Barion / Stripe)</option>
                 </select>

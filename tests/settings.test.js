@@ -285,15 +285,16 @@ test('the AI model comes from the settings and a malformed name falls back loudl
 // ---------- 3. Publikus konfiguráció ----------
 
 test('GET /api/config exposes only public data and never the system prompt', async (t) => {
-  fakeDb(t, { settings: { pricing: DB_PRICING, maintenance_mode: true, seasonal_hints: ['hó', 'szél'], ai_config: { model: 'gemini-2.5-pro', system_prompt: 'TITKOS PROMPT' } } });
+  fakeDb(t, { settings: { pricing: DB_PRICING, maintenance_mode: true, ai_config: { model: 'gemini-2.5-pro', system_prompt: 'TITKOS PROMPT' } } });
   const base = await listen(t);
   const response = await fetch(`${base}/api/config`);
   const data = await response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(
-    { success: data.success, pricing: data.pricing, maintenance_mode: data.maintenance_mode, seasonal_hints: data.seasonal_hints },
-    { success: true, pricing: DB_PRICING, maintenance_mode: true, seasonal_hints: ['hó', 'szél'] }
+    { success: data.success, pricing: data.pricing, maintenance_mode: data.maintenance_mode },
+    { success: true, pricing: DB_PRICING, maintenance_mode: true }
   );
+  assert.equal('seasonal_hints' in data, false);
   assert.equal(JSON.stringify(data).includes('TITKOS'), false);
   assert.equal('ai_config' in data, false);
   assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -408,11 +409,11 @@ test('the migration seeds the real model, the full original prompt and the real 
   assert.equal(/lorem/i.test(MIGRATION_SQL), false);
 });
 
-test('seasonal hints are separated by semicolons so a hint may contain commas', async (t) => {
-  const { store } = fakeDb(t);
-  const saved = await settingsService.updateSettings(supabase.getClient(), { seasonal_hints: 'Őszi termések gyűjtése, falevelek préselése; Márton-napi lámpás;' });
-  assert.deepEqual(saved.seasonal_hints, ['Őszi termések gyűjtése, falevelek préselése', 'Márton-napi lámpás']);
-  assert.deepEqual(store.system_settings.seasonal_hints, ['Őszi termések gyűjtése, falevelek préselése', 'Márton-napi lámpás']);
+test('the retired seasonal_hints setting is no longer accepted or exposed (the theme_suggestions table replaced it)', async (t) => {
+  fakeDb(t);
+  await assert.rejects(() => settingsService.updateSettings(supabase.getClient(), { seasonal_hints: 'Márton-napi lámpás;' }), (error) => error.status === 400 && /Ismeretlen beállítás/.test(error.message));
+  assert.equal('seasonal_hints' in settingsService.DEFAULT_SETTINGS, false);
+  assert.equal('seasonal_hints' in settingsService.publicConfig(settingsService.DEFAULT_SETTINGS), false);
 });
 
 test('the newsletter is rendered into the base_layout with the recipient unsubscribe link, also when the layout forgets the placeholder', () => {

@@ -366,6 +366,7 @@ function setDurationSelection(nextValue) {
   persistDraftState();
   updateWeeklyDailyBreakdownVisibility();
   updateSummary();
+  scheduleThemeSuggestionsRefresh();
 }
 
 function updateSummary() {
@@ -1034,11 +1035,13 @@ function bindAutoSaveListeners() {
       updateSummary();
       saveProfileToStorage();
       persistDraftState();
+      if (field.matches('[data-field="date-value"], [data-field="week-value"]')) scheduleThemeSuggestionsRefresh();
     });
     field.addEventListener('change', () => {
       updateSummary();
       saveProfileToStorage();
       persistDraftState();
+      if (field.matches('[data-field="date-value"], [data-field="week-value"]')) scheduleThemeSuggestionsRefresh();
     });
   });
 
@@ -1205,16 +1208,48 @@ function buildGenerationPayload() {
   };
 }
 
+const THEME_SUGGESTIONS_DELAY_MS = 250;
+let themeSuggestionsTimer = null;
+let themeSuggestionsRequest = 0;
+
+// A téma-ajánlók a kiválasztott naphoz / héthez tartozó adatbázis-találatok (GET /api/theme-suggestions); a lista dátumváltáskor oldal-újratöltés nélkül frissül.
+async function refreshThemeSuggestions() {
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) return;
+  const request = ++themeSuggestionsRequest;
+  const date = getDateValue();
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/theme-suggestions${date ? `?date=${encodeURIComponent(date)}` : ''}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.success) throw new Error(data?.error || `HTTP ${response.status}`);
+    if (request !== themeSuggestionsRequest) return;
+    appConfig.themeSuggestions = (data.suggestions || []).map((item) => String(item?.title || '').trim()).filter(Boolean);
+    appConfig.themeSuggestionsError = false;
+  } catch (error) {
+    if (request !== themeSuggestionsRequest) return;
+    console.error('A téma-ajánlások nem tölthetők be:', error);
+    appConfig.themeSuggestions = [];
+    appConfig.themeSuggestionsError = true;
+  }
+  renderSeasonalThemeSuggestions();
+}
+
+function scheduleThemeSuggestionsRefresh() {
+  clearTimeout(themeSuggestionsTimer);
+  themeSuggestionsTimer = setTimeout(refreshThemeSuggestions, THEME_SUGGESTIONS_DELAY_MS);
+}
+
 function renderSeasonalThemeSuggestions() {
   const container = document.getElementById('themeSuggestions');
   if (!container) return;
 
-  // A javaslatok az adatbázisból (GET /api/config -> seasonal_hints) jönnek; betöltés előtt vagy hiba esetén nincs beégetett lista.
-  const themes = appConfig.seasonalHints;
+  const themes = appConfig.themeSuggestions;
   const themeField = document.querySelector('input[data-field="theme"]');
   if (themeField && themes.length) themeField.placeholder = `Pl.: ${themes[0]}`;
   const activeTheme = document.querySelector('input[data-field="theme"]')?.value?.trim();
-  container.innerHTML = themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme)}">${escapeHtml(theme)}</button>`).join('');
+  container.innerHTML = appConfig.themeSuggestionsError
+    ? '<span class="field-hint" role="status">A téma-ajánlások most nem tölthetők be, de a témát szabadon beírhatod.</span>'
+    : themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme)}">${escapeHtml(theme)}</button>`).join('');
 
   container.querySelectorAll('[data-theme-option]').forEach((button) => {
     button.addEventListener('click', () => {

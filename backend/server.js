@@ -25,6 +25,7 @@ const academicPlan = require('./services/academicPlan');
 const { APA7_RULE } = require('./services/literatureRules');
 const telemetryService = require('./services/telemetryService');
 const settingsService = require('./services/settingsService');
+const themeSuggestions = require('./services/themeSuggestionsService');
 const barionService = require('./services/barionService');
 const { billingStatus } = require('./services/billingStatus');
 
@@ -123,7 +124,7 @@ app.use((_req, res, next) => {
   res.setHeader('Content-Security-Policy-Report-Only', CONTENT_SECURITY_POLICY);
   next();
 });
-app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] }));
+app.use(cors({ origin: (origin, callback) => corsOrigin(origin, callback), methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] }));
 // A Stripe aláírás-ellenőrzéshez nyers törzs kell, ezért ez az express.json() ELŐTT van.
 app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 // A Barion visszahívás query-ben (GET) vagy űrlapként/JSON-ban (POST) hozza a paymentId-t; az állapotot a handler a Barion API-tól kérdezi le.
@@ -164,7 +165,19 @@ for (const file of SEO_FILES) {
   app.get(`/${file}`, (_req, res) => res.sendFile(path.join(STATIC_ROOT, file)));
 }
 
-// Nyilvános beállítások a frontendnek: árak, karbantartás, szezonális javaslatok, az aktív cégprofil és fizetési szolgáltató. A rendszerprompt és az AI-konfiguráció soha nem kerül ki.
+// Nyilvános téma-ajánlások egy napra vagy ISO hétre (?date=YYYY-MM-DD | YYYY-Www); dátum nélkül a mai nap. Csak aktív sorok, legfeljebb 8 elem.
+app.get('/api/theme-suggestions', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    res.json({ success: true, ...(await themeSuggestions.suggestionsForDate(supabase.getClient(), req.query.date)) });
+  } catch (error) {
+    if (error.status && error.status < 500) return res.status(error.status).json({ success: false, error: error.message });
+    logger.error('theme_suggestions', error);
+    return res.status(500).json({ success: false, error: 'A téma-ajánlások jelenleg nem érhetők el.' });
+  }
+});
+
+// Nyilvános beállítások a frontendnek: árak, karbantartás, az aktív cégprofil és fizetési szolgáltató. A rendszerprompt és az AI-konfiguráció soha nem kerül ki.
 app.get('/api/config', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
