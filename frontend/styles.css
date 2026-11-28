@@ -2450,11 +2450,9 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-pagesize { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted, inherit); }
 .admin-pagesize select { min-height: 40px; }
 .admin-pagesize input[type="search"], .admin-pagesize input[type="date"] { min-height: 40px; }
-.admin-theme-preview { border: 1px solid var(--border, #d9ebe0); border-radius: 14px; padding: 12px 16px; margin: 10px 0 14px; display: grid; gap: 8px; }
-.admin-theme-preview legend { font-weight: 700; padding: 0 6px; }
-.admin-theme-preview .theme-suggestions { gap: 8px 10px; }
-.admin-theme-preview .chip { cursor: default; }
-.theme-suggestions { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+/* A tervező „Projekt témája” alatti ajánló chipek konténere (.field > #themeSuggestions). */
+.field .theme-suggestions, #themeSuggestions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 12px; margin-bottom: 0; }
+.theme-suggestions .chip { margin: 0; flex: 0 0 auto; max-width: 100%; }
 .admin-themes-table { table-layout: auto; min-width: 860px; }
 .admin-themes-table th:not(.col-theme), .admin-themes-table td:not(:first-child) { white-space: nowrap; width: 1%; }
 .admin-themes-table .col-theme, .admin-themes-table td:first-child { width: auto; min-width: 260px; white-space: normal; }

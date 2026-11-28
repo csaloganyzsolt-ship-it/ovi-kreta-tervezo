@@ -276,7 +276,7 @@ test('the admin page has a dedicated theme tab and the old seasonal hints field 
   const html = fs.readFileSync(path.join(ROOT, 'frontend', 'admin.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'admin.js'), 'utf8');
   assert.match(html, /data-admin-tab="themes"/);
-  for (const id of ['panelThemes', 'themesSearch', 'themesCategory', 'themesPeriod', 'themesPreviewDate', 'themesPreviewChips', 'themesTable', 'themeDialog', 'themeForm']) {
+  for (const id of ['panelThemes', 'themesSearch', 'themesCategory', 'themesPeriod', 'themesTable', 'themeDialog', 'themeForm']) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
   assert.equal(html.includes('id="setHints"'), false);

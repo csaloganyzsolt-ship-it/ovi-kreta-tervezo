@@ -73,9 +73,11 @@ test('the admin theme table has pager, page size selector, usage column and an a
   assert.match(CSS, /\.admin-menu-list\s*\{[^}]*position:\s*fixed|\.admin-action-menu\s*\{[^}]*position:\s*fixed/);
 });
 
-test('theme chip containers get a roomy gap in the planner and in the admin preview', () => {
-  assert.match(CSS, /^\.theme-suggestions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*8px 10px/m);
-  assert.match(CSS, /\.admin-theme-preview \.theme-suggestions\s*\{[^}]*gap:\s*8px 10px/);
+test('theme chip container in the planner is a flex-wrap box with a visible gap; the admin date preview is gone', () => {
+  assert.match(CSS, /#themeSuggestions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*10px 12px/);
+  assert.match(CSS, /\.theme-suggestions \.chip\s*\{[^}]*margin:\s*0/);
+  assert.match(read('frontend', 'tervezo.html'), /class="theme-suggestions[^"]*" id="themeSuggestions"/);
+  assert.equal(/Előnézet dátumra|themesPreview|admin-theme-preview|previewThemes/.test(ADMIN_HTML + ADMIN_JS + CSS), false);
 });
 
 const fakeListClient = (rows) => ({

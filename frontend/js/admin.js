@@ -1385,7 +1385,6 @@
       await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'PUT', body: { is_active: next } });
       showToast(next ? 'A téma aktív, megjelenhet a tervezőben.' : 'A téma inaktív, nem jelenik meg a tervezőben.');
       await loadThemes();
-      previewThemes();
     } catch (error) {
       showToast(`Az állapot nem módosítható: ${errorMessage(error)}`, true);
     }
@@ -1397,7 +1396,6 @@
       await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
       showToast('A téma törölve.');
       await loadThemes();
-      previewThemes();
     } catch (error) {
       showToast(`A téma nem törölhető: ${errorMessage(error)}`, true);
     }
@@ -1462,25 +1460,6 @@
   lists.themes = createList({ name: 'themes', path: '/api/admin/theme-suggestions', render: (data) => { themeRows = data.suggestions; renderThemes(data); }, errorId: 'themesError', errorText: 'A téma-ajánlók nem tölthetők be', pageSize: THEME_PAGE_SIZE });
   const loadThemes = () => lists.themes.load();
 
-  // Ugyanaz a nyilvános végpont, amelyet a tervező is hív: pontosan azt a (max. 8) chipet mutatja, amit a vásárló az adott napon látna.
-  async function previewThemes() {
-    const date = byId('themesPreviewDate').value;
-    try {
-      const data = await api(`/api/theme-suggestions${date ? `?date=${encodeURIComponent(date)}` : ''}`);
-      const chips = byId('themesPreviewChips');
-      chips.replaceChildren(...data.suggestions.map((item) => {
-        const chip = el('span', 'chip', item.title);
-        chip.title = `${THEME_CATEGORY_LABELS[item.category] || item.category} · prioritás: ${item.priority}`;
-        return chip;
-      }));
-      byId('themesPreviewInfo').textContent = `${data.suggestions.length} ajánlás (${data.date}, ${THEME_SEASON_LABELS[data.season] || data.season})${data.source === 'fallback' ? ' – FIGYELEM: a beépített alap szolgált ki, az adatbázis nem érhető el vagy üres.' : ''}`;
-      setText('themesPreviewError', '');
-    } catch (error) {
-      byId('themesPreviewChips').replaceChildren();
-      setText('themesPreviewError', `Az előnézet nem tölthető be: ${errorMessage(error)}`);
-    }
-  }
-
   function openThemeDialog(row) {
     themeEditId = row?.id || null;
     byId('themeDialogTitle').textContent = row ? 'Téma szerkesztése' : 'Új téma';
@@ -1513,7 +1492,6 @@
       byId('themeDialog').close();
       showToast(themeEditId ? 'A téma módosítva.' : 'A téma felvéve.');
       await loadThemes();
-      previewThemes();
     } catch (error) {
       setText('themeFormError', `A téma nem menthető: ${errorMessage(error)}`);
     } finally {
@@ -1522,9 +1500,7 @@
   }
 
   function initThemes() {
-    byId('themesPreviewDate').value = today();
-    byId('themesPreviewDate').addEventListener('change', previewThemes);
-    byId('themesRefresh').addEventListener('click', () => { loadThemes(); previewThemes(); });
+    byId('themesRefresh').addEventListener('click', () => loadThemes());
     byId('themesNew').addEventListener('click', () => openThemeDialog(null));
     byId('themesSortUsage').addEventListener('click', () => {
       lists.themes.set('sort', byId('themesSort').value === 'usage' ? '' : 'usage');
@@ -1553,7 +1529,7 @@
     orders: [loadOrders],
     users: [loadUsers],
     reviews: [loadReviews],
-    themes: [loadThemes, previewThemes],
+    themes: [loadThemes],
     newsletter: [loadCampaigns, refreshPreview],
     logs: [loadLogs],
     settings: [loadSettings, loadTemplates]
