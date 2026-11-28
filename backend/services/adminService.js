@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { CODE_PATTERN, normalizeCode } = require('./coupons');
 const { normalizeEmail } = require('../utils/email');
 const settingsService = require('./settingsService');
+const auditLog = require('./auditLog');
 const { countThemes, topThemes } = require('./themeStats');
 
 class AdminError extends Error {
@@ -334,7 +335,8 @@ const SETTING_LABELS = {
   billing_profile: 'Számlázási profil',
   payment_provider: 'Fizetési szolgáltató',
   seasonal_hints: 'Szezonális ötletek',
-  invoice_e_invoice: 'E-számla kapcsoló'
+  invoice_e_invoice: 'E-számla kapcsoló',
+  planner_config: 'Tervező űrlap (szövegek és opciók)'
 };
 const TEMPLATE_KEY_PREFIX = 'email_template:';
 const SECRET_NAME = /key|secret|token|password|authorization/i;
@@ -358,9 +360,10 @@ async function listAudit(client, query = {}) {
   const paging = parsePaging(query);
   const range = parseDateRange(query);
   const type = filterText(query.type);
-  if (type && !['setting', 'template'].includes(type)) throw validationError('Ismeretlen beállítás-típus.');
+  if (type && !['setting', 'template', 'theme'].includes(type)) throw validationError('Ismeretlen beállítás-típus.');
   let request = client.from('system_settings_history').select('id, setting_key, old_value, new_value, changed_at, changed_by', { count: 'exact' });
   if (type === 'template') request = request.ilike('setting_key', `${TEMPLATE_KEY_PREFIX}%`);
+  if (type === 'theme') request = request.ilike('setting_key', `${auditLog.THEME_KEY_PREFIX}%`);
   if (type === 'setting') request = request.in('setting_key', Object.keys(settingsService.DEFAULT_SETTINGS));
   if (range.from) request = request.gte('changed_at', range.from);
   if (range.to) request = request.lte('changed_at', range.to);
@@ -377,14 +380,32 @@ async function listAudit(client, query = {}) {
   const entries = (data || []).map((row) => ({
     id: row.id,
     key: row.setting_key,
-    label: settingLabel(row.setting_key),
-    kind: String(row.setting_key).startsWith(TEMPLATE_KEY_PREFIX) ? 'template' : 'setting',
+    label: auditLog.isThemeKey(row.setting_key) ? `Téma-ajánló: ${(row.new_value || row.old_value || {}).title || row.setting_key.slice(auditLog.THEME_KEY_PREFIX.length)}` : settingLabel(row.setting_key),
+    kind: String(row.setting_key).startsWith(TEMPLATE_KEY_PREFIX) ? 'template' : auditLog.isThemeKey(row.setting_key) ? 'theme' : 'setting',
+    summary: auditLog.describeChange(row.setting_key, row.old_value, row.new_value),
+    restorable: auditLog.isRestorableKey(row.setting_key),
     changedAt: row.changed_at,
     changedBy: row.changed_by || '',
     oldValue: maskValue(row.old_value),
     newValue: maskValue(row.new_value)
   }));
   return { entries, ...pageMeta(Number.isInteger(count) ? count : entries.length, paging) };
+}
+
+// Egykattintásos visszaállítás: a naplózott „régi érték” visszaíródik (a visszaállítás is új naplóbejegyzés lesz).
+async function restoreAudit(client, id, actor = '') {
+  const { data: row, error } = await client.from('system_settings_history').select('id, setting_key, old_value, new_value').eq('id', id).maybeSingle();
+  if (error) throw dbError(error, 'A naplóbejegyzés nem olvasható');
+  if (!row) throw new AdminError('A naplóbejegyzés nem található.', 404);
+  if (!auditLog.isRestorableKey(row.setting_key)) throw new AdminError('Ez a módosítás nem állítható vissza innen.', 400);
+  if (row.setting_key === 'planner_config') {
+    const settings = await settingsService.updateSettings(client, { planner_config: row.old_value || {} }, actor, { replace: true });
+    return { key: row.setting_key, restored: true, planner_config: settings.planner_config };
+  }
+  const themeId = row.setting_key.slice(auditLog.THEME_KEY_PREFIX.length);
+  const themes = require('./themeSuggestionsService');
+  const result = await themes.restoreSuggestion(client, themeId, row.old_value, actor);
+  return { key: row.setting_key, restored: true, ...result };
 }
 
 const SUPPORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -706,6 +727,7 @@ module.exports = {
   parseCouponInput,
   listLogs,
   listAudit,
+  restoreAudit,
   maskValue,
   settingLabel,
   createSupportCoupon,

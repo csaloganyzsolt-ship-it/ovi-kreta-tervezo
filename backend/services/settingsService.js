@@ -5,6 +5,8 @@
 // Adatbázis-kliens nélkül (teszt, helyi fejlesztés) a beégetett alapértékek érvényesek; konfigurált, de hibázó adatbázisnál a hiba nem rejtődik el.
 const supabase = require('./supabaseService');
 const { setActiveBillingProfile } = require('./siteConstants');
+const plannerConfig = require('./plannerConfigDefaults');
+const auditLog = require('./auditLog');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SYSTEM_PROMPT = require('./defaultSystemPrompt');
@@ -46,7 +48,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   billing_notification_email: '',
   error_notification_email: '',
   billing_profile: process.env.BILLING_PROFILE === 'kft' ? 'kft' : 'ev',
-  payment_provider: 'barion'
+  payment_provider: 'barion',
+  // Csak az alapértéktől eltérő rész tárolódik (lásd plannerConfigDefaults.js).
+  planner_config: Object.freeze({ texts: Object.freeze({}), optionLists: Object.freeze({}) })
 });
 
 class SettingsError extends Error {
@@ -101,6 +105,10 @@ function normalizeRows(rows) {
   for (const row of rows || []) {
     if (!row || !(row.key in out)) continue;
     const value = row.key === 'pricing' ? migrateLegacyPricing(row.value) : row.value;
+    if (row.key === 'planner_config') {
+      out.planner_config = plannerConfig.diffFromDefaults(plannerConfig.mergePlannerConfig(row.value));
+      continue;
+    }
     out[row.key] = OBJECT_SETTINGS.includes(row.key) ? { ...out[row.key], ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) } : row.value;
   }
   for (const tier of PRICE_TIERS) if (!Number.isInteger(out.pricing[tier]) || out.pricing[tier] < 1) out.pricing[tier] = DEFAULT_SETTINGS.pricing[tier];
@@ -192,7 +200,8 @@ function publicConfig(settings) {
     announcement_bar: { ...settings.announcement_bar },
     maintenance_mode: settings.maintenance_mode === true,
     billing_profile: settings.billing_profile,
-    payment_provider: settings.payment_provider
+    payment_provider: settings.payment_provider,
+    planner_config: plannerConfig.publicView(settings.planner_config)
   };
 }
 
@@ -215,7 +224,7 @@ function parsePrice(value, label) {
 }
 
 // A részleges módosítás (PATCH) csak az ismert kulcsokat engedi, és az összevont értéket validálja.
-function validatePatch(patch, current) {
+function validatePatch(patch, current, options = {}) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new SettingsError('A módosításnak JSON objektumnak kell lennie.');
   const unknown = Object.keys(patch).filter((key) => !(key in DEFAULT_SETTINGS));
   if (unknown.length) throw new SettingsError(`Ismeretlen beállítás: ${unknown.slice(0, 3).join(', ')}.`);
@@ -293,14 +302,22 @@ function validatePatch(patch, current) {
       updates.external_links[key] = url;
     }
   }
+  if ('planner_config' in patch) {
+    try {
+      updates.planner_config = plannerConfig.applyPatch(plannerConfig.mergePlannerConfig(current.planner_config), patch.planner_config, { replace: options.replace === true });
+    } catch (error) {
+      if (error instanceof plannerConfig.PlannerConfigError) throw new SettingsError(error.message);
+      throw error;
+    }
+  }
   if (!Object.keys(updates).length) throw new SettingsError('Nincs módosítandó beállítás.');
   return updates;
 }
 
 // A módosító (admin e-mail) az updated_by oszlopba kerül, abból tölti a history.changed_by mezőt a trigger (20261203090000 migráció); nélküle is ment.
-async function updateSettings(client, patch, actor = '') {
+async function updateSettings(client, patch, actor = '', options = {}) {
   const current = await getSettings({ force: true });
-  const updates = validatePatch(patch, current);
+  const updates = validatePatch(patch, current, options);
   const stamp = new Date().toISOString();
   const by = String(actor || '').trim().slice(0, 254);
   const rows = Object.entries(updates).map(([key, value]) => ({ key, value, updated_at: stamp }));
@@ -310,6 +327,7 @@ async function updateSettings(client, patch, actor = '') {
   cache = normalizeRows([...Object.entries(current).map(([key, value]) => ({ key, value })), ...rows]);
   cachedAt = Date.now();
   if ('billing_profile' in updates) setActiveBillingProfile(updates.billing_profile);
+  if ('planner_config' in updates) await auditLog.recordChange(client, 'planner_config', current.planner_config, updates.planner_config, by);
   return cache;
 }
 
@@ -557,5 +575,5 @@ function composeEmail(templates, id, values = {}) {
 module.exports = {
   isValidModelName, PRICE_TIERS, LINK_KEYS, BILLING_PROFILE_TYPES, PAYMENT_PROVIDERS, TEMPLATE_IDS, DEFAULT_SETTINGS, DEFAULT_DAILY_GENERATION_CAP, CACHE_TTL_MS, SettingsError,
   MAX_PROMPT_LENGTH, validatePatch, getSettings, peek, invalidate, updateSettings, publicConfig, pricingTierFor, dailyGenerationCapOf, resolveNotificationEmail, isValidEmail, resolveAiModel,
-  listTemplates, listHistory, updateTemplate, createTemplate, deleteTemplate, resetTemplate, DEFAULT_TEMPLATES, getTemplates, fillPlaceholders, composeEmail
+  listTemplates, listHistory, updateTemplate, createTemplate, deleteTemplate, resetTemplate, DEFAULT_TEMPLATES, getTemplates, fillPlaceholders, composeEmail, plannerConfig
 };

@@ -8,7 +8,7 @@ document.addEventListener('click', (event) => {
   toggle.setAttribute('aria-expanded', String(open));
 });
 
-document.querySelectorAll('.segment[data-group="energy"], .segment[data-group="detail"], .segment[data-group="weeklyScope"]').forEach((option) => {
+document.querySelectorAll('.segment[data-group="detail"], .segment[data-group="weeklyScope"]').forEach((option) => {
   option.addEventListener('click', () => {
     setChoice(option.dataset.group, option.dataset.value);
     if (option.dataset.group === 'weeklyScope') updateWeeklyDailyBreakdownVisibility();
@@ -126,6 +126,7 @@ function applyPublicConfig(config) {
   });
   appConfig.maintenance = config.maintenance_mode === true;
   appConfig.loaded = true;
+  applyPlannerConfig(config.planner_config);
   renderSeasonalThemeSuggestions();
   renderStep();
   updateExportLock();
@@ -143,7 +144,7 @@ async function loadPublicConfig() {
     console.error('A rendszerbeállítások nem tölthetők be:', error);
     const note = document.getElementById('configError');
     if (note) {
-      note.textContent = 'A friss árak és beállítások most nem tölthetők be. Kérjük, frissítsd az oldalt.';
+      note.textContent = 'A friss árak, szövegek és opciók most nem tölthetők be, ezért a beépített alapértékekkel dolgozunk. Kérjük, frissítsd az oldalt.';
       note.hidden = false;
     }
   }

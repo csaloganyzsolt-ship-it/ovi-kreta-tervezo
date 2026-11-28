@@ -4,6 +4,7 @@
 // termék és a „Teljes heti csomag” 1. lépése is; a csomag napi tervei ehhez igazodnak.
 const { generationError, readText, readStringArray } = require('./responseReaders');
 const { weekRangeLabel } = require('./academicPlan');
+const settingsService = require('./settingsService');
 
 const WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
 
@@ -178,7 +179,7 @@ const DAYS_SHAPE = `,
 // A heti összesítő prompt; a közös szabályokat (tiltólista, IKT, SNI stb.) a server.js adja át.
 function buildSummaryPrompt(settings, detail, commonRules, { withDays = false, weeklyAreaRule = '', toolsLine = '', literatureLine = '' } = {}) {
   const days = settings.selectedDays;
-  const mixed = settings.group === 'Vegyes csoport';
+  const mixed = settingsService.plannerConfig.mixedGroupLabels(settingsService.peek().planner_config).has(settings.group);
   const progression = settings.weeklyProgressionType === 'area_focused'
     ? 'area_focused – klasszikus területváltó: minden nap más nevelési terület áll a fókuszban, a heti téma köti össze őket.'
     : 'progressive – szervesen egymásra épülő projekt: a hét tevékenységei az előző napok élményeire és produktumaira épülnek.';

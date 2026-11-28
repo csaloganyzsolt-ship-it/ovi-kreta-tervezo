@@ -46,6 +46,7 @@
               <button type="button" role="tab" class="profile-tab" id="tabUsers" data-admin-tab="users" aria-selected="false" aria-controls="panelUsers">Felhasználók</button>
               <button type="button" role="tab" class="profile-tab" id="tabReviews" data-admin-tab="reviews" aria-selected="false" aria-controls="panelReviews">Értékelések <span class="admin-nav-badge" id="reviewsBadge" hidden></span></button>
               <button type="button" role="tab" class="profile-tab" id="tabThemes" data-admin-tab="themes" aria-selected="false" aria-controls="panelThemes">Téma-ajánlók</button>
+              <button type="button" role="tab" class="profile-tab" id="tabPlanner" data-admin-tab="planner" aria-selected="false" aria-controls="panelPlanner">Tervező űrlap</button>
               <button type="button" role="tab" class="profile-tab" id="tabNewsletter" data-admin-tab="newsletter" aria-selected="false" aria-controls="panelNewsletter">Hírlevél</button>
               <button type="button" role="tab" class="profile-tab" id="tabLogs" data-admin-tab="logs" aria-selected="false" aria-controls="panelLogs">Rendszernapló</button>
               <button type="button" role="tab" class="profile-tab" id="tabSettings" data-admin-tab="settings" aria-selected="false" aria-controls="panelSettings">Beállítások</button>
@@ -384,6 +385,21 @@
             </dialog>
           </section>
 
+          <section class="profile-panel" id="panelPlanner" role="tabpanel" aria-labelledby="tabPlanner" hidden>
+            <h2>Tervező űrlap</h2>
+            <p class="profile-hint">A tervező 1–4. lépésének szövegei és választólistái. Az átírt értékek a vásárlói felületen és a generált tervezet fejlécében is megjelennek; minden módosítás bekerül a Rendszernapló „Módosítási napló” fülére, ahonnan egy kattintással visszaállítható.</p>
+            <p class="profile-hint" id="plannerProtected">Védett, nem szerkeszthető elemek: tervezettípus, időtartam és heti beállítások, a 6 nevelési terület, a kidolgozottság szintjei, a heti építkezés, az oktatási irodalom-pipa, az árazás és a fizetés, valamint a botvédelem.</p>
+            <div class="admin-listbar">
+              <p class="profile-hint" id="plannerStatus" role="status"></p>
+              <span class="admin-listbar-tools">
+                <button type="button" class="profile-btn primary" id="plannerSave">Változtatások mentése</button>
+                <button type="button" class="profile-btn" id="plannerResetAll">Minden visszaállítása</button>
+              </span>
+            </div>
+            <p class="profile-error" id="plannerError" role="alert" hidden></p>
+            <div id="plannerSections"></div>
+          </section>
+
           <section class="profile-panel" id="panelThemes" role="tabpanel" aria-labelledby="tabThemes" hidden>
             <h2>Téma-ajánlók</h2>
             <p class="profile-hint">A tervező „Projekt témája” alatti chipek a kiválasztott dátum (vagy hét) alapján innen jönnek: előbb a dátumra eső jeles napok, majd az évszak témái, végül az általános tartalék (legfeljebb 8 ajánlás, prioritás szerint).</p>
@@ -623,6 +639,7 @@
                     <option value="">Összes</option>
                     <option value="setting">Beállítás</option>
                     <option value="template">E-mail sablon</option>
+                    <option value="theme">Téma-ajánló</option>
                   </select>
                 </div>
               <div class="admin-daterange">
@@ -640,8 +657,8 @@
               <div class="admin-table-wrap">
                 <table class="admin-table" id="auditTable">
                   <thead>
-                    <tr><th>Időpont</th><th>Módosító</th><th>Beállítás</th><th>Miről (régi érték)</th><th>Mire (új érték)</th></tr>
-                    <tr class="admin-filter-row" hidden><th></th><th><input type="search" data-list="audit" data-filter="changedBy" placeholder="Keresés" aria-label="Módosító szűrése" autocomplete="off" /></th><th><input type="search" data-list="audit" data-filter="setting" placeholder="Keresés" aria-label="Beállítás szűrése" autocomplete="off" /></th><th></th><th></th></tr>
+                    <tr><th>Időpont</th><th>Módosító</th><th>Beállítás</th><th>Miről (régi érték)</th><th>Mire (új érték)</th><th>Művelet</th></tr>
+                    <tr class="admin-filter-row" hidden><th></th><th><input type="search" data-list="audit" data-filter="changedBy" placeholder="Keresés" aria-label="Módosító szűrése" autocomplete="off" /></th><th><input type="search" data-list="audit" data-filter="setting" placeholder="Keresés" aria-label="Beállítás szűrése" autocomplete="off" /></th><th></th><th></th><th></th></tr>
                   </thead>
                   <tbody></tbody>
                 </table>

@@ -2456,6 +2456,18 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-listbar .profile-hint { margin: 0; flex: 1 1 220px; }
 .admin-listbar-tools { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .admin-listbar-tools .profile-btn { min-height: 40px; }
+.planner-section { margin: 18px 0; padding: 14px; border: 1px solid var(--border, #d8e6df); border-radius: 12px; }
+.planner-section h3 { margin: 0 0 10px; }
+.planner-row { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto auto; gap: 6px 10px; align-items: start; margin: 8px 0; }
+.planner-row .planner-key { font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.planner-row input, .planner-row textarea { width: 100%; min-width: 0; }
+.planner-badge { font-size: 0.75rem; color: var(--primary); white-space: nowrap; }
+.planner-list { margin: 12px 0; padding: 10px; background: color-mix(in srgb, var(--primary) 6%, transparent); border-radius: 10px; }
+.planner-list h4 { margin: 0 0 8px; }
+.planner-option { display: flex; align-items: center; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+.planner-option input[type="text"] { flex: 1 1 200px; min-width: 0; }
+.planner-list-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+@media (max-width: 700px) { .planner-row { grid-template-columns: 1fr; } }
 .admin-pagesize { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted, inherit); }
 .admin-pagesize select { min-height: 40px; }
 .admin-pagesize input[type="search"], .admin-pagesize input[type="date"] { min-height: 40px; }

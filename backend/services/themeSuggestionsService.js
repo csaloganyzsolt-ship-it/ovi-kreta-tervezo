@@ -4,6 +4,7 @@
 // A kiválasztás tiszta függvényekből áll (dátum → MM-DD → jeles napok → évszak → általános), így adatbázis nélkül tesztelhető.
 const logger = require('../utils/logger');
 const { normalizeThemeKey } = require('./themeStats');
+const auditLog = require('./auditLog');
 
 const TABLE = 'theme_suggestions';
 const PUBLIC_COLUMNS = 'id, title, category, season, start_mmdd, end_mmdd, priority, is_active, created_at, updated_at';
@@ -281,14 +282,15 @@ async function listSuggestions(client, query = {}, counts = new Map()) {
   };
 }
 
-async function createSuggestion(client, body) {
+async function createSuggestion(client, body, actor = '') {
   const row = validateSuggestion(body);
   const { data, error } = await client.from(TABLE).insert(row).select(COLUMNS).single();
   if (error) throw dbError('A téma mentése sikertelen', error);
+  await auditLog.recordChange(client, auditLog.themeKey(data.id), null, auditLog.themeSnapshot(data), actor);
   return data;
 }
 
-async function updateSuggestion(client, id, body) {
+async function updateSuggestion(client, id, body, actor = '') {
   const key = requireId(id);
   const { data: current, error: readError } = await client.from(TABLE).select(COLUMNS).eq('id', key).maybeSingle();
   if (readError) throw dbError('A téma lekérdezése sikertelen', readError);
@@ -298,19 +300,44 @@ async function updateSuggestion(client, id, body) {
   const { data, error } = await client.from(TABLE).update({ ...merged, updated_at: new Date().toISOString() }).eq('id', key).select(COLUMNS).maybeSingle();
   if (error) throw dbError('A téma módosítása sikertelen', error);
   if (!data) throw new ThemeSuggestionError('A téma nem található.', 404);
+  await auditLog.recordChange(client, auditLog.themeKey(key), auditLog.themeSnapshot(current), auditLog.themeSnapshot(data), actor);
   return data;
 }
 
-async function deleteSuggestion(client, id) {
+async function deleteSuggestion(client, id, actor = '') {
   const key = requireId(id);
+  const { data: before } = await client.from(TABLE).select(COLUMNS).eq('id', key).maybeSingle();
   const { data, error } = await client.from(TABLE).delete().eq('id', key).select('id');
   if (error) throw dbError('A téma törlése sikertelen', error);
   if (!data || !data.length) throw new ThemeSuggestionError('A téma nem található.', 404);
+  if (before) await auditLog.recordChange(client, auditLog.themeKey(key), auditLog.themeSnapshot(before), null, actor);
   return { deleted: key };
+}
+
+// Naplóból való visszaállítás: oldValue === null → a létrehozás visszavonása (törlés); különben a régi mezők visszaírása (törölt sor azonos id-val újra létrejön).
+async function restoreSuggestion(client, id, oldValue, actor = '') {
+  const key = requireId(id);
+  const { data: current, error: readError } = await client.from(TABLE).select(COLUMNS).eq('id', key).maybeSingle();
+  if (readError) throw dbError('A téma lekérdezése sikertelen', readError);
+  if (!oldValue) {
+    if (!current) throw new ThemeSuggestionError('A téma már nem létezik, nincs mit visszavonni.', 404);
+    const { error } = await client.from(TABLE).delete().eq('id', key);
+    if (error) throw dbError('A téma törlése sikertelen', error);
+    await auditLog.recordChange(client, auditLog.themeKey(key), auditLog.themeSnapshot(current), null, actor);
+    return { action: 'deleted', id: key };
+  }
+  const row = validateSuggestion(oldValue);
+  let result;
+  if (current) result = await client.from(TABLE).update({ ...row, updated_at: new Date().toISOString() }).eq('id', key).select(COLUMNS).maybeSingle();
+  else result = await client.from(TABLE).insert({ id: key, ...row }).select(COLUMNS).single();
+  if (result.error) throw dbError('A téma visszaállítása sikertelen', result.error);
+  await auditLog.recordChange(client, auditLog.themeKey(key), auditLog.themeSnapshot(current), auditLog.themeSnapshot(result.data), actor);
+  return { action: current ? 'updated' : 'recreated', id: key, suggestion: result.data };
 }
 
 module.exports = {
   ThemeSuggestionError,
+  restoreSuggestion,
   CATEGORIES,
   SEASONS,
   MAX_SUGGESTIONS,

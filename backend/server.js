@@ -51,6 +51,11 @@ function normalizeFreeText(value, maxLength = 2000) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+// Admin által szerkeszthető címkék (korcsoport, opciók): vezérlőkarakter- és sortörés-mentes egy sor.
+function cleanLine(value) {
+  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function buildBlacklistRule(blacklist) {
   if (!blacklist) return '';
   return `SZIGORÚ TILTÁS: a pedagógus az alábbiakat kifejezetten kizárta. Ezeket a témákat, dalokat, eszközöket, szavakat SEHOL ne használd és ne említsd a tervben (sem a táblázatban, sem az eszközlistában, sem a módszereknél), semmilyen formában vagy szinonímával kerülve a használatot: ${JSON.stringify(blacklist)}`;
@@ -233,7 +238,7 @@ app.get('/health', (_req, res) => {
 
 function normalizeArray(value) {
   const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[;,]/) : [];
-  return items.filter((item) => typeof item === 'string').map((item) => item.trim()).filter(Boolean);
+  return items.filter((item) => typeof item === 'string').map((item) => cleanLine(item)).filter(Boolean);
 }
 
 function getDetailProfile(detailLevel) {
@@ -331,7 +336,7 @@ function buildPrompt(payload = {}, { dayContext = '' } = {}) {
   const detail = getDetailProfile(Number(payload.detailLevel ?? 68));
   const settings = {
     theme: payload.theme || '',
-    group: payload.group || '',
+    group: cleanLine(payload.group || ''),
     kindergartenName: payload.kindergartenName || '',
     kindergartenProfile: normalizeFreeText(payload.kindergartenProfile),
     teacherName: payload.teacherName || '',
@@ -342,11 +347,11 @@ function buildPrompt(payload = {}, { dayContext = '' } = {}) {
     weeklyScope: weeklyScope(payload),
     selectedDays: getSelectedDays(payload),
     weeklyProgressionType: payload.weeklyProgressionType === 'area_focused' ? 'area_focused' : 'progressive',
-    fridayClosingType: payload.fridayClosingType || 'Kiállítás a csoportszobában',
-    tevekenysegForma: payload.tevekenysegForma || '',
+    fridayClosingType: cleanLine(payload.fridayClosingType || '') || 'Kiállítás a csoportszobában',
+    tevekenysegForma: cleanLine(payload.tevekenysegForma || ''),
     elozmeny: payload.elozmeny || '',
     childCount: payload.childCount ?? null,
-    energyLevel: payload.energyLevel ?? 'Átlagos',
+    energyLevel: typeof payload.energyLevel === 'string' ? (cleanLine(payload.energyLevel) || 'Átlagos') : (payload.energyLevel ?? 'Átlagos'),
     hasPreschoolers: Boolean(payload.hasPreschoolers),
     focusAreas: normalizeArray(payload.focusAreas),
     weeklyFocusAreas: payload.weeklyFocusAreas && typeof payload.weeklyFocusAreas === 'object' ? payload.weeklyFocusAreas : {},
@@ -371,7 +376,8 @@ function buildPrompt(payload = {}, { dayContext = '' } = {}) {
     showLiteratureAtBottom: academicPlan.isAcademic(payload) || Boolean(payload.showLiteratureAtBottom)
   };
 
-  const extraRules = [settings.group === 'Vegyes csoport' ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');
+  const mixedGroup = settingsService.plannerConfig.mixedGroupLabels(settingsService.peek().planner_config).has(settings.group);
+  const extraRules = [mixedGroup ? MIXED_GROUP_RULE : '', NO_PLATFORM_NAME_RULE].filter(Boolean).join('\n');
   if (academicPlan.isAcademic(payload)) {
     const academicSettings = { ...settings, planMode: 'academic', planKind: getPlanKind(payload), includeDailyBreakdown: false, studentName: normalizeFreeText(payload.studentName, 200) };
     const commonRules = [

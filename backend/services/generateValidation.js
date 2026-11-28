@@ -122,7 +122,7 @@ function validateGeneratePayload(payload) {
   put('requestedModel', text(payload.requestedModel, 'requestedModel', 60));
   put('themeSuggestionId', validateThemeSuggestionId(payload.themeSuggestionId));
   for (const [key, max] of [
-    ['theme', 300], ['group', 100], ['kindergartenName', 200], ['kindergartenProfile', 300],
+    ['theme', 300], ['group', 200], ['kindergartenName', 200], ['kindergartenProfile', 300],
     ['teacherName', 200], ['studentName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
     ['tevekenysegForma', 300], ['elozmeny', 4000], ['customNote', 4000], ['availableTools', 4000],
     ['blacklist', 4000], ['iktCustomApp', 300]
@@ -130,7 +130,7 @@ function validateGeneratePayload(payload) {
 
   if (payload.energyLevel !== undefined && payload.energyLevel !== null) {
     if (typeof payload.energyLevel === 'number' && Number.isFinite(payload.energyLevel)) clean.energyLevel = payload.energyLevel;
-    else put('energyLevel', text(payload.energyLevel, 'energyLevel', 60));
+    else put('energyLevel', text(payload.energyLevel, 'energyLevel', 200));
   }
   for (const key of ['includeDailyBreakdown', 'hasPreschoolers', 'iktEnabled', 'showLiteratureAtBottom', 'preview']) {
     put(key, bool(payload[key], key));
@@ -145,7 +145,7 @@ function validateGeneratePayload(payload) {
   put('focusAreas', list(payload.focusAreas, 'focusAreas', 12, 200));
   put('specialNeeds', list(payload.specialNeeds, 'specialNeeds', 20, 200));
   put('selectedGoals', list(payload.selectedGoals, 'selectedGoals', 30, 200));
-  put('iktTools', list(payload.iktTools, 'iktTools', 20, 100));
+  put('iktTools', list(payload.iktTools, 'iktTools', 20, 200));
   put('weeklyFocusAreas', weekdayKeyedObject(payload.weeklyFocusAreas, 'weeklyFocusAreas', (entry, field) => {
     const areas = list(entry, field, 10, 200);
     if (areas === undefined) throw fail(field, 'tömb vagy szöveg szükséges');

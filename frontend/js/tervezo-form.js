@@ -143,7 +143,7 @@ function getWeeklyProgressionType() {
 }
 
 function getFridayClosingType() {
-  return document.getElementById('fridayClosingType')?.value || 'Kiállítás a csoportszobában';
+  return document.getElementById('fridayClosingType')?.value || plannerDefaultLabel('fridayClosingType');
 }
 
 function updateFocusAreaDayRows() {
@@ -186,7 +186,7 @@ function getWeeklyFocusAreas() {
   return result;
 }
 
-const ENERGY_DEFAULT = 'Átlagos';
+let ENERGY_DEFAULT = 'Átlagos';
 
 const DETAIL_LEVELS = { concise: 30, detailed: 68, extended: 90 };
 
@@ -240,7 +240,7 @@ function syncAdvancedSettingsOpenState() {
     Boolean(getIktCustomApp()) ||
     (getSelectedDuration() === 'Heti' && (
       getWeeklyProgressionType() !== 'progressive' ||
-      getFridayClosingType() !== 'Kiállítás a csoportszobában'));
+      getFridayClosingType() !== plannerDefaultLabel('fridayClosingType')));
   if (hasCustomValue) details.open = true;
 }
 
@@ -257,7 +257,7 @@ function getDateValue() {
 }
 
 function getGroup() {
-  return document.querySelector('select[data-field="group"]')?.value || 'Nagycsoport';
+  return document.querySelector('select[data-field="group"]')?.value || plannerDefaultLabel('group');
 }
 
 function renderSummaryChecklist() {
@@ -604,7 +604,7 @@ function clearDraftState() {
     }
 
     if (field.matches('[data-field="group"]')) {
-      field.value = 'Nagycsoport';
+      field.value = plannerDefaultLabel('group');
       return;
     }
 
@@ -1030,7 +1030,7 @@ function renderHistoryPanel() {
 function bindAutoSaveListeners() {
   const trackedFields = Array.from(document.querySelectorAll('input, textarea, select'));
   trackedFields.forEach((field) => {
-    if (field.matches('input[type="hidden"]')) return;
+    if (field.matches('input[type="hidden"]') || field.matches('[data-sni-label]')) return;
     field.addEventListener('input', () => {
       updateSummary();
       saveProfileToStorage();
@@ -1103,14 +1103,6 @@ function bindAutoSaveListeners() {
       persistDraftState();
     });
   }
-
-  document.querySelectorAll('#iktToolsPicker [data-ikt-tool]').forEach((button) => {
-    button.addEventListener('click', () => {
-      button.classList.toggle('active');
-      updateSummary();
-      persistDraftState();
-    });
-  });
 
   document.getElementById('iktCustomApp')?.addEventListener('input', () => {
     updateSummary();

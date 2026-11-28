@@ -874,14 +874,37 @@
     return details;
   }
 
+  async function restoreAuditEntry(entry, button) {
+    if (!window.confirm(`Biztosan visszaállítod ezt a módosítást?\n\n${entry.summary || entry.label}\n\nA visszaállítás új naplóbejegyzésként is rögzítésre kerül.`)) return;
+    button.disabled = true;
+    try {
+      await api(`/api/admin/audit/${encodeURIComponent(entry.id)}/restore`, { method: 'POST' });
+      showToast('A módosítás visszaállítva.');
+      loaded.planner = false;
+      if (loaded.themes) loadThemes();
+      await lists.audit.load();
+    } catch (error) {
+      setText('auditError', `A visszaállítás nem sikerült: ${errorMessage(error)}`);
+      button.disabled = false;
+    }
+  }
+
   function renderAudit(data) {
     byId('auditCount').textContent = `${data.total} módosítás`;
     fillTable('auditTable', data.entries.map((entry) => {
       const label = el('span');
       label.append(el('strong', '', entry.label));
-      if (entry.label !== entry.key) label.append(el('br'), el('small', 'admin-audit-key', entry.key));
-      return [formatDate(entry.changedAt), entry.changedBy || '–', label, auditValue(entry.oldValue), auditValue(entry.newValue)];
-    }), 5, 'Még nincs rögzített beállításmódosítás.');
+      if (entry.summary) label.append(el('br'), el('small', 'admin-audit-key', entry.summary));
+      else if (entry.label !== entry.key) label.append(el('br'), el('small', 'admin-audit-key', entry.key));
+      const action = el('span');
+      if (entry.restorable) {
+        const button = el('button', 'profile-btn', '↺ Visszaállítás');
+        button.type = 'button';
+        button.addEventListener('click', () => restoreAuditEntry(entry, button));
+        action.append(button);
+      }
+      return [formatDate(entry.changedAt), entry.changedBy || '–', label, auditValue(entry.oldValue), auditValue(entry.newValue), action];
+    }), 6, 'Még nincs rögzített beállításmódosítás.');
   }
 
   lists.audit = createList({ name: 'audit', path: '/api/admin/audit', render: renderAudit, errorId: 'auditError', errorText: 'Az audit napló nem tölthető be' });
@@ -1500,6 +1523,8 @@
 
   function initThemes() {
     byId('themesRefresh').addEventListener('click', () => loadThemes());
+    byId('plannerSave').addEventListener('click', savePlanner);
+    byId('plannerResetAll').addEventListener('click', resetPlanner);
     byId('themesNew').addEventListener('click', () => openThemeDialog(null));
     byId('themesSortUsage').addEventListener('click', () => {
       lists.themes.set('sort', byId('themesSort').value === 'usage' ? '' : 'usage');
@@ -1520,9 +1545,162 @@
     window.addEventListener('scroll', () => closeThemeMenu(false), true);
   }
 
+  // ---------- Tervező űrlap (szövegek és opciólisták) ----------
+
+  const planner = { defaults: null, draft: null, meta: null, maxItems: 25 };
+  const PLANNER_SECTIONS = { 1: '1. lépés – Téma és időkeret', 2: '2. lépés – Csoport és igények', 3: '3. lépés – Módszerek és eszközök', 4: '4. lépés – Összegzés és generálás' };
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  function plannerDirty() {
+    return JSON.stringify(planner.draft) !== JSON.stringify(planner.saved);
+  }
+
+  function plannerMarkDirty() {
+    setText('plannerStatus', plannerDirty() ? 'Mentetlen változtatások vannak.' : 'Nincs mentetlen változtatás.');
+  }
+
+  function plannerTextRow(key, [, type, fallback]) {
+    const row = el('div', 'planner-row');
+    const label = el('label', 'planner-key', key);
+    const input = type === 'hint' ? el('textarea') : el('input');
+    if (type !== 'hint') input.type = 'text';
+    input.id = `planner-text-${key}`;
+    label.htmlFor = input.id;
+    input.value = planner.draft.texts[key] ?? fallback;
+    const badge = el('span', 'planner-badge', 'módosítva');
+    const reset = el('button', 'profile-btn', '↺ Alapértelmezés');
+    reset.type = 'button';
+    const refresh = () => {
+      const changed = input.value !== fallback;
+      badge.hidden = !changed;
+      reset.hidden = !changed;
+    };
+    input.addEventListener('input', () => { planner.draft.texts[key] = input.value; refresh(); plannerMarkDirty(); });
+    reset.addEventListener('click', () => { input.value = fallback; planner.draft.texts[key] = fallback; refresh(); plannerMarkDirty(); });
+    refresh();
+    row.append(label, input, badge, reset);
+    return row;
+  }
+
+  function plannerListEditor(name, meta) {
+    const box = el('div', 'planner-list');
+    const render = () => {
+      const items = planner.draft.optionLists[name];
+      const defaultIds = new Set(planner.defaults.optionLists[name].map((item) => item.id));
+      box.replaceChildren(el('h4', '', meta.title));
+      items.forEach((item, index) => {
+        const row = el('div', 'planner-option');
+        const label = el('input');
+        label.type = 'text';
+        label.value = item.label;
+        label.maxLength = 140;
+        label.setAttribute('aria-label', `${meta.title} – felirat`);
+        label.addEventListener('input', () => { item.label = label.value; plannerMarkDirty(); });
+        const toggle = el('input');
+        toggle.type = 'checkbox';
+        toggle.checked = item.active;
+        toggle.setAttribute('aria-label', 'Aktív');
+        toggle.addEventListener('change', () => { item.active = toggle.checked; plannerMarkDirty(); });
+        const up = el('button', 'profile-btn', '↑');
+        const down = el('button', 'profile-btn', '↓');
+        up.type = down.type = 'button';
+        up.disabled = index === 0;
+        down.disabled = index === items.length - 1;
+        up.addEventListener('click', () => { items.splice(index - 1, 0, items.splice(index, 1)[0]); render(); plannerMarkDirty(); });
+        down.addEventListener('click', () => { items.splice(index + 1, 0, items.splice(index, 1)[0]); render(); plannerMarkDirty(); });
+        row.append(label, toggle, up, down);
+        if (!defaultIds.has(item.id)) {
+          const remove = el('button', 'profile-btn', 'Törlés');
+          remove.type = 'button';
+          remove.addEventListener('click', () => { items.splice(index, 1); render(); plannerMarkDirty(); });
+          row.append(remove);
+        }
+        box.append(row);
+      });
+      const tools = el('div', 'planner-list-tools');
+      const add = el('button', 'profile-btn', '+ Új opció');
+      add.type = 'button';
+      add.disabled = items.length >= planner.maxItems;
+      add.addEventListener('click', () => {
+        const id = `custom_${Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+        items.push({ id, label: '', active: true });
+        render();
+        plannerMarkDirty();
+      });
+      const reset = el('button', 'profile-btn', '↺ Lista visszaállítása');
+      reset.type = 'button';
+      reset.addEventListener('click', () => { planner.draft.optionLists[name] = clone(planner.defaults.optionLists[name]); render(); plannerMarkDirty(); });
+      tools.append(add, reset);
+      box.append(tools);
+    };
+    render();
+    return box;
+  }
+
+  function renderPlanner() {
+    const sections = byId('plannerSections');
+    sections.replaceChildren();
+    Object.entries(PLANNER_SECTIONS).forEach(([number, title]) => {
+      const section = el('section', 'planner-section');
+      section.append(el('h3', '', title));
+      Object.entries(planner.meta.lists).filter(([, meta]) => String(meta.section) === number).forEach(([name, meta]) => section.append(plannerListEditor(name, meta)));
+      Object.entries(planner.meta.texts).filter(([, meta]) => String(meta[0]) === number).forEach(([key, meta]) => section.append(plannerTextRow(key, meta)));
+      sections.append(section);
+    });
+    plannerMarkDirty();
+  }
+
+  function plannerApply(data) {
+    planner.defaults = data.defaults;
+    planner.saved = clone(data.effective);
+    planner.draft = clone(data.effective);
+    planner.draft.texts = { ...planner.defaults.texts, ...planner.draft.texts };
+    planner.saved = clone(planner.draft);
+    renderPlanner();
+  }
+
+  async function loadPlanner() {
+    byId('plannerError').hidden = true;
+    try {
+      const data = await api('/api/admin/planner-config');
+      planner.meta = data.meta;
+      planner.maxItems = data.meta.maxItems || 25;
+      plannerApply(data);
+    } catch (error) {
+      setText('plannerError', `A tervező-konfiguráció nem tölthető be: ${errorMessage(error)}`);
+      byId('plannerError').hidden = false;
+    }
+  }
+
+  async function savePlanner() {
+    byId('plannerError').hidden = true;
+    try {
+      await api('/api/admin/planner-config', { method: 'PUT', body: planner.draft });
+      showToast('A tervező űrlap mentve.');
+      loaded.logs = false;
+      await loadPlanner();
+    } catch (error) {
+      setText('plannerError', `A mentés nem sikerült: ${errorMessage(error)}`);
+      byId('plannerError').hidden = false;
+    }
+  }
+
+  async function resetPlanner() {
+    if (!window.confirm('Biztosan visszaállítod az ÖSSZES tervező-szöveget és opciólistát az alapértékekre? A művelet a Módosítási naplóból visszavonható.')) return;
+    try {
+      await api('/api/admin/planner-config/reset', { method: 'POST' });
+      showToast('Az alapértékek visszaállítva.');
+      await loadPlanner();
+    } catch (error) {
+      setText('plannerError', `A visszaállítás nem sikerült: ${errorMessage(error)}`);
+      byId('plannerError').hidden = false;
+    }
+  }
+
   // ---------- Lapok ----------
 
   const TAB_LOADERS = {
+    planner: [loadPlanner],
     overview: [loadStats],
     coupons: [loadCoupons],
     orders: [loadOrders],

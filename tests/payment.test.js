@@ -1087,7 +1087,7 @@ test('the synchronous theme bootstrap lives in theme-init.js and is shipped ever
   }
 });
 
-const PLANNER_SCRIPTS = ['core', 'academic', 'weekly', 'form', 'preview', 'export', 'generate', 'paywall', 'history', 'init'].map((name) => `tervezo-${name}.js`);
+const PLANNER_SCRIPTS = ['core', 'academic', 'weekly', 'form', 'config', 'preview', 'export', 'generate', 'paywall', 'history', 'init'].map((name) => `tervezo-${name}.js`);
 
 test('tervezo.html loads the planner scripts in order and the single static list covers every shipped file', async () => {
   const { SITE_ASSETS, PAGES } = require('../backend/services/siteConstants');

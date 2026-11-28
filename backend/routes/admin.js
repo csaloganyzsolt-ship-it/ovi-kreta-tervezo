@@ -225,18 +225,44 @@ router.patch('/admin/settings', handle('A beállítások mentése', async (clien
 // Téma-ajánlók (dátum- és évszakfüggő chipek a tervezőben): teljes CRUD, kizárólag adminnak.
 router.get('/admin/theme-suggestions', handle('A téma-ajánlók lekérdezése', async (client, req) => themeSuggestions.listSuggestions(client, req.query, await themeStats.loadThemeCounts(client))));
 router.post('/admin/theme-suggestions', handle('A téma létrehozása', async (client, req, res) => {
-  const suggestion = await themeSuggestions.createSuggestion(client, req.body);
+  const suggestion = await themeSuggestions.createSuggestion(client, req.body, req.user?.email);
   logger.info('admin_themes', 'Téma-ajánló létrehozva', { details: { id: suggestion.id, title: suggestion.title, admin: req.user?.email } });
   res.status(201).json({ success: true, suggestion });
 }));
 router.put('/admin/theme-suggestions/:id', handle('A téma módosítása', async (client, req) => {
-  const suggestion = await themeSuggestions.updateSuggestion(client, req.params.id, req.body);
+  const suggestion = await themeSuggestions.updateSuggestion(client, req.params.id, req.body, req.user?.email);
   logger.info('admin_themes', 'Téma-ajánló módosítva', { details: { id: suggestion.id, admin: req.user?.email } });
   return { suggestion };
 }));
 router.delete('/admin/theme-suggestions/:id', handle('A téma törlése', async (client, req) => {
-  const result = await themeSuggestions.deleteSuggestion(client, req.params.id);
+  const result = await themeSuggestions.deleteSuggestion(client, req.params.id, req.user?.email);
   logger.info('admin_themes', 'Téma-ajánló törölve', { details: { id: result.deleted, admin: req.user?.email } });
+  return result;
+}));
+// Tervező űrlap (Zöld szövegek és Sárga opciólisták): mentés és visszaállítás naplózva (Rendszernapló → Módosítási napló).
+router.get('/admin/planner-config', handle('A tervező-konfiguráció lekérdezése', async () => {
+  const { plannerConfig } = settingsService;
+  const settings = await settingsService.getSettings({ force: true });
+  return {
+    defaults: plannerConfig.defaults(),
+    effective: plannerConfig.mergePlannerConfig(settings.planner_config),
+    stored: settings.planner_config,
+    meta: { texts: plannerConfig.TEXT_META, lists: plannerConfig.OPTION_META, maxItems: plannerConfig.MAX_ITEMS }
+  };
+}));
+router.put('/admin/planner-config', handle('A tervező-konfiguráció mentése', async (client, req) => {
+  const settings = await settingsService.updateSettings(client, { planner_config: req.body }, req.user?.email);
+  logger.info('admin_settings', 'Tervező-konfiguráció módosítva', { details: { admin: req.user?.email } });
+  return { effective: settingsService.plannerConfig.mergePlannerConfig(settings.planner_config), stored: settings.planner_config };
+}));
+router.post('/admin/planner-config/reset', handle('A tervező-konfiguráció visszaállítása', async (client, req) => {
+  const settings = await settingsService.updateSettings(client, { planner_config: {} }, req.user?.email, { replace: true });
+  logger.info('admin_settings', 'Tervező-konfiguráció alapértékre állítva', { details: { admin: req.user?.email } });
+  return { effective: settingsService.plannerConfig.mergePlannerConfig(settings.planner_config), stored: settings.planner_config };
+}));
+router.post('/admin/audit/:id/restore', handle('A módosítás visszaállítása', async (client, req) => {
+  const result = await admin.restoreAudit(client, req.params.id, req.user?.email);
+  logger.info('admin_audit', 'Módosítás visszaállítva a naplóból', { details: { entry: req.params.id, key: result.key, admin: req.user?.email } });
   return result;
 }));
 router.get('/admin/email-templates', handle('Az e-mail sablonok lekérdezése', async (client) => ({ templates: await settingsService.listTemplates(client) })));

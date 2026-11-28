@@ -144,7 +144,7 @@ test('validation rejects out-of-range, mistyped and oversized fields', () => {
     { weeklyFocusAreas: { Vasárnap: ['Mozgás'] } }, { weeklyFocusAreas: { Hétfő: 5 } }, { weeklyFocusAreas: [] },
     { focusAreas: Array(13).fill('x') }, { focusAreas: [5] }, { focusAreas: ['x'.repeat(201)] },
     { specialNeeds: Array(21).fill('x') }, { selectedGoals: Array(31).fill('x') }, { iktTools: Array(21).fill('x') },
-    { iktTools: ['x'.repeat(101)] }, { theme: 'x'.repeat(301) }, { theme: { $ne: 1 } }, { duration: 'Havi' },
+    { iktTools: ['x'.repeat(201)] }, { theme: 'x'.repeat(301) }, { theme: { $ne: 1 } }, { duration: 'Havi' },
     { iktEnabled: 'igen' }, { customNotes: [] }, { customNotes: { primary: 'x'.repeat(4001) } }
   ];
   for (const overrides of bad) {

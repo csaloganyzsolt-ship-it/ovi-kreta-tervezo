@@ -60,8 +60,8 @@
 
         <section class="panel content">
           <div class="step-panel active" data-step="1">
-            <h2>1. Miről szól a hét/nap?</h2>
-            <p class="subhead">Téma és időkeret: add meg, mikorra és miről készüljön a tervezet.</p>
+            <h2 data-cfg-text="step1Title">1. Miről szól a hét/nap?</h2>
+            <p class="subhead" data-cfg-text="step1Subhead">Téma és időkeret: add meg, mikorra és miről készüljön a tervezet.</p>
 
             <div class="plan-mode-block" id="planModeBlock">
               <span class="plan-mode-label" id="planModeLabel">Milyen típusú tervezetet készítsünk?</span>
@@ -87,8 +87,8 @@
               </div>
               <div class="plan-mode-academic-extra" id="planModeAcademicExtra" hidden>
                 <div class="field full">
-                  <label for="studentName">Hallgató / Óvodapedagógus neve (opcionális)</label>
-                  <input type="text" id="studentName" data-field="student-name" placeholder="Pl.: Kovács Anna" autocomplete="off" />
+                  <label for="studentName" data-cfg-text="studentNameLabel">Hallgató / Óvodapedagógus neve (opcionális)</label>
+                  <input type="text" id="studentName" data-field="student-name" placeholder="Pl.: Kovács Anna" data-cfg-placeholder="studentNamePlaceholder" autocomplete="off" />
                 </div>
                 <small class="field-hint" id="planModeAcademicHint">Napi időtartamnál Foglalkozási/tevékenységi terv (A4 álló), heti időtartamnál egyhetes Tematikus terv (A4 fekvő) készül. A szakirodalmi hivatkozásokat (oldalszámok) beadás előtt ellenőrizd a kiadványokban.</small>
               </div>
@@ -167,27 +167,27 @@
               </div>
 
                             <div class="field">
-                <label>Korcsoport</label>
-                <select data-field="group">
-                  <option value="Kiscsoport">Kiscsoport</option>
-                  <option value="Középső csoport">Középső csoport</option>
-                  <option value="Nagycsoport" selected>Nagycsoport</option>
-                  <option value="Vegyes csoport">Vegyes csoport</option>
+                <label data-cfg-text="groupLabel">Korcsoport</label>
+                <select data-field="group" data-cfg-options="group">
+                  <option value="Kiscsoport" data-option-id="kiscsoport">Kiscsoport</option>
+                  <option value="Középső csoport" data-option-id="kozepso">Középső csoport</option>
+                  <option value="Nagycsoport" data-option-id="nagycsoport" selected>Nagycsoport</option>
+                  <option value="Vegyes csoport" data-option-id="vegyes">Vegyes csoport</option>
                 </select>
               </div>
 
               <div class="field full">
-                <label>Téma / projekt címe</label>
+                <label data-cfg-text="themeLabel">Téma / projekt címe</label>
                 <input type="text" data-field="theme" placeholder="Pl.: Gesztenye gyűjtés" />
                 <div class="theme-suggestions u-mt-12" id="themeSuggestions"></div>
               </div>
 
               <div class="field full">
-                <label for="tevekenysegForma">Tevékenységi forma</label>
-                <select id="tevekenysegForma" data-field="tevekenyseg-forma">
-                  <option value="Kezdeményezett tevékenység (kötetlen)" selected>Kezdeményezett tevékenység (kötetlen)</option>
-                  <option value="Irányított / szervezett foglalkozás (kötött)">Irányított / szervezett foglalkozás (kötött)</option>
-                  <option value="Mikrocsoportos / egyéni fejlesztés">Mikrocsoportos / egyéni fejlesztés</option>
+                <label for="tevekenysegForma" data-cfg-text="tevekenysegFormaLabel">Tevékenységi forma</label>
+                <select id="tevekenysegForma" data-field="tevekenyseg-forma" data-cfg-options="tevekenysegForma">
+                  <option value="Kezdeményezett tevékenység (kötetlen)" data-option-id="kezdemenyezett" selected>Kezdeményezett tevékenység (kötetlen)</option>
+                  <option value="Irányított / szervezett foglalkozás (kötött)" data-option-id="iranyitott">Irányított / szervezett foglalkozás (kötött)</option>
+                  <option value="Mikrocsoportos / egyéni fejlesztés" data-option-id="mikrocsoportos">Mikrocsoportos / egyéni fejlesztés</option>
                 </select>
               </div>
 
@@ -287,53 +287,53 @@
               </div>
 
               <div class="field">
-                <label>Óvoda neve</label>
-                <input type="text" data-field="kindergarten-name" placeholder="Pl.: Bölcsőde és Óvoda Péter Pál" />
+                <label data-cfg-text="kindergartenNameLabel">Óvoda neve</label>
+                <input type="text" data-field="kindergarten-name" placeholder="Pl.: Bölcsőde és Óvoda Péter Pál" data-cfg-placeholder="kindergartenNamePlaceholder" />
               </div>
 
               <div class="field">
-                <label>Óvoda arculata (opcionális)</label>
-                <input type="text" data-field="kindergarten-profile" placeholder="pl. Zöld Óvoda, néphagyományőrző, Boldog Óvoda, mozgásfejlesztő..." />
+                <label data-cfg-text="kindergartenProfileLabel">Óvoda arculata (opcionális)</label>
+                <input type="text" data-field="kindergarten-profile" placeholder="pl. Zöld Óvoda, néphagyományőrző, Boldog Óvoda, mozgásfejlesztő..." data-cfg-placeholder="kindergartenProfilePlaceholder" />
               </div>
 
               <div class="field">
-                <label>Óvodapedagógus neve</label>
-                <input type="text" data-field="teacher-name" placeholder="Pl.: Nagy Eszter" />
+                <label data-cfg-text="teacherNameLabel">Óvodapedagógus neve</label>
+                <input type="text" data-field="teacher-name" placeholder="Pl.: Nagy Eszter" data-cfg-placeholder="teacherNamePlaceholder" />
               </div>
 
               <div class="field full">
-                <label>Csoport neve</label>
-                <input type="text" data-field="group-name" placeholder="Pl.: Napfény csoport" />
+                <label data-cfg-text="groupNameLabel">Csoport neve</label>
+                <input type="text" data-field="group-name" placeholder="Pl.: Napfény csoport" data-cfg-placeholder="groupNamePlaceholder" />
               </div>
 
               <div class="field full">
-                <label>Saját megjegyzés / egyéni kiegészítés</label>
-                <textarea data-field="custom-note" placeholder="Pl.: A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni."></textarea>
+                <label data-cfg-text="customNoteLabel">Saját megjegyzés / egyéni kiegészítés</label>
+                <textarea data-field="custom-note" placeholder="Pl.: A csoport sokat mozog, ezért több mozgásos bevezető játékot szeretnék beépíteni." data-cfg-placeholder="customNotePlaceholder"></textarea>
               </div>
             </div>
           </div>
 
           <div class="step-panel" data-step="2">
-            <h2>2. Kiknek tervezünk?</h2>
-            <p class="subhead">A csoport profilja: létszám, hangulat és speciális igények, hogy az AI személyre szabottabban dolgozzon.</p>
+            <h2 data-cfg-text="step2Title">2. Kiknek tervezünk?</h2>
+            <p class="subhead" data-cfg-text="step2Subhead">A csoport profilja: létszám, hangulat és speciális igények, hogy az AI személyre szabottabban dolgozzon.</p>
 
             <div class="field-grid">
               <div class="field">
-                <label>Hány gyerek van a csoportban?</label>
-                <input type="number" min="1" step="1" data-field="child-count" placeholder="Pl.: 20" />
+                <label data-cfg-text="childCountLabel">Hány gyerek van a csoportban?</label>
+                <input type="number" min="1" step="1" data-field="child-count" placeholder="Pl.: 20" data-cfg-placeholder="childCountPlaceholder" />
               </div>
 
               <div class="field full">
-                <label id="energyLabel">Milyen a csoport hangulata, mozgékonysága?</label>
-                <div class="segmented" data-group="energy" role="group" aria-labelledby="energyLabel">
-                  <button class="segment" type="button" data-group="energy" data-value="Nyugodt, kiegyensúlyozott">Nyugodt, kiegyensúlyozott</button>
-                  <button class="segment active" type="button" data-group="energy" data-value="Átlagos">Átlagos</button>
-                  <button class="segment" type="button" data-group="energy" data-value="Nagyon mozgékony, eleven">Nagyon mozgékony, eleven</button>
+                <label id="energyLabel" data-cfg-text="energyLabel">Milyen a csoport hangulata, mozgékonysága?</label>
+                <div class="segmented" data-group="energy" data-cfg-options="energyLevel" role="group" aria-labelledby="energyLabel">
+                  <button class="segment" type="button" data-group="energy" data-option-id="nyugodt" data-value="Nyugodt, kiegyensúlyozott">Nyugodt, kiegyensúlyozott</button>
+                  <button class="segment active" type="button" data-group="energy" data-option-id="atlagos" data-value="Átlagos">Átlagos</button>
+                  <button class="segment" type="button" data-group="energy" data-option-id="mozgekony" data-value="Nagyon mozgékony, eleven">Nagyon mozgékony, eleven</button>
                 </div>
               </div>
 
               <div class="field full">
-                <label>Iskola-előkészítős gyermekek</label>
+                <label data-cfg-text="preschoolersLabel">Iskola-előkészítős gyermekek</label>
                 <div class="toggle-row">
                   <span>Van/Nincs</span>
                   <label class="switch">
@@ -344,46 +344,46 @@
               </div>
 
               <div class="field full">
-                <label>Speciális nevelési igények</label>
+                <label data-cfg-text="specialNeedsLabel">Speciális nevelési igények</label>
                 <div class="inline-box">
-                  <h3>Milyen kiemelt figyelmet igénylő gyerekek vannak jelen?</h3>
-                  <div class="check-grid" data-field="special-needs-group">
-                    <label class="check-item"><input type="checkbox" data-sni-label="Figyelemzavar / hiperaktivitás" /> Figyelemzavar / hiperaktivitás</label>
-                    <label class="check-item"><input type="checkbox" data-sni-label="Beszédfejlődési elmaradás" /> Beszédfejlődési elmaradás</label>
-                    <label class="check-item"><input type="checkbox" data-sni-label="Autizmus spektrumzavar" /> Autizmus spektrumzavar</label>
-                    <label class="check-item"><input type="checkbox" data-sni-label="Mozgásfejlődési elmaradás" /> Mozgásfejlődési elmaradás</label>
-                    <label class="check-item"><input type="checkbox" data-sni-label="Sajátos nevelési igény (SNI)" /> Sajátos nevelési igény (SNI)</label>
-                    <label class="check-item"><input type="checkbox" data-sni-label="Beilleszkedési, tanulási, magatartási nehézség (BTMN)" /> Beilleszkedési, tanulási, magatartási nehézség (BTMN)</label>
+                  <h3 data-cfg-text="specialNeedsHeading">Milyen kiemelt figyelmet igénylő gyerekek vannak jelen?</h3>
+                  <div class="check-grid" data-field="special-needs-group" data-cfg-options="specialNeeds">
+                    <label class="check-item"><input type="checkbox" data-option-id="figyelemzavar" data-sni-label="Figyelemzavar / hiperaktivitás" /> <span>Figyelemzavar / hiperaktivitás</span></label>
+                    <label class="check-item"><input type="checkbox" data-option-id="beszed" data-sni-label="Beszédfejlődési elmaradás" /> <span>Beszédfejlődési elmaradás</span></label>
+                    <label class="check-item"><input type="checkbox" data-option-id="autizmus" data-sni-label="Autizmus spektrumzavar" /> <span>Autizmus spektrumzavar</span></label>
+                    <label class="check-item"><input type="checkbox" data-option-id="mozgas" data-sni-label="Mozgásfejlődési elmaradás" /> <span>Mozgásfejlődési elmaradás</span></label>
+                    <label class="check-item"><input type="checkbox" data-option-id="sni" data-sni-label="Sajátos nevelési igény (SNI)" /> <span>Sajátos nevelési igény (SNI)</span></label>
+                    <label class="check-item"><input type="checkbox" data-option-id="btmn" data-sni-label="Beilleszkedési, tanulási, magatartási nehézség (BTMN)" /> <span>Beilleszkedési, tanulási, magatartási nehézség (BTMN)</span></label>
                   </div>
                 </div>
               </div>
 
               <div class="field full">
-                <label>Saját válasz / más szempont</label>
-                <textarea data-field="group-note" placeholder="Pl.: Egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz."></textarea>
+                <label data-cfg-text="groupNoteLabel">Saját válasz / más szempont</label>
+                <textarea data-field="group-note" placeholder="Pl.: Egy gyermeknek több vizuális jelzésre van szüksége a feladatokhoz." data-cfg-placeholder="groupNotePlaceholder"></textarea>
               </div>
             </div>
           </div>
 
           <div class="step-panel" data-step="3">
-            <h2>3. Mit szeretnénk látni?</h2>
-            <p class="subhead">Konkrét pedagógiai kívánságok: eszközök, kötelező szövegek, célok és a kidolgozottság.</p>
+            <h2 data-cfg-text="step3Title">3. Mit szeretnénk látni?</h2>
+            <p class="subhead" data-cfg-text="step3Subhead">Konkrét pedagógiai kívánságok: eszközök, kötelező szövegek, célok és a kidolgozottság.</p>
 
             <div class="field-grid">
               <div class="field full">
-                <label for="availableTools">Rendelkezésre álló eszközök és saját ötletek</label>
-                <small class="field-hint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
-                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok; gyűjtött gesztenye és falevelek a barkácsoláshoz"></textarea>
+                <label for="availableTools" data-cfg-text="availableToolsLabel">Rendelkezésre álló eszközök és saját ötletek</label>
+                <small class="field-hint" data-cfg-text="availableToolsHint">Ha ide nem írsz semmit, az AI az óvodákban általánosan megtalálható alapfelszereléseket (papír, olló, ceruza, labda, stb.) fogja alapul venni.</small>
+                <textarea id="availableTools" data-field="available-tools" placeholder="Pl.: színes papír, olló, gyurma, hangszerek (xilofon, dob), nagy labdák, bábok; gyűjtött gesztenye és falevelek a barkácsoláshoz" data-cfg-placeholder="availableToolsPlaceholder"></textarea>
               </div>
 
               <div class="field full">
-                <label>Van kötelező mese, vers vagy dal?</label>
-                <textarea data-field="required-text" placeholder="Pl.: Mindig legyen benne a „Süni, süni, sünikém” című dal."></textarea>
+                <label data-cfg-text="requiredTextLabel">Van kötelező mese, vers vagy dal?</label>
+                <textarea data-field="required-text" placeholder="Pl.: Mindig legyen benne a „Süni, süni, sünikém” című dal." data-cfg-placeholder="requiredTextPlaceholder"></textarea>
               </div>
 
               <div class="field full">
-                <label>Saját kérés vagy további elképzelés</label>
-                <textarea data-field="custom-request" placeholder="Pl.: Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen."></textarea>
+                <label data-cfg-text="customRequestLabel">Saját kérés vagy további elképzelés</label>
+                <textarea data-field="custom-request" placeholder="Pl.: Szeretném, ha a tervben több nyelvi játék és rövidebb, fókuszált blokk legyen." data-cfg-placeholder="customRequestPlaceholder"></textarea>
               </div>
 
               <div class="field full">
@@ -399,14 +399,14 @@
                 <summary>Speciális beállítások <span class="summary-hint">(tiltólista, előzmény, irodalom a lap alján, IKT eszközök, heti építkezés és pénteki lezárás)</span></summary>
                 <div class="advanced-body">
                   <div class="field">
-                    <label for="blacklist">Tiltások / Amit NE használjon</label>
-                    <textarea id="blacklist" data-field="blacklist" placeholder="Pl.: Ne legyen gyurma, ne használja a Süss fel napot."></textarea>
-                    <small class="field-hint">Témák, dalok, eszközök vagy szavak, amelyeket az AI szigorúan kerüljön.</small>
+                    <label for="blacklist" data-cfg-text="blacklistLabel">Tiltások / Amit NE használjon</label>
+                    <textarea id="blacklist" data-field="blacklist" placeholder="Pl.: Ne legyen gyurma, ne használja a Süss fel napot." data-cfg-placeholder="blacklistPlaceholder"></textarea>
+                    <small class="field-hint" data-cfg-text="blacklistHint">Témák, dalok, eszközök vagy szavak, amelyeket az AI szigorúan kerüljön.</small>
                   </div>
 
                   <div class="field">
-                    <label>A tevékenység előzménye</label>
-                    <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről."></textarea>
+                    <label data-cfg-text="elozmenyLabel">A tevékenység előzménye</label>
+                    <textarea data-field="elozmeny" placeholder="Pl.: ébredő természet megfigyelése, előzetes beszélgetés a látható évszaki jelenségekről." data-cfg-placeholder="elozmenyPlaceholder"></textarea>
                   </div>
 
                   <label class="check-item check-item-strong">
@@ -415,7 +415,7 @@
                   </label>
 
                   <div class="field full u-mt-4">
-                    <label>IKT / Digitális eszközök beépítése</label>
+                    <label data-cfg-text="iktLabel">IKT / Digitális eszközök beépítése</label>
                     <div class="toggle-row">
                       <span id="iktToggleStatusLabel">Nem</span>
                       <label class="switch">
@@ -427,16 +427,16 @@
                   </div>
 
                   <div id="iktOptionsPanel" class="weekly-settings-panel u-mt-0" hidden>
-                    <span class="weekly-days-label">Választható IKT eszközcsoportok és alkalmazások</span>
-                    <div class="quick-actions" id="iktToolsPicker">
-                      <button class="chip" type="button" data-ikt-tool="Padlórobotok (Bee-Bot, Andy, Edison)">Padlórobotok (Bee-Bot, Andy, Edison)</button>
-                      <button class="chip" type="button" data-ikt-tool="Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)">Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)</button>
-                      <button class="chip" type="button" data-ikt-tool="Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)">Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)</button>
-                      <button class="chip" type="button" data-ikt-tool="Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)">Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)</button>
+                    <span class="weekly-days-label" data-cfg-text="iktPanelLabel">Választható IKT eszközcsoportok és alkalmazások</span>
+                    <div class="quick-actions" id="iktToolsPicker" data-cfg-options="iktTools">
+                      <button class="chip" type="button" data-option-id="padlorobot" data-ikt-tool="Padlórobotok (Bee-Bot, Andy, Edison)">Padlórobotok (Bee-Bot, Andy, Edison)</button>
+                      <button class="chip" type="button" data-option-id="interaktiv_tabla" data-ikt-tool="Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)">Interaktív tábla és gyakorlóprogramok (Smart Board, Okos Doboz, Wordwall, LearningApps)</button>
+                      <button class="chip" type="button" data-option-id="tablet" data-ikt-tool="Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)">Tablet, diagnosztika és kreatív/3D appok (eDia, Quiver, Kids Doodle, Paint, AutoDraw)</button>
+                      <button class="chip" type="button" data-option-id="nyelvi" data-ikt-tool="Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)">Nyelvi-kommunikációs és mese appok (BOOKR Kids, Diavetítő appok, Szörnyek Háza, Játékosan magyarul)</button>
                     </div>
                     <div class="field full u-mt-8">
-                      <label for="iktCustomApp">Egyéb IKT eszköz vagy alkalmazás</label>
-                      <input type="text" id="iktCustomApp" data-field="ikt-custom-app" placeholder="Pl.: saját fejlesztő játék, YouTube zenei illusztráció, fényasztal..." />
+                      <label for="iktCustomApp" data-cfg-text="iktCustomAppLabel">Egyéb IKT eszköz vagy alkalmazás</label>
+                      <input type="text" id="iktCustomApp" data-field="ikt-custom-app" placeholder="Pl.: saját fejlesztő játék, YouTube zenei illusztráció, fényasztal..." data-cfg-placeholder="iktCustomAppPlaceholder" />
                     </div>
                   </div>
 
@@ -449,12 +449,12 @@
                       </select>
                     </div>
                     <div class="field">
-                      <label for="fridayClosingType">Pénteki lezárás formája</label>
-                      <select id="fridayClosingType">
-                        <option value="Kiállítás a csoportszobában">Kiállítás a csoportszobában</option>
-                        <option value="Dramatikus közös játék">Dramatikus közös játék</option>
-                        <option value="Ünnepi szokás/Kóstoló">Ünnepi szokás/Kóstoló</option>
-                        <option value="Projektzáró élményséta">Projektzáró élményséta</option>
+                      <label for="fridayClosingType" data-cfg-text="fridayClosingLabel">Pénteki lezárás formája</label>
+                      <select id="fridayClosingType" data-cfg-options="fridayClosingType">
+                        <option value="Kiállítás a csoportszobában" data-option-id="kiallitas">Kiállítás a csoportszobában</option>
+                        <option value="Dramatikus közös játék" data-option-id="dramatikus">Dramatikus közös játék</option>
+                        <option value="Ünnepi szokás/Kóstoló" data-option-id="unnepi">Ünnepi szokás/Kóstoló</option>
+                        <option value="Projektzáró élményséta" data-option-id="elmenyseta">Projektzáró élményséta</option>
                       </select>
                     </div>
                   </div>
@@ -464,11 +464,11 @@
           </div>
 
           <div class="step-panel" data-step="4">
-            <h2>4. Összegzés és elkészítés</h2>
-            <p class="subhead">Mielőtt elindítod az elkészítést, ellenőrizd a beállításokat.</p>
+            <h2 data-cfg-text="step4Title">4. Összegzés és elkészítés</h2>
+            <p class="subhead" data-cfg-text="step4Subhead">Mielőtt elindítod az elkészítést, ellenőrizd a beállításokat.</p>
 
             <div class="inline-box">
-              <h3>Ellenőrző lista</h3>
+              <h3 data-cfg-text="checklistTitle">Ellenőrző lista</h3>
               <div class="summary-checklist" id="summaryChecklist"></div>
             </div>
 
@@ -736,6 +736,7 @@
     <script src="js/tervezo-academic.js"></script>
     <script src="js/tervezo-weekly.js"></script>
     <script src="js/tervezo-form.js"></script>
+    <script src="js/tervezo-config.js"></script>
     <script src="js/tervezo-preview.js"></script>
     <script src="js/tervezo-export.js"></script>
     <script src="js/tervezo-generate.js"></script>
