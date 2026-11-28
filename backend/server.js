@@ -532,10 +532,6 @@ function releaseUnits(count) {
   for (let i = 0; i < count; i += 1) releaseDailyGeneration();
 }
 
-// A téma-ajánló használatának rögzítése nem blokkol: a hibát a szolgáltatás naplózza, a generálás nem várja meg.
-function recordThemeUsage(request) {
-  themeSuggestions.recordUsage({ id: request.themeSuggestionId, title: request.theme }, supabase.getClient());
-}
 
 // Teljes heti csomag: 1 heti összesítő + napi tervek, láncolt Gemini-hívásokkal a háttérben (a státuszt a GET /api/generate/:id/status adja).
 async function runWeeklyPackage({ job, request, settings, model, user, clientIp, reserved }) {
@@ -596,7 +592,6 @@ async function runWeeklyPackage({ job, request, settings, model, user, clientIp,
     };
     telemetryService.logEvent('document_generated', { metadata: { plan_mode: 'weekly_package', age_group: request.group, theme_category: request.theme } });
     planStore.savePlan(job.id, { ...result, request, generationId: job.id }, user ? { userId: user.id, email: user.email } : undefined);
-    recordThemeUsage(request);
     const output = shouldLockPlan(request, process.env)
       ? { ...planStore.createMirrorPlan(result), generationId: job.id }
       : { ...result, generationId: job.id };
@@ -730,7 +725,6 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     // Bejelentkezett felhasználónál a terv a fiókjához kötődik; token nélkül (vendég mód) vagy érvénytelen tokennel semmi nem változik.
     const user = await authService.optionalUser(req);
     planStore.savePlan(generationId, { ...result, request, generationId }, user ? { userId: user.id, email: user.email } : undefined);
-    recordThemeUsage(request);
 
     console.info('Generated document:', result.is_thematic
       ? { weeks: result.hetek.length }

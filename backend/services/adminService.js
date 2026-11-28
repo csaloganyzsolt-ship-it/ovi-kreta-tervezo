@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { CODE_PATTERN, normalizeCode } = require('./coupons');
 const { normalizeEmail } = require('../utils/email');
 const settingsService = require('./settingsService');
+const { countThemes, topThemes } = require('./themeStats');
 
 class AdminError extends Error {
   constructor(message, status = 500) {
@@ -86,6 +87,7 @@ async function getStats(client, now = Date.now()) {
       total: documents.length,
       unlocked,
       breakdown,
+      topThemes: topThemes(countThemes(documents.map((doc) => doc.request?.theme))),
       conversionRate: documents.length ? Math.round((unlocked / documents.length) * 1000) / 10 : 0
     }
   };

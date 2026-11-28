@@ -268,7 +268,7 @@ test('GET /api/admin/stats aggregates revenue, users, confirmed subscribers and 
   assert.equal(stats.paidOrders, 2);
   assert.equal(stats.registeredUsers, 5);
   assert.equal(stats.confirmedSubscribers, 2, 'Alice és Carol; a megerősítetlen e-mailű feliratkozó nem számít');
-  assert.deepEqual(stats.documents, { total: 5, unlocked: 3, breakdown: { standard: 2, academic: 2, weekly: 1 }, conversionRate: 60 });
+  assert.deepEqual(stats.documents, { total: 5, unlocked: 3, breakdown: { standard: 2, academic: 2, weekly: 1 }, topThemes: [], conversionRate: 60 });
 });
 
 test('stats handle an empty database without dividing by zero and report database failures generically', async (t) => {

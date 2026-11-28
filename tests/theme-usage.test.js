@@ -16,32 +16,44 @@ const FORM_JS = read('frontend', 'js', 'tervezo-form.js');
 
 const UUID = '3f2b8c1e-5d4a-4b7e-9c10-1a2b3c4d5e6f';
 
-const fakeRpcClient = (result = { data: 1, error: null }) => {
-  const calls = [];
-  return { calls, rpc: async (name, args) => { calls.push({ name, args }); return result; } };
-};
+const stats = require('../backend/services/themeStats');
 
-test('recordUsage increments by id, or by trimmed title when there is no id', async () => {
-  const byId = fakeRpcClient();
-  assert.equal(await themes.recordUsage({ id: UUID, title: 'Márton-nap' }, byId), true);
-  assert.deepEqual(byId.calls, [{ name: 'increment_theme_suggestion_usage', args: { p_id: UUID, p_title: null } }]);
-
-  const byTitle = fakeRpcClient();
-  assert.equal(await themes.recordUsage({ title: '  Márton-nap  ' }, byTitle), true);
-  assert.deepEqual(byTitle.calls[0].args, { p_id: null, p_title: 'Márton-nap' });
+test('themeStats counts custom and suggested themes together, case- and whitespace-insensitively', () => {
+  const counts = stats.countThemes(['Márton-nap', ' márton-nap ', 'Márton-nap', 'Saját kirándulás', '', null, 'saját   kirándulás']);
+  assert.equal(counts.get(stats.normalizeThemeKey('Márton-nap')).count, 3);
+  assert.equal(counts.get(stats.normalizeThemeKey('Márton-nap')).title, 'Márton-nap');
+  assert.equal(counts.get('saját kirándulás').count, 2);
+  assert.equal(counts.size, 2);
+  assert.deepEqual(stats.topThemes(counts, 1), [{ name: 'Márton-nap', count: 3 }]);
 });
 
-test('recordUsage never throws and ignores empty or invalid input', async () => {
-  const client = fakeRpcClient();
-  assert.equal(await themes.recordUsage({}, client), false);
-  assert.equal(await themes.recordUsage({ id: 'nem-uuid', title: '' }, client), false);
-  assert.equal(client.calls.length, 0);
-
-  assert.equal(await themes.recordUsage({ title: 'Téma' }, fakeRpcClient({ data: null, error: { message: 'boom' } })), false);
-  const throwing = { rpc: async () => { throw new Error('hálózati hiba'); } };
-  assert.equal(await themes.recordUsage({ title: 'Téma' }, throwing), false);
+test('loadThemeCounts pages through documents and fails loudly on database errors', async () => {
+  const pages = [Array.from({ length: 1000 }, () => ({ request: { theme: 'Ősz' } })), [{ request: { theme: 'ősz' } }, { request: null }]];
+  let call = 0;
+  const client = { from: (table) => { assert.equal(table, 'documents'); return { select: () => ({ order: () => ({ range: async () => ({ data: pages[call++], error: null }) }) }) }; } };
+  assert.equal((await stats.loadThemeCounts(client)).get('ősz').count, 1001);
+  const broken = { from: () => ({ select: () => ({ order: () => ({ range: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) };
+  await assert.rejects(() => stats.loadThemeCounts(broken), /boom/);
 });
 
+test('the usage column and the admin home Top themes use the same counts', async () => {
+  const counts = stats.countThemes(['Márton-nap', 'márton-nap', 'Saját téma']);
+  const client = { from: () => ({ select: () => ({ order: () => ({ range: async () => ({ data: [{ id: 'a', title: 'Márton-nap', category: 'event', priority: 90, is_active: true }], error: null }) }) }) }) };
+  const list = await themes.listSuggestions(client, {}, counts);
+  assert.equal(list.suggestions[0].usage_count, stats.topThemes(counts)[0].count);
+  assert.equal(list.suggestions[0].usage_count, 2);
+  const adminSource = read('backend', 'services', 'adminService.js');
+  assert.match(adminSource, /topThemes: topThemes\(countThemes\(/);
+  assert.match(read('backend', 'routes', 'admin.js'), /loadThemeCounts\(client\)/);
+  assert.equal(/recordUsage|recordThemeUsage/.test(read('backend', 'server.js') + read('backend', 'services', 'themeSuggestionsService.js')), false);
+});
+
+test('the admin home tables fit their cards without horizontal scrolling', () => {
+  assert.match(CSS, /\.admin-card-grid\s*\{[^}]*repeat\(auto-fit, minmax\(min\(260px, 100%\), 1fr\)\)/);
+  assert.match(CSS, /\.admin-card \.admin-table\s*\{[^}]*min-width:\s*0/);
+  assert.match(CSS, /\.admin-card \.admin-table td:last-child[^{]*\{[^}]*white-space:\s*nowrap/);
+  assert.match(CSS, /\.admin-card \.admin-table td:first-child[^{]*\{[^}]*overflow-wrap:\s*anywhere/);
+});
 test('generate validation accepts an optional themeSuggestionId and rejects non-UUID values', () => {
   assert.deepEqual(themes.ADMIN_PAGE_SIZES, [10, 25, 50, 100]);
   assert.equal(validateGeneratePayload({ themeSuggestionId: UUID }).themeSuggestionId, UUID);
@@ -89,23 +101,24 @@ test('admin list pages the filtered rows, sorts by usage and validates the page 
     id: `id-${i}`, title: `Téma ${String(i).padStart(2, '0')}`, category: 'general', season: null, start_mmdd: null, end_mmdd: null, priority: 20, is_active: true, usage_count: i
   }));
   const client = fakeListClient(rows);
+  const counts = new Map(rows.map((r) => [stats.normalizeThemeKey(r.title), { title: r.title, count: r.usage_count }]));
 
-  const first = await themes.listSuggestions(client, { pageSize: '25' });
+  const first = await themes.listSuggestions(client, { pageSize: '25' }, counts);
   assert.equal(first.suggestions.length, 25);
   assert.equal(first.total, 74);
   assert.equal(first.totalPages, 3);
   assert.equal(first.from, 1);
   assert.equal(first.to, 25);
 
-  const last = await themes.listSuggestions(client, { pageSize: '25', page: '3' });
+  const last = await themes.listSuggestions(client, { pageSize: '25', page: '3' }, counts);
   assert.equal(last.suggestions.length, 24);
   assert.equal(last.to, 74);
 
-  const byUsage = await themes.listSuggestions(client, { pageSize: '10', sort: 'usage' });
+  const byUsage = await themes.listSuggestions(client, { pageSize: '10', sort: 'usage' }, counts);
   assert.equal(byUsage.suggestions[0].usage_count, 73);
   assert.equal(byUsage.suggestions.length, 10);
 
-  const filtered = await themes.listSuggestions(client, { pageSize: '10', q: 'téma 7' });
+  const filtered = await themes.listSuggestions(client, { pageSize: '10', q: 'téma 7' }, counts);
   assert.equal(filtered.total, 4);
   assert.equal(filtered.page, 1);
 

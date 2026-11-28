@@ -74,9 +74,8 @@ test('Analytics: Stats aggregation with mock data', async () => {
   assert.ok(stats.devices.desktop);
   assert.ok(stats.devices.tablet);
 
-  // Top topics
-  assert.ok(Array.isArray(stats.top_topics));
-  assert.ok(stats.top_topics.some((t) => t.name === 'Animals'));
+  // A témák statisztikája már nem a telemetriából jön (adminService.getStats → documents.topThemes)
+  assert.equal('top_topics' in stats, false);
 
   // Top age groups
   assert.ok(Array.isArray(stats.top_age_groups));

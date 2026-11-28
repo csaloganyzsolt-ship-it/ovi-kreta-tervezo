@@ -3,12 +3,11 @@
 // Dátum- és évszakfüggő téma-ajánló: a tervező „Projekt témája” chipjei a `theme_suggestions` táblából jönnek.
 // A kiválasztás tiszta függvényekből áll (dátum → MM-DD → jeles napok → évszak → általános), így adatbázis nélkül tesztelhető.
 const logger = require('../utils/logger');
+const { normalizeThemeKey } = require('./themeStats');
 
 const TABLE = 'theme_suggestions';
-// A nyilvános lekérdezés nem olvassa a usage_count oszlopot, így a használati migráció előtt sem esik a beépített alapra.
 const PUBLIC_COLUMNS = 'id, title, category, season, start_mmdd, end_mmdd, priority, is_active, created_at, updated_at';
-const COLUMNS = `${PUBLIC_COLUMNS}, usage_count`;
-const USAGE_FUNCTION = 'increment_theme_suggestion_usage';
+const COLUMNS = PUBLIC_COLUMNS;
 const ADMIN_PAGE_SIZES = [10, 25, 50, 100];
 const SORTS = ['priority', 'usage', 'title'];
 const CATEGORIES = ['event', 'season', 'general'];
@@ -213,6 +212,8 @@ function monthContains(row, month) {
   return false;
 }
 
+// A használatot nem ez a tábla számolja: a `counts` a közös téma-statisztika (themeStats.loadThemeCounts) eredménye,
+// ugyanaz, amit az Admin főoldal „Top témák” táblája is mutat.
 const usageOf = (row) => Number(row.usage_count) || 0;
 
 const SORTERS = {
@@ -242,11 +243,12 @@ function periodFilter(query) {
 
 // Admin lista: kereső (cím), típus, évszak (a megadott évszak hónapjaihoz eső jeles napok is), hónap és állapot szerinti szűrés,
 // rendezés (priority | usage | title) és lapozás (10 / 25 / 50 / 100 sor).
-async function listSuggestions(client, query = {}) {
+async function listSuggestions(client, query = {}, counts = new Map()) {
   const paging = parseAdminPaging(query);
   const sort = SORTS.includes(query.sort) ? query.sort : 'priority';
-  const { data, error } = await client.from(TABLE).select(COLUMNS).order('priority', { ascending: false }).range(0, 4999);
+  const { data: stored, error } = await client.from(TABLE).select(COLUMNS).order('priority', { ascending: false }).range(0, 4999);
   if (error) throw dbError('A téma-ajánlások lekérdezése sikertelen', error);
+  const data = (stored || []).map((row) => ({ ...row, usage_count: counts.get(normalizeThemeKey(row.title))?.count || 0 }));
   const q = String(query.q || '').trim().toLocaleLowerCase('hu');
   const category = CATEGORIES.includes(query.category) ? query.category : '';
   const period = periodFilter(query);
@@ -277,23 +279,6 @@ async function listSuggestions(client, query = {}) {
     to: offset + suggestions.length,
     sort
   };
-}
-
-// Használat mérése: id szerint, annak hiányában a (trimmelt, kis- és nagybetűre érzéketlen) cím szerint növeli az SQL függvény a számlálót.
-// Sosem dob hibát: a generálást nem akaszthatja meg, a hibát naplózza. Visszatérés: sikerült-e a rögzítés.
-async function recordUsage({ id, title } = {}, client) {
-  const cleanId = UUID_PATTERN.test(String(id || '')) ? String(id) : null;
-  const cleanTitle = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_LENGTH) : '';
-  if (!cleanId && !cleanTitle) return false;
-  try {
-    if (!client || typeof client.rpc !== 'function') throw new Error('nincs Supabase kapcsolat');
-    const { error } = await client.rpc(USAGE_FUNCTION, { p_id: cleanId, p_title: cleanId ? null : cleanTitle });
-    if (error) throw new Error(error.message || 'ismeretlen adatbázishiba');
-    return true;
-  } catch (error) {
-    logger.error('theme_suggestions', `A téma használata nem rögzíthető: ${error.message}`, { details: { id: cleanId, title: cleanTitle } });
-    return false;
-  }
 }
 
 async function createSuggestion(client, body) {
@@ -339,7 +324,6 @@ module.exports = {
   suggestionsForDate,
   validateSuggestion,
   listSuggestions,
-  recordUsage,
   ADMIN_PAGE_SIZES,
   createSuggestion,
   updateSuggestion,

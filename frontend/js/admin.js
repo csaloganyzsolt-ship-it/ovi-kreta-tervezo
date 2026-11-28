@@ -265,6 +265,9 @@
       byId('docWeekly').textContent = String(stats.documents.breakdown.weekly);
       byId('docConversion').textContent = `${String(stats.documents.conversionRate).replace('.', ',')}%`;
 
+      // Top témák: ugyanaz a közös számlálás, mint a Téma-ajánlók fül „Használat” oszlopa (minden legenerált tervezet, kézi és chipes téma együtt).
+      fillTable('topicsTable', (stats.documents.topThemes || []).map((t) => [t.name, `${t.count} db`]), 2, 'Nincsenek adatok');
+
       // Telemetria statisztikák
       if (analytics) {
         byId('analyticsTotal').textContent = String(analytics.total_events);
@@ -279,10 +282,6 @@
         byId('deviceMobile').textContent = `${analytics.devices.mobile}%`;
         byId('deviceTablet').textContent = `${analytics.devices.tablet}%`;
         byId('deviceDesktop').textContent = `${analytics.devices.desktop}%`;
-
-        // Top témakörök
-        const topicsRows = (analytics.top_topics || []).map((t) => [t.name, String(t.count)]);
-        fillTable('topicsTable', topicsRows, 2, 'Nincsenek adatok');
 
         // Top korcsoportok
         const ageGroupsRows = (analytics.top_age_groups || []).map((a) => [a.name, String(a.count)]);

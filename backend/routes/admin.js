@@ -14,6 +14,7 @@ const invoiceService = require('../services/invoiceService');
 const planStore = require('../services/planStore');
 const reviewService = require('../services/reviewService');
 const themeSuggestions = require('../services/themeSuggestionsService');
+const themeStats = require('../services/themeStats');
 const documentExport = require('../services/documentExport');
 const { billingStatus } = require('../services/billingStatus');
 const { dailyGenerationStatus } = require('../services/generationCap');
@@ -222,7 +223,7 @@ router.patch('/admin/settings', handle('A beállítások mentése', async (clien
   return { settings };
 }));
 // Téma-ajánlók (dátum- és évszakfüggő chipek a tervezőben): teljes CRUD, kizárólag adminnak.
-router.get('/admin/theme-suggestions', handle('A téma-ajánlók lekérdezése', (client, req) => themeSuggestions.listSuggestions(client, req.query)));
+router.get('/admin/theme-suggestions', handle('A téma-ajánlók lekérdezése', async (client, req) => themeSuggestions.listSuggestions(client, req.query, await themeStats.loadThemeCounts(client))));
 router.post('/admin/theme-suggestions', handle('A téma létrehozása', async (client, req, res) => {
   const suggestion = await themeSuggestions.createSuggestion(client, req.body);
   logger.info('admin_themes', 'Téma-ajánló létrehozva', { details: { id: suggestion.id, title: suggestion.title, admin: req.user?.email } });

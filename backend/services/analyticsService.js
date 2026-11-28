@@ -35,7 +35,6 @@ async function getAnalyticsStats(client, timePeriodDays = null) {
         },
         devices: {},
         downloads: { docx: 0, pdf: 0 },
-        top_topics: [],
         top_age_groups: [],
         top_referrers: [],
         time_period_days: timePeriodDays || 'all'
@@ -54,8 +53,7 @@ async function getAnalyticsStats(client, timePeriodDays = null) {
     // Eszköztípus megoszlás
     const devices = { mobile: 0, tablet: 0, desktop: 0, unknown: 0 };
 
-    // Téma és korosztály (metaadatokból)
-    const topics = {};
+    // Korosztály (metaadatokból); a témák statisztikája a közös themeStats-ból jön, nem a telemetriából
     const ageGroups = {};
 
     // Referrer domainek
@@ -94,11 +92,8 @@ async function getAnalyticsStats(client, timePeriodDays = null) {
 
       // Metaadatok feldolgozása
       if (event.metadata && typeof event.metadata === 'object') {
-        const { theme_category, age_group } = event.metadata;
-        
-        if (theme_category) {
-          topics[theme_category] = (topics[theme_category] || 0) + 1;
-        }
+        const { age_group } = event.metadata;
+
         if (age_group) {
           ageGroups[age_group] = (ageGroups[age_group] || 0) + 1;
         }
@@ -124,12 +119,7 @@ async function getAnalyticsStats(client, timePeriodDays = null) {
       conversionRates.paywall_opened_rate = ((funnel.paywall_opened / funnel.page_views) * 100).toFixed(2);
     }
 
-    // Top 5 témák és korcsoportok
-    const topTopics = Object.entries(topics)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
+    // Top 5 korcsoport
     const topAgeGroups = Object.entries(ageGroups)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -162,7 +152,6 @@ async function getAnalyticsStats(client, timePeriodDays = null) {
       devices: deviceBreakdown,
       device_counts: devices,
       downloads,
-      top_topics: topTopics,
       top_age_groups: topAgeGroups,
       top_referrers: topReferrers,
       time_period_days: timePeriodDays || 'all'
