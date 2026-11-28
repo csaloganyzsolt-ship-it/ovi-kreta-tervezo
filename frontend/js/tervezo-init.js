@@ -159,6 +159,7 @@ function initializeApp() {
   loadDraftFromStorage();
   loadGeneratedPlanFromStorage();
   bindAutoSaveListeners();
+  bindThemeSuggestionReset();
   updateDateInputsForDuration();
   refreshThemeSuggestions();
   updateWeeklyDailyBreakdownVisibility();

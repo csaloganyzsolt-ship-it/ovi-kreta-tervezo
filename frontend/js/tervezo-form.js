@@ -1180,6 +1180,7 @@ function buildGenerationPayload() {
     planKind: selectedDuration === 'Heti' ? 'weekly' : 'daily',
     studentName: planMode === 'academic' ? (document.querySelector('input[data-field="student-name"]')?.value.trim() || '') : '',
     theme: getTheme(),
+    themeSuggestionId: getThemeSuggestionId(),
     group: getGroup(),
     kindergartenName: document.querySelector('input[data-field="kindergarten-name"]')?.value || '',
     kindergartenProfile: document.querySelector('input[data-field="kindergarten-profile"]')?.value.trim() || '',
@@ -1211,6 +1212,7 @@ function buildGenerationPayload() {
 const THEME_SUGGESTIONS_DELAY_MS = 250;
 let themeSuggestionsTimer = null;
 let themeSuggestionsRequest = 0;
+let selectedThemeSuggestion = null;
 
 // A téma-ajánlók a kiválasztott naphoz / héthez tartozó adatbázis-találatok (GET /api/theme-suggestions); a lista dátumváltáskor oldal-újratöltés nélkül frissül.
 async function refreshThemeSuggestions() {
@@ -1223,7 +1225,9 @@ async function refreshThemeSuggestions() {
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.success) throw new Error(data?.error || `HTTP ${response.status}`);
     if (request !== themeSuggestionsRequest) return;
-    appConfig.themeSuggestions = (data.suggestions || []).map((item) => String(item?.title || '').trim()).filter(Boolean);
+    appConfig.themeSuggestions = (data.suggestions || [])
+      .map((item) => ({ id: String(item?.id || ''), title: String(item?.title || '').trim() }))
+      .filter((item) => item.title);
     appConfig.themeSuggestionsError = false;
   } catch (error) {
     if (request !== themeSuggestionsRequest) return;
@@ -1245,11 +1249,11 @@ function renderSeasonalThemeSuggestions() {
 
   const themes = appConfig.themeSuggestions;
   const themeField = document.querySelector('input[data-field="theme"]');
-  if (themeField && themes.length) themeField.placeholder = `Pl.: ${themes[0]}`;
+  if (themeField && themes.length) themeField.placeholder = `Pl.: ${themes[0].title}`;
   const activeTheme = document.querySelector('input[data-field="theme"]')?.value?.trim();
   container.innerHTML = appConfig.themeSuggestionsError
     ? '<span class="field-hint" role="status">A téma-ajánlások most nem tölthetők be, de a témát szabadon beírhatod.</span>'
-    : themes.map((theme) => `<button class="chip${activeTheme === theme ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme)}">${escapeHtml(theme)}</button>`).join('');
+    : themes.map((theme) => `<button class="chip${activeTheme === theme.title ? ' active' : ''}" type="button" data-theme-option="${escapeHtml(theme.title)}" data-theme-id="${escapeHtml(theme.id)}">${escapeHtml(theme.title)}</button>`).join('');
 
   container.querySelectorAll('[data-theme-option]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1267,8 +1271,22 @@ function renderSeasonalThemeSuggestions() {
       }
 
       themeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      // A választott ajánló azonosítóját az input-esemény (ami a kézi átírást törli) UTÁN tároljuk.
+      selectedThemeSuggestion = currentlyActive ? null : { id: button.dataset.themeId || '', title: button.dataset.themeOption };
       saveProfileToStorage();
       persistDraftState();
     });
   });
+}
+
+// Kézi átírásnál a chiphez tartozó azonosító elévül: a téma-mező tartalma már nem az ajánlott cím.
+function bindThemeSuggestionReset() {
+  document.querySelector('input[data-field="theme"]')?.addEventListener('input', (event) => {
+    if (selectedThemeSuggestion && event.target.value.trim() !== selectedThemeSuggestion.title) selectedThemeSuggestion = null;
+  });
+}
+
+function getThemeSuggestionId() {
+  const theme = document.querySelector('input[data-field="theme"]')?.value.trim();
+  return selectedThemeSuggestion?.id && selectedThemeSuggestion.title === theme ? selectedThemeSuggestion.id : undefined;
 }

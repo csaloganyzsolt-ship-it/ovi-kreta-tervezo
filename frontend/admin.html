@@ -397,14 +397,14 @@
             <div class="admin-listbar">
               <p class="profile-hint" id="themesCount" role="status"></p>
               <span class="admin-listbar-tools">
-                <label class="admin-pagesize">Keresés <input type="search" id="themesSearch" maxlength="100" autocomplete="off" placeholder="Téma szövege" /></label>
-                <label class="admin-pagesize">Típus <select id="themesCategory">
+                <label class="admin-pagesize">Keresés <input type="search" id="themesSearch" data-list="themes" data-filter="q" maxlength="100" autocomplete="off" placeholder="Téma szövege" /></label>
+                <label class="admin-pagesize">Típus <select id="themesCategory" data-list="themes" data-filter="category">
                   <option value="">Mind</option>
                   <option value="event">Jeles nap</option>
                   <option value="season">Évszak</option>
                   <option value="general">Általános</option>
                 </select></label>
-                <label class="admin-pagesize">Hónap / évszak <select id="themesPeriod">
+                <label class="admin-pagesize">Hónap / évszak <select id="themesPeriod" data-list="themes" data-filter="period">
                   <option value="">Mind</option>
                   <optgroup label="Évszak">
                     <option value="season:tavasz">Tavasz</option>
@@ -427,18 +427,38 @@
                     <option value="month:12">December</option>
                   </optgroup>
                 </select></label>
+                <label class="admin-pagesize">Rendezés <select id="themesSort" data-list="themes" data-filter="sort">
+                  <option value="">Prioritás szerint</option>
+                  <option value="usage">Használat szerint (legnépszerűbbek elöl)</option>
+                  <option value="title">Név szerint</option>
+                </select></label>
+                <label class="admin-pagesize">Sor / oldal <select id="themesPageSize" data-list="themes" data-pagesize>
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select></label>
                 <button type="button" class="profile-btn" id="themesRefresh">Frissítés</button>
                 <button type="button" class="profile-btn primary" id="themesNew">Új téma</button>
               </span>
             </div>
             <div class="admin-table-wrap">
-              <table class="admin-table" id="themesTable">
+              <table class="admin-table admin-themes-table" id="themesTable">
                 <thead>
-                  <tr><th>Téma</th><th>Típus</th><th>Időszak / Évszak</th><th>Prioritás</th><th>Állapot</th><th>Műveletek</th></tr>
+                  <tr>
+                    <th class="col-theme">Téma</th>
+                    <th>Típus</th>
+                    <th>Időszak / Évszak</th>
+                    <th>Prioritás</th>
+                    <th aria-sort="none"><button type="button" class="admin-sort-btn" id="themesSortUsage" title="Rendezés használat szerint">Használat <span aria-hidden="true" id="themesSortMark"></span></button></th>
+                    <th>Állapot</th>
+                    <th class="col-actions"><span class="sr-only">Műveletek</span></th>
+                  </tr>
                 </thead>
                 <tbody></tbody>
               </table>
             </div>
+            <div class="admin-pager" data-list="themes" data-pager></div>
             <p class="profile-error" id="themesError" role="alert" hidden></p>
             <dialog class="admin-dialog" id="themeDialog" aria-labelledby="themeDialogTitle">
               <form class="profile-form" id="themeForm" method="dialog" novalidate>

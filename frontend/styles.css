@@ -2452,9 +2452,21 @@ html[data-theme="dark"] .admin-link:hover { color: var(--primary); }
 .admin-pagesize input[type="search"], .admin-pagesize input[type="date"] { min-height: 40px; }
 .admin-theme-preview { border: 1px solid var(--border, #d9ebe0); border-radius: 14px; padding: 12px 16px; margin: 10px 0 14px; display: grid; gap: 8px; }
 .admin-theme-preview legend { font-weight: 700; padding: 0 6px; }
-.admin-theme-preview .theme-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-theme-preview .theme-suggestions { gap: 8px 10px; }
 .admin-theme-preview .chip { cursor: default; }
-.admin-theme-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.theme-suggestions { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+.admin-themes-table { table-layout: auto; min-width: 860px; }
+.admin-themes-table th:not(.col-theme), .admin-themes-table td:not(:first-child) { white-space: nowrap; width: 1%; }
+.admin-themes-table .col-theme, .admin-themes-table td:first-child { width: auto; min-width: 260px; white-space: normal; }
+.admin-themes-table td { padding-top: 6px; padding-bottom: 6px; line-height: 1.35; }
+.admin-themes-table td:nth-child(4), .admin-themes-table td:nth-child(5), .admin-themes-table th:nth-child(4), .admin-themes-table th:nth-child(5) { text-align: right; }
+.admin-sort-btn { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; padding: 0; cursor: pointer; white-space: nowrap; }
+.admin-sort-btn:hover, .admin-sort-btn:focus-visible { color: var(--primary); text-decoration: underline; outline: none; }
+.admin-menu-btn { min-height: 36px; min-width: 40px; padding: 2px 10px; font-size: 1.2rem; line-height: 1; }
+.admin-action-menu { min-width: 170px; }
+.admin-menu-item.danger { color: #b3261e; }
+[data-theme="dark"] .admin-menu-item.danger { color: #ffb4b4; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .admin-listbar .profile-btn.has-filters { border-color: var(--primary); color: var(--primary); font-weight: 700; }
 .admin-filters[hidden], .admin-filter-row[hidden], .admin-menu-list[hidden] { display: none; }
 .admin-menu { position: relative; display: inline-block; }

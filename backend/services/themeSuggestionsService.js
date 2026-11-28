@@ -5,7 +5,12 @@
 const logger = require('../utils/logger');
 
 const TABLE = 'theme_suggestions';
-const COLUMNS = 'id, title, category, season, start_mmdd, end_mmdd, priority, is_active, created_at, updated_at';
+// A nyilvános lekérdezés nem olvassa a usage_count oszlopot, így a használati migráció előtt sem esik a beépített alapra.
+const PUBLIC_COLUMNS = 'id, title, category, season, start_mmdd, end_mmdd, priority, is_active, created_at, updated_at';
+const COLUMNS = `${PUBLIC_COLUMNS}, usage_count`;
+const USAGE_FUNCTION = 'increment_theme_suggestion_usage';
+const ADMIN_PAGE_SIZES = [10, 25, 50, 100];
+const SORTS = ['priority', 'usage', 'title'];
 const CATEGORIES = ['event', 'season', 'general'];
 const SEASONS = ['tavasz', 'nyar', 'osz', 'tel'];
 const MAX_SUGGESTIONS = 8;
@@ -119,10 +124,10 @@ function selectSuggestions(rows, mmdd, limit = MAX_SUGGESTIONS) {
   return picked.sort(compareSuggestions);
 }
 
-const publicItem = (row) => ({ title: row.title, category: row.category, priority: row.priority });
+const publicItem = (row) => ({ id: row.id, title: row.title, category: row.category, priority: row.priority });
 
 async function fetchActiveRows(client) {
-  const { data, error } = await client.from(TABLE).select(COLUMNS).eq('is_active', true);
+  const { data, error } = await client.from(TABLE).select(PUBLIC_COLUMNS).eq('is_active', true);
   if (error) throw new Error(error.message || 'Ismeretlen adatbázishiba');
   return data || [];
 }
@@ -208,25 +213,87 @@ function monthContains(row, month) {
   return false;
 }
 
-// Admin lista: kereső (cím), típus, évszak (a megadott évszak hónapjaihoz eső jeles napok is), hónap és állapot szerinti szűrés.
+const usageOf = (row) => Number(row.usage_count) || 0;
+
+const SORTERS = {
+  priority: compareSuggestions,
+  usage: (a, b) => usageOf(b) - usageOf(a) || compareSuggestions(a, b),
+  title: (a, b) => String(a.title).localeCompare(String(b.title), 'hu')
+};
+
+function parseAdminPaging(query) {
+  const page = Number.parseInt(query.page, 10);
+  const rawSize = query.pageSize;
+  const pageSize = Number.parseInt(rawSize, 10);
+  if (rawSize !== undefined && rawSize !== '' && !ADMIN_PAGE_SIZES.includes(pageSize)) {
+    throw new ThemeSuggestionError(`Az oldalméret ${ADMIN_PAGE_SIZES.join(', ')} lehet.`);
+  }
+  return { page: Number.isInteger(page) && page > 0 ? page : 1, pageSize: ADMIN_PAGE_SIZES.includes(pageSize) ? pageSize : ADMIN_PAGE_SIZES[1] };
+}
+
+// A „period” szűrő: „season:osz” vagy „month:11”; a külön season / month paraméter is él.
+function periodFilter(query) {
+  const [kind, value] = String(query.period || '').split(':');
+  return {
+    season: kind === 'season' ? value : query.season,
+    month: kind === 'month' ? value : query.month
+  };
+}
+
+// Admin lista: kereső (cím), típus, évszak (a megadott évszak hónapjaihoz eső jeles napok is), hónap és állapot szerinti szűrés,
+// rendezés (priority | usage | title) és lapozás (10 / 25 / 50 / 100 sor).
 async function listSuggestions(client, query = {}) {
+  const paging = parseAdminPaging(query);
+  const sort = SORTS.includes(query.sort) ? query.sort : 'priority';
   const { data, error } = await client.from(TABLE).select(COLUMNS).order('priority', { ascending: false }).range(0, 4999);
   if (error) throw dbError('A téma-ajánlások lekérdezése sikertelen', error);
   const q = String(query.q || '').trim().toLocaleLowerCase('hu');
   const category = CATEGORIES.includes(query.category) ? query.category : '';
-  const season = SEASONS.includes(query.season) ? query.season : '';
-  const month = Number(query.month);
+  const period = periodFilter(query);
+  const season = SEASONS.includes(period.season) ? period.season : '';
+  const month = Number(period.month);
   const hasMonth = Number.isInteger(month) && month >= 1 && month <= 12;
   const active = query.active === 'true' ? true : query.active === 'false' ? false : null;
   const seasonMonths = { tavasz: [3, 4, 5], nyar: [6, 7, 8], osz: [9, 10, 11], tel: [12, 1, 2] };
-  const suggestions = (data || [])
+  const filtered = (data || [])
     .filter((row) => !q || String(row.title).toLocaleLowerCase('hu').includes(q))
     .filter((row) => !category || row.category === category)
     .filter((row) => !season || row.season === season || seasonMonths[season].some((m) => monthContains(row, m)))
     .filter((row) => !hasMonth || monthContains(row, month))
     .filter((row) => active === null || row.is_active === active)
-    .sort(compareSuggestions);
-  return { suggestions, total: (data || []).length };
+    .sort(SORTERS[sort]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / paging.pageSize));
+  const page = Math.min(paging.page, totalPages);
+  const offset = (page - 1) * paging.pageSize;
+  const suggestions = filtered.slice(offset, offset + paging.pageSize).map((row) => ({ ...row, usage_count: usageOf(row) }));
+  return {
+    suggestions,
+    total: filtered.length,
+    overall: (data || []).length,
+    page,
+    pageSize: paging.pageSize,
+    totalPages,
+    from: suggestions.length ? offset + 1 : 0,
+    to: offset + suggestions.length,
+    sort
+  };
+}
+
+// Használat mérése: id szerint, annak hiányában a (trimmelt, kis- és nagybetűre érzéketlen) cím szerint növeli az SQL függvény a számlálót.
+// Sosem dob hibát: a generálást nem akaszthatja meg, a hibát naplózza. Visszatérés: sikerült-e a rögzítés.
+async function recordUsage({ id, title } = {}, client) {
+  const cleanId = UUID_PATTERN.test(String(id || '')) ? String(id) : null;
+  const cleanTitle = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_LENGTH) : '';
+  if (!cleanId && !cleanTitle) return false;
+  try {
+    if (!client || typeof client.rpc !== 'function') throw new Error('nincs Supabase kapcsolat');
+    const { error } = await client.rpc(USAGE_FUNCTION, { p_id: cleanId, p_title: cleanId ? null : cleanTitle });
+    if (error) throw new Error(error.message || 'ismeretlen adatbázishiba');
+    return true;
+  } catch (error) {
+    logger.error('theme_suggestions', `A téma használata nem rögzíthető: ${error.message}`, { details: { id: cleanId, title: cleanTitle } });
+    return false;
+  }
 }
 
 async function createSuggestion(client, body) {
@@ -272,6 +339,8 @@ module.exports = {
   suggestionsForDate,
   validateSuggestion,
   listSuggestions,
+  recordUsage,
+  ADMIN_PAGE_SIZES,
   createSuggestion,
   updateSuggestion,
   deleteSuggestion

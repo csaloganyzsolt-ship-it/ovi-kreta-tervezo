@@ -123,8 +123,8 @@
 
   // Egy lista (rendelések, felhasználók, napló, audit) állapota: oldal, oldalméret, szűrők. A [data-list="név"] elemek kötődnek hozzá:
   // data-filter (szűrőmező), data-range (gyorsgomb), data-clear (szűrők törlése), data-pagesize, data-pager.
-  function createList({ name, path, render, errorId, errorText }) {
-    const state = { page: 1, pageSize: 20 };
+  function createList({ name, path, render, errorId, errorText, pageSize = 20 }) {
+    const state = { page: 1, pageSize };
     const query = (selector) => [...document.querySelectorAll(`[data-list="${name}"]${selector}`)];
     let timer = null;
     let request = 0;
@@ -158,7 +158,8 @@
     function renderPager(data) {
       query('[data-pager]').forEach((box) => {
         box.replaceChildren();
-        const total = el('span', 'admin-pager-total', `${data.total} találat · ${data.page}. / ${data.totalPages} oldal`);
+        const range = data.from !== undefined ? `${data.from}–${data.to} / ${data.total} találat` : `${data.total} találat`;
+        const total = el('span', 'admin-pager-total', `${range} · ${data.page}. / ${data.totalPages} oldal`);
         const button = (label, page, { disabled = false, current = false, title = '' } = {}) => {
           const node = el('button', `profile-btn${current ? ' primary' : ''}`, label);
           node.type = 'button';
@@ -227,6 +228,7 @@
         clearTimeout(timer);
         reload();
       }));
+      query('[data-pagesize]').forEach((select) => { select.value = String(state.pageSize); });
       query('[data-pagesize]').forEach((select) => select.addEventListener('change', () => {
         state.pageSize = Number(select.value) || 20;
         query('[data-pagesize]').forEach((other) => { other.value = String(state.pageSize); });
@@ -1364,20 +1366,11 @@
 
   const THEME_CATEGORY_LABELS = { event: 'Jeles nap', season: 'Évszak', general: 'Általános' };
   const THEME_SEASON_LABELS = { tavasz: 'Tavasz', nyar: 'Nyár', osz: 'Ősz', tel: 'Tél' };
-  const THEME_SEARCH_DELAY_MS = 300;
+  const THEME_PAGE_SIZE = 25;
   let themeEditId = null;
-  let themeSearchTimer = null;
   let themeRows = [];
-
-  function themeQuery() {
-    const params = new URLSearchParams();
-    const text = byId('themesSearch').value.trim();
-    if (text) params.set('q', text);
-    if (byId('themesCategory').value) params.set('category', byId('themesCategory').value);
-    const [kind, value] = byId('themesPeriod').value.split(':');
-    if (kind === 'season' || kind === 'month') params.set(kind, value);
-    return params.toString();
-  }
+  let themeMenu = null;
+  let themeMenuOwner = null;
 
   function themePeriodLabel(row) {
     if (row.start_mmdd && row.end_mmdd) {
@@ -1386,24 +1379,20 @@
     return THEME_SEASON_LABELS[row.season] || '–';
   }
 
-  async function toggleTheme(row, checkbox) {
-    checkbox.disabled = true;
+  async function toggleTheme(row) {
+    const next = row.is_active !== true;
     try {
-      await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'PUT', body: { is_active: checkbox.checked } });
-      showToast(checkbox.checked ? 'A téma aktív, megjelenhet a tervezőben.' : 'A téma inaktív, nem jelenik meg a tervezőben.');
-      row.is_active = checkbox.checked;
+      await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'PUT', body: { is_active: next } });
+      showToast(next ? 'A téma aktív, megjelenhet a tervezőben.' : 'A téma inaktív, nem jelenik meg a tervezőben.');
+      await loadThemes();
       previewThemes();
     } catch (error) {
-      checkbox.checked = !checkbox.checked;
       showToast(`Az állapot nem módosítható: ${errorMessage(error)}`, true);
-    } finally {
-      checkbox.disabled = false;
     }
   }
 
-  async function deleteTheme(row, button) {
+  async function deleteTheme(row) {
     if (!window.confirm(`Véglegesen törlöd ezt a témát: „${row.title}”? Ez nem vonható vissza.`)) return;
-    button.disabled = true;
     try {
       await api(`/api/admin/theme-suggestions/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
       showToast('A téma törölve.');
@@ -1411,44 +1400,67 @@
       previewThemes();
     } catch (error) {
       showToast(`A téma nem törölhető: ${errorMessage(error)}`, true);
-    } finally {
-      button.disabled = false;
     }
   }
 
-  function renderThemes(rows, total) {
-    byId('themesCount').textContent = rows.length === total ? `${total} téma` : `${rows.length} találat / ${total} téma`;
+  // A műveletmenü egyetlen, a body-hoz fűzött lebegő elem (position: fixed), így a táblázat overflow-ja nem vágja le.
+  function closeThemeMenu(restoreFocus) {
+    if (!themeMenu || themeMenu.hidden) return;
+    themeMenu.hidden = true;
+    if (themeMenuOwner) {
+      themeMenuOwner.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) themeMenuOwner.focus();
+    }
+    themeMenuOwner = null;
+  }
+
+  function openThemeMenu(button, row) {
+    if (themeMenuOwner === button) { closeThemeMenu(true); return; }
+    closeThemeMenu(false);
+    const item = (label, handler, className = '') => {
+      const node = el('button', `admin-menu-item ${className}`.trim(), label);
+      node.type = 'button';
+      node.setAttribute('role', 'menuitem');
+      node.addEventListener('click', () => { closeThemeMenu(false); handler(); });
+      return node;
+    };
+    themeMenu.replaceChildren(
+      item('Szerkesztés', () => openThemeDialog(row)),
+      item(row.is_active === true ? 'Inaktiválás' : 'Aktiválás', () => toggleTheme(row)),
+      item('Törlés', () => deleteTheme(row), 'danger')
+    );
+    themeMenu.hidden = false;
+    themeMenuOwner = button;
+    button.setAttribute('aria-expanded', 'true');
+    const rect = button.getBoundingClientRect();
+    const width = themeMenu.offsetWidth;
+    const height = themeMenu.offsetHeight;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const top = rect.bottom + 4 + height > window.innerHeight ? Math.max(8, rect.top - height - 4) : rect.bottom + 4;
+    themeMenu.style.left = `${left}px`;
+    themeMenu.style.top = `${top}px`;
+    themeMenu.querySelector('button')?.focus();
+  }
+
+  function renderThemes(data) {
+    const rows = data.suggestions;
+    byId('themesCount').textContent = data.total === data.overall ? `${data.overall} téma` : `${data.total} találat / ${data.overall} téma`;
+    byId('themesSortMark').textContent = data.sort === 'usage' ? '▼' : '';
+    byId('themesSortUsage').closest('th').setAttribute('aria-sort', data.sort === 'usage' ? 'descending' : 'none');
     fillTable('themesTable', rows.map((row) => {
-      const toggle = el('input');
-      toggle.type = 'checkbox';
-      toggle.checked = row.is_active === true;
-      toggle.setAttribute('aria-label', `Aktív: ${row.title}`);
-      toggle.addEventListener('change', () => toggleTheme(row, toggle));
-      const state = el('label', 'admin-theme-toggle');
-      state.append(toggle, document.createTextNode(' aktív'));
-      const edit = el('button', 'profile-btn', 'Szerkesztés');
-      edit.type = 'button';
-      edit.addEventListener('click', () => openThemeDialog(row));
-      const remove = el('button', 'profile-btn danger', 'Törlés');
-      remove.type = 'button';
-      remove.addEventListener('click', () => deleteTheme(row, remove));
-      const actions = el('span', 'admin-actions');
-      actions.append(edit, ' ', remove);
-      return [row.title, THEME_CATEGORY_LABELS[row.category] || row.category, themePeriodLabel(row), String(row.priority), state, actions];
-    }), 6, 'Nincs a szűrésnek megfelelő téma.');
+      const state = el('span', row.is_active === true ? 'admin-badge-on' : 'admin-badge-off', row.is_active === true ? 'Aktív' : 'Inaktív');
+      const menuButton = el('button', 'profile-btn admin-menu-btn', '⋯');
+      menuButton.type = 'button';
+      menuButton.setAttribute('aria-haspopup', 'menu');
+      menuButton.setAttribute('aria-expanded', 'false');
+      menuButton.setAttribute('aria-label', `Műveletek: ${row.title}`);
+      menuButton.addEventListener('click', () => openThemeMenu(menuButton, row));
+      return [row.title, THEME_CATEGORY_LABELS[row.category] || row.category, themePeriodLabel(row), String(row.priority), `${row.usage_count || 0} db`, state, menuButton];
+    }), 7, 'Nincs a szűrésnek megfelelő téma.');
   }
 
-  async function loadThemes() {
-    const query = themeQuery();
-    try {
-      const data = await api(`/api/admin/theme-suggestions${query ? `?${query}` : ''}`);
-      themeRows = data.suggestions;
-      setText('themesError', '');
-      renderThemes(themeRows, data.total);
-    } catch (error) {
-      setText('themesError', `A téma-ajánlók nem tölthetők be: ${errorMessage(error)}`);
-    }
-  }
+  lists.themes = createList({ name: 'themes', path: '/api/admin/theme-suggestions', render: (data) => { themeRows = data.suggestions; renderThemes(data); }, errorId: 'themesError', errorText: 'A téma-ajánlók nem tölthetők be', pageSize: THEME_PAGE_SIZE });
+  const loadThemes = () => lists.themes.load();
 
   // Ugyanaz a nyilvános végpont, amelyet a tervező is hív: pontosan azt a (max. 8) chipet mutatja, amit a vásárló az adott napon látna.
   async function previewThemes() {
@@ -1512,13 +1524,25 @@
   function initThemes() {
     byId('themesPreviewDate').value = today();
     byId('themesPreviewDate').addEventListener('change', previewThemes);
-    byId('themesSearch').addEventListener('input', () => { clearTimeout(themeSearchTimer); themeSearchTimer = setTimeout(loadThemes, THEME_SEARCH_DELAY_MS); });
-    byId('themesCategory').addEventListener('change', loadThemes);
-    byId('themesPeriod').addEventListener('change', loadThemes);
     byId('themesRefresh').addEventListener('click', () => { loadThemes(); previewThemes(); });
     byId('themesNew').addEventListener('click', () => openThemeDialog(null));
+    byId('themesSortUsage').addEventListener('click', () => {
+      lists.themes.set('sort', byId('themesSort').value === 'usage' ? '' : 'usage');
+      lists.themes.reload();
+    });
     byId('themeForm').addEventListener('submit', saveTheme);
     byId('themeCancel').addEventListener('click', () => byId('themeDialog').close());
+
+    themeMenu = el('div', 'admin-menu-list admin-action-menu');
+    themeMenu.setAttribute('role', 'menu');
+    themeMenu.hidden = true;
+    document.body.appendChild(themeMenu);
+    document.addEventListener('click', (event) => {
+      if (!themeMenu.hidden && !themeMenu.contains(event.target) && !event.target.closest('.admin-menu-btn')) closeThemeMenu(false);
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeThemeMenu(true); });
+    window.addEventListener('resize', () => closeThemeMenu(false));
+    window.addEventListener('scroll', () => closeThemeMenu(false), true);
   }
 
   // ---------- Lapok ----------

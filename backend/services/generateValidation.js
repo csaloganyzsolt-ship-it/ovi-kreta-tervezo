@@ -61,6 +61,15 @@ function validateChildCount(value) {
   return value;
 }
 
+// A chipre kattintáskor a tervező a téma-ajánló azonosítóját is elküldi (használat mérése); üres érték = kézzel írt téma.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateThemeSuggestionId(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) throw fail('themeSuggestionId', 'érvényes UUID szükséges');
+  return value.toLowerCase();
+}
+
 function validateDetailLevel(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
@@ -111,6 +120,7 @@ function validateGeneratePayload(payload) {
   put('weeklyScope', oneOf(payload.weeklyScope, 'weeklyScope', ['summary', 'package']));
   put('weeklyProgressionType', oneOf(payload.weeklyProgressionType, 'weeklyProgressionType', ['progressive', 'area_focused']));
   put('requestedModel', text(payload.requestedModel, 'requestedModel', 60));
+  put('themeSuggestionId', validateThemeSuggestionId(payload.themeSuggestionId));
   for (const [key, max] of [
     ['theme', 300], ['group', 100], ['kindergartenName', 200], ['kindergartenProfile', 300],
     ['teacherName', 200], ['studentName', 200], ['groupName', 200], ['dateValue', 40], ['fridayClosingType', 200],
