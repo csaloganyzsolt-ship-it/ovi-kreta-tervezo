@@ -13,7 +13,7 @@ const stripeService = require('../backend/services/stripeService');
 const { buildEmailContent } = require('../backend/services/mailService');
 
 const ROOT = path.join(__dirname, '..');
-const order = (plan) => ({ plan, orderId: 'cs_1', customer: { email: 'a@b.hu' } });
+const order = (plan, amountHuf = 390, extra = {}) => ({ plan, amountHuf, orderId: 'cs_1', customer: { email: 'a@b.hu' }, ...extra });
 
 test('BILLING_PROFILE selects ev by default and kft only for the exact value kft', () => {
   assert.equal(getBillingProfile({}).type, 'ev');
@@ -53,9 +53,9 @@ test('both profiles carry the exact company data', () => {
   assert.equal(publicCompany({ BILLING_PROFILE: 'kft' }).court, 'Győri Törvényszék Cégbírósága');
 });
 
-test('ev profile issues AAM invoices: net equals gross, VAT is 0 Ft, prices stay 390/890', () => {
-  for (const [plan, gross] of [['daily', 390], ['weekly_summary', 390], ['weekly', 390], ['weekly_package', 890], ['weekly_detailed', 890]]) {
-    const xml = invoiceService.buildInvoiceXml(order(plan), { SZAMLAZZ_KEY: 'k' });
+test('ev profile issues AAM invoices: net equals gross (the order amount), VAT is 0 Ft', () => {
+  for (const [plan, gross] of [['daily', 390], ['weekly_summary', 590], ['weekly', 590], ['weekly_package', 890], ['weekly_detailed', 1090]]) {
+    const xml = invoiceService.buildInvoiceXml(order(plan, gross, { selectedDayCount: 3 }), { SZAMLAZZ_KEY: 'k' });
     assert.match(xml, /<afakulcs>AAM<\/afakulcs>/);
     assert.match(xml, new RegExp(`<nettoEgysegar>${gross}</nettoEgysegar>`));
     assert.match(xml, new RegExp(`<nettoErtek>${gross}</nettoErtek>`));
@@ -64,14 +64,14 @@ test('ev profile issues AAM invoices: net equals gross, VAT is 0 Ft, prices stay
   }
 });
 
-test('kft profile issues 27% invoices with the same gross prices', () => {
+test('kft profile issues 27% invoices from the order amount', () => {
   const env = { SZAMLAZZ_KEY: 'k', BILLING_PROFILE: 'kft' };
   const daily = invoiceService.buildInvoiceXml(order('daily'), env);
   assert.match(daily, /<afakulcs>27<\/afakulcs>/);
   assert.match(daily, /<nettoErtek>307<\/nettoErtek>/);
   assert.match(daily, /<afaErtek>83<\/afaErtek>/);
   assert.match(daily, /<bruttoErtek>390<\/bruttoErtek>/);
-  const detailed = invoiceService.buildInvoiceXml(order('weekly_detailed'), env);
+  const detailed = invoiceService.buildInvoiceXml(order('weekly_detailed', 890, { selectedDayCount: 3 }), env);
   assert.match(detailed, /<bruttoErtek>890<\/bruttoErtek>/);
   assert.match(detailed, /<afaErtek>189<\/afaErtek>/);
 });

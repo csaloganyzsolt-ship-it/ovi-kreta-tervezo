@@ -640,6 +640,7 @@
                     <option value="setting">Beállítás</option>
                     <option value="template">E-mail sablon</option>
                     <option value="theme">Téma-ajánló</option>
+                    <option value="coupon">Kupon</option>
                   </select>
                 </div>
               <div class="admin-daterange">
@@ -684,25 +685,31 @@
                   <label><input type="checkbox" id="setMaintenance" /> Karbantartás mód (a generálás leáll, a felhasználók udvarias üzenetet kapnak)</label>
                 </div>
                 <div>
-                  <label for="setPriceDaily">Napi ovis tervezet ára (Ft) – a „Csak heti összesítő” termékre is érvényes (weekly_summary)</label>
+                  <label for="setPriceDaily">Napi tervezet ára (Ft)</label>
                   <input id="setPriceDaily" type="number" min="1" max="100000" step="1" />
                 </div>
                 <div>
-                  <label for="setPriceWeekly">Heti ovis csomag ára (Ft) – a „Teljes heti csomag” (weekly_package)</label>
-                  <input id="setPriceWeekly" type="number" min="1" max="100000" step="1" />
+                  <label for="setPriceWeeklySummary">Heti összesítő alapára (Ft) – a heti csomag alapja is</label>
+                  <input id="setPriceWeeklySummary" type="number" min="1" max="100000" step="1" />
                 </div>
                 <div>
-                  <label for="setPriceAcademicDaily">Egyetemi napi terv ára (Ft)</label>
+                  <label for="setPriceWeeklyExtraDay">Kidolgozott nap felára heti csomagban (Ft/nap)</label>
+                  <input id="setPriceWeeklyExtraDay" type="number" min="0" max="50000" step="1" />
+                </div>
+                <div>
+                  <label for="setPriceAcademicDaily">Oktatási napi ár (Ft)</label>
                   <input id="setPriceAcademicDaily" type="number" min="1" max="100000" step="1" />
                 </div>
                 <div>
-                  <label for="setPriceAcademicWeekly">Egyetemi heti terv ára (Ft)</label>
+                  <label for="setPriceAcademicWeekly">Oktatási heti/tematikus ár (Ft)</label>
                   <input id="setPriceAcademicWeekly" type="number" min="1" max="100000" step="1" />
                 </div>
+                <p class="profile-hint span-2" id="pricePreview" role="status"></p>
                 <div>
                   <label for="setDailyCap">Napi szerverplafon (generálás / nap)</label>
                   <input id="setDailyCap" type="number" min="1" max="100000" step="1" />
                   <p class="profile-hint" id="dailyCapInfo" role="status"></p>
+                  <p class="profile-error" id="dailyCapEnvWarning" role="alert" hidden>⚠ A szerver DAILY_GENERATION_CAP környezeti változója aktív, ezért az itt megadott érték jelenleg NEM érvényes: a környezeti változó felülírja.</p>
                 </div>
                 <fieldset class="span-2 admin-announcement">
                   <legend>Főoldali akciós sáv</legend>
@@ -731,6 +738,8 @@
                   <small id="setAiPromptCount" class="muted" aria-live="polite">0 / 100 000 karakter</small>
                 </div>
                 <div class="profile-actions">
+                  <button type="button" class="profile-btn" id="aiResetModel" title="A modell mezőbe a gyári modellnevet tölti; mentésig nem érvényes">↺ Gyári modell visszaállítása</button>
+                  <button type="button" class="profile-btn" id="aiResetPrompt" title="A prompt mezőbe a gyári system promptot tölti; mentésig nem érvényes">↺ Gyári system prompt betöltése</button>
                   <button type="submit" class="profile-btn primary" id="aiSave">Mentés</button>
                   <button type="button" class="profile-btn" data-history-key="ai_config" id="aiHistory">Előzmények</button>
                   <span class="profile-status" id="aiStatus" role="status" hidden></span>
@@ -828,7 +837,7 @@
               <div class="profile-field">
                 <label for="historyKey">Beállítás</label>
                 <select id="historyKey">
-                  <option value="pricing">Árazás (4 csomag)</option>
+                  <option value="pricing">Árazás (3+2 elem)</option>
                   <option value="daily_generation_cap">Napi szerverplafon</option>
                   <option value="announcement_bar">Főoldali akciós sáv</option>
                   <option value="external_links">Külső linkek</option>

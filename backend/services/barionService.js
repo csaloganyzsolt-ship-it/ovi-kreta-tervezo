@@ -11,6 +11,7 @@ const coupons = require('./coupons');
 const settingsService = require('./settingsService');
 const orders = require('./orderService');
 const { getBillingProfile } = require('./siteConstants');
+const { orderMetaFor } = require('./pricing');
 const logger = require('../utils/logger');
 const { PaymentError } = stripeService;
 
@@ -133,10 +134,10 @@ async function callBarion(url, options, deps) {
 }
 
 // A Barion Payment/Start hívása: az összeg a mentett csomagból (részleges kuponnál a szerver által ellenőrzött kedvezménnyel csökkentve), a documentId az OrderNumber mezőben utazik.
-async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, user, req }, deps = {}) {
+async function startPayment({ plan, planMode, email, billing, generationId, title, coupon, user, req, product: resolved, selectedDays }, deps = {}) {
   const env = deps.env || process.env;
   await settingsService.getSettings();
-  const product = stripeService.parsePlan(plan, planMode);
+  const product = resolved || stripeService.parsePlan(plan, planMode, { selectedDays });
   const discount = coupon ? coupons.computeDiscount(product.amountHuf, coupon.percent) : null;
   const amountHuf = discount ? discount.finalPrice : product.amountHuf;
   if (amountHuf <= 0) throw new PaymentError('A 100%-os kupon fizetés nélkül váltható be, a Barion fizetés nem indítható.', 400);
@@ -199,6 +200,7 @@ async function startPayment({ plan, planMode, email, billing, generationId, titl
       planMode: product.planMode,
       planKey: product.key,
       amount: amountHuf,
+      meta: orderMetaFor(product),
       listPrice: discount ? product.amountHuf : undefined,
       couponCode: discount ? coupon.code : undefined,
       couponPercent: discount ? coupon.percent : undefined,
@@ -258,6 +260,7 @@ async function issueOrderInvoice(order, deps, env) {
       created: createdSeconds(order),
       plan: order.planKey,
       amountHuf: order.amount,
+      selectedDayCount: order.meta?.selectedDayCount || undefined,
       couponPercent: order.couponPercent || undefined,
       paymentMethod: 'Barion',
       billingProfile: order.billingProfile || undefined,

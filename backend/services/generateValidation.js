@@ -1,6 +1,6 @@
 'use strict';
 
-const WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
+const { WEEKDAYS } = require('./weeklyScope');
 
 class ValidationError extends Error {
   constructor(message) {

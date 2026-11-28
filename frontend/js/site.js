@@ -37,9 +37,10 @@ const LEGAL_TEXTS = {
 <p>Az űrlap témamezőibe személyes adat (pl. gyermek neve, sajátos nevelési igényének személyhez köthető részletei) nem adható meg, kizárólag általános pedagógiai célok és témák.</p>
 <h3>3. Megrendelés, árak és fizetés</h3>
 <ul>
-<li>1 db Napi tervezet: 390 Ft (bruttó)</li>
-<li>1 db Heti komplex csomag (heti keretterv + 5 napi részletes tervezet): 890 Ft (bruttó)</li>
-<li>1 db Oktatási célú tervezet (napi foglalkozásterv vagy heti tematikus terv): 690 Ft (bruttó)</li>
+<li>1 db Napi tervezet: {{PRICE_DAILY}} (bruttó)</li>
+<li>1 db Heti összesítő: {{PRICE_WEEKLY_SUMMARY}} (bruttó)</li>
+<li>1 db Teljes heti csomag (heti összesítő + 1–5 kidolgozott napi tervezet): a heti összesítő alapára ({{PRICE_WEEKLY_SUMMARY}}) + a kiválasztott napok száma × {{PRICE_WEEKLY_EXTRA_DAY}} / nap (bruttó)</li>
+<li>1 db Oktatási célú tervezet: napi foglalkozásterv {{PRICE_ACADEMIC_DAILY}}, heti tematikus terv {{PRICE_ACADEMIC_WEEKLY}} (bruttó)</li>
 </ul>
 <p>{{VAT_NOTE}}</p>
 <p>A szolgáltatás igénybevétele egyszeri díjas. Nem minősül előfizetésnek, a megadott bankkártyát a Szolgáltató a jövőben semmilyen automatikus vagy ismétlődő díjjal nem terheli meg.</p>
@@ -148,9 +149,10 @@ ${PROCESSORS_LIST}
 </ul>
 <h3>2. Csomagok és díjszabás</h3>
 <ul>
-<li>Napi tervezet: 390 Ft (bruttó)</li>
-<li>Heti komplex csomag (heti keretterv + 5 napi részletes tervezet): 890 Ft (bruttó)</li>
-<li>Oktatási célú tervezet (napi foglalkozásterv vagy heti tematikus terv): 690 Ft (bruttó)</li>
+<li>Napi tervezet: {{PRICE_DAILY}} (bruttó)</li>
+<li>Heti összesítő: {{PRICE_WEEKLY_SUMMARY}} (bruttó)</li>
+<li>Teljes heti csomag (heti összesítő + 1–5 kidolgozott napi tervezet): {{PRICE_WEEKLY_SUMMARY}} alapár + a kiválasztott napok száma × {{PRICE_WEEKLY_EXTRA_DAY}} / nap (bruttó)</li>
+<li>Oktatási célú tervezet: napi foglalkozásterv {{PRICE_ACADEMIC_DAILY}}, heti tematikus terv {{PRICE_ACADEMIC_WEEKLY}} (bruttó)</li>
 </ul>
 <p>Minden vásárlás egyszeri díjfizetést jelent. Az OviTervezőnél nincs havidíj, nincs előfizetés és nincs automatikus megújuló terhelés. Pontosan és kizárólag azt az összeget vonjuk le, amelyet az adott tervezet kiválasztásakor jóváhagysz.</p>
 <h3>3. Számlázás és bizonylatkiállítás</h3>
@@ -219,6 +221,7 @@ function loadRuntimeConfig() {
         if (data.company && typeof data.company === 'object') config.company = { ...(config.company || {}), ...data.company };
         config.paymentProvider = data.paymentProvider === 'stripe' ? 'stripe' : 'barion';
         config.barionPixelId = String(data.barionPixelId || '');
+        if (data.pricing && window.OviPricing && !window.OviPricing.setPricing(data.pricing)) console.error('A /api/config árai hiányosak vagy érvénytelenek:', data.pricing);
         if (data.announcement_bar && typeof data.announcement_bar === 'object') config.announcementBar = { enabled: data.announcement_bar.enabled === true, text: String(data.announcement_bar.text || '') };
         if (data.stripePublishableKey !== undefined) config.stripePublishableKey = data.stripePublishableKey;
         if (data.stripeTestMode !== undefined && config.company) config.company.stripeTestMode = data.stripeTestMode;
@@ -271,11 +274,37 @@ function renderAnnouncementBar() {
   if (!existing) document.body.insertBefore(el, document.body.firstChild);
 }
 
+// Főoldali ártábla és GYIK: a [data-price] elemek a /api/config árait kapják; a statikus HTML-érték csak a betöltésig látszik.
+// data-price="daily|weekly_summary|weekly_extra_day|academic_daily|academic_weekly|weekly_max" (weekly_max = 5 napos csomag ára).
+function renderLandingPrices() {
+  const pricing = window.OviPricing;
+  const nodes = document.querySelectorAll('[data-price]');
+  if (!nodes.length) return;
+  if (!pricing?.isLoaded()) {
+    console.error('A főoldali árak nem frissíthetők: a /api/config árai nem érkeztek meg.');
+    return;
+  }
+  nodes.forEach((node) => {
+    const tier = node.dataset.price;
+    const value = tier === 'weekly_max' ? pricing.priceFor('weekly_package', 5) : pricing.prices[tier];
+    if (value !== undefined) node.textContent = pricing.formatHuf(value);
+  });
+}
+
 function openLegalModal(key) {
   const [title, items] = LEGAL_TEXTS[key];
   document.getElementById('legalModalTitle').textContent = title;
   const company = getCompany();
   const reg = `${company.regLabel}: ${company.regNo}${company.court ? ` (${company.court})` : ''}`;
+  const pricing = window.OviPricing;
+  const money = (tier) => {
+    const value = pricing?.prices?.[tier];
+    if (value === undefined) {
+      console.error('Az ÁSZF díjszabása nem tölthető ki: az árak nem érkeztek meg a /api/config végpontról.');
+      return '[ár nem elérhető, kérjük, frissítsd az oldalt]';
+    }
+    return pricing.formatHuf(value);
+  };
   const values = {
     SUPPORT_EMAIL: company.email,
     COMPANY_NAME: company.name,
@@ -284,7 +313,8 @@ function openLegalModal(key) {
     COMPANY_REG: reg,
     VAT_NOTE: company.vatNote
   };
-  document.getElementById('legalModalBody').innerHTML = items.replace(/\{\{([A-Z_]+)\}\}/g, (_m, key) => siteEscapeHtml(values[key] ?? ''));
+  const priceTokens = { PRICE_DAILY: 'daily', PRICE_WEEKLY_SUMMARY: 'weekly_summary', PRICE_WEEKLY_EXTRA_DAY: 'weekly_extra_day', PRICE_ACADEMIC_DAILY: 'academic_daily', PRICE_ACADEMIC_WEEKLY: 'academic_weekly' };
+  document.getElementById('legalModalBody').innerHTML = items.replace(/\{\{([A-Z_]+)\}\}/g, (_m, key) => siteEscapeHtml(priceTokens[key] ? money(priceTokens[key]) : (values[key] ?? '')));
   openModal('legalModal');
 }
 
@@ -402,7 +432,7 @@ function initSite() {
 
   renderFooterCompany();
   applyPaymentProvider();
-  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); });
+  loadRuntimeConfig().then(() => { renderFooterCompany(); applyPaymentProvider(); renderAnnouncementBar(); renderLandingPrices(); });
   initReviews();
   document.addEventListener('click', (event) => {
     const sample = event.target.closest('[data-sample-modal]');

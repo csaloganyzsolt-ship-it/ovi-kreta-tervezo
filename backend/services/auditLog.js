@@ -60,13 +60,57 @@ function describeTheme(before, after) {
   return `Téma módosítva: „${after?.title || before?.title}” (${changed.join(', ') || 'nincs eltérés'}).`;
 }
 
+const PRICE_LABELS = { daily: 'Napi tervezet', weekly_summary: 'Heti összesítő alapára', weekly_extra_day: 'Kidolgozott nap felára', academic_daily: 'Oktatási napi', academic_weekly: 'Oktatási heti' };
+
+function describePricing(before, after) {
+  const changed = Object.keys(PRICE_LABELS).filter((tier) => !isEqual(before?.[tier], after?.[tier]));
+  if (!changed.length) return 'Árak módosítva (nincs látható eltérés).';
+  return `Árak módosítva: ${changed.map((tier) => `${PRICE_LABELS[tier]} ${before?.[tier] ?? '–'} → ${after?.[tier] ?? '–'} Ft`).join('; ')}.`;
+}
+
+const onOff = (value) => (value === true ? 'bekapcsolva' : 'kikapcsolva');
+
+const COUPON_KEY_PREFIX = 'coupon:';
+const COUPON_FIELDS = ['code', 'discount_percent', 'max_uses', 'valid_until', 'is_active', 'note'];
+const COUPON_FIELD_LABELS = { discount_percent: 'kedvezmény', max_uses: 'felhasználási keret', valid_until: 'érvényesség vége', is_active: 'állapot', note: 'megjegyzés' };
+const couponKey = (code) => `${COUPON_KEY_PREFIX}${code}`;
+const isCouponKey = (key) => typeof key === 'string' && key.startsWith(COUPON_KEY_PREFIX);
+
+function couponSnapshot(row) {
+  if (!row) return null;
+  return Object.fromEntries(COUPON_FIELDS.map((field) => [field, row[field] ?? null]));
+}
+
+function describeCoupon(before, after) {
+  if (!before && after) return `Kupon létrehozva: ${after.code} (${after.discount_percent}%).`;
+  if (before && !after) return `Kupon törölve: ${before.code}.`;
+  const changed = Object.keys(COUPON_FIELD_LABELS).filter((field) => !isEqual(before?.[field], after?.[field])).map((field) => COUPON_FIELD_LABELS[field]);
+  if (before?.is_active !== false && after?.is_active === false && /Archiválva/.test(String(after.note || ''))) return `Kupon archiválva: ${after.code}.`;
+  return `Kupon módosítva: ${after?.code || before?.code} (${changed.join(', ') || 'nincs eltérés'}).`;
+}
+
 // Magyar összefoglaló egy history-sorhoz (olvasáskor számolva, nincs külön oszlop).
 function describeChange(key, before, after) {
   if (key === 'planner_config') return describePlanner(before, after);
   if (isThemeKey(key)) return describeTheme(before, after);
+  if (isCouponKey(key)) return describeCoupon(before, after);
+  if (key === 'pricing') return describePricing(before, after);
+  if (key === 'maintenance_mode') return `Karbantartási mód ${onOff(after === true)}.`;
+  if (key === 'payment_provider') return `Fizetési szolgáltató: ${before ?? '–'} → ${after ?? '–'}.`;
+  if (key === 'billing_profile') return `Számlázási profil: ${before ?? '–'} → ${after ?? '–'}.`;
+  if (key === 'daily_generation_cap') return `Napi generálási keret: ${before ?? '–'} → ${after ?? '–'}.`;
+  if (key === 'announcement_bar') return `Hirdetősáv ${onOff(after?.enabled)}${after?.text ? `: „${String(after.text).slice(0, 80)}”` : ''}.`;
+  if (key === 'ai_config') {
+    const parts = [];
+    if (before?.model !== after?.model) parts.push(`modell: ${before?.model ?? '–'} → ${after?.model ?? '–'}`);
+    if (before?.system_prompt !== after?.system_prompt) parts.push('system prompt módosítva');
+    return `AI beállítás módosítva${parts.length ? ` (${parts.join('; ')})` : ''}.`;
+  }
   return '';
 }
 
-const isRestorableKey = (key) => key === 'planner_config' || isThemeKey(key);
+// Az egykattintásos visszaállítást támogató beállítások (mind a validatePatch-en át íródik vissza).
+const RESTORABLE_SETTING_KEYS = Object.freeze(['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email']);
+const isRestorableKey = (key) => RESTORABLE_SETTING_KEYS.includes(key) || isThemeKey(key);
 
-module.exports = { recordChange, describeChange, themeKey, isThemeKey, themeSnapshot, isRestorableKey, isEqual, THEME_FIELDS, THEME_KEY_PREFIX, isMissingColumn };
+module.exports = { recordChange, describeChange, themeKey, isThemeKey, themeSnapshot, couponKey, isCouponKey, couponSnapshot, isRestorableKey, isEqual, THEME_FIELDS, THEME_KEY_PREFIX, COUPON_KEY_PREFIX, RESTORABLE_SETTING_KEYS, isMissingColumn };

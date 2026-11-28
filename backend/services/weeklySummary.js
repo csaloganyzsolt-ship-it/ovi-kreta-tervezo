@@ -6,7 +6,7 @@ const { generationError, readText, readStringArray } = require('./responseReader
 const { weekRangeLabel } = require('./academicPlan');
 const settingsService = require('./settingsService');
 
-const WEEKDAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
+const { WEEKDAYS, selectedDaysOf, standardWeeklyScope } = require('./weeklyScope');
 
 // [kulcs, felirat, kötelező-e legalább egy tétel]
 const AREA_LISTS = Object.freeze([
@@ -54,10 +54,7 @@ function isStandardWeekly(payload = {}) {
 }
 
 // A „csak összesítő” az alapértelmezett heti választás; a csomag csak kifejezett weeklyScope: 'package' esetén készül.
-function weeklyScopeOf(payload = {}) {
-  if (!isStandardWeekly(payload)) return null;
-  return payload.weeklyScope === 'package' ? 'package' : 'summary';
-}
+const weeklyScopeOf = standardWeeklyScope;
 
 // Kötelező-e legalább 1 tétel (min), egyébként lehet üres; a tételek mindig nem üres szövegek.
 function readList(value, field, min) {
@@ -128,11 +125,7 @@ function normalizeSummaryBody(parsed, payload, { withDays = false } = {}) {
   return body;
 }
 
-function daysOf(payload) {
-  const requested = Array.isArray(payload.selectedDays) ? payload.selectedDays : [];
-  const days = WEEKDAYS.filter((day) => requested.includes(day));
-  return days.length ? days : [...WEEKDAYS];
-}
+const daysOf = selectedDaysOf;
 
 // Önálló „Csak heti összesítő” eredménye (is_weekly_summary) vagy a csomag keretterve (a csomag a napokat külön fűzi hozzá).
 function normalizeWeeklySummary(parsed, payload, options = {}) {

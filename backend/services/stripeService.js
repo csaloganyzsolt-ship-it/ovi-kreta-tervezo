@@ -73,9 +73,9 @@ function getBaseUrl(env = process.env) {
   return (configured || fallback).replace(/\/+$/, '');
 }
 
-// A planMode a csomag árát is meghatározza: az oktatási célú (academic) tervezet 690 Ft.
-function parsePlan(value, planMode) {
-  const product = productFor(value, planMode);
+// A planMode és (heti csomagnál) a napok a csomag árát is meghatározzák; a fizetési végpontok a mentett tervezetből adják át a kész terméket.
+function parsePlan(value, planMode, options) {
+  const product = productFor(value, planMode, undefined, options);
   if (!product) throw new PaymentError(`Ismeretlen csomag. Elfogadott értékek: ${Object.keys(PRODUCTS).join(', ')}.`);
   return product;
 }
@@ -107,10 +107,10 @@ function getClient(env = process.env, deps = {}, profileType) {
   return cachedClient;
 }
 
-async function createCheckoutSession({ plan, email, generationId, title, planMode } = {}, deps = {}) {
+async function createCheckoutSession({ plan, email, generationId, title, planMode, product: resolved, selectedDays } = {}, deps = {}) {
   const env = deps.env || process.env;
   await settingsService.getSettings();
-  const product = parsePlan(plan, planMode);
+  const product = resolved || parsePlan(plan, planMode, { selectedDays });
   const customerEmail = parseEmail(email);
   assertPaymentsAvailable(env);
   const baseUrl = getBaseUrl(env);
@@ -142,7 +142,7 @@ async function createCheckoutSession({ plan, email, generationId, title, planMod
         product_data: { name: product.invoiceName, description: product.invoiceName }
       }
     }],
-    metadata: { plan: product.key, planMode: product.planMode, billingProfile: getBillingProfile(env).type, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
+    metadata: { plan: product.key, planMode: product.planMode, selectedDayCount: String(product.selectedDays?.length || 0), billingProfile: getBillingProfile(env).type, generationId: String(generationId || '').slice(0, 100), title: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 200) },
     success_url: `${baseUrl}/tervezo.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/tervezo.html?payment=cancel`
   });

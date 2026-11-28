@@ -15,6 +15,7 @@ const orders = require('../services/orderService');
 const profileService = require('../services/profileService');
 const settingsService = require('../services/settingsService');
 const { getBillingProfile } = require('../services/siteConstants');
+const { productForStoredPlan, resolveProductKey, orderMetaFor } = require('../services/pricing');
 
 // Rendelésenként ennyiszer küldhető ki a tervezet e-mailben (kézbesítés, újraküldés ellen védve).
 const MAX_DELIVERIES = 1;
@@ -90,9 +91,9 @@ async function recordDeliveryFailure(order, error, req) {
   }).catch((e) => console.warn('Admin error alert failed:', e.message));
 }
 
-// A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri.
+// A tárolt terv a mérvadó: az academic tervezet nem fizethető standard áron akkor sem, ha a kliens ezt kéri (lásd productFromStoredPlan).
 // 45/2014. (II. 26.) Korm. rendelet 29. § (1) m): digitális adattartalomnál a vevő kifejezett nyilatkozata nélkül nem indul fizetés; a nyilatkozat bizonyítékként a rendszernaplóba kerül.
-const CONSENT_VERSION = '2026-11-27';
+const CONSENT_VERSION = '2026-11-28';
 function requireConsent(req, body, email) {
   const consent = body.consent || {};
   if (consent.terms !== true || consent.digitalContent !== true) {
@@ -107,22 +108,32 @@ function requireConsent(req, body, email) {
   });
 }
 
-function planModeFor(body = {}) {
-  const stored = body.generationId ? planStore.getPlan(String(body.generationId)) : null;
-  if (stored) return stored.planMode === 'academic' || stored.is_thematic === true || stored.request?.planMode === 'academic' ? 'academic' : 'standard';
-  return body.planMode === 'academic' ? 'academic' : 'standard';
+
+// A fizetendő termék kizárólag a szerveren mentett tervezetből jön (planKey, planMode, weeklyScope, napok). A kliens `plan` mezője csak ellenőrzésre szolgál:
+// ha nem egyezik a tervezet valódi besorolásával, a kérés 400-zal elutasul (így heti csomag nem oldható fel napi áron).
+function productFromStoredPlan(body, generationId) {
+  const stored = generationId ? planStore.getPlan(generationId) : null;
+  const found = stored ? productForStoredPlan(stored) : null;
+  if (!found) throw Object.assign(new Error('A tervezet már nem érhető el a szerveren, ezért nem fizethető. Készíts újat.'), { status: 404 });
+  const claimed = body.plan;
+  if (claimed !== undefined && claimed !== null && claimed !== '' && resolveProductKey(claimed, found.planMode) !== found.key) {
+    logger.warning('payment', 'A kliens csomagja nem egyezik a mentett tervezet besorolásával, a kérés elutasítva', { details: { generationId, claimed: String(claimed).slice(0, 40), actual: found.key } });
+    throw Object.assign(new Error('A megadott csomag nem egyezik a tervezet típusával. Töltsd újra az oldalt, és próbáld újra.'), { status: 400 });
+  }
+  return found;
 }
 
 async function createCheckout(req, res) {
   try {
     const body = req.body || {};
     requireConsent(req, body, body.email);
-    if (body.generationId) await planStore.loadPlan(String(body.generationId).slice(0, 100));
-    const planMode = planModeFor(body);
-    const session = await stripeService.createCheckoutSession({ ...body, planMode });
+    const generationId = String(body.generationId || '').slice(0, 100);
+    if (generationId) await planStore.loadPlan(generationId);
+    const product = productFromStoredPlan(body, generationId);
+    const session = await stripeService.createCheckoutSession({ ...body, generationId, product, planMode: product.planMode });
     // A valódi Stripe-fizetés rendelése már a indításkor megvan (állapotforrás); a mock munkamenet nem kerül az adatbázisba.
     if (!session.mock) {
-      const user = await recordOwner(req, String(body.generationId || '').slice(0, 100), body.email);
+      const user = await recordOwner(req, generationId, body.email);
       await orders.createPending({
         orderNumber: orders.orderNumberFor(session.id, new Date()),
         sessionId: session.id,
@@ -131,10 +142,11 @@ async function createCheckout(req, res) {
         billingProfile: getBillingProfile().type,
         userId: user?.id,
         email: stripeService.parseEmail(body.email),
-        documentId: String(body.generationId || '').slice(0, 100) || undefined,
-        planMode,
+        documentId: generationId || undefined,
+        planMode: product.planMode,
         planKey: session.plan,
         amount: session.amountHuf,
+        meta: orderMetaFor(product),
         title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, 200) || undefined,
         paymentMethod: 'Stripe'
       });
@@ -159,9 +171,9 @@ async function applyCoupon(req, res) {
     coupons.restoreSession(planStore.getDocumentState(generationId)?.coupon_session);
     const known = coupons.sessionFor(generationId);
     const coupon = known && known.code === coupons.normalizeCode(body.code) ? { code: known.code, percent: 100 } : await coupons.lookup(body.code);
-    const planMode = planModeFor(body);
+    const product = productFromStoredPlan(body, generationId);
+    const planMode = product.planMode;
     await settingsService.getSettings();
-    const product = stripeService.parsePlan(body.plan, planMode);
     const discount = coupons.computeDiscount(product.amountHuf, coupon.percent);
 
     if (coupon.percent < 100) {
@@ -184,6 +196,7 @@ async function applyCoupon(req, res) {
         planMode,
         planKey: session.plan,
         amount: 0,
+        meta: orderMetaFor(product),
         couponCode: session.code,
         paymentMethod: 'Kupon'
       });
@@ -238,7 +251,9 @@ async function checkoutBarion(req, res) {
         throw error;
       }
     }
-    const result = await barionService.startPayment({ ...body, generationId, planMode: planModeFor(body), coupon, user, req });
+    await settingsService.getSettings();
+    const product = productFromStoredPlan(body, generationId);
+    const result = await barionService.startPayment({ ...body, generationId, product, planMode: product.planMode, coupon, user, req });
     // A már ellenőrzött számlázási adat így kitölti a következő vásárlást; a hibája nem állítja meg a fizetést.
     if (user) await profileService.rememberBilling(user, barionService.parseBilling(body.billing)).catch((error) => console.error('[profil] A számlázási adatok visszaírása sikertelen:', error.message));
     if (body.subscribeNewsletter === true) await saveCheckoutSubscription(user, body);
@@ -423,6 +438,8 @@ async function stripeWebhook(req, res) {
       orderId: session.id,
       created: session.created,
       plan: session.metadata?.plan,
+      amountHuf: order.amount,
+      selectedDayCount: order.meta?.selectedDayCount || Number(session.metadata?.selectedDayCount) || undefined,
       billingProfile: order.billingProfile || profileType,
       customer
     });

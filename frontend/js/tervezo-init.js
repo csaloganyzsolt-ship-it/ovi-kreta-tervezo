@@ -119,17 +119,21 @@ function initFooterAndModals() {
 
 // A nyilvános beállítások (árak, karbantartás, szezonális javaslatok) betöltése. Hiba esetén a felület hangosan jelez, nincs kamu adat.
 function applyPublicConfig(config) {
-  const prices = config.pricing || {};
-  const byKind = { daily: prices.daily, weekly_summary: prices.daily, weekly_package: prices.weekly, academic_daily: prices.academic_daily, academic_weekly: prices.academic_weekly };
-  Object.entries(byKind).forEach(([kind, price]) => {
-    if (Number.isInteger(price) && price > 0) PAYWALL_PRICES[kind] = price;
-  });
+  if (!OviPricing.setPricing(config.pricing)) {
+    console.error('A /api/config árai hiányosak vagy érvénytelenek:', config.pricing);
+    const note = document.getElementById('configError');
+    if (note) {
+      note.textContent = 'Az árak nem töltődtek be, ezért az árinformáció nem jeleníthető meg. Kérjük, frissítsd az oldalt.';
+      note.hidden = false;
+    }
+  }
   appConfig.maintenance = config.maintenance_mode === true;
   appConfig.loaded = true;
   applyPlannerConfig(config.planner_config);
   renderSeasonalThemeSuggestions();
   renderStep();
   updateExportLock();
+  if (typeof renderStepOnePrices === 'function') renderStepOnePrices();
 }
 
 async function loadPublicConfig() {

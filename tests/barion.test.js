@@ -9,7 +9,7 @@ const server = require('../backend/server');
 const planStore = require('../backend/services/planStore');
 const stripeService = require('../backend/services/stripeService');
 const invoiceService = require('../backend/services/invoiceService');
-const { PRODUCTS, resolveProductKey, productFor } = require('../backend/services/pricing');
+const { PRODUCTS, resolveProductKey, productFor, priceOf } = require('../backend/services/pricing');
 const { barionPixelId, DEFAULT_BARION_PIXEL_ID, CONTENT_SECURITY_POLICY } = require('../backend/services/siteConstants');
 
 const ROOT = path.join(__dirname, '..');
@@ -17,10 +17,15 @@ const PIXEL_ID = 'BP-U0p5Sp7I1Q-EF';
 
 // ---------- Árazás: egy forrás, a planMode dönti el az összeget ----------
 
-test('the price table is one source: standard 390/890 Ft, academic 690 Ft for daily and weekly', () => {
-  assert.deepEqual(Object.fromEntries(Object.entries(PRODUCTS).map(([key, product]) => [key, product.amountHuf])), {
-    daily: 390, weekly_summary: 390, weekly_package: 890, academic_daily: 690, academic_weekly: 690
+test('the price table is one source: five price keys from the pricing setting, the weekly package is summary + days × extra, academic 690 Ft', () => {
+  const pricing = { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 };
+  assert.deepEqual(Object.fromEntries(Object.keys(PRODUCTS).map((key) => [key, priceOf(key, pricing).amountHuf])), {
+    daily: 390, weekly_summary: 590, weekly_package: 1090, academic_daily: 690, academic_weekly: 690
   });
+  assert.ok(Object.values(PRODUCTS).every((product) => !('amountHuf' in product)), 'a termékleírásban nincs beégetett ár');
+  assert.deepEqual([1, 3, 5].map((days) => priceOf('weekly_package', pricing, days).amountHuf), [690, 890, 1090]);
+  assert.throws(() => priceOf('daily', { weekly_summary: 590 }), /Hiányzó vagy érvénytelen árbeállítás: daily/);
+  assert.throws(() => productFor('daily', 'standard', {}), /árbeállítás/);
   assert.equal(stripeService.PRODUCTS, PRODUCTS, 'a Stripe, a számlázás és a Barion ugyanazt a táblát használja');
   for (const product of Object.values(PRODUCTS)) assert.equal(product.planMode, product.key.startsWith('academic_') ? 'academic' : 'standard');
   assert.ok(PRODUCTS.academic_daily.invoiceName.includes('oktatási célú'));
@@ -39,21 +44,22 @@ test('planMode decides the product: academic never pays a standard price, unknow
   assert.throws(() => stripeService.parsePlan('monthly', 'academic'), (error) => error.status === 400 && /academic_daily/.test(error.message));
 });
 
-test('Stripe charges 690 Ft for the academic plans and 390/890 Ft for the standard ones, from the plan mode', async () => {
-  const charge = async (plan, planMode) => {
+test('Stripe charges 690 Ft for the academic plans, 390 Ft daily, 590 Ft summary and 590 + days × 100 Ft for the package, from the plan mode', async () => {
+  const charge = async (plan, planMode, selectedDays) => {
     let params;
     const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_test_1', url: 'https://stripe/x' }; } } } };
-    const result = await stripeService.createCheckoutSession({ plan, planMode, email: 'a@b.hu', generationId: 'g1' }, { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, client });
+    const result = await stripeService.createCheckoutSession({ plan, planMode, selectedDays, email: 'a@b.hu', generationId: 'g1' }, { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, client });
     return { params, result };
   };
-  for (const [plan, mode, key, huf] of [
+  for (const [plan, mode, key, huf, days] of [
     ['daily', 'academic', 'academic_daily', 690], ['weekly', 'academic', 'academic_weekly', 690], ['weekly_detailed', 'academic', 'academic_weekly', 690],
-    ['academic_daily', 'standard', 'academic_daily', 690], ['daily', 'standard', 'daily', 390], ['weekly_detailed', 'standard', 'weekly_package', 890]
+    ['academic_daily', 'standard', 'academic_daily', 690], ['daily', 'standard', 'daily', 390], ['weekly', 'standard', 'weekly_summary', 590],
+    ['weekly_detailed', 'standard', 'weekly_package', 890, ['Hétfő', 'Szerda', 'Péntek']], ['weekly_package', 'standard', 'weekly_package', 690, ['Kedd']], ['weekly_package', 'standard', 'weekly_package', 1090]
   ]) {
-    const { params, result } = await charge(plan, mode);
+    const { params, result } = await charge(plan, mode, days);
     assert.equal(params.line_items[0].price_data.unit_amount, huf * 100, `${plan}/${mode}`);
     assert.equal(params.metadata.plan, key);
-    assert.equal(params.metadata.planMode, huf === 690 ? 'academic' : 'standard');
+    assert.equal(params.metadata.planMode, key.startsWith('academic_') ? 'academic' : 'standard');
     assert.equal(result.amountHuf, huf);
     assert.equal(result.plan, key);
   }
@@ -64,7 +70,7 @@ test('Stripe charges 690 Ft for the academic plans and 390/890 Ft for the standa
 test('the invoice for an academic plan is 690 Ft AAM: net equals gross, no VAT, with its own line item name', () => {
   const env = { SZAMLAZZ_API_KEY_EV: 'agent-ev' };
   for (const plan of ['academic_daily', 'academic_weekly']) {
-    const xml = invoiceService.buildInvoiceXml({ plan, orderId: 'cs_test_1', customer: { email: 'a@b.hu' } }, env);
+    const xml = invoiceService.buildInvoiceXml({ plan, amountHuf: 690, orderId: 'cs_test_1', customer: { email: 'a@b.hu' } }, env);
     assert.match(xml, /<afakulcs>AAM<\/afakulcs>/);
     assert.match(xml, /<nettoEgysegar>690<\/nettoEgysegar>/);
     assert.match(xml, /<nettoErtek>690<\/nettoErtek>/);
@@ -73,7 +79,8 @@ test('the invoice for an academic plan is 690 Ft AAM: net equals gross, no VAT, 
     assert.match(xml, /oktatási célú/);
     assert.doesNotMatch(xml, /szamlaszamElotag/);
   }
-  assert.match(invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'cs_test_1', customer: { email: 'a@b.hu' } }, env), /<bruttoErtek>390<\/bruttoErtek>/);
+  assert.match(invoiceService.buildInvoiceXml({ plan: 'daily', amountHuf: 390, orderId: 'cs_test_1', customer: { email: 'a@b.hu' } }, env), /<bruttoErtek>390<\/bruttoErtek>/);
+  assert.throws(() => invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'cs_test_1', customer: { email: 'a@b.hu' } }, env), /hiányzik a rendelés összege/);
 });
 
 async function listen(t) {
@@ -110,11 +117,14 @@ test('the server takes the plan mode from the stored plan, so an academic plan c
   const standard = await checkout({ plan: 'daily', planMode: 'academic', generationId: 'gen_barion_standard' });
   assert.equal(standard.plan, 'daily', 'a tárolt standard terv a standard áron marad');
   assert.equal(standard.amountHuf, 390);
-  const unknown = await checkout({ plan: 'daily', planMode: 'academic', generationId: 'gen_nincs_ilyen' });
-  assert.equal(unknown.plan, 'academic_daily', 'tárolt terv nélkül a kliens planMode-ja érvényes');
-  const weekly = await checkout({ plan: 'weekly_detailed', generationId: 'gen_barion_standard' });
+  const unknown = await post(base, '/api/create-checkout-session', { plan: 'daily', planMode: 'academic', email: 'a@b.hu', generationId: 'gen_nincs_ilyen' });
+  assert.equal(unknown.status, 404, 'tárolt terv nélkül nincs fizetés (a kliens planMode-ja nem számít)');
+  planStore.savePlan('gen_barion_weekly3', { is_weekly: true, napok: [{ nap_neve: 'Hétfő' }, { nap_neve: 'Kedd' }, { nap_neve: 'Szerda' }], request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } });
+  const weekly = await checkout({ plan: 'weekly_detailed', generationId: 'gen_barion_weekly3' });
   assert.equal(weekly.amountHuf, 890);
-  const invalid = await post(base, '/api/create-checkout-session', { plan: 'monthly', planMode: 'academic', email: 'a@b.hu' });
+  const mismatch = await post(base, '/api/create-checkout-session', { plan: 'weekly_detailed', email: 'a@b.hu', generationId: 'gen_barion_standard' });
+  assert.equal(mismatch.status, 400, 'napi tervhez heti csomag ára nem kérhető');
+  const invalid = await post(base, '/api/create-checkout-session', { plan: 'monthly', planMode: 'academic', email: 'a@b.hu', generationId: 'gen_barion_standard' });
   assert.equal(invalid.status, 400);
 });
 
@@ -411,7 +421,7 @@ test('the Barion checkout sends the plan and plan mode of the document, and the 
   const window = await loadPlanner(t);
   const cases = [
     [standardResult({ duration: 'Napi' }), 'daily', 'standard', 'Napi tervezet – 390 Ft'],
-    [standardResult({ duration: 'Heti' }), 'weekly_summary', 'standard', 'Heti összesítő – 390 Ft'],
+    [standardResult({ duration: 'Heti' }), 'weekly_summary', 'standard', 'Heti összesítő – 590 Ft'],
     [academicResult(), 'academic_daily', 'academic', 'Oktatási célú napi tervezet – 690 Ft'],
     [thematicResult(), 'academic_weekly', 'academic', 'Oktatási célú heti tematikus terv – 690 Ft']
   ];
@@ -421,7 +431,7 @@ test('the Barion checkout sends the plan and plan mode of the document, and the 
     assert.equal(window.currentPlanMode(), planMode);
     window.openCheckoutModal();
     assert.equal(window.document.getElementById('checkoutSummary').textContent, summary);
-    const price = plan.startsWith('academic') ? '690' : '390';
+    const price = plan.startsWith('academic') ? '690' : plan === 'weekly_summary' ? '590' : '390';
     assert.match(window.document.getElementById('unlockBtn')?.textContent || window.document.querySelector('.unlock-cta').textContent, new RegExp(`${price} Ft`), `${plan}: feloldó gomb`);
 
     let body;
@@ -436,10 +446,14 @@ test('the Barion checkout sends the plan and plan mode of the document, and the 
   }
 });
 
-test('the front end price table matches the server price table for every product', async (t) => {
+test('the front end has no price table: prices come from OviPricing and match the server formula for every product', async (t) => {
   const window = await loadPlanner(t);
-  const frontend = JSON.parse(JSON.stringify(window.eval('PAYWALL_PRICES')));
-  assert.deepEqual(frontend, Object.fromEntries(Object.entries(PRODUCTS).map(([key, product]) => [key, product.amountHuf])));
+  assert.equal(window.eval('typeof PAYWALL_PRICES'), 'undefined');
+  const pricing = { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 };
+  for (const key of Object.keys(PRODUCTS)) {
+    const server = priceOf(key, pricing, 3).amountHuf;
+    assert.equal(window.OviPricing.priceFor(key, 3), server, key);
+  }
   const labels = JSON.parse(JSON.stringify(window.eval('PLAN_LABELS')));
   assert.deepEqual(Object.keys(labels).sort(), Object.keys(PRODUCTS).sort());
 });
@@ -645,9 +659,9 @@ test('a pending Barion payment is checked once more on the next page load, silen
 
 test('the price texts mention the academic price consistently on the landing page, the legal texts and the JSON-LD', () => {
   const landing = fs.readFileSync(path.join(ROOT, 'frontend', 'index.html'), 'utf8');
-  assert.match(landing, /oktatási célú \(egyetemi\) tervezet <strong>690 Ft<\/strong>/);
-  assert.equal((landing.match(/napi és heti formában is 690 Ft, bruttó/g) || []).length, 2, 'látható GYIK és JSON-LD egyezik');
-  assert.match(landing, /"lowPrice":"390","highPrice":"890","offerCount":"3"/);
+  assert.match(landing, /oktatási célú \(egyetemi\) tervezet <strong data-price="academic_daily">690 Ft<\/strong>/);
+  assert.equal((landing.match(/napi formában (<span data-price="academic_daily">)?690 Ft(<\/span>)?, heti formában (<span data-price="academic_weekly">)?690 Ft(<\/span>)?, bruttó/g) || []).length, 2, 'látható GYIK és JSON-LD egyezik');
+  assert.match(landing, /"lowPrice":"390","highPrice":"1090","offerCount":"4"/);
   const legal = fs.readFileSync(path.join(ROOT, 'frontend', 'js', 'site.js'), 'utf8');
-  assert.equal((legal.match(/Oktatási célú tervezet \(napi foglalkozásterv vagy heti tematikus terv\): 690 Ft \(bruttó\)/g) || []).length, 2);
+  assert.equal((legal.match(/Oktatási célú tervezet: napi foglalkozásterv \{\{PRICE_ACADEMIC_DAILY\}\}, heti tematikus terv \{\{PRICE_ACADEMIC_WEEKLY\}\} \(bruttó\)/g) || []).length, 2);
 });

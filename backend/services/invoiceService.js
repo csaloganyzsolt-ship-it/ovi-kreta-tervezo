@@ -1,7 +1,6 @@
 'use strict';
 
-const { PRODUCTS } = require('./stripeService');
-const { resolveProductKey } = require('./pricing');
+const { resolveProductKey, PRODUCTS, packageLabel } = require('./pricing');
 const { normalizeHuTaxNumber } = require('../utils/taxNumber');
 
 const { SUPPORT_EMAIL: DEFAULT_SUPPORT_EMAIL, getBillingProfile } = require('./siteConstants');
@@ -63,13 +62,15 @@ function orderNumber(orderId, created = new Date()) {
   return `OVI-${ymd}-${String(orderId || '').slice(-6).toUpperCase()}`;
 }
 
-function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent, billingProfile }, env = process.env, date = new Date()) {
+function buildInvoiceXml({ customer, plan, orderId, created, paymentMethod, amountHuf, couponPercent, billingProfile, selectedDayCount }, env = process.env, date = new Date()) {
   // A régi (weekly, weekly_detailed) rendelések kulcsait is kiszolgáljuk.
   const product = PRODUCTS[resolveProductKey(plan)];
   if (!product) throw new Error(`Ismeretlen csomag a számlázáshoz: ${plan}`);
-  // Kuponos fizetésnél a számla a ténylegesen fizetett (kedvezményes) összegről szól.
-  const gross = Number.isInteger(amountHuf) && amountHuf > 0 ? amountHuf : product.amountHuf;
-  const itemName = couponPercent ? `${product.invoiceName} (kupon: -${couponPercent}%)` : product.invoiceName;
+  // A számla bruttó végösszege mindig a rendelés összege (kuponos fizetésnél a ténylegesen fizetett összeg); nincs beégetett tartalék ár.
+  if (!Number.isInteger(amountHuf) || amountHuf <= 0) throw new Error(`A számlához hiányzik a rendelés összege (${orderId}).`);
+  const gross = amountHuf;
+  const baseName = product.key === 'weekly_package' && Number.isInteger(selectedDayCount) && selectedDayCount > 0 ? packageLabel(selectedDayCount) : product.invoiceName;
+  const itemName = couponPercent ? `${baseName} (kupon: -${couponPercent}%)` : baseName;
   const vatKey = vatRate(env, billingProfile);
   const { net, vat } = splitGross(gross, vatKey);
   const day = today(date);

@@ -170,7 +170,7 @@ function parseCouponInput(body = {}, now = Date.now()) {
   return { code, discount_percent: percent, max_uses: maxUses, valid_until: parseValidUntil(body.valid_until, now), note: note || null };
 }
 
-async function createCoupon(client, body, now = Date.now()) {
+async function createCoupon(client, body, now = Date.now(), actor = '') {
   const input = parseCouponInput(body, now);
   const { data: existing, error: lookupError } = await client.from('coupons').select('code').eq('code', input.code).maybeSingle();
   if (lookupError) throw dbError(lookupError, 'A kupon ellenőrzése sikertelen');
@@ -180,6 +180,7 @@ async function createCoupon(client, body, now = Date.now()) {
     if (error.code === '23505') throw new AdminError('Ilyen kuponkód már létezik.', 409);
     throw dbError(error, 'A kupon mentése sikertelen');
   }
+  await auditLog.recordChange(client, auditLog.couponKey(data.code), null, auditLog.couponSnapshot(data), actor);
   return couponView(data);
 }
 
@@ -196,25 +197,39 @@ function parseCouponPatch(body = {}, now = Date.now()) {
   return patch;
 }
 
-async function updateCoupon(client, rawCode, body, now = Date.now()) {
+// A módosítás előtti állapot a naplóhoz; az olvasási hiba nem akaszthatja meg a műveletet.
+async function couponBefore(client, code) {
+  try {
+    const { data } = await client.from('coupons').select(COUPON_COLUMNS).eq('code', code).maybeSingle();
+    return data ? auditLog.couponSnapshot(data) : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function updateCoupon(client, rawCode, body, now = Date.now(), actor = '') {
   const code = normalizeCode(rawCode);
   if (!CODE_PATTERN.test(code)) throw new AdminError('A kupon nem található.', 404);
   const patch = parseCouponPatch(body, now);
+  const before = await couponBefore(client, code);
   const { data, error } = await client.from('coupons').update(patch).eq('code', code).select(COUPON_COLUMNS);
   if (error) throw dbError(error, 'A kupon módosítása sikertelen');
   if (!data?.length) throw new AdminError('A kupon nem található.', 404);
+  await auditLog.recordChange(client, auditLog.couponKey(code), before, auditLog.couponSnapshot(data[0]), actor);
   return couponView(data[0]);
 }
 
 const setCouponActive = (client, rawCode, isActive) => updateCoupon(client, rawCode, { is_active: isActive });
 
 // Idegenkulcs-hivatkozás (rendelés, beváltás) esetén nem törlünk, hanem archiválunk: a kupon inaktív, tegnap lejárt, a megjegyzésben jelölve.
-async function deleteCoupon(client, rawCode, now = Date.now()) {
+async function deleteCoupon(client, rawCode, now = Date.now(), actor = '') {
   const code = normalizeCode(rawCode);
   if (!CODE_PATTERN.test(code)) throw new AdminError('A kupon nem található.', 404);
+  const before = await couponBefore(client, code);
   const { data, error } = await client.from('coupons').delete().eq('code', code).select('code');
   if (!error) {
     if (!data?.length) throw new AdminError('A kupon nem található.', 404);
+    await auditLog.recordChange(client, auditLog.couponKey(code), before || { code }, null, actor);
     return { deleted: true, archived: false, code };
   }
   if (error.code !== '23503') throw dbError(error, 'A kupon törlése sikertelen');
@@ -222,6 +237,7 @@ async function deleteCoupon(client, rawCode, now = Date.now()) {
   const { data: updated, error: archiveError } = await client.from('coupons').update(archive).eq('code', code).select(COUPON_COLUMNS);
   if (archiveError) throw dbError(archiveError, 'A kupon archiválása sikertelen');
   if (!updated?.length) throw new AdminError('A kupon nem található.', 404);
+  await auditLog.recordChange(client, auditLog.couponKey(code), before, auditLog.couponSnapshot(updated[0]), actor);
   return { deleted: false, archived: true, code, coupon: couponView(updated[0]) };
 }
 
@@ -360,10 +376,11 @@ async function listAudit(client, query = {}) {
   const paging = parsePaging(query);
   const range = parseDateRange(query);
   const type = filterText(query.type);
-  if (type && !['setting', 'template', 'theme'].includes(type)) throw validationError('Ismeretlen beállítás-típus.');
+  if (type && !['setting', 'template', 'theme', 'coupon'].includes(type)) throw validationError('Ismeretlen beállítás-típus.');
   let request = client.from('system_settings_history').select('id, setting_key, old_value, new_value, changed_at, changed_by', { count: 'exact' });
   if (type === 'template') request = request.ilike('setting_key', `${TEMPLATE_KEY_PREFIX}%`);
   if (type === 'theme') request = request.ilike('setting_key', `${auditLog.THEME_KEY_PREFIX}%`);
+  if (type === 'coupon') request = request.ilike('setting_key', `${auditLog.COUPON_KEY_PREFIX}%`);
   if (type === 'setting') request = request.in('setting_key', Object.keys(settingsService.DEFAULT_SETTINGS));
   if (range.from) request = request.gte('changed_at', range.from);
   if (range.to) request = request.lte('changed_at', range.to);
@@ -380,8 +397,8 @@ async function listAudit(client, query = {}) {
   const entries = (data || []).map((row) => ({
     id: row.id,
     key: row.setting_key,
-    label: auditLog.isThemeKey(row.setting_key) ? `Téma-ajánló: ${(row.new_value || row.old_value || {}).title || row.setting_key.slice(auditLog.THEME_KEY_PREFIX.length)}` : settingLabel(row.setting_key),
-    kind: String(row.setting_key).startsWith(TEMPLATE_KEY_PREFIX) ? 'template' : auditLog.isThemeKey(row.setting_key) ? 'theme' : 'setting',
+    label: auditLog.isThemeKey(row.setting_key) ? `Téma-ajánló: ${(row.new_value || row.old_value || {}).title || row.setting_key.slice(auditLog.THEME_KEY_PREFIX.length)}` : auditLog.isCouponKey(row.setting_key) ? `Kupon: ${row.setting_key.slice(auditLog.COUPON_KEY_PREFIX.length)}` : settingLabel(row.setting_key),
+    kind: String(row.setting_key).startsWith(TEMPLATE_KEY_PREFIX) ? 'template' : auditLog.isThemeKey(row.setting_key) ? 'theme' : auditLog.isCouponKey(row.setting_key) ? 'coupon' : 'setting',
     summary: auditLog.describeChange(row.setting_key, row.old_value, row.new_value),
     restorable: auditLog.isRestorableKey(row.setting_key),
     changedAt: row.changed_at,
@@ -401,6 +418,19 @@ async function restoreAudit(client, id, actor = '') {
   if (row.setting_key === 'planner_config') {
     const settings = await settingsService.updateSettings(client, { planner_config: row.old_value || {} }, actor, { replace: true });
     return { key: row.setting_key, restored: true, planner_config: settings.planner_config };
+  }
+  if (!auditLog.isThemeKey(row.setting_key)) {
+    if (row.old_value === null || row.old_value === undefined) throw new AdminError('Ehhez a bejegyzéshez nincs korábbi érték, ezért nem állítható vissza.', 409);
+    let previous = row.old_value;
+    // A régi (heti csomagár-mezős) árazás naplóbejegyzése csak az ismert árkulcsokra szűkül; a hiányzó új kulcsok a jelenlegi értéken maradnak.
+    if (row.setting_key === 'pricing' && previous && typeof previous === 'object') previous = Object.fromEntries(Object.entries(previous).filter(([tier]) => settingsService.PRICE_TIERS.includes(tier)));
+    try {
+      const settings = await settingsService.updateSettings(client, { [row.setting_key]: previous }, actor);
+      return { key: row.setting_key, restored: true, value: maskValue(settings[row.setting_key], row.setting_key) };
+    } catch (error) {
+      if (error instanceof settingsService.SettingsError) throw new AdminError(`A régi érték már nem érvényes, nem állítható vissza: ${error.message}`, 409);
+      throw error;
+    }
   }
   const themeId = row.setting_key.slice(auditLog.THEME_KEY_PREFIX.length);
   const themes = require('./themeSuggestionsService');

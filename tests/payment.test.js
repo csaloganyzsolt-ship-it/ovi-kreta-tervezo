@@ -30,18 +30,19 @@ test('live checkout sends HUF minor units and metadata to Stripe', async () => {
   let params;
   const client = { checkout: { sessions: { create: async (p) => { params = p; return { id: 'cs_live_1', url: 'https://stripe/x' }; } } } };
   const result = await stripeService.createCheckoutSession(
-    { plan: 'weekly_detailed', email: 'a@b.hu', generationId: 'g1' },
+    { plan: 'weekly_detailed', email: 'a@b.hu', generationId: 'g1', selectedDays: ['Hétfő', 'Kedd', 'Szerda'] },
     { env: { ...devEnv, STRIPE_SECRET_KEY: 'sk_test' }, client }
   );
   assert.equal(result.url, 'https://stripe/x');
   assert.equal(params.line_items[0].price_data.unit_amount, 89000);
+  assert.equal(params.metadata.selectedDayCount, '3');
   assert.equal(params.line_items[0].price_data.currency, 'huf');
   assert.equal(params.metadata.plan, 'weekly_package');
 });
 
 test('invoice XML escapes input and splits VAT', () => {
   const xml = invoiceService.buildInvoiceXml(
-    { plan: 'daily', orderId: 'cs_1', customer: { name: 'A & <B>', email: 'a@b.hu', zip: '1111', city: 'Bp', address: 'Fő u. 1' } },
+    { plan: 'daily', amountHuf: 390, orderId: 'cs_1', customer: { name: 'A & <B>', email: 'a@b.hu', zip: '1111', city: 'Bp', address: 'Fő u. 1' } },
     { SZAMLAZZ_KEY: 'key', SZAMLAZZ_VAT_RATE: '27' }
   );
   assert.match(xml, /A &amp; &lt;B&gt;/);
@@ -53,7 +54,7 @@ test('issueInvoice keeps no state: the PDF is only returned in memory and a retr
   const env = { SZAMLAZZ_KEY: 'key' };
   let calls = 0;
   const fetch = async () => { calls += 1; return { ok: true, headers: new Map([['szlahu_szamlaszam', 'E-2025-1']]), arrayBuffer: async () => Buffer.from('%PDF-1.4 test') }; };
-  const order = { orderId: 'cs_test_1', plan: 'daily', customer: { email: 'a@b.hu' } };
+  const order = { orderId: 'cs_test_1', plan: 'daily', amountHuf: 390, customer: { email: 'a@b.hu' } };
   const first = await invoiceService.issueInvoice(order, { env, fetch });
   assert.equal(first.invoiceNumber, 'E-2025-1');
   assert.match(first.pdf.toString(), /^%PDF/);
@@ -64,7 +65,8 @@ test('issueInvoice keeps no state: the PDF is only returned in memory and a retr
 test('invoice errors from Számlázz.hu are surfaced', async () => {
   const env = { SZAMLAZZ_KEY: 'key' };
   const fetch = async () => ({ ok: true, headers: new Map([['szlahu_error', 'Hib%C3%A1s']]) });
-  await assert.rejects(invoiceService.issueInvoice({ orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env, fetch }), /Hibás/);
+  await assert.rejects(invoiceService.issueInvoice({ orderId: 'x', plan: 'daily', amountHuf: 390, customer: { email: 'a@b.hu' } }, { env, fetch }), /Hibás/);
+  await assert.rejects(invoiceService.issueInvoice({ orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } }, { env, fetch }), /hiányzik a rendelés összege/);
 });
 
 test('webhook rejects calls without valid configuration or signature', async () => {
@@ -76,8 +78,10 @@ test('webhook rejects calls without valid configuration or signature', async () 
     const port = server.address().port;
     const response = await fetch(`http://127.0.0.1:${port}/api/webhook/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.ok([400, 503].includes(response.status));
+    const planStore = require('../backend/services/planStore');
+    planStore.savePlan('gen_hook_1', { ...makePlan(2), request: { planMode: 'standard', duration: 'Napi' } });
     const mock = await fetch(`http://127.0.0.1:${port}/api/create-checkout-session`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'weekly', email: 'a@b.hu', consent: { terms: true, digitalContent: true } })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'daily', generationId: 'gen_hook_1', email: 'a@b.hu', consent: { terms: true, digitalContent: true } })
     });
     assert.equal(mock.status, 200);
     assert.equal((await mock.json()).mock, true);
@@ -152,7 +156,7 @@ test('sk_test key runs live checkout in test mode with return URLs', async () =>
 });
 
 test('Számlázz.hu sandbox flag still produces a regular e-invoice, not a proforma', () => {
-  const order = { plan: 'daily', orderId: 'cs_1', customer: { email: 'a@b.hu' } };
+  const order = { plan: 'daily', amountHuf: 390, orderId: 'cs_1', customer: { email: 'a@b.hu' } };
   const sandbox = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_SANDBOX: 'true' });
   assert.match(sandbox, /<dijbekero>false<\/dijbekero>/);
   assert.match(sandbox, /<eszamla>false<\/eszamla>/);
@@ -192,8 +196,8 @@ test('footer and legal modals use the real company data without placeholders', a
 test('invoice carries software line items, ovitervezo.hu note and sends an e-invoice', () => {
   const base = { orderId: 'x', customer: { email: 'a@b.hu' } };
   const env = { SZAMLAZZ_KEY: 'k' };
-  const daily = invoiceService.buildInvoiceXml({ ...base, plan: 'daily' }, env);
-  const weekly = invoiceService.buildInvoiceXml({ ...base, plan: 'weekly' }, env);
+  const daily = invoiceService.buildInvoiceXml({ ...base, plan: 'daily', amountHuf: 390 }, env);
+  const weekly = invoiceService.buildInvoiceXml({ ...base, plan: 'weekly', amountHuf: 590 }, env);
   assert.match(daily, /<megnevezes>OviTervező – Online szoftverhasználati díj \(1 alkalom\)<\/megnevezes>/);
   assert.match(weekly, /<megnevezes>OviTervező – Online szoftverhasználati díj – heti összesítő<\/megnevezes>/);
   assert.doesNotMatch(daily, /pedagógiai/);
@@ -238,7 +242,7 @@ test('signed checkout.session.completed webhook issues the invoice with the new 
 });
 
 test('SUPPORT_EMAIL drives the invoice note and reply address, with a working fallback', () => {
-  const order = { plan: 'daily', orderId: 'x', customer: { email: 'a@b.hu' } };
+  const order = { plan: 'daily', amountHuf: 390, orderId: 'x', customer: { email: 'a@b.hu' } };
   const custom = invoiceService.buildInvoiceXml(order, { SZAMLAZZ_KEY: 'k', SUPPORT_EMAIL: 'segitseg@ovitervezo.hu' });
   assert.match(custom, /Ügyfélszolgálat: segitseg@ovitervezo\.hu/);
   assert.match(custom, /<emailReplyto>segitseg@ovitervezo\.hu<\/emailReplyto>/);
@@ -253,9 +257,9 @@ test('Stripe checkout names match the invoice software line items', async () => 
   assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj (1 alkalom)');
   await stripeService.createCheckoutSession({ plan: 'weekly', email: 'a@b.hu' }, { env, client });
   assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – heti összesítő');
-  assert.equal(params.line_items[0].price_data.unit_amount, 39000);
-  await stripeService.createCheckoutSession({ plan: 'weekly_detailed', email: 'a@b.hu' }, { env, client });
-  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Online szoftverhasználati díj – teljes heti csomag');
+  assert.equal(params.line_items[0].price_data.unit_amount, 59000);
+  await stripeService.createCheckoutSession({ plan: 'weekly_detailed', email: 'a@b.hu', selectedDays: ['Hétfő', 'Kedd', 'Szerda'] }, { env, client });
+  assert.equal(params.line_items[0].price_data.product_data.name, 'OviTervező – Heti tervezet csomag (heti összesítő + 3 kidolgozott nap)');
   assert.equal(params.line_items[0].price_data.unit_amount, 89000);
   assert.doesNotMatch(JSON.stringify(params), /pedagógiai/);
 });
@@ -272,7 +276,7 @@ test('checkout return URLs follow FRONTEND_URL, falling back to BASE_URL', async
 });
 
 test('invoice request disables Számlázz.hu mailing and asks for the PDF; the PDF is fetched live by invoice number', async () => {
-  const xml = invoiceService.buildInvoiceXml({ plan: 'daily', orderId: 'cs_test_9', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
+  const xml = invoiceService.buildInvoiceXml({ plan: 'daily', amountHuf: 390, orderId: 'cs_test_9', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
   assert.match(xml, /<szamlaLetoltes>true<\/szamlaLetoltes>/);
   assert.match(xml, /<sendEmail>false<\/sendEmail>/);
   const env = { SZAMLAZZ_KEY: 'k' };
@@ -393,14 +397,14 @@ test('locked preview renders 1:1 mirror activity section with blur and shows the
   assert.equal(host.querySelector('.locked-mirror-text'), null);
 });
 
-test('plan kinds map to the three price tiers', async (t) => {
+test('plan kinds map to the price tiers and the paywall price follows the day count', async (t) => {
   const window = await loadLockedApp(t);
   assert.equal(window.planKind({ request: { duration: 'Napi' } }), 'daily');
   assert.equal(window.planKind({ request: { duration: 'Heti', weeklyScope: 'summary' } }), 'weekly_summary');
   assert.equal(window.planKind({ is_weekly: true, request: { duration: 'Heti', weeklyScope: 'package' } }), 'weekly_package');
   const price = (result) => { window.renderResultDocument({ ...makePlan(8), ...result, generationId: 'gp' + Math.random() }); return window.document.getElementById('unlockBtn').textContent; };
   assert.match(price({ request: { ...makePayload(), duration: 'Napi' } }), /390 Ft/);
-  assert.match(price({ request: { ...makePayload(), duration: 'Heti' } }), /390 Ft/);
+  assert.match(price({ request: { ...makePayload(), duration: 'Heti', weeklyScope: 'summary' } }), /590 Ft/);
 });
 
 test('unlock buttons appear in all places while locked and give way to the Feloldva badge', async (t) => {
@@ -443,7 +447,7 @@ test('generation disables the button, shows progress text, scrolls to the loader
 });
 
 test('the Számlázz.hu XML never carries a prefix or order number element, even when a prefix env is set (numbering is the account default)', () => {
-  const base = { orderId: 'x', plan: 'daily', customer: { email: 'a@b.hu' } };
+  const base = { orderId: 'x', plan: 'daily', amountHuf: 390, customer: { email: 'a@b.hu' } };
   for (const env of [{ SZAMLAZZ_KEY: 'k' }, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_PREFIX: 'OVITE' }, { SZAMLAZZ_KEY: 'k', SZAMLAZZ_INVOICE_PREFIX: 'ABC' }]) {
     const xml = invoiceService.buildInvoiceXml(base, env);
     assert.doesNotMatch(xml, /szamlaszamElotag|szamlaElotag|rendelesSzam|rendelesszam/i);
@@ -454,7 +458,7 @@ test('invoice number order id stays internal: the XML has no OVI order number, t
   const sessionId = 'cs_live_a1oHW2xOQfzz8abc7TTU12';
   const created = Date.UTC(2026, 10, 8, 12) / 1000;
   assert.equal(invoiceService.orderNumber(sessionId, created), 'OVI-261108-7TTU12');
-  const xml = invoiceService.buildInvoiceXml({ orderId: sessionId, created, plan: 'daily', customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
+  const xml = invoiceService.buildInvoiceXml({ orderId: sessionId, created, plan: 'daily', amountHuf: 390, customer: { email: 'a@b.hu' } }, { SZAMLAZZ_KEY: 'k' });
   assert.doesNotMatch(xml, /OVI-261108|rendelesSzam/);
   assert.doesNotMatch(xml, /cs_live_/);
   const { buildEmailContent } = require('../backend/services/mailService');
@@ -593,7 +597,7 @@ test('mail template is warm, lists attachments and carries the legal footer', ()
 
 test('sheets webhook payload has all purchase fields and failures never throw', async () => {
   const sheets = require('../backend/services/sheetsService');
-  const session = { id: 'cs_live_a1oHW2xOQfzz8abc7TTU12', created: Date.UTC(2026, 10, 10, 8) / 1000, metadata: { plan: 'weekly_detailed', title: 'Őszi erdő' } };
+  const session = { id: 'cs_live_a1oHW2xOQfzz8abc7TTU12', created: Date.UTC(2026, 10, 10, 8) / 1000, amount_total: 89000, metadata: { plan: 'weekly_package', title: 'Őszi erdő' } };
   const customer = { name: 'Teszt Elek', email: 'a@b.hu', zip: '9153', city: 'Öttevény', address: 'Arany J. u. 10.' };
   const payload = sheets.buildPayload({ session, invoiceNumber: 'OVITE-2026-1', customer }, new Date(Date.UTC(2026, 10, 10, 8, 5)));
   assert.deepEqual(payload, {
@@ -632,7 +636,7 @@ test('purchase e-mail is sent to the customer without BCC copying plan attachmen
 test('index.html is a pure landing page and tervezo.html is the planner only', () => {
   const landing = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const planner = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'tervezo.html'), 'utf8');
-  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '890 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Átlátható, szakmai felépítés', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
+  for (const text of ['Tervező indítása', 'Kezdjük a tervezést', '390 Ft', '1 090 Ft', '1. Csoport adatai', '2. Átgondolt vázlat', '3. Letöltés és másolás', 'Nem merev sablon', '100% szerkeszthető Word', 'Átlátható, szakmai felépítés', 'id="seoContent"', 'id="siteFooter"']) assert.ok(landing.includes(text), text);
   assert.equal((landing.match(/href="tervezo\.html"/g) || []).length >= 2, true);
   for (const absent of ['id="wizardList"', 'id="generateBtn"', 'id="previewPanel"', 'id="checkoutModal"', 'html2pdf']) assert.ok(!landing.includes(absent), `landing: ${absent}`);
   for (const text of ['id="wizardList"', 'id="previewPanel"', 'id="checkoutModal"', 'id="siteFooter"', 'href="index.html"']) assert.ok(planner.includes(text), `planner: ${text}`);
@@ -758,7 +762,7 @@ test('landing FAQ questions match the FAQPage JSON-LD and meta follows the SEO b
   assert.equal(app.name, 'OviTervező');
   assert.equal(app.applicationCategory, 'EducationalApplication');
   assert.equal(app.offers.lowPrice, '390');
-  assert.equal(app.offers.highPrice, '890');
+  assert.equal(app.offers.highPrice, '1090');
   assert.match(html, /<title>Óvodai tervezet készítés és óvodai tervező program \| OviTervező<\/title>/);
   assert.match(html, /name="description" content="Szakszerű óvodai tervezet, heti tervek és tematikus foglalkozásterv minták pár perc alatt/);
 });

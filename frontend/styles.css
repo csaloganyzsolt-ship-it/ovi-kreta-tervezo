@@ -2137,6 +2137,9 @@ a.brand { text-decoration: none; color: inherit; }
 }
 .plan-mode-title { font-weight: 800; }
 .plan-mode-sub { font-size: 0.85rem; color: var(--muted); }
+.price-hint { display: block; font-size: 0.78rem; color: var(--muted); font-weight: 400; margin-top: 4px; line-height: 1.35; }
+.price-hint[hidden] { display: none; }
+.segment .price-hint { margin-top: 2px; }
 .plan-mode-info {
   padding: 12px 14px;
   border: 1px solid var(--border);

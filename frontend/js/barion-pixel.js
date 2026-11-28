@@ -28,11 +28,19 @@
 (function fullBarionPixel(root) {
   const CURRENCY = 'HUF';
   const PURCHASES_KEY = 'oviKretaBarionPurchases';
-  const CATALOG = [
-    { id: 'daily', name: 'Napi tervezet', price: 390 },
-    { id: 'academic_daily', name: 'Oktatási célú tervezet', price: 690 },
-    { id: 'weekly_package', name: 'Teljes heti csomag', price: 890 }
+  // A listaárak nem ide vannak beégetve: a /api/config árait (OviPricing) használja; a csomagnevek maradnak.
+  const CATALOG_ITEMS = [
+    { id: 'daily', name: 'Napi tervezet' },
+    { id: 'weekly_summary', name: 'Heti összesítő' },
+    { id: 'weekly_package', name: 'Teljes heti csomag' },
+    { id: 'academic_daily', name: 'Oktatási célú tervezet' }
   ];
+
+  function catalog() {
+    const pricing = root.OviPricing;
+    if (!pricing || !pricing.isLoaded()) return [];
+    return CATALOG_ITEMS.map((item) => ({ ...item, price: pricing.priceFor(item.id, 5) }));
+  }
 
   function contentsOf(items) {
     return items.map((item) => ({ id: String(item.id), name: String(item.name), quantity: 1, unitPrice: Number(item.price), price: Number(item.price), currency: CURRENCY }));
@@ -54,9 +62,14 @@
   }
 
   const api = {
-    CATALOG,
+    CATALOG_ITEMS,
+    catalog,
     track,
-    contentView(items = CATALOG) {
+    contentView(items = catalog()) {
+      if (!items.length) {
+        console.error('A Barion Pixel contentView nem küldhető: az árak még nem töltődtek be.');
+        return false;
+      }
       return track('contentView', { contentType: 'Product', currency: CURRENCY, contents: contentsOf(items) });
     },
     addToCart(item) {
@@ -79,7 +92,14 @@
 
   root.barionPixel = api;
   if (root.document && root.document.getElementById && /tervezo(\.html)?$/.test(root.location?.pathname || '')) {
-    const send = () => api.contentView();
-    if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', send); else send();
+    // Az árak a /api/config-ból érkeznek; a megtekintés egyszer, az árak betöltése után megy el.
+    let sent = false;
+    const send = () => {
+      if (sent || !root.OviPricing?.isLoaded()) return;
+      sent = true;
+      api.contentView();
+    };
+    root.document.addEventListener('pricing-loaded', send);
+    send();
   }
 }(typeof window !== 'undefined' ? window : globalThis));

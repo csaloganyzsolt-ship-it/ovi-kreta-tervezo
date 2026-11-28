@@ -159,12 +159,12 @@ function buildLockedBoundaryCard(result) {
   const meta = (typeof window !== 'undefined' && window.getLockedMeta)
     ? window.getLockedMeta(result)
     : (typeof getLockedMeta === 'function' ? getLockedMeta(result) : { table_count: 1, activity_count: (result?.kidolgozas_tablazat || []).length });
-  const price = PAYWALL_PRICES[planKind(result)] || 390;
+  const priceText = paywallPriceText(planKind(result), result);
   return `
           <div class="locked-boundary-card">
             <div class="locked-boundary-badge">Zárolt szakasz</div>
             <p class="locked-boundary-text">A teljes dokumentum elkészült: ${escapeHtml(meta.table_count)} részletes táblázat és ${escapeHtml(meta.activity_count)} kidolgozott tevékenységi egység vár feloldásra.</p>
-            <button type="button" class="unlock-cta" data-action="unlock">Teljes tervezet feloldása – ${escapeHtml(price)} Ft</button>
+            <button type="button" class="unlock-cta" data-action="unlock">Teljes tervezet feloldása – ${escapeHtml(priceText)}</button>
           </div>`;
 }
 

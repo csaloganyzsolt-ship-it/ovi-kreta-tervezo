@@ -1347,19 +1347,21 @@ test('GET /api/admin/orders/:orderNumber/invoice streams the live Számlázz.hu 
   assert.equal(pdfCalls, 1);
 });
 
-test('admin.html: the settings tab has four prices, cap, announcement bar, external links, and the template list has the feedback request', () => {
+test('admin.html: the settings tab has five prices, cap, announcement bar, external links, and the template list has the feedback request', () => {
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'admin.html'), 'utf8');
-  for (const id of ['setPriceDaily', 'setPriceWeekly', 'setPriceAcademicDaily', 'setPriceAcademicWeekly', 'setDailyCap', 'setAnnouncementEnabled', 'setAnnouncementText', 'setLinkCloudflare', 'setLinkGoogleAnalytics', 'setLinkSearchConsole', 'setLinkBarion', 'setLinkSzamlazz', 'tabNewsletter', 'panelNewsletter']) {
+  for (const id of ['setPriceDaily', 'setPriceWeeklySummary', 'setPriceWeeklyExtraDay', 'setPriceAcademicDaily', 'setPriceAcademicWeekly', 'pricePreview', 'dailyCapEnvWarning', 'aiResetModel', 'aiResetPrompt', 'setDailyCap', 'setAnnouncementEnabled', 'setAnnouncementText', 'setLinkCloudflare', 'setLinkGoogleAnalytics', 'setLinkSearchConsole', 'setLinkBarion', 'setLinkSzamlazz', 'tabNewsletter', 'panelNewsletter']) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
+  assert.equal(html.includes('id="setPriceWeekly"'), false, 'a régi heti teljes csomag ár mező megszűnt');
+  assert.ok(html.includes('value="coupon"'), 'a naplószűrőben van kupon típus');
   for (const key of ['daily_generation_cap', 'announcement_bar', 'external_links']) assert.ok(html.includes(`value="${key}"`), `${key} előzmény`);
   assert.ok(html.includes('value="feedback_request"') && html.includes('value="payment_success"'));
 });
 
-test('admin.js: the settings form saves four prices, the cap and the announcement; the links form saves only https URLs and refreshes the toolbar', async (t) => {
-  const settings = { maintenance_mode: false, pricing: { daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }, daily_generation_cap: 250, announcement_bar: { enabled: false, text: '' }, ai_config: { model: 'gemini-3.1-pro-preview', system_prompt: 'x' }, billing_profile: 'ev', payment_provider: 'barion', external_links: { cloudflare: '', google_analytics: '', search_console: '', barion: '', szamlazz: '' } };
+test('admin.js: the settings form saves five prices (with a confirm for the critical change), the cap and the announcement; the links form saves only https URLs and refreshes the toolbar', async (t) => {
+  const settings = { maintenance_mode: false, pricing: { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 }, daily_generation_cap: 250, announcement_bar: { enabled: false, text: '' }, ai_config: { model: 'gemini-3.1-pro-preview', system_prompt: 'x' }, billing_profile: 'ev', payment_provider: 'barion', external_links: { cloudflare: '', google_analytics: '', search_console: '', barion: '', szamlazz: '' } };
   const patches = [];
-  const { document } = await loadPage(t, {
+  const { document, state } = await loadPage(t, {
     routes: {
       '/api/admin/me': ME,
       '/api/admin/stats': () => [STATS],
@@ -1379,13 +1381,22 @@ test('admin.js: the settings form saves four prices, the cap and the announcemen
   assert.equal(document.querySelectorAll('#billingStatusList .admin-status-card').length, 6);
   assert.match(document.getElementById('billingStatusList').textContent, /Supabase adatbázis\s*HIÁNYZIK/);
 
+  assert.equal(document.getElementById('setPriceWeeklySummary').value, '590');
+  assert.equal(document.getElementById('setPriceWeeklyExtraDay').value, '100');
+  assert.match(document.getElementById('pricePreview').textContent, /1 nap = 690 Ft · 3 nap = 890 Ft · 5 nap = 1 ?090 Ft/);
+  document.getElementById('setPriceWeeklyExtraDay').value = '150';
+  document.getElementById('setPriceWeeklyExtraDay').dispatchEvent(new document.defaultView.Event('input', { bubbles: true }));
+  assert.match(document.getElementById('pricePreview').textContent, /1 nap = 740 Ft · 3 nap = 1 ?040 Ft · 5 nap = 1 ?340 Ft/);
+  document.getElementById('setPriceWeeklyExtraDay').value = '100';
   document.getElementById('setPriceDaily').value = '400';
   document.getElementById('setDailyCap').value = '300';
   document.getElementById('setAnnouncementEnabled').checked = true;
   document.getElementById('setAnnouncementText').value = 'Akció!';
   document.getElementById('generalForm').dispatchEvent(new document.defaultView.Event('submit', { cancelable: true, bubbles: true }));
   await tick();
-  assert.deepEqual(patches[0].pricing, { daily: 400, weekly: 890, academic_daily: 690, academic_weekly: 690 });
+  assert.equal(state.confirms.length, 1, 'az ármódosítás megerősítést kér');
+  assert.match(state.confirms[0], /Napi tervezet ár: 390 → 400 Ft/);
+  assert.deepEqual(patches[0].pricing, { daily: 400, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 });
   assert.equal(patches[0].daily_generation_cap, 300);
   assert.deepEqual(patches[0].announcement_bar, { enabled: true, text: 'Akció!' });
 
@@ -2111,4 +2122,131 @@ test('admin.js: the reviews tab shows stars, filters by status, approves and ope
   const call1 = state.fetches.find((f) => f.method === 'PATCH');
   assert.deepEqual(JSON.parse(JSON.stringify(call1.body)), { status: 'approved' });
   await tick();
+});
+
+// ---------- Árazási modell: kiterjesztett visszaállítás, kupon-napló, gyári alapértékek ----------
+
+const HID = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+test('isRestorableKey covers every restorable setting and the theme keys, nothing else', () => {
+  const auditLog = require('../backend/services/auditLog');
+  const expected = ['planner_config', 'pricing', 'ai_config', 'maintenance_mode', 'daily_generation_cap', 'announcement_bar', 'external_links', 'billing_profile', 'payment_provider', 'notification_email', 'billing_notification_email', 'error_notification_email'];
+  assert.deepEqual([...auditLog.RESTORABLE_SETTING_KEYS].sort(), [...expected].sort());
+  for (const key of expected) assert.equal(auditLog.isRestorableKey(key), true, key);
+  assert.equal(auditLog.isRestorableKey('theme_suggestion:abc'), true);
+  assert.equal(auditLog.isRestorableKey('coupon:ABC'), false);
+  assert.equal(auditLog.isRestorableKey('email_template:x'), false);
+});
+
+test('restoring pricing filters legacy keys, keeps the current values for missing new keys, and rejects invalid old values with 409', async (t) => {
+  const current = { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 };
+  const client = useAdminEnv(t, fakeAdmin({
+    profiles: adminProfiles(),
+    system_settings: [{ key: 'pricing', value: current }],
+    system_settings_history: [
+      { id: HID(1), setting_key: 'pricing', old_value: { daily: 450, weekly: 890, academic_daily: 700, academic_weekly: 700 }, new_value: current, changed_at: new Date().toISOString(), changed_by: 'x' },
+      { id: HID(2), setting_key: 'pricing', old_value: { daily: -5 }, new_value: current, changed_at: new Date().toISOString(), changed_by: 'x' },
+      { id: HID(3), setting_key: 'pricing', old_value: null, new_value: current, changed_at: new Date().toISOString(), changed_by: 'x' }
+    ]
+  }));
+  const settingsService = require('../backend/services/settingsService');
+  settingsService.invalidate();
+  t.after(() => settingsService.invalidate());
+  const base = await listen(t);
+  const restore = (id) => call(base, `/api/admin/audit/${id}/restore`, { token: 'token-admin', method: 'POST' });
+
+  const ok = await restore(HID(1));
+  assert.equal(ok.status, 200);
+  const stored = client.db.system_settings.find((row) => row.key === 'pricing').value;
+  assert.equal(stored.daily, 450);
+  assert.equal(stored.academic_daily, 700);
+  assert.equal(stored.academic_weekly, 700);
+  assert.equal(stored.weekly_summary, 590, 'a hiányzó új kulcs a jelenlegi értéken marad');
+  assert.equal(stored.weekly_extra_day, 100);
+  assert.equal('weekly' in stored, false, 'a régi heti kulcs nem íródik vissza');
+
+  const invalid = await restore(HID(2));
+  assert.equal(invalid.status, 409);
+  assert.match((await invalid.json()).error, /nem állítható vissza/);
+  assert.equal((await restore(HID(3))).status, 409, 'régi érték nélkül nincs visszaállítás');
+});
+
+test('restoring ai_config and maintenance_mode writes the old value back; non-restorable keys answer 400', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({
+    profiles: adminProfiles(),
+    system_settings: [{ key: 'ai_config', value: { model: 'gemini-x-new', system_prompt: 'Új prompt' } }, { key: 'maintenance_mode', value: true }],
+    system_settings_history: [
+      { id: HID(11), setting_key: 'ai_config', old_value: { model: 'gemini-3.1-pro-preview', system_prompt: 'Régi prompt' }, new_value: { model: 'gemini-x-new', system_prompt: 'Új prompt' }, changed_at: new Date().toISOString(), changed_by: 'x' },
+      { id: HID(12), setting_key: 'maintenance_mode', old_value: false, new_value: true, changed_at: new Date().toISOString(), changed_by: 'x' },
+      { id: HID(13), setting_key: 'coupon:ABC', old_value: null, new_value: { code: 'ABC' }, changed_at: new Date().toISOString(), changed_by: 'x' }
+    ]
+  }));
+  const settingsService = require('../backend/services/settingsService');
+  settingsService.invalidate();
+  t.after(() => settingsService.invalidate());
+  const base = await listen(t);
+  const restore = (id) => call(base, `/api/admin/audit/${id}/restore`, { token: 'token-admin', method: 'POST' });
+
+  assert.equal((await restore(HID(11))).status, 200);
+  assert.deepEqual(client.db.system_settings.find((row) => row.key === 'ai_config').value, { model: 'gemini-3.1-pro-preview', system_prompt: 'Régi prompt' });
+  assert.equal((await restore(HID(12))).status, 200);
+  assert.equal(client.db.system_settings.find((row) => row.key === 'maintenance_mode').value, false);
+  assert.equal((await restore(HID(13))).status, 400);
+});
+
+test('coupon create / update / delete / archive write audit entries with Hungarian summaries', async (t) => {
+  const client = useAdminEnv(t, fakeAdmin({ profiles: adminProfiles(), coupons: [], system_settings_history: [] }));
+  const base = await listen(t);
+  const send = (route, method, body) => call(base, `/api/admin/${route}`, { token: 'token-admin', method, body });
+  const auditLog = require('../backend/services/auditLog');
+  const history = (code) => client.db.system_settings_history.filter((row) => row.setting_key === `coupon:${code}`);
+
+  assert.equal((await send('coupons', 'POST', { code: 'TAVASZ', discount_percent: 20 })).status, 201);
+  assert.equal((await send('coupons/TAVASZ', 'PATCH', { is_active: false })).status, 200);
+  assert.equal((await send('coupons/TAVASZ', 'DELETE')).status, 200);
+  const rows = history('TAVASZ');
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].old_value, null);
+  assert.equal(rows[0].new_value.discount_percent, 20);
+  assert.ok(rows.every((row) => String(row.changed_by).toLowerCase() === 'admin@example.com'));
+  assert.equal(rows[2].new_value, null);
+  assert.match(auditLog.describeChange('coupon:TAVASZ', rows[0].old_value, rows[0].new_value), /^Kupon létrehozva: TAVASZ \(20%\)\./);
+  assert.match(auditLog.describeChange('coupon:TAVASZ', rows[1].old_value, rows[1].new_value), /^Kupon módosítva: TAVASZ \(állapot\)\./);
+  assert.match(auditLog.describeChange('coupon:TAVASZ', rows[2].old_value, rows[2].new_value), /^Kupon törölve: TAVASZ\./);
+
+  assert.equal((await send('coupons', 'POST', { code: 'HASZNALT', discount_percent: 10 })).status, 201);
+  client.failures['delete:coupons'] = { code: '23503', message: 'violates foreign key constraint' };
+  const archived = await send('coupons/HASZNALT', 'DELETE');
+  assert.equal((await archived.json()).archived, true);
+  const last = history('HASZNALT').at(-1);
+  assert.equal(last.new_value.is_active, false);
+  assert.match(auditLog.describeChange('coupon:HASZNALT', last.old_value, last.new_value), /^Kupon archiválva: HASZNALT\./);
+
+  const audit = await (await call(base, '/api/admin/audit?type=coupon&pageSize=100', { token: 'token-admin' })).json();
+  assert.ok(audit.entries.length >= 5);
+  assert.ok(audit.entries.every((entry) => entry.kind === 'coupon'));
+  assert.ok(audit.entries.every((entry) => /^Kupon /.test(entry.summary || entry.description || '')), 'magyar összefoglaló minden kuponbejegyzésen');
+});
+
+test('GET /api/admin/settings/defaults returns the factory AI config and pricing, admin only', async (t) => {
+  useAdminEnv(t, fakeAdmin({ profiles: adminProfiles() }));
+  const base = await listen(t);
+  assert.equal((await call(base, '/api/admin/settings/defaults')).status, 401);
+  const response = await call(base, '/api/admin/settings/defaults', { token: 'token-admin' });
+  assert.equal(response.status, 200);
+  const { defaults } = await response.json();
+  const { DEFAULT_SETTINGS } = require('../backend/services/settingsService');
+  assert.deepEqual(defaults.ai_config, { model: DEFAULT_SETTINGS.ai_config.model, system_prompt: DEFAULT_SETTINGS.ai_config.system_prompt });
+  assert.ok(defaults.ai_config.model && defaults.ai_config.system_prompt.length > 50);
+  assert.deepEqual(defaults.pricing, { daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 });
+});
+
+test('admin.js asks for confirmation on critical saves, and the AI reset buttons use the defaults endpoint', () => {
+  const js = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'js', 'admin.js'), 'utf8');
+  assert.match(js, /window\.confirm\(/);
+  assert.match(js, /criticalChanges/);
+  for (const key of ['pricing', 'maintenance_mode', 'billing_profile', 'payment_provider']) assert.ok(js.includes(key), key);
+  assert.match(js, /\/api\/admin\/settings\/defaults/);
+  assert.match(js, /aiResetModel/);
+  assert.match(js, /aiResetPrompt/);
 });

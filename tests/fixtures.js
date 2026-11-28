@@ -154,14 +154,19 @@ function makeThematicResponse(overrides = {}) {
 module.exports = { makePayload, makePlan, makeAcademicPayload, makeAcademicResponse, makeThematicPayload, makeThematicResponse };
 // A jsdom-tesztek nem töltenek külső fájlokat, ezért minden helyi <script src> tartalmát (az eredeti sorrendben) a lapba ágyazzuk;
 // a config.js kivétel, mert a tesztek a saját APP_CONFIG-jukat adják.
-function readPage(name) {
+// Az árakat a /api/config adja; a tesztlapokba a pricing-ui.js után beillesztjük a tesztárakat (readPage(name, { pricing: false }) árak nélküli lapot ad).
+const TEST_PRICING = Object.freeze({ daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 });
+function readPage(name, { pricing = true } = {}) {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..', 'frontend');
   return fs.readFileSync(path.join(root, name), 'utf8')
     .replace(/<script src="([^":?]+)(?:\?v=\d+)?"><\/script>/g, (tag, file) => {
       const target = path.join(root, file);
-      return file !== 'js/config.js' && fs.existsSync(target) ? `<script>${fs.readFileSync(target, 'utf8')}</script>` : tag;
+      if (file === 'js/config.js' || !fs.existsSync(target)) return tag;
+      const inline = `<script>${fs.readFileSync(target, 'utf8')}</script>`;
+      return file === 'js/pricing-ui.js' && pricing ? `${inline}<script>OviPricing.setPricing(${JSON.stringify(TEST_PRICING)});</script>` : inline;
     });
 }
 module.exports.readPage = readPage;
+module.exports.TEST_PRICING = TEST_PRICING;

@@ -1069,11 +1069,15 @@
     try {
       const { settings, dailyGeneration } = await api('/api/admin/settings');
       byId('setMaintenance').checked = settings.maintenance_mode === true;
+      loadedSettings = settings;
       byId('setPriceDaily').value = settings.pricing.daily;
-      byId('setPriceWeekly').value = settings.pricing.weekly;
+      byId('setPriceWeeklySummary').value = settings.pricing.weekly_summary;
+      byId('setPriceWeeklyExtraDay').value = settings.pricing.weekly_extra_day;
       byId('setPriceAcademicDaily').value = settings.pricing.academic_daily;
       byId('setPriceAcademicWeekly').value = settings.pricing.academic_weekly;
+      renderPricePreview();
       byId('setDailyCap').value = settings.daily_generation_cap;
+      byId('dailyCapEnvWarning').hidden = dailyGeneration?.source !== 'env';
       byId('dailyCapInfo').textContent = dailyGeneration
         ? `Ma eddig: ${dailyGeneration.count} generálás / ${dailyGeneration.cap} plafon${dailyGeneration.source === 'env' ? ' (a DAILY_GENERATION_CAP környezeti változó felülírja a beállítást)' : ''}.`
         : '';
@@ -1130,6 +1134,33 @@
     }
   }
 
+  let loadedSettings = null;
+  const formatHuf = (value) => `${String(Math.round(Number(value))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} Ft`;
+
+  function renderPricePreview() {
+    const base = Number(byId('setPriceWeeklySummary').value);
+    const extra = Number(byId('setPriceWeeklyExtraDay').value);
+    const valid = Number.isFinite(base) && Number.isFinite(extra) && byId('setPriceWeeklySummary').value !== '' && byId('setPriceWeeklyExtraDay').value !== '';
+    setText('pricePreview', valid ? `Példa heti csomag árak jelenleg: ${[1, 3, 5].map((days) => `${days} nap = ${formatHuf(base + days * extra)}`).join(' · ')}` : '');
+  }
+
+  const PRICE_FIELD_LABELS = [['daily', 'Napi tervezet'], ['weekly_summary', 'Heti összesítő alapára'], ['weekly_extra_day', 'Kidolgozott nap felára'], ['academic_daily', 'Oktatási napi'], ['academic_weekly', 'Oktatási heti']];
+
+  // Kritikus mentések (árak, számlázási profil, fizetési szolgáltató, karbantartás) előtti összefoglaló.
+  function criticalChanges(patch) {
+    const before = loadedSettings || {};
+    const lines = [];
+    if (patch.pricing) {
+      for (const [tier, label] of PRICE_FIELD_LABELS) {
+        if (before.pricing?.[tier] !== patch.pricing[tier]) lines.push(`${label} ár: ${before.pricing?.[tier] ?? '–'} → ${patch.pricing[tier]} Ft`);
+      }
+    }
+    if (patch.maintenance_mode !== undefined && (before.maintenance_mode === true) !== patch.maintenance_mode) lines.push(`Karbantartási mód: ${patch.maintenance_mode ? 'BEKAPCSOLÁS (a generálás leáll)' : 'kikapcsolás'}`);
+    if (patch.billing_profile !== undefined && before.billing_profile !== patch.billing_profile) lines.push(`Számlázási profil: ${before.billing_profile || '–'} → ${patch.billing_profile}`);
+    if (patch.payment_provider !== undefined && before.payment_provider !== patch.payment_provider) lines.push(`Fizetési szolgáltató: ${before.payment_provider || '–'} → ${patch.payment_provider}`);
+    return lines;
+  }
+
   async function saveSettings(event, patchBuilder, ids) {
     event.preventDefault();
     flash(ids.status, ids.error, '', false);
@@ -1137,7 +1168,10 @@
     button.disabled = true;
     try {
       const patch = patchBuilder();
+      const changes = criticalChanges(patch);
+      if (changes.length && !window.confirm(`Biztosan mented a kritikus változtatást?\n\n${changes.join('\n')}\n\nA változás azonnal érvényes az élő rendszerre.`)) return;
       const { settings } = await api('/api/admin/settings', { method: 'PATCH', body: patch });
+      loadedSettings = { ...(loadedSettings || {}), ...(settings || {}), ...patch };
       if (patch.external_links) renderToolLinks(settings?.external_links || patch.external_links);
       flash(ids.status, ids.error, 'Mentve. A változás azonnal érvényes.', false);
     } catch (error) {
@@ -1151,7 +1185,8 @@
     maintenance_mode: byId('setMaintenance').checked,
     pricing: {
       daily: Number(byId('setPriceDaily').value),
-      weekly: Number(byId('setPriceWeekly').value),
+      weekly_summary: Number(byId('setPriceWeeklySummary').value),
+      weekly_extra_day: Number(byId('setPriceWeeklyExtraDay').value),
       academic_daily: Number(byId('setPriceAcademicDaily').value),
       academic_weekly: Number(byId('setPriceAcademicWeekly').value)
     },
@@ -1846,6 +1881,22 @@
     byId('tplDelete').addEventListener('click', deleteTemplate);
     byId('tplReset').addEventListener('click', resetTemplate);
     byId('setAiPrompt')?.addEventListener('input', updatePromptCount);
+    for (const id of ['setPriceWeeklySummary', 'setPriceWeeklyExtraDay']) byId(id).addEventListener('input', renderPricePreview);
+    async function loadFactoryAi(field) {
+      try {
+        const { defaults } = await api('/api/admin/settings/defaults');
+        if (field === 'model') byId('setAiModel').value = defaults.ai_config.model;
+        else {
+          byId('setAiPrompt').value = defaults.ai_config.system_prompt;
+          updatePromptCount();
+        }
+        flash('aiStatus', 'aiError', 'Gyári érték betöltve. Mentsd el, hogy érvénybe lépjen.', false);
+      } catch (error) {
+        flash('aiStatus', 'aiError', `A gyári érték nem tölthető be: ${errorMessage(error)}`, true);
+      }
+    }
+    byId('aiResetModel').addEventListener('click', () => loadFactoryAi('model'));
+    byId('aiResetPrompt').addEventListener('click', () => loadFactoryAi('prompt'));
     byId('tplSkeleton').addEventListener('click', loadSkeleton);
     byId('templateForm').addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(refreshTemplatePreview, PREVIEW_DELAY_MS); });
     activateTab('overview');

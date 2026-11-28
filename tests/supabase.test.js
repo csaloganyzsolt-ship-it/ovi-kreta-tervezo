@@ -278,7 +278,8 @@ test('a 100% coupon unlocks the plan, skips Stripe and invoicing and logs one re
   assert.equal(client.tables.orders.length, 1);
   assert.deepEqual(
     { ...client.tables.orders[0], created_at: undefined, updated_at: undefined, paid_at: undefined, delivery_count: undefined },
-    { created_at: undefined, updated_at: undefined, paid_at: undefined, delivery_count: undefined, session_id: data.sessionId, order_number: client.tables.orders[0].order_number, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 0, coupon_code: 'OVI100', payment_method: 'Kupon', status: 'paid' }
+    { created_at: undefined, updated_at: undefined, paid_at: undefined, delivery_count: undefined, session_id: data.sessionId, order_number: client.tables.orders[0].order_number, user_email: 'vevo@example.com', document_id: id, plan_mode: 'standard', plan_key: 'daily', amount: 0, coupon_code: 'OVI100', payment_method: 'Kupon', status: 'paid',
+      meta: { planKind: 'daily', planMode: 'standard', weeklyScope: null, selectedDays: [], selectedDayCount: 0, priceComponents: { base: 390, extraPerDay: 0, days: 0 } } }
   );
 
   // max_uses=1 már elfogyott, de ugyanaz a terv ugyanazt a munkamenetet kapja, és nem kerül második sor a statisztikába.
@@ -568,4 +569,66 @@ test('the checkout box shows the discounted price after a partial coupon and the
   window.closeModals();
   window.openCheckoutModal();
   assert.equal(document.getElementById('couponStatus').textContent, 'Kupon elfogadva (-50%): fizetendő 195 Ft', 'az újranyitott ablak is a kedvezményes árat mutatja');
+});
+
+test('weekly package prices (1/3/5 days) and the weekly summary: the 50% coupon is applied on the server total, Barion and the invoice carry the same amount and the package label', async (t) => {
+  const days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek'];
+  const cases = [
+    { name: 'package1', plan: { is_weekly: true, napok: days.slice(0, 1).map((nap_neve) => ({ nap_neve })), request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } }, claim: 'weekly_detailed', list: 690, final: 345, dayCount: 1 },
+    { name: 'package3', plan: { is_weekly: true, napok: days.slice(0, 3).map((nap_neve) => ({ nap_neve })), request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } }, claim: 'weekly_detailed', list: 890, final: 445, dayCount: 3 },
+    { name: 'package5', plan: { is_weekly: true, napok: days.map((nap_neve) => ({ nap_neve })), request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } }, claim: 'weekly_detailed', list: 1090, final: 545, dayCount: 5 },
+    { name: 'summary', plan: { is_weekly_summary: true, request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'summary' } }, claim: 'weekly_summary', list: 590, final: 295, dayCount: 0 }
+  ];
+  for (const item of cases) {
+    await t.test(item.name, async (sub) => {
+      const client = useSupabase(sub, fakeSupabase({ coupons: [couponRow()] }));
+      barionEnv(sub);
+      const holder = {};
+      const calls = stubBarion(sub, () => holder.state());
+      const base = await listen(sub);
+      const id = `gen_pricing_${item.name}`;
+      planStore.savePlan(id, item.plan);
+
+      const applied = await (await post(base, '/api/apply-coupon', applyBody(id, { plan: item.claim }))).json();
+      assert.equal(applied.originalPrice, item.list);
+      assert.equal(applied.finalPrice, item.final);
+
+      const started = await (await post(base, '/api/checkout-barion', { plan: item.claim, planMode: 'standard', email: 'vevo@example.com', billing: BILLING, generationId: id, title: 'Őszi erdő' })).json();
+      assert.equal(started.success, true);
+      assert.equal(started.amountHuf, item.final);
+      assert.equal(started.originalAmountHuf, item.list);
+      const transaction = calls.start[0].Transactions[0];
+      assert.equal(transaction.Total, item.final);
+      const record = await orders.getBySessionId(started.sessionId);
+      assert.equal(record.amount, transaction.Total, 'a rendelés összege a Barion Total-lal egyezik');
+      assert.equal(record.meta.selectedDayCount, item.dayCount);
+      if (item.dayCount) assert.deepEqual(record.meta.priceComponents, { base: 590, extraPerDay: 100, days: item.dayCount });
+      assert.equal(client.tables.orders[0].meta.selectedDayCount, item.dayCount, 'a meta a Supabase sorba is bekerül');
+
+      holder.state = () => ({ PaymentId: PAYMENT_ID, PaymentRequestId: started.sessionId, Status: 'Succeeded', Total: item.final, Currency: 'HUF', Errors: [] });
+      assert.equal((await fetch(`${base}/api/webhook/barion?paymentId=${PAYMENT_ID}`)).status, 200);
+      assert.equal(calls.invoiceXml.length, 1);
+      assert.match(calls.invoiceXml[0], new RegExp(`<bruttoErtek>${record.amount}</bruttoErtek>`), 'a számla bruttó összege a rendelés összege');
+      assert.match(calls.invoiceXml[0], /kupon: -50%/);
+      if (item.dayCount) assert.ok(calls.invoiceXml[0].includes(`Heti tervezet csomag (heti összesítő + ${item.dayCount} kidolgozott nap)`));
+      else assert.equal(calls.invoiceXml[0].includes('Heti tervezet csomag'), false);
+    });
+  }
+});
+
+test('a client plan that disagrees with the stored plan is rejected with 400 on coupon, Stripe and Barion routes, a missing stored plan with 404', async (t) => {
+  useSupabase(t, fakeSupabase({ coupons: [couponRow()] }));
+  barionEnv(t);
+  const calls = stubBarion(t, () => ({}));
+  const base = await listen(t);
+  planStore.savePlan('gen_pricing_manip', { is_weekly: true, napok: [{ nap_neve: 'Hétfő' }, { nap_neve: 'Kedd' }], request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } });
+  const common = { planMode: 'standard', email: 'vevo@example.com', billing: BILLING, title: 'Őszi erdő' };
+  const routes = [['/api/apply-coupon', { code: 'OVI50' }], ['/api/create-checkout-session', {}], ['/api/checkout-barion', {}]];
+  for (const [route, extra] of routes) {
+    const mismatch = await post(base, route, { ...common, ...extra, plan: 'daily', generationId: 'gen_pricing_manip' });
+    assert.equal(mismatch.status, 400, `${route}: eltérő kliens-terv`);
+    const missing = await post(base, route, { ...common, ...extra, plan: 'daily', generationId: 'gen_pricing_nincs' });
+    assert.equal(missing.status, 404, `${route}: hiányzó tervezet`);
+  }
+  assert.equal(calls.start.length, 0, 'egyik elutasított kérés sem jutott el a Barionig');
 });

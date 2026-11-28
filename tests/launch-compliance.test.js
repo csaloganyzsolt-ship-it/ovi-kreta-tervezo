@@ -7,7 +7,7 @@ const invoiceService = require('../backend/services/invoiceService');
 const { unsubscribeHeaders } = require('../backend/services/newsletterService');
 
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
-const order = (customer) => ({ plan: 'daily', orderId: 'cs_test_1', customer: { email: 'ovi@example.com', ...customer } });
+const order = (customer) => ({ plan: 'daily', orderId: 'cs_test_1', amountHuf: 390, customer: { email: 'ovi@example.com', ...customer } });
 const ENV = { SZAMLAZZ_KEY: 'k' };
 
 test('Hungarian tax numbers: 8 digit, 11 digit and dashed forms normalise, bad check digits are refused', () => {

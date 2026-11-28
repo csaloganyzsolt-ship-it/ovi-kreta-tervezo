@@ -152,18 +152,23 @@ test('checkout-barion trims and sanitizes the billing fields before storing them
   assert.deepEqual((await orders.getBySessionId(data.sessionId)).billing, { name: 'Minta b Kft /b', zip: '9021', city: 'Győr', address: 'Fő u. 1.' });
 });
 
-test('checkout-barion charges 690 Ft for an academic plan from the stored plan, whatever the client claims, and 890 Ft for the weekly package', async (t) => {
+test('checkout-barion charges 690 Ft for an academic plan from the stored plan, whatever the client claims, and summary + days × extra for the weekly package', async (t) => {
   barionEnv(t);
   seedPlans();
+  planStore.savePlan('gen_barion_week3', { is_weekly: true, napok: [{ nap_neve: 'Hétfő' }, { nap_neve: 'Kedd' }, { nap_neve: 'Szerda' }], request: { planMode: 'standard', duration: 'Heti', weeklyScope: 'package' } });
   const calls = stubExternal(t);
   const base = await listen(t);
 
   const cheat = await startBarion(base, { plan: 'daily', planMode: 'standard', generationId: 'gen_barion_acad' });
   assert.equal(cheat.data.amountHuf, 690);
   assert.equal(calls.start[0].body.Transactions[0].Total, 690);
-  const weekly = await startBarion(base, { plan: 'weekly_detailed' });
+  const weekly = await startBarion(base, { plan: 'weekly_detailed', generationId: 'gen_barion_week3' });
   assert.equal(weekly.data.amountHuf, 890);
   assert.equal(calls.start[1].body.Transactions[0].Total, 890);
+  assert.equal((await orders.getBySessionId(weekly.data.sessionId)).meta.selectedDayCount, 3);
+  const manipulated = await startBarion(base, { plan: 'daily', generationId: 'gen_barion_week3' });
+  assert.equal(manipulated.response.status, 400, 'heti csomag napi áron nem fizethető');
+  assert.equal(calls.start.length, 2);
 });
 
 test('checkout-barion uses the live API without BARION_TEST_MODE and falls back to the support address as Payee', async (t) => {
@@ -192,7 +197,7 @@ test('checkout-barion refuses bad input, a missing key, Barion errors and a fore
   const base = await listen(t);
 
   for (const [label, override, status, pattern] of [
-    ['bad plan', { plan: 'monthly' }, 400, /Ismeretlen csomag/],
+    ['bad plan', { plan: 'monthly' }, 400, /nem egyezik a tervezet típusával/],
     ['bad e-mail', { email: 'nem-email' }, 400, /e-mail/],
     ['no billing', { billing: undefined }, 400, /számlázási adatok hiányosak: számlázási név, irányítószám, település, utca, házszám/],
     ['partial billing', { billing: { ...BILLING, city: ' ', address: '' } }, 400, /hiányosak: település, utca, házszám/],

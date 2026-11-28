@@ -3,8 +3,21 @@
 
 // ===== Fizetési kapu (teaser) =====
 // FIGYELEM: ez felületi kapu. A teljes terv a böngészőben létezik; a szerveroldali visszatartás a következő lépés.
-// Az oktatási célú (academic) tervezet napi és heti formában is 690 Ft; a szerver (services/pricing.js) a mérvadó, a teszt egyezésüket ellenőrzi.
-const PAYWALL_PRICES = { daily: 390, weekly_summary: 390, weekly_package: 890, academic_daily: 690, academic_weekly: 690 };
+// Az árak a /api/config-ból jönnek (OviPricing, js/pricing-ui.js); a szerver (services/pricing.js) a mérvadó.
+// Heti csomagnál a kidolgozott napok száma a mentett eredmény napjaiból adódik.
+function resultDayCount(result = lastResult) {
+  return Array.isArray(result?.napok) && result.napok.length ? result.napok.length : (result?.request?.selectedDays || []);
+}
+
+function paywallPrice(kind, result = lastResult) {
+  return window.OviPricing.priceFor(kind, kind === 'weekly_package' ? resultDayCount(result) : undefined);
+}
+
+// Kiírható ár: hiányzó konfigurációnál hangos jelzés (nincs néma tartalékár).
+function paywallPriceText(kind, result = lastResult) {
+  const label = window.OviPricing.priceLabel(kind, kind === 'weekly_package' ? resultDayCount(result) : undefined);
+  return label || 'ár nem elérhető';
+}
 
 const PLAN_LABELS = {
   daily: 'Napi tervezet',
@@ -99,11 +112,11 @@ function applyPaywall(host) {
   const summary = (typeof window !== 'undefined' && window.formatExtentSummary)
     ? window.formatExtentSummary(meta.table_count, meta.activity_count)
     : `A teljes dokumentum elkészült: ${meta.table_count} részletes táblázat és ${meta.activity_count} kidolgozott tevékenységi egység vár feloldásra.`;
-  const price = PAYWALL_PRICES[planKind(lastResult)] || 390;
+  const priceText = paywallPriceText(planKind(lastResult), lastResult);
   gate.innerHTML = `
           <div class="locked-boundary-badge">Teljes kidolgozás feloldása</div>
           <p>${escapeHtml(summary)}</p>
-          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet feloldása – ${escapeHtml(price)} Ft</button>`;
+          <button type="button" class="unlock-cta" id="unlockBtn">Teljes tervezet feloldása – ${escapeHtml(priceText)}</button>`;
   body.appendChild(gate);
 }
 
@@ -123,8 +136,7 @@ function updateExportLock() {
   // Fizetés után a generálás gomb elbújik; csak az űrlap módosítása (zárolás) hozza vissza.
   const justPaid = paywallEnabled() && Boolean(lastResult) && !locked && onResultStep;
   nextBtn.hidden = justPaid && !isFormDirty() && !nextBtn.classList.contains('is-busy');
-  const price = PAYWALL_PRICES[planKind()];
-  const label = `Teljes tervezet feloldása – ${price} Ft`;
+  const label = `Teljes tervezet feloldása – ${paywallPriceText(planKind())}`;
   ['unlockNavBtn', 'unlockTopBtn', 'unlockBottomBtn', 'unlockFloatingBtn'].forEach((id) => {
     const button = document.getElementById(id);
     if (!button) return;
@@ -160,7 +172,7 @@ function guardLocked() {
 
 // A Barion Pixel termékadata: a csomag kulcsa, neve és a szerverrel egyező listaár.
 function pixelItem(kind = planKind()) {
-  return { id: kind, name: PLAN_LABELS[kind], price: PAYWALL_PRICES[kind] };
+  return { id: kind, name: PLAN_LABELS[kind], price: paywallPrice(kind) };
 }
 
 function openCheckoutModal() {
@@ -291,7 +303,7 @@ async function startBarionCheckout() {
       throw failure;
     }
     if (!BARION_GATEWAY_PATTERN.test(String(data.gatewayUrl || ''))) throw new Error('A Barion érvénytelen fizetési címet adott vissza.');
-    window.barionPixel?.initiateCheckout({ ...pixelItem(), price: data.amountHuf || PAYWALL_PRICES[planKind()] });
+    window.barionPixel?.initiateCheckout({ ...pixelItem(), price: data.amountHuf ?? paywallPrice(planKind()) });
     localStorage.setItem('oviKretaPendingCheckout', lastResult.generationId);
     localStorage.setItem(PENDING_BARION_KEY, data.sessionId);
     redirectTo(data.gatewayUrl);
@@ -352,11 +364,12 @@ function discountMessage(discount) {
 function renderCheckoutPrice() {
   const kind = planKind();
   const discount = getAppliedDiscount();
+  const listPrice = paywallPriceText(kind);
   document.getElementById('checkoutSummary').textContent = discount
-    ? `${PLAN_LABELS[kind]} – ${discount.finalPrice} Ft (eredeti ár: ${PAYWALL_PRICES[kind]} Ft)`
-    : `${PLAN_LABELS[kind]} – ${PAYWALL_PRICES[kind]} Ft`;
+    ? `${PLAN_LABELS[kind]} – ${discount.finalPrice} Ft (eredeti ár: ${listPrice})`
+    : `${PLAN_LABELS[kind]} – ${listPrice}`;
   // A fizetendő (kuponnal csökkentett) összeg a fizetés gombon is látszik, hogy az ár egyértelmű maradjon.
-  const payLabel = `Tovább a fizetéshez – ${discount ? discount.finalPrice : PAYWALL_PRICES[kind]} Ft`;
+  const payLabel = `Tovább a fizetéshez – ${discount ? `${discount.finalPrice} Ft` : listPrice}`;
   for (const id of ['checkoutBarion', 'checkoutStripe']) {
     const button = document.getElementById(id);
     if (button) button.textContent = payLabel;
@@ -482,8 +495,8 @@ async function handleCheckoutReturn() {
     localStorage.removeItem(PENDING_BARION_KEY);
     showPurchaseNotice('');
     if (!isCouponSession(sessionId)) {
-      const kind = PAYWALL_PRICES[data.plan] ? data.plan : planKind();
-      window.barionPixel?.purchase({ id: sessionId, itemId: kind, name: PLAN_LABELS[kind], price: data.amountHuf || PAYWALL_PRICES[kind] });
+      const kind = PLAN_LABELS[data.plan] ? data.plan : planKind();
+      window.barionPixel?.purchase({ id: sessionId, itemId: kind, name: PLAN_LABELS[kind], price: data.amountHuf ?? paywallPrice(kind) });
     }
     showUnlockedPlan(pending, sessionId, data.planData);
     if (data.emailEnabled && lastResult) await deliverPurchaseEmail(sessionId);

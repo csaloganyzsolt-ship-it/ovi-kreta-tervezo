@@ -21,13 +21,13 @@ const FIELDS = Object.freeze({
   documentSynced: 'document_synced', createdAt: 'created_at'
 });
 const ALL_COLUMNS = [...Object.values(FIELDS), 'updated_at'].join(', ');
-// Hibamezők: külön kezelve, hogy a kód a migráció (last_error, last_error_at) lefuttatása előtt is működjön.
-const ERROR_COLUMNS = 'last_error, last_error_at';
+// Hibamezők: külön kezelve, hogy a kód a migráció (last_error, last_error_at, meta) lefuttatása előtt is működjön.
+const ERROR_COLUMNS = 'last_error, last_error_at, meta';
 const memory = new Map();
 const alertedErrors = new Map();
 let errorColumns = null;
 
-const isMissingErrorColumn = (error) => /last_error/.test(String(error?.message || ''));
+const isMissingErrorColumn = (error) => /last_error|\bmeta\b/.test(String(error?.message || ''));
 
 // A számlán és a levelekben is szereplő rendelésszám (OVI-ÉÉHHNN-XXXXXX).
 function orderNumberFor(sessionId, created = new Date()) {
@@ -43,6 +43,8 @@ function toRow(order) {
     if (field === 'email' && value !== null) value = normalizeEmail(value);
     row[column] = value;
   }
+  // Árkomponensek, kiválasztott napok (utólagos számlázhatóság); az oszlopot a 20261207090000_orders_meta.sql hozza létre.
+  if (order.meta && typeof order.meta === 'object') row.meta = order.meta;
   return row;
 }
 
@@ -55,6 +57,7 @@ function fromRow(row) {
   order.documentSynced = row.document_synced === true;
   order.lastError = row.last_error || null;
   order.lastErrorAt = row.last_error_at || null;
+  order.meta = row.meta && typeof row.meta === 'object' ? row.meta : null;
   return order;
 }
 
@@ -91,7 +94,13 @@ async function upsertOrder(order) {
     memoryInsert(row);
     return true;
   }
-  const { error } = await client.from('orders').upsert(row, { onConflict: 'order_number' });
+  let { error } = await client.from('orders').upsert(row, { onConflict: 'order_number' });
+  if (error && 'meta' in row && /\bmeta\b/.test(error.message)) {
+    // A migráció még nem futott le: a rendelés (és a fizetés) nem akadhat el, de a hiányt hangosan jelezzük.
+    console.error(`[orders] Az orders.meta oszlop hiányzik (futtasd a 20261207090000_orders_meta.sql migrációt); a rendelés meta nélkül mentődik: ${order.orderNumber}`);
+    const { meta: _meta, ...rest } = row;
+    ({ error } = await client.from('orders').upsert(rest, { onConflict: 'order_number' }));
+  }
   if (error) throw new Error(`A rendelés Supabase-be mentése sikertelen (${order.orderNumber}): ${error.message}`);
   return true;
 }
@@ -234,6 +243,7 @@ async function issueInvoiceForOrder(order, deps = {}) {
       created: Math.floor((Number.isFinite(created) ? created : Date.now()) / 1000),
       plan: order.planKey,
       amountHuf: order.amount,
+      selectedDayCount: order.meta?.selectedDayCount || undefined,
       couponPercent: order.couponPercent || undefined,
       paymentMethod: order.paymentMethod || undefined,
       billingProfile: order.billingProfile || undefined,

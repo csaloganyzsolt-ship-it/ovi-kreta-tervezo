@@ -69,10 +69,12 @@
                 <button class="plan-mode-card active" type="button" data-plan-mode="standard" aria-pressed="true">
                   <span class="plan-mode-title">Óvodai tervezet</span>
                   <span class="plan-mode-sub">Mindennapi óvodai gyakorlathoz</span>
+                  <span class="price-hint" data-price-for="standard"></span>
                 </button>
                 <button class="plan-mode-card" type="button" data-plan-mode="academic" aria-pressed="false">
                   <span class="plan-mode-title">Oktatási célú tervezet</span>
                   <span class="plan-mode-sub">Hallgatói / egyetemi beadandó</span>
+                  <span class="price-hint" data-price-for="academic"></span>
                 </button>
               </div>
               <div class="plan-mode-compare" id="planModeCompare">
@@ -137,11 +139,12 @@
                   <button class="segment active" type="button" data-group="duration" data-value="Napi">Napi</button>
                   <button class="segment" type="button" data-group="duration" data-value="Heti">Heti</button>
                 </div>
+                <small class="price-hint" id="durationPriceHint" role="status" hidden></small>
                 <div id="weeklySettingsPanel" class="weekly-settings-panel" hidden>
                   <span class="weekly-days-label" id="weeklyScopeLabel">Mit szeretnél kapni?</span>
                   <div class="segmented" data-group="weeklyScope" role="group" aria-labelledby="weeklyScopeLabel">
-                    <button class="segment active" type="button" data-group="weeklyScope" data-value="summary">Csak heti összesítő</button>
-                    <button class="segment" type="button" data-group="weeklyScope" data-value="package">Teljes heti csomag (összesítő + napi tervek)</button>
+                    <button class="segment active" type="button" data-group="weeklyScope" data-value="summary">Csak heti összesítő <span class="price-hint" data-price-for="scope-summary"></span></button>
+                    <button class="segment" type="button" data-group="weeklyScope" data-value="package">Teljes heti csomag (összesítő + napi tervek) <span class="price-hint" data-price-for="scope-package"></span></button>
                   </div>
                   <div id="weeklyDaysBlock" hidden>
                   <span class="weekly-days-label" id="weeklyDaysLabel">Melyik napokra készüljön részletes tervezet?</span>
@@ -153,6 +156,7 @@
                     <button class="day-chip active" type="button" data-day="Péntek" aria-pressed="true">Péntek</button>
                   </div>
                   <small class="field-hint" id="weeklyDaysHint" role="status">A heti összesítő mellé a kijelölt napokra külön, teljes értékű napi tervezet készül (a generálás több percig is tarthat). Legalább egy napot ki kell választani.</small>
+                  <small class="price-hint" id="weeklyPriceSummary" role="status" hidden></small>
                   </div>
                   <small class="field-hint">A heti építkezés és a pénteki lezárás a 3. lépés „Speciális beállítások” részében módosítható.</small>
                 </div>
@@ -470,6 +474,7 @@
             <div class="inline-box">
               <h3 data-cfg-text="checklistTitle">Ellenőrző lista</h3>
               <div class="summary-checklist" id="summaryChecklist"></div>
+              <small class="price-hint" id="stepPriceNote" role="status" hidden></small>
             </div>
 
             <div class="generation-error-banner" id="generationErrorBanner" role="alert" hidden style="display: none;"></div>
@@ -725,6 +730,7 @@
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/pricing-ui.js"></script>
     <script src="js/site.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
     <script src="js/auth.js"></script>

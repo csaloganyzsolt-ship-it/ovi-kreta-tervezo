@@ -14,7 +14,13 @@ const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const isValidModelName = (value) => typeof value === 'string' && MODEL_NAME_PATTERN.test(value);
 const BILLING_PROFILE_TYPES = Object.freeze(['ev', 'kft']);
 const PAYMENT_PROVIDERS = Object.freeze(['barion', 'stripe']);
-const PRICE_TIERS = Object.freeze(['daily', 'weekly', 'academic_daily', 'academic_weekly']);
+// daily: napi ár; weekly_summary: heti összesítő alapára (a csomag alapja is); weekly_extra_day: kidolgozott napi terv felára csomagban (Ft / nap, lehet 0).
+const PRICE_TIERS = Object.freeze(['daily', 'weekly_summary', 'weekly_extra_day', 'academic_daily', 'academic_weekly']);
+const ZERO_ALLOWED_TIERS = Object.freeze(['weekly_extra_day']);
+const MAX_EXTRA_DAY_PRICE_HUF = 50000;
+const maxPriceFor = (tier) => (tier === 'weekly_extra_day' ? MAX_EXTRA_DAY_PRICE_HUF : MAX_PRICE_HUF);
+const minPriceFor = (tier) => (ZERO_ALLOWED_TIERS.includes(tier) ? 0 : 1);
+const isValidPrice = (tier, value) => Number.isInteger(value) && value >= minPriceFor(tier) && value <= maxPriceFor(tier);
 const LINK_KEYS = Object.freeze(['cloudflare', 'google_analytics', 'search_console', 'barion', 'szamlazz']);
 const DEFAULT_DAILY_GENERATION_CAP = 250;
 const MAX_DAILY_GENERATION_CAP = 100000;
@@ -29,7 +35,8 @@ const MAX_PROMPT_LENGTH = 100000;
 const MAX_TEMPLATE_LENGTH = 100000;
 
 const DEFAULT_SETTINGS = Object.freeze({
-  pricing: Object.freeze({ daily: 390, weekly: 890, academic_daily: 690, academic_weekly: 690 }),
+  // Az árak egyetlen alapérték-forrása; minden más felület ezt (vagy az Admin-értéket) használja.
+  pricing: Object.freeze({ daily: 390, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 690, academic_weekly: 690 }),
   daily_generation_cap: DEFAULT_DAILY_GENERATION_CAP,
   announcement_bar: Object.freeze({ enabled: false, text: '' }),
   external_links: Object.freeze({
@@ -77,12 +84,12 @@ function defaults() {
 
 const OBJECT_SETTINGS = Object.freeze(['pricing', 'ai_config', 'announcement_bar', 'external_links']);
 
-// A régi 3 szintű árazás (standard / academic / weekly) a 4 csomagos alakra képeződik; az új kulcsok előnyben vannak.
+// A régi árazások ({ standard, academic, weekly } és { daily, weekly, academic_* }) az új 5 elemű alakra képeződnek: az egyedi daily / academic_* érték megmarad,
+// a régi „weekly” (teljes csomag fix ár) kimarad, a hiányzó weekly_summary / weekly_extra_day az alapértékből töltődik (lásd normalizeRows).
 function migrateLegacyPricing(source) {
   const value = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
   const mapped = {};
   if ('standard' in value) mapped.daily = value.standard;
-  if ('weekly' in value) mapped.weekly = value.weekly;
   if ('academic' in value) { mapped.academic_daily = value.academic; mapped.academic_weekly = value.academic; }
   const out = { ...mapped };
   for (const tier of PRICE_TIERS) if (tier in value) out[tier] = value[tier];
@@ -111,7 +118,7 @@ function normalizeRows(rows) {
     }
     out[row.key] = OBJECT_SETTINGS.includes(row.key) ? { ...out[row.key], ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) } : row.value;
   }
-  for (const tier of PRICE_TIERS) if (!Number.isInteger(out.pricing[tier]) || out.pricing[tier] < 1) out.pricing[tier] = DEFAULT_SETTINGS.pricing[tier];
+  for (const tier of PRICE_TIERS) if (!isValidPrice(tier, out.pricing[tier])) out.pricing[tier] = DEFAULT_SETTINGS.pricing[tier];
   out.pricing = Object.fromEntries(PRICE_TIERS.map((tier) => [tier, out.pricing[tier]]));
   if (!Number.isInteger(out.daily_generation_cap) || out.daily_generation_cap < 1 || out.daily_generation_cap > MAX_DAILY_GENERATION_CAP) out.daily_generation_cap = DEFAULT_DAILY_GENERATION_CAP;
   out.announcement_bar = { enabled: out.announcement_bar.enabled === true, text: typeof out.announcement_bar.text === 'string' ? out.announcement_bar.text : '' };
@@ -164,10 +171,10 @@ function invalidate() {
   templateCachedAt = 0;
 }
 
-// Az árak nem változnak a 4 kategóriára állításkor: a heti összesítő a „Napi ovis”, a teljes heti csomag a „Heti ovis” árat használja (a régi weekly / weekly_detailed kulcsok is).
+// Az árkulcs és a beállításkulcs egyezik (a heti csomag ára a weekly_summary + napok × weekly_extra_day képletből jön, lásd pricing.js).
 function pricingTierFor(productKey) {
-  if (productKey === 'weekly' || productKey === 'weekly_summary') return 'daily';
-  return productKey === 'weekly_detailed' || productKey === 'weekly_package' ? 'weekly' : String(productKey);
+  const key = String(productKey);
+  return key === 'weekly' || key === 'weekly_detailed' || key === 'weekly_package' ? 'weekly_summary' : key;
 }
 
 const isValidEmail = (value) => typeof value === 'string' && value.length <= 254 && /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/.test(value);
@@ -217,8 +224,8 @@ function resolveAiModel(settings, fallbackModel) {
 
 function parsePrice(value, label) {
   const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
-  if (!Number.isInteger(number) || number < 1 || number > MAX_PRICE_HUF) {
-    throw new SettingsError(`A(z) ${label} ár egész szám legyen 1 és ${MAX_PRICE_HUF} Ft között.`);
+  if (!isValidPrice(label, number)) {
+    throw new SettingsError(`A(z) ${label} ár egész szám legyen ${minPriceFor(label)} és ${maxPriceFor(label)} Ft között.`);
   }
   return number;
 }

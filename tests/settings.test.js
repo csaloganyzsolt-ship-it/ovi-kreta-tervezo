@@ -14,7 +14,7 @@ const invoiceService = require('../backend/services/invoiceService');
 const { productFor } = require('../backend/services/pricing');
 const { getBillingProfile } = require('../backend/services/siteConstants');
 
-const DB_PRICING = { daily: 555, weekly: 1999, academic_daily: 777, academic_weekly: 888 };
+const DB_PRICING = { daily: 555, weekly_summary: 650, weekly_extra_day: 120, academic_daily: 777, academic_weekly: 888 };
 const PACKAGE_FILE = { filename: 'tervezet.docx', content: Buffer.from('docx') };
 const TEMPLATE_ROWS = [
   { id: 'base_layout', subject: 'Keret', body_html: '<html><body><div class="keret">{{content}}</div></body></html>' },
@@ -185,20 +185,28 @@ test('orderService error recording never throws and dedupes alerts per order and
   await assert.doesNotReject(orderService.recordError('OVI-NINCS', 'Számlázás', 'x'));
 });
 
-test('package prices follow the four tiers of system_settings', async (t) => {
+test('package prices follow the five price keys of system_settings', async (t) => {
   fakeDb(t, { settings: { pricing: DB_PRICING } });
   await settingsService.getSettings({ force: true });
   assert.equal(productFor('daily', 'standard').amountHuf, 555);
-  assert.equal(productFor('weekly', 'standard').amountHuf, 555, 'a heti alapcsomag a napi árat használja');
-  assert.equal(productFor('weekly_detailed', 'standard').amountHuf, 1999, 'a heti részletes csomag a heti árat használja');
+  assert.equal(productFor('weekly', 'standard').amountHuf, 650, 'a heti összesítő a weekly_summary árat használja');
+  assert.equal(productFor('weekly_detailed', 'standard', undefined, { selectedDays: ['Hétfő', 'Kedd'] }).amountHuf, 650 + 2 * 120, 'a csomag: összesítő + napok × felár');
+  assert.equal(productFor('weekly_detailed', 'standard').amountHuf, 650 + 5 * 120, 'napok megadása nélkül mind az 5 nap');
   assert.equal(productFor('daily', 'academic').amountHuf, 777);
   assert.equal(productFor('academic_weekly', 'standard').amountHuf, 888);
 });
 
-test('a legacy {standard, academic, weekly} pricing row is migrated to the four tiers', async (t) => {
+test('a legacy {standard, academic, weekly} pricing row is migrated to the five price keys', async (t) => {
   fakeDb(t, { settings: { pricing: { standard: 450, academic: 700, weekly: 950 } } });
   const settings = await settingsService.getSettings({ force: true });
-  assert.deepEqual(settings.pricing, { daily: 450, weekly: 950, academic_daily: 700, academic_weekly: 700 });
+  assert.deepEqual(settings.pricing, { daily: 450, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 700, academic_weekly: 700 });
+});
+
+test('a legacy {daily, weekly, academic_*} pricing row keeps the custom prices, drops weekly and fills the new keys', async (t) => {
+  fakeDb(t, { settings: { pricing: { daily: 500, weekly: 890, academic_daily: 700, academic_weekly: 700 } } });
+  const settings = await settingsService.getSettings({ force: true });
+  assert.deepEqual(settings.pricing, { daily: 500, weekly_summary: 590, weekly_extra_day: 100, academic_daily: 700, academic_weekly: 700 });
+  assert.equal('weekly' in settings.pricing, false);
 });
 
 test('the settings cache refreshes after 5 minutes or immediately after an admin update', async (t) => {
@@ -505,7 +513,7 @@ test('daily_generation_cap is validated and drives the server cap unless the env
 
 function invalidateForDefaults() { settingsService.invalidate(); }
 
-test('announcement_bar is validated and GET /api/config returns it with the four prices', async (t) => {
+test('announcement_bar is validated and GET /api/config returns it with the five price keys', async (t) => {
   fakeDb(t);
   const client = supabase.getClient();
   await assert.rejects(settingsService.updateSettings(client, { announcement_bar: { enabled: true, text: '  ' } }), /szöveg/);
@@ -515,7 +523,7 @@ test('announcement_bar is validated and GET /api/config returns it with the four
   const base = await listen(t);
   const data = await (await fetch(`${base}/api/config`)).json();
   assert.deepEqual(data.announcement_bar, { enabled: true, text: 'Őszi <b>akció</b>' });
-  assert.deepEqual(Object.keys(data.pricing).sort(), ['academic_daily', 'academic_weekly', 'daily', 'weekly']);
+  assert.deepEqual(Object.keys(data.pricing).sort(), ['academic_daily', 'academic_weekly', 'daily', 'weekly_extra_day', 'weekly_summary']);
   assert.equal(data.pricing.academic_daily, 800);
   assert.equal('external_links' in data, false, 'a külső linkek nem publikusak');
   assert.equal('daily_generation_cap' in data, false);

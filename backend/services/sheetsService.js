@@ -1,7 +1,5 @@
 'use strict';
 
-const { PRODUCTS } = require('./stripeService');
-const { resolveProductKey } = require('./pricing');
 const { orderNumber } = require('./invoiceService');
 
 const TIMEOUT_MS = 15000;
@@ -24,7 +22,6 @@ function safeFilePart(value) {
 
 function buildPayload({ session, invoiceNumber, customer, invoicePdf }, now = new Date(), env = process.env) {
   const plan = session.metadata?.plan;
-  const product = PRODUCTS[resolveProductKey(plan)];
   const created = session.created ? new Date(session.created * 1000) : now;
   const address = [customer.zip, customer.city, customer.address].filter(Boolean).join(', ');
   const orderNo = orderNumber(session.id, created);
@@ -37,7 +34,7 @@ function buildPayload({ session, invoiceNumber, customer, invoicePdf }, now = ne
     szamlazasi_cim: address,
     csomag: String(plan || '').startsWith('academic_') ? 'Oktatási célú tervezet' : (String(plan || '').startsWith('weekly') ? 'Heti csomag' : 'Napi tervezet'),
     tervezet_temaja: session.metadata?.title || '',
-    fizetett_osszeg_huf: Number.isInteger(session.metadata?.amountHuf) ? session.metadata.amountHuf : (product ? product.amountHuf : null),
+    fizetett_osszeg_huf: Number.isInteger(session.metadata?.amountHuf) ? session.metadata.amountHuf : (Number.isFinite(session.amount_total) ? Math.round(session.amount_total / 100) : null),
     stripe_session_id: session.id
   };
   if (Buffer.isBuffer(invoicePdf) && invoicePdf.length) {

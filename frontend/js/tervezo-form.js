@@ -373,6 +373,48 @@ function setDurationSelection(nextValue) {
 function updateSummary() {
   // A generated document keeps the settings it was actually generated from.
   renderSummaryChecklist();
+  renderStepOnePrices();
+}
+
+// Diszkrét árkijelzés (1. és 4. lépés): kizárólag az Admin-árakból (OviPricing), tájékoztató jelleggel.
+function currentPriceKind() {
+  if (isAcademicMode()) return getSelectedDuration() === 'Heti' ? 'academic_weekly' : 'academic_daily';
+  if (getSelectedDuration() !== 'Heti') return 'daily';
+  return getWeeklyScope() === 'package' ? 'weekly_package' : 'weekly_summary';
+}
+
+function renderStepOnePrices() {
+  if (typeof OviPricing === 'undefined') return;
+  const P = OviPricing;
+  const setHint = (id, text) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.textContent = text;
+    node.hidden = !text;
+  };
+  if (!P.isLoaded()) {
+    if (typeof appConfig !== 'undefined' && appConfig.loaded) setHint('stepPriceNote', 'Az árak nem töltődtek be.');
+    return;
+  }
+  const p = P.prices;
+  const f = P.formatHuf;
+  const days = getSelectedDays();
+  const packagePrice = P.priceFor('weekly_package', days);
+  const setCard = (mode, text) => {
+    const node = document.querySelector(`[data-price-for="${mode}"]`);
+    if (node) node.textContent = text;
+  };
+  setCard('standard', `Napi: ${f(p.daily)} · Heti összesítő: ${f(p.weekly_summary)}`);
+  setCard('academic', `Napi: ${f(p.academic_daily)} · Heti: ${f(p.academic_weekly)}`);
+  setCard('scope-summary', f(p.weekly_summary));
+  setCard('scope-package', `${f(p.weekly_summary)} + ${f(p.weekly_extra_day)} / nap`);
+  const academic = isAcademicMode();
+  const weekly = getSelectedDuration() === 'Heti';
+  const kind = currentPriceKind();
+  setHint('durationPriceHint', `${academic ? 'Oktatási' : 'Óvodai'} ${weekly ? 'heti' : 'napi'} tervezet feloldási díja igény esetén: ${kind === 'weekly_package' ? f(p.weekly_summary) : f(P.priceFor(kind))}${kind === 'weekly_package' ? ' (csak összesítő)' : ''} — az előnézet elkészítése díjmentes.`);
+  const packageActive = !academic && weekly && getWeeklyScope() === 'package';
+  setHint('weeklyPriceSummary', packageActive ? `Teljes terv feloldási díja igény esetén: ${f(p.weekly_summary)} + ${days.length} × ${f(p.weekly_extra_day)} = ${f(packagePrice)} — az előnézet elkészítése díjmentes.` : '');
+  setHint('stepPriceNote', `Feloldási díj igény esetén: ${f(P.priceFor(kind, days))}${kind === 'weekly_package' ? ` (${f(p.weekly_summary)} + ${days.length} × ${f(p.weekly_extra_day)})` : ''} — az előnézet elkészítése díjmentes.`);
 }
 
 function getAutoSaveKey(element) {

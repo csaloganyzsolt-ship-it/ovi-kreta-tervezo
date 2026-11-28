@@ -79,11 +79,11 @@ router.get('/admin/stats', handle('A statisztika lekérdezése', async (client, 
 
 router.get('/admin/coupons', handle('A kuponok lekérdezése', (client) => admin.listCoupons(client)));
 router.post('/admin/coupons', handle('A kupon létrehozása', async (client, req, res) => {
-  const coupon = await admin.createCoupon(client, req.body);
+  const coupon = await admin.createCoupon(client, req.body, Date.now(), req.user?.email);
   res.status(201).json({ success: true, coupon });
 }));
-router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (client, req) => ({ coupon: await admin.updateCoupon(client, req.params.code, req.body) })));
-router.delete('/admin/coupons/:code', handle('A kupon törlése', (client, req) => admin.deleteCoupon(client, req.params.code)));
+router.patch('/admin/coupons/:code', handle('A kupon módosítása', async (client, req) => ({ coupon: await admin.updateCoupon(client, req.params.code, req.body, Date.now(), req.user?.email) })));
+router.delete('/admin/coupons/:code', handle('A kupon törlése', (client, req) => admin.deleteCoupon(client, req.params.code, Date.now(), req.user?.email)));
 router.get('/admin/newsletter/campaigns/:id', handle('A kampány betöltése', (client, req) => newsletter.getCampaign(client, req.params.id)));
 
 router.get('/admin/logs', handle('A rendszernapló lekérdezése', (client, req) => admin.listLogs(client, req.query)));
@@ -212,6 +212,12 @@ router.get('/admin/newsletter/campaigns', handle('A kampányok lekérdezése', (
 router.get('/admin/settings', handle('A beállítások lekérdezése', async () => ({
   settings: await settingsService.getSettings({ force: true }),
   dailyGeneration: await currentDailyGeneration()
+})));
+router.get('/admin/settings/defaults', handle('A gyári beállítások lekérdezése', async () => ({
+  defaults: {
+    ai_config: { model: settingsService.DEFAULT_SETTINGS.ai_config.model, system_prompt: settingsService.DEFAULT_SETTINGS.ai_config.system_prompt },
+    pricing: { ...settingsService.DEFAULT_SETTINGS.pricing }
+  }
 })));
 router.get('/admin/settings/history/:key', handle('Az előzmények lekérdezése', async (client, req) => ({
   key: req.params.key,

@@ -19,7 +19,8 @@ const planStore = require('./services/planStore');
 const stripeService = require('./services/stripeService');
 const invoiceService = require('./services/invoiceService');
 const { SUPPORT_EMAIL, TURNSTILE_SITE_KEY, SUPABASE_PUBLIC_URL, SUPABASE_PUBLISHABLE_KEY, barionPixelId, SITE_ASSETS, SEO_FILES, CONTENT_SECURITY_POLICY, publicCompany, getBillingProfile } = require('./services/siteConstants');
-const { validateGeneratePayload, WEEKDAYS } = require('./services/generateValidation');
+const { validateGeneratePayload } = require('./services/generateValidation');
+const { WEEKDAYS, selectedDaysOf } = require('./services/weeklyScope');
 const { generationError, readText, readStringArray, clampRows, normalizeTable } = require('./services/responseReaders');
 const academicPlan = require('./services/academicPlan');
 const { APA7_RULE } = require('./services/literatureRules');
@@ -256,12 +257,8 @@ function getDetailProfile(detailLevel) {
 const weeklySummary = require('./services/weeklySummary');
 const generationJobs = require('./services/generationJobs');
 
-// A kiválasztott napok (hétfői–pénteki sorrendben, duplikáció nélkül); hiányzó vagy érvénytelen érték esetén mind az 5 nap.
-function getSelectedDays(payload = {}) {
-  const requested = Array.isArray(payload.selectedDays) ? payload.selectedDays : [];
-  const days = WEEKDAYS.filter((day) => requested.includes(day));
-  return days.length ? days : [...WEEKDAYS];
-}
+// A napnormalizálás közös modulban él (generálás, árazás és fizetés ugyanazt használja).
+const getSelectedDays = selectedDaysOf;
 
 // 'summary' = csak heti összesítő, 'package' = összesítő + napi tervek (láncolt generálás), null = napi vagy oktatási célú terv.
 function weeklyScope(payload = {}) {
