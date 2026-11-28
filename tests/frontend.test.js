@@ -1027,7 +1027,7 @@ test('the locked daily preview keeps labels readable and hides every locked valu
 });
 
 test('the planner page uses the new step 4 title, SNI/BTMN options, the tools hint before the textarea and no goal chips', () => {
-  assert.match(html, /<span>Összegzés és elkészítés<\/span>/);
+  assert.match(html, /<span data-cfg-text="wizardStep4">Összegzés és elkészítés<\/span>/);
   assert.match(html, /<h2 data-cfg-text="step4Title">4\. Összegzés és elkészítés<\/h2>/);
   assert.equal(html.includes('Generálási folyamat'), false);
   assert.equal(html.includes('Célkifejezések'), false);

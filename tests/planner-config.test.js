@@ -19,7 +19,11 @@ const HTML = read('frontend', 'tervezo.html');
 test('the built-in defaults match the static tervezo.html texts and option lists', () => {
   const { document } = new JSDOM(HTML).window;
   const defaults = pc.defaults();
-  for (const [key, [, type, text]] of Object.entries(pc.TEXT_META)) {
+  for (const [key, [, type, text, dynamic]] of Object.entries(pc.TEXT_META)) {
+    if (dynamic === 'dynamic') {
+      assert.equal(defaults.texts[key], text, key);
+      continue;
+    }
     const node = document.querySelector(type === 'placeholder' ? `[data-cfg-placeholder="${key}"]` : `[data-cfg-text="${key}"]`);
     assert.ok(node, `${key}: hiányzik a data-cfg attribútum`);
     const actual = type === 'placeholder' ? node.getAttribute('placeholder') : node.textContent.replace(/\s+/g, ' ').trim();
@@ -268,9 +272,17 @@ test('the Admin has the Tervező űrlap tab, the restore column and renders valu
   assert.match(admin, /id="plannerResetAll"/);
   assert.match(admin, /<option value="theme">/);
   assert.match(js, /planner: \[loadPlanner\]/);
-  assert.match(js, /↺ Alapértelmezés/);
-  assert.match(js, /↺ Lista visszaállítása/);
-  assert.match(js, /\+ Új opció/);
+  assert.match(js, /↺ Eredeti szöveg/);
+  assert.match(js, /↺ Lista visszaállítása az eredetire/);
+  assert.match(js, /\+ Új válaszlehetőség hozzáadása/);
+  assert.match(js, /👁 Látható/);
+  assert.match(js, /🚫 Rejtett/);
+  assert.match(js, /🗑 Törlés/);
+  assert.match(js, /🔒 Rendszerszinten rögzített elem/);
+  assert.match(js, /Mozgatás feljebb \/ lejjebb/);
+  assert.match(js, /Módosítva/);
+  assert.match(js, /Segítő szöveg:/);
+  assert.match(js, /Példaszöveg az üres mezőben \(placeholder\):/);
   assert.match(js, /↺ Visszaállítás/);
   assert.match(js, /\/api\/admin\/audit\/\$\{encodeURIComponent\(entry\.id\)\}\/restore/);
   const plannerBlock = js.slice(js.indexOf('Tervező űrlap (szövegek és opciólisták)'), js.indexOf('const TAB_LOADERS'));
@@ -302,4 +314,44 @@ test('applyPlannerConfig renders renamed options and texts safely and keeps the 
   assert.equal(select.value, evil, 'az eredetileg kijelölt nagycsoport id alapján megmarad');
   assert.equal(document.querySelectorAll('[data-cfg-options="specialNeeds"] [data-sni-label]').length, 1);
   assert.equal(document.querySelector('img[src="x"]'), null);
+});
+
+test('the admin layout covers every text key and option list exactly once, in 4 steps', () => {
+  assert.equal(pc.PLANNER_LAYOUT.length, 4);
+  const textKeys = [];
+  const lists = [];
+  const collect = (block) => {
+    for (const prop of ['label', 'hint', 'placeholder', 'heading']) if (block[prop]) textKeys.push(block[prop]);
+    if (block.list) lists.push(block.list);
+    for (const [section, labels] of block.summary || []) textKeys.push(section, ...labels);
+  };
+  for (const step of pc.PLANNER_LAYOUT) {
+    textKeys.push(step.titleKey);
+    if (step.subheadKey) textKeys.push(step.subheadKey);
+    step.blocks.forEach(collect);
+  }
+  const expected = Object.keys(pc.TEXT_META);
+  assert.deepEqual([...new Set(textKeys)].sort(), expected.slice().sort());
+  assert.equal(textKeys.length, new Set(textKeys).size, 'minden szöveg egyszer szerepel');
+  assert.deepEqual(lists.slice().sort(), Object.keys(pc.DEFAULT_OPTION_LISTS).sort());
+});
+
+test('the step 4 summary labels and the step list names come from the planner config', () => {
+  const form = read('frontend', 'js', 'tervezo-form.js');
+  for (const key of ['sumSec1', 'sumSec2', 'sumSec3', 'sumSec4', 'sumGroup', 'sumTheme', 'sumFriday']) {
+    assert.ok(form.includes(`'${key}'`), `${key} az összegzőben`);
+  }
+  assert.match(read('frontend', 'js', 'tervezo-config.js'), /function plannerText/);
+  assert.match(HTML, /data-cfg-text="sumSec1"/);
+  assert.match(HTML, /data-cfg-text="wizardStep4"/);
+});
+
+test('the admin planner editor uses switches, locks and no raw technical keys as visible text', () => {
+  const js = read('frontend', 'js', 'admin.js');
+  assert.match(js, /planner-vis/);
+  assert.match(js, /aria-pressed/);
+  assert.match(js, /is-hidden/);
+  assert.match(js, /planner-lock/);
+  assert.match(js, /Ha kikapcsolod, ez a válaszlehetőség nem jelenik meg a vásárlóknak/);
+  assert.doesNotMatch(js, /textContent = (key|name)\b/);
 });

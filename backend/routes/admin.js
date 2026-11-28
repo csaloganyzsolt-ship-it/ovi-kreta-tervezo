@@ -247,7 +247,7 @@ router.get('/admin/planner-config', handle('A tervező-konfiguráció lekérdez�
     defaults: plannerConfig.defaults(),
     effective: plannerConfig.mergePlannerConfig(settings.planner_config),
     stored: settings.planner_config,
-    meta: { texts: plannerConfig.TEXT_META, lists: plannerConfig.OPTION_META, maxItems: plannerConfig.MAX_ITEMS }
+    meta: { texts: plannerConfig.TEXT_META, lists: plannerConfig.OPTION_META, layout: plannerConfig.PLANNER_LAYOUT, maxItems: plannerConfig.MAX_ITEMS }
   };
 }));
 router.put('/admin/planner-config', handle('A tervező-konfiguráció mentése', async (client, req) => {

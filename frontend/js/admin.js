@@ -1547,9 +1547,16 @@
 
   // ---------- Tervező űrlap (szövegek és opciólisták) ----------
 
-  const planner = { defaults: null, draft: null, meta: null, maxItems: 25 };
-  const PLANNER_SECTIONS = { 1: '1. lépés – Téma és időkeret', 2: '2. lépés – Csoport és igények', 3: '3. lépés – Módszerek és eszközök', 4: '4. lépés – Összegzés és generálás' };
+  const planner = { defaults: null, draft: null, saved: null, meta: null, maxItems: 25, step: 1 };
   const clone = (value) => JSON.parse(JSON.stringify(value));
+  const PLANNER_CONTROLS = {
+    select: 'Legördülő lista a tervezőben',
+    buttons: 'Választható gombok a tervezőben',
+    checks: 'Több is bejelölhető (jelölőnégyzetek)',
+    chips: 'Több is kiválasztható (kattintható gombok)'
+  };
+  // Mező-szerepek: előtag a szerkesztősávon, hogy a nem technikai szerkesztő is lássa, mit ír át.
+  const PLANNER_ROLES = { hint: 'Segítő szöveg:', placeholder: 'Példaszöveg az üres mezőben (placeholder):' };
 
   function plannerDirty() {
     return JSON.stringify(planner.draft) !== JSON.stringify(planner.saved);
@@ -1559,66 +1566,93 @@
     setText('plannerStatus', plannerDirty() ? 'Mentetlen változtatások vannak.' : 'Nincs mentetlen változtatás.');
   }
 
-  function plannerTextRow(key, [, type, fallback]) {
-    const row = el('div', 'planner-row');
-    const label = el('label', 'planner-key', key);
-    const input = type === 'hint' ? el('textarea') : el('input');
-    if (type !== 'hint') input.type = 'text';
-    input.id = `planner-text-${key}`;
-    label.htmlFor = input.id;
+  // Szerkeszthető szöveg: a belső azonosító és a gyári szöveg csak egér-ráviteli buborékban látszik.
+  // role: 'title' | 'label' | 'hint' | 'placeholder' | 'subtle' (összegző feliratok)
+  function plannerEditable(key, role) {
+    const [, type, fallback] = planner.meta.texts[key];
+    const wrap = el('div', `planner-edit planner-edit-${role}`);
+    const multiline = type === 'hint';
+    const input = multiline ? el('textarea') : el('input');
+    if (!multiline) input.type = 'text';
+    if (multiline) input.rows = 2;
     input.value = planner.draft.texts[key] ?? fallback;
-    const badge = el('span', 'planner-badge', 'módosítva');
-    const reset = el('button', 'profile-btn', '↺ Alapértelmezés');
+    input.title = `Gyári szöveg: ${fallback} (azonosító: ${key})`;
+    input.setAttribute('aria-label', PLANNER_ROLES[role] || 'Szöveg');
+    const badge = el('span', 'planner-badge', 'Módosítva');
+    const reset = el('button', 'planner-reset', '↺ Eredeti szöveg');
     reset.type = 'button';
+    reset.title = `Visszaállítás a gyári szövegre: ${fallback}`;
     const refresh = () => {
       const changed = input.value !== fallback;
+      wrap.classList.toggle('is-changed', changed);
       badge.hidden = !changed;
       reset.hidden = !changed;
     };
     input.addEventListener('input', () => { planner.draft.texts[key] = input.value; refresh(); plannerMarkDirty(); });
     reset.addEventListener('click', () => { input.value = fallback; planner.draft.texts[key] = fallback; refresh(); plannerMarkDirty(); });
     refresh();
-    row.append(label, input, badge, reset);
-    return row;
+    if (PLANNER_ROLES[role]) wrap.append(el('span', 'planner-role', PLANNER_ROLES[role]));
+    wrap.append(input, badge, reset);
+    return wrap;
   }
 
-  function plannerListEditor(name, meta) {
+  function plannerLock(text, why) {
+    const bar = el('div', 'planner-lock');
+    bar.tabIndex = 0;
+    bar.title = why || 'Rendszerszinten rögzített elem, nem írható át.';
+    bar.append(el('strong', '', '🔒 Rendszerszinten rögzített elem'), el('span', '', text));
+    return bar;
+  }
+
+  function plannerListEditor(name, control) {
+    const meta = planner.meta.lists[name];
     const box = el('div', 'planner-list');
     const render = () => {
       const items = planner.draft.optionLists[name];
       const defaultIds = new Set(planner.defaults.optionLists[name].map((item) => item.id));
-      box.replaceChildren(el('h4', '', meta.title));
+      const head = el('div', 'planner-list-head');
+      const heading = el('div');
+      heading.append(el('strong', '', `${PLANNER_CONTROLS[control]}: ${meta.title}`));
+      const resetList = el('button', 'planner-reset planner-reset-list', '↺ Lista visszaállítása az eredetire');
+      resetList.type = 'button';
+      resetList.addEventListener('click', () => { planner.draft.optionLists[name] = clone(planner.defaults.optionLists[name]); render(); plannerMarkDirty(); });
+      head.append(heading, resetList);
+      box.replaceChildren(head);
       items.forEach((item, index) => {
-        const row = el('div', 'planner-option');
+        const row = el('div', item.active ? 'planner-option' : 'planner-option is-hidden');
         const label = el('input');
         label.type = 'text';
         label.value = item.label;
         label.maxLength = 140;
-        label.setAttribute('aria-label', `${meta.title} – felirat`);
+        label.setAttribute('aria-label', `${meta.title} – válaszlehetőség felirata`);
         label.addEventListener('input', () => { item.label = label.value; plannerMarkDirty(); });
-        const toggle = el('input');
-        toggle.type = 'checkbox';
-        toggle.checked = item.active;
-        toggle.setAttribute('aria-label', 'Aktív');
-        toggle.addEventListener('change', () => { item.active = toggle.checked; plannerMarkDirty(); });
-        const up = el('button', 'profile-btn', '↑');
-        const down = el('button', 'profile-btn', '↓');
+        const visibility = el('button', item.active ? 'planner-vis is-on' : 'planner-vis', item.active ? '👁 Látható' : '🚫 Rejtett');
+        visibility.type = 'button';
+        visibility.setAttribute('aria-pressed', item.active ? 'true' : 'false');
+        visibility.title = 'Ha kikapcsolod, ez a válaszlehetőség nem jelenik meg a vásárlóknak';
+        visibility.addEventListener('click', () => { item.active = !item.active; render(); plannerMarkDirty(); });
+        const up = el('button', 'planner-move', '↑');
+        const down = el('button', 'planner-move', '↓');
         up.type = down.type = 'button';
+        up.title = down.title = 'Mozgatás feljebb / lejjebb';
         up.disabled = index === 0;
         down.disabled = index === items.length - 1;
         up.addEventListener('click', () => { items.splice(index - 1, 0, items.splice(index, 1)[0]); render(); plannerMarkDirty(); });
         down.addEventListener('click', () => { items.splice(index + 1, 0, items.splice(index, 1)[0]); render(); plannerMarkDirty(); });
-        row.append(label, toggle, up, down);
-        if (!defaultIds.has(item.id)) {
-          const remove = el('button', 'profile-btn', 'Törlés');
+        row.append(label, visibility, up, down);
+        if (defaultIds.has(item.id)) {
+          const builtin = el('span', 'planner-builtin', 'Gyári');
+          builtin.title = 'Gyári opció nem törölhető, csak elrejthető.';
+          row.append(builtin);
+        } else {
+          const remove = el('button', 'planner-delete', '🗑 Törlés');
           remove.type = 'button';
           remove.addEventListener('click', () => { items.splice(index, 1); render(); plannerMarkDirty(); });
           row.append(remove);
         }
         box.append(row);
       });
-      const tools = el('div', 'planner-list-tools');
-      const add = el('button', 'profile-btn', '+ Új opció');
+      const add = el('button', 'profile-btn planner-add', '+ Új válaszlehetőség hozzáadása');
       add.type = 'button';
       add.disabled = items.length >= planner.maxItems;
       add.addEventListener('click', () => {
@@ -1627,26 +1661,66 @@
         render();
         plannerMarkDirty();
       });
-      const reset = el('button', 'profile-btn', '↺ Lista visszaállítása');
-      reset.type = 'button';
-      reset.addEventListener('click', () => { planner.draft.optionLists[name] = clone(planner.defaults.optionLists[name]); render(); plannerMarkDirty(); });
-      tools.append(add, reset);
-      box.append(tools);
+      box.append(add);
     };
     render();
     return box;
   }
 
+  // Egy mezőblokk úgy néz ki, mint a tervezőben: cím, segítő szöveg, maga a mező (vagy lista), végül a zárolt rész.
+  function plannerBlock(block) {
+    const card = el('div', 'planner-field');
+    if (block.lock && !block.control) {
+      card.append(plannerLock(block.lock, block.why));
+      return card;
+    }
+    if (block.summary) {
+      const summary = el('div', 'planner-summary');
+      block.summary.forEach(([sectionKey, labels]) => {
+        const section = el('div', 'planner-summary-section');
+        section.append(plannerEditable(sectionKey, 'label'));
+        labels.forEach((key) => {
+          const row = el('div', 'planner-summary-row');
+          row.append(plannerEditable(key, 'subtle'), el('span', 'planner-summary-value', '…'));
+          section.append(row);
+        });
+        summary.append(section);
+      });
+      card.append(summary);
+      return card;
+    }
+    card.append(plannerEditable(block.label, 'label'));
+    if (block.heading) card.append(plannerEditable(block.heading, 'subtle'));
+    if (block.hint) card.append(plannerEditable(block.hint, 'hint'));
+    if (block.list) card.append(plannerListEditor(block.list, block.control));
+    else if (block.placeholder) {
+      const mock = plannerEditable(block.placeholder, 'placeholder');
+      mock.classList.add(block.control === 'textarea' ? 'planner-mock-area' : 'planner-mock-input');
+      card.append(mock);
+    } else if (block.control === 'switch') card.append(el('div', 'planner-mock-switch', '⬤ Be / Ki kapcsoló'));
+    if (block.lock) card.append(plannerLock(block.lock, block.why));
+    return card;
+  }
+
   function renderPlanner() {
-    const sections = byId('plannerSections');
-    sections.replaceChildren();
-    Object.entries(PLANNER_SECTIONS).forEach(([number, title]) => {
-      const section = el('section', 'planner-section');
-      section.append(el('h3', '', title));
-      Object.entries(planner.meta.lists).filter(([, meta]) => String(meta.section) === number).forEach(([name, meta]) => section.append(plannerListEditor(name, meta)));
-      Object.entries(planner.meta.texts).filter(([, meta]) => String(meta[0]) === number).forEach(([key, meta]) => section.append(plannerTextRow(key, meta)));
-      sections.append(section);
+    const root = byId('plannerSections');
+    const tabs = el('div', 'planner-steps');
+    tabs.setAttribute('role', 'tablist');
+    planner.meta.layout.forEach((step) => {
+      const tab = el('button', step.step === planner.step ? 'planner-step is-active' : 'planner-step', `${step.step}. ${step.tab}`);
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', step.step === planner.step ? 'true' : 'false');
+      tab.addEventListener('click', () => { planner.step = step.step; renderPlanner(); });
+      tabs.append(tab);
     });
+    const current = planner.meta.layout.find((step) => step.step === planner.step);
+    const card = el('section', 'planner-card');
+    const top = el('div', 'planner-card-head');
+    top.append(plannerEditable(current.titleKey, 'title'), plannerEditable(current.subheadKey, 'hint'));
+    card.append(top);
+    current.blocks.forEach((block) => card.append(plannerBlock(block)));
+    root.replaceChildren(tabs, card);
     plannerMarkDirty();
   }
 

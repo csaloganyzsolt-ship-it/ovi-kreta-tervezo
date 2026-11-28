@@ -279,17 +279,18 @@ function renderSummaryChecklist() {
     return isWeekly ? value : `${value} (csak heti tervnél érvényes)`;
   };
 
+  const L = plannerText;
   const sections = [
-    ['Téma és időkeret', [
-      `Tervezet típusa: ${payload.planMode === 'academic' ? 'Oktatási célú tervezet' : 'Óvodai tervezet'}`,
-      ...(payload.planMode === 'academic' ? [`Hallgató / Óvodapedagógus: ${payload.studentName || none}`] : []),
-      `Előző tervezet csatolva: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
-      `Időtartam: ${describeDuration(payload)}`,
-      `${isWeekly ? 'Hét' : 'Dátum'}: ${payload.dateValue || none}`,
-      `Korcsoport: ${payload.group}`,
-      `Téma: ${payload.theme || none}`,
-      `Tevékenységi forma: ${payload.tevekenysegForma || none}`,
-      `Nevelési területek: ${isWeekly
+    [L('sumSec1', 'Téma és időkeret'), [
+      `${L('sumPlanType', 'Tervezet típusa')}: ${payload.planMode === 'academic' ? 'Oktatási célú tervezet' : 'Óvodai tervezet'}`,
+      ...(payload.planMode === 'academic' ? [`${L('sumStudent', 'Hallgató / Óvodapedagógus')}: ${payload.studentName || none}`] : []),
+      `${L('sumPrevPlan', 'Előző tervezet csatolva')}: ${attachedPreviousPlan ? `${attachedPreviousPlan.theme} (${attachedPreviousPlan.date})` : 'nem'}`,
+      `${L('sumDuration', 'Időtartam')}: ${describeDuration(payload)}`,
+      `${isWeekly ? L('sumWeek', 'Hét') : L('sumDate', 'Dátum')}: ${payload.dateValue || none}`,
+      `${L('sumGroup', 'Korcsoport')}: ${payload.group}`,
+      `${L('sumTheme', 'Téma')}: ${payload.theme || none}`,
+      `${L('sumForm', 'Tevékenységi forma')}: ${payload.tevekenysegForma || none}`,
+      `${L('sumAreas', 'Nevelési területek')}: ${isWeekly
         ? (payload.focusAreas.length
             ? payload.focusAreas.map((area) => {
                 const days = Object.entries(payload.weeklyFocusAreas || {}).filter(([, list]) => list.includes(area)).map(([day]) => day);
@@ -297,32 +298,32 @@ function renderSummaryChecklist() {
               }).join('; ')
             : 'Nincs kiválasztva (általános heti elosztás)')
         : (payload.focusAreas.join(', ') || 'Nincs kiválasztva')}`,
-      `Óvoda: ${payload.kindergartenName || none}`,
-      `Óvoda arculata: ${payload.kindergartenProfile || none}`,
-      `Óvodapedagógus: ${payload.teacherName || none}`,
-      `Csoport neve: ${payload.groupName || none}`,
-      `Saját megjegyzés: ${customNotes.primary || none}`
+      `${L('sumKindergarten', 'Óvoda')}: ${payload.kindergartenName || none}`,
+      `${L('sumProfile', 'Óvoda arculata')}: ${payload.kindergartenProfile || none}`,
+      `${L('sumTeacher', 'Óvodapedagógus')}: ${payload.teacherName || none}`,
+      `${L('sumGroupName', 'Csoport neve')}: ${payload.groupName || none}`,
+      `${L('sumNote', 'Saját megjegyzés')}: ${customNotes.primary || none}`
     ]],
-    ['A csoport profilja', [
-      `Gyereklétszám: ${payload.childCount ?? none}`,
-      `Csoport hangulata, mozgékonysága: ${payload.energyLevel}`,
-      `Iskola-előkészítő gyermekek: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
-      `Speciális nevelési igények (SNI, BTMN): ${specialNeeds.join(', ') || none}`,
-      `Csoportmegjegyzés: ${customNotes.groupNote || none}`
+    [L('sumSec2', 'A csoport profilja'), [
+      `${L('sumChildCount', 'Gyereklétszám')}: ${payload.childCount ?? none}`,
+      `${L('sumEnergy', 'Csoport hangulata, mozgékonysága')}: ${payload.energyLevel}`,
+      `${L('sumPreschoolers', 'Iskola-előkészítő gyermekek')}: ${payload.hasPreschoolers ? 'igen' : 'nem'}`,
+      `${L('sumSpecialNeeds', 'Speciális nevelési igények (SNI, BTMN)')}: ${specialNeeds.join(', ') || none}`,
+      `${L('sumGroupNote', 'Csoportmegjegyzés')}: ${customNotes.groupNote || none}`
     ]],
-    ['Pedagógiai kívánságok', [
-      `Rendelkezésre álló eszközök és saját ötletek: ${payload.availableTools || defaultToolsText}`,
-      `Kötelező mese/vers/dal: ${customNotes.requiredText || none}`,
-      `Külön kérés: ${customNotes.customRequest || none}`,
-      `Kidolgozottság: ${{ concise: 'Tömör vázlat', extended: 'Kibővített, mély kidolgozás (1400–2000 szó)' }[payload.detail] || 'Részletesen kidolgozott tervezet'}`
+    [L('sumSec3', 'Pedagógiai kívánságok'), [
+      `${L('sumTools', 'Rendelkezésre álló eszközök és saját ötletek')}: ${payload.availableTools || defaultToolsText}`,
+      `${L('sumRequiredText', 'Kötelező mese/vers/dal')}: ${customNotes.requiredText || none}`,
+      `${L('sumRequest', 'Külön kérés')}: ${customNotes.customRequest || none}`,
+      `${L('sumDetail', 'Kidolgozottság')}: ${{ concise: 'Tömör vázlat', extended: 'Kibővített, mély kidolgozás (1400–2000 szó)' }[payload.detail] || 'Részletesen kidolgozott tervezet'}`
     ]],
-    ['Speciális beállítások', [
-      `Tiltólista: ${payload.blacklist || 'Nincs megadva'}`,
-      `Előzmény: ${payload.elozmeny || none}`,
-      `Irodalomjegyzék megjelenítése: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
-      `IKT / Digitális eszközök: ${payload.iktEnabled ? ([...(payload.iktTools || []), payload.iktCustomApp].filter(Boolean).join('; ') || 'Igen') : 'Nem'}`,
-      `Heti építkezés típusa: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
-      `Pénteki zárás formája: ${weeklyOnly(payload.fridayClosingType)}`
+    [L('sumSec4', 'Speciális beállítások'), [
+      `${L('sumBlacklist', 'Tiltólista')}: ${payload.blacklist || 'Nincs megadva'}`,
+      `${L('sumBackground', 'Előzmény')}: ${payload.elozmeny || none}`,
+      `${L('sumLiterature', 'Irodalomjegyzék megjelenítése')}: ${payload.showLiteratureAtBottom ? 'igen' : 'nem'}`,
+      `${L('sumIkt', 'IKT / Digitális eszközök')}: ${payload.iktEnabled ? ([...(payload.iktTools || []), payload.iktCustomApp].filter(Boolean).join('; ') || 'Igen') : 'Nem'}`,
+      `${L('sumProgression', 'Heti építkezés típusa')}: ${weeklyOnly(progressionLabels[payload.weeklyProgressionType] || payload.weeklyProgressionType)}`,
+      `${L('sumFriday', 'Pénteki zárás formája')}: ${weeklyOnly(payload.fridayClosingType)}`
     ]]
   ];
 

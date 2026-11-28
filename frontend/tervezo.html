@@ -51,10 +51,10 @@
           </button>
           <p class="wizard-header">Folyamat</p>
           <div class="wizard-list" id="wizardList">
-            <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span>Téma és időkeret</span></button>
-            <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span>A csoport profilja</span></button>
-            <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span>Pedagógiai kívánságok</span></button>
-            <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span>Összegzés és elkészítés</span></button>
+            <button class="wizard-item active" type="button" data-step="0"><span class="wizard-number">1</span><span data-cfg-text="sumSec1">Téma és időkeret</span></button>
+            <button class="wizard-item" type="button" data-step="1"><span class="wizard-number">2</span><span data-cfg-text="sumSec2">A csoport profilja</span></button>
+            <button class="wizard-item" type="button" data-step="2"><span class="wizard-number">3</span><span data-cfg-text="sumSec3">Pedagógiai kívánságok</span></button>
+            <button class="wizard-item" type="button" data-step="3"><span class="wizard-number">4</span><span data-cfg-text="wizardStep4">Összegzés és elkészítés</span></button>
           </div>
         </aside>
 
@@ -132,7 +132,7 @@
               </div>
 
               <div class="field full">
-                <label>Időtartam</label>
+                <label data-cfg-text="durationLabel">Időtartam</label>
                 <div class="segmented" data-group="duration">
                   <button class="segment active" type="button" data-group="duration" data-value="Napi">Napi</button>
                   <button class="segment" type="button" data-group="duration" data-value="Heti">Heti</button>
@@ -159,7 +159,7 @@
               </div>
 
               <div class="field full">
-                <label>Időpont</label>
+                <label data-cfg-text="dateLabel">Időpont</label>
                 <div class="field date-inline" id="dateFieldWrapper">
                   <input type="date" id="dailyDateField" data-field="date-value" placeholder="Válassz dátumot" />
                   <input type="week" id="weeklyDateField" data-field="week-value" placeholder="Válassz hetet" style="display:none;" />
@@ -192,7 +192,7 @@
               </div>
 
               <div class="field full" id="dailyFocusAreaField">
-                <label>Melyik nevelési területek lesznek fókuszban?</label>
+                <label data-cfg-text="focusAreasLabel">Melyik nevelési területek lesznek fókuszban?</label>
                 <div class="check-grid focus-area-grid">
                   <div class="focus-area-card" data-area-card="Verselés, mesélés">
                     <label class="check-item"><input type="checkbox" data-focus-area="Verselés, mesélés" /> Verselés, mesélés</label>
@@ -387,7 +387,7 @@
               </div>
 
               <div class="field full">
-                <label id="detailLabel">Kidolgozottság</label>
+                <label id="detailLabel" data-cfg-text="detailLabel">Kidolgozottság</label>
                 <div class="segmented" data-group="detail" role="group" aria-labelledby="detailLabel">
                   <button class="segment" type="button" data-group="detail" data-value="concise">Tömör vázlat</button>
                   <button class="segment active" type="button" data-group="detail" data-value="detailed">Részletesen kidolgozott tervezet</button>
@@ -442,7 +442,7 @@
 
                   <div id="weeklyAdvancedBlock" class="weekly-advanced" hidden>
                     <div class="field">
-                      <label for="weeklyProgressionType">Heti építkezés</label>
+                      <label for="weeklyProgressionType" data-cfg-text="weeklyProgressionLabel">Heti építkezés</label>
                       <select id="weeklyProgressionType">
                         <option value="progressive">Szervesen egymásra épülő projekt (Hétfői gyűjtéstől a Pénteki zárásig)</option>
                         <option value="area_focused">Klasszikus területváltó (Minden nap más nevelési terület áll fókuszban)</option>

@@ -5,6 +5,13 @@
 
 const PLANNER_DEFAULT_IDS = { group: 'nagycsoport', energyLevel: 'atlagos' };
 
+// Az Adminban átírt szövegek (kulcs → szöveg); az összegző kártya feliratai ebből jönnek, a beépített szöveg a tartalék.
+let plannerTexts = {};
+function plannerText(key, fallback) {
+  const value = plannerTexts[key];
+  return typeof value === 'string' && value ? value : fallback;
+}
+
 function plannerOptionContainer(list) {
   return document.querySelector(`[data-cfg-options="${list}"]`);
 }
@@ -87,6 +94,7 @@ function renderPlannerIkt(container, items) {
 function applyPlannerConfig(config) {
   if (!config || typeof config !== 'object') return;
   const texts = config.texts && typeof config.texts === 'object' ? config.texts : {};
+  plannerTexts = texts;
   document.querySelectorAll('[data-cfg-text]').forEach((node) => {
     const value = texts[node.dataset.cfgText];
     if (typeof value === 'string' && value) node.textContent = value;
@@ -109,6 +117,7 @@ function applyPlannerConfig(config) {
     const container = plannerOptionContainer(list);
     if (container && valid(lists[list])) render(container, lists[list]);
   });
+  updateSummary();
 }
 
 // Delegált eseménykezelők: az újrarenderelt opciók is működnek. A kijelölés mentése a meglévő piszkozat-logikával történik.

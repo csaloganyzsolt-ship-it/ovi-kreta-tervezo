@@ -63,8 +63,103 @@ const TEXT_META = {
   fridayClosingLabel: [3, 'label', 'Pénteki lezárás formája'],
   step4Title: [4, 'label', '4. Összegzés és elkészítés'],
   step4Subhead: [4, 'hint', 'Mielőtt elindítod az elkészítést, ellenőrizd a beállításokat.'],
-  checklistTitle: [4, 'label', 'Ellenőrző lista']
+  checklistTitle: [4, 'label', 'Ellenőrző lista'],
+  durationLabel: [1, 'label', 'Időtartam'],
+  dateLabel: [1, 'label', 'Időpont'],
+  focusAreasLabel: [1, 'label', 'Melyik nevelési területek lesznek fókuszban?'],
+  detailLabel: [3, 'label', 'Kidolgozottság'],
+  weeklyProgressionLabel: [3, 'label', 'Heti építkezés'],
+  wizardStep4: [4, 'label', 'Összegzés és elkészítés'],
+  // Összegző kártya: szekciócímek (a lépéslista is ezeket mutatja) és bal oldali mezőfeliratok. A feliratok a kártyában dinamikusan épülnek (nincs saját DOM-csomópontjuk).
+  sumSec1: [4, 'label', 'Téma és időkeret'],
+  sumSec2: [4, 'label', 'A csoport profilja'],
+  sumSec3: [4, 'label', 'Pedagógiai kívánságok'],
+  sumSec4: [4, 'label', 'Speciális beállítások', 'dynamic'],
+  sumPlanType: [4, 'label', 'Tervezet típusa', 'dynamic'],
+  sumStudent: [4, 'label', 'Hallgató / Óvodapedagógus', 'dynamic'],
+  sumPrevPlan: [4, 'label', 'Előző tervezet csatolva', 'dynamic'],
+  sumDuration: [4, 'label', 'Időtartam', 'dynamic'],
+  sumWeek: [4, 'label', 'Hét', 'dynamic'],
+  sumDate: [4, 'label', 'Dátum', 'dynamic'],
+  sumGroup: [4, 'label', 'Korcsoport', 'dynamic'],
+  sumTheme: [4, 'label', 'Téma', 'dynamic'],
+  sumForm: [4, 'label', 'Tevékenységi forma', 'dynamic'],
+  sumAreas: [4, 'label', 'Nevelési területek', 'dynamic'],
+  sumKindergarten: [4, 'label', 'Óvoda', 'dynamic'],
+  sumProfile: [4, 'label', 'Óvoda arculata', 'dynamic'],
+  sumTeacher: [4, 'label', 'Óvodapedagógus', 'dynamic'],
+  sumGroupName: [4, 'label', 'Csoport neve', 'dynamic'],
+  sumNote: [4, 'label', 'Saját megjegyzés', 'dynamic'],
+  sumChildCount: [4, 'label', 'Gyereklétszám', 'dynamic'],
+  sumEnergy: [4, 'label', 'Csoport hangulata, mozgékonysága', 'dynamic'],
+  sumPreschoolers: [4, 'label', 'Iskola-előkészítő gyermekek', 'dynamic'],
+  sumSpecialNeeds: [4, 'label', 'Speciális nevelési igények (SNI, BTMN)', 'dynamic'],
+  sumGroupNote: [4, 'label', 'Csoportmegjegyzés', 'dynamic'],
+  sumTools: [4, 'label', 'Rendelkezésre álló eszközök és saját ötletek', 'dynamic'],
+  sumRequiredText: [4, 'label', 'Kötelező mese/vers/dal', 'dynamic'],
+  sumRequest: [4, 'label', 'Külön kérés', 'dynamic'],
+  sumDetail: [4, 'label', 'Kidolgozottság', 'dynamic'],
+  sumBlacklist: [4, 'label', 'Tiltólista', 'dynamic'],
+  sumBackground: [4, 'label', 'Előzmény', 'dynamic'],
+  sumLiterature: [4, 'label', 'Irodalomjegyzék megjelenítése', 'dynamic'],
+  sumIkt: [4, 'label', 'IKT / Digitális eszközök', 'dynamic'],
+  sumProgression: [4, 'label', 'Heti építkezés típusa', 'dynamic'],
+  sumFriday: [4, 'label', 'Pénteki zárás formája', 'dynamic']
 };
+
+const lock = (text, why) => ({ lock: text, why });
+const field = (control, options) => ({ control, ...options });
+
+// A szerkesztő sorrendje és tagolása a valódi tervezőt tükrözi. Minden szövegkulcs és lista pontosan egyszer szerepel (teszt őrzi).
+// A „lock” blokkok a védett (Piros) elemek: csak kontextusként, szerkeszthetetlenül jelennek meg.
+const PLANNER_LAYOUT = [
+  { step: 1, tab: 'Téma és időkeret', titleKey: 'step1Title', subheadKey: 'step1Subhead', blocks: [
+    lock('Tervezet típusa: Normál / Oktatási', 'Erre épül az árazás és az oktatási tervezet külön szabályrendszere, ezért nem írható át.'),
+    field('text', { label: 'studentNameLabel', placeholder: 'studentNamePlaceholder' }),
+    field('lockedChoice', { label: 'durationLabel', lock: 'Napi / Heti választó', why: 'Erre épül az árazás és a heti csomag logikája, ezért nem írható át.' }),
+    field('lockedChoice', { label: 'dateLabel', lock: 'Dátum / hét választó', why: 'A dátumválasztó a téma-ajánlókhoz és a generáláshoz kötött, ezért nem írható át.' }),
+    field('select', { label: 'groupLabel', list: 'group' }),
+    field('text', { label: 'themeLabel', lock: 'Téma-ajánló gombok (a „Téma-ajánlók” fülön szerkeszthetők)', why: 'A javaslatokat a Téma-ajánlók fül kezeli.' }),
+    field('select', { label: 'tevekenysegFormaLabel', list: 'tevekenysegForma' }),
+    field('lockedChoice', { label: 'focusAreasLabel', lock: 'A 6 nevelési terület (ONOAP)', why: 'Erre épül a 6 területű heti táblázat és a generálás, ezért nem írható át.' }),
+    field('text', { label: 'kindergartenNameLabel', placeholder: 'kindergartenNamePlaceholder' }),
+    field('text', { label: 'kindergartenProfileLabel', placeholder: 'kindergartenProfilePlaceholder' }),
+    field('text', { label: 'teacherNameLabel', placeholder: 'teacherNamePlaceholder' }),
+    field('text', { label: 'groupNameLabel', placeholder: 'groupNamePlaceholder' }),
+    field('textarea', { label: 'customNoteLabel', placeholder: 'customNotePlaceholder' })
+  ] },
+  { step: 2, tab: 'A csoport profilja', titleKey: 'step2Title', subheadKey: 'step2Subhead', blocks: [
+    field('text', { label: 'childCountLabel', placeholder: 'childCountPlaceholder' }),
+    field('buttons', { label: 'energyLabel', list: 'energyLevel' }),
+    field('switch', { label: 'preschoolersLabel' }),
+    field('checks', { label: 'specialNeedsLabel', heading: 'specialNeedsHeading', list: 'specialNeeds' }),
+    field('textarea', { label: 'groupNoteLabel', placeholder: 'groupNotePlaceholder' })
+  ] },
+  { step: 3, tab: 'Pedagógiai kívánságok', titleKey: 'step3Title', subheadKey: 'step3Subhead', blocks: [
+    field('textarea', { label: 'availableToolsLabel', hint: 'availableToolsHint', placeholder: 'availableToolsPlaceholder' }),
+    field('textarea', { label: 'requiredTextLabel', placeholder: 'requiredTextPlaceholder' }),
+    field('textarea', { label: 'customRequestLabel', placeholder: 'customRequestPlaceholder' }),
+    field('lockedChoice', { label: 'detailLabel', lock: 'Kidolgozottság szintjei (Tömör / Részletes / Kibővített)', why: 'Erre épül az árazás, a szószám-keret és a generálás, ezért nem írható át.' }),
+    field('textarea', { label: 'blacklistLabel', hint: 'blacklistHint', placeholder: 'blacklistPlaceholder' }),
+    field('textarea', { label: 'elozmenyLabel', placeholder: 'elozmenyPlaceholder' }),
+    lock('Felhasznált irodalom megjelenítése a lap alján', 'Oktatási tervezetnél kötelező és a szerver kényszeríti, ezért nem írható át.'),
+    field('chips', { label: 'iktLabel', heading: 'iktPanelLabel', list: 'iktTools' }),
+    field('text', { label: 'iktCustomAppLabel', placeholder: 'iktCustomAppPlaceholder' }),
+    field('lockedChoice', { label: 'weeklyProgressionLabel', lock: 'Heti építkezés típusa', why: 'A heti csomag generálási logikájára épül, ezért nem írható át.' }),
+    field('select', { label: 'fridayClosingLabel', list: 'fridayClosingType' })
+  ] },
+  { step: 4, tab: 'Összegzés és elkészítés', titleKey: 'step4Title', subheadKey: 'step4Subhead', blocks: [
+    field('text', { label: 'wizardStep4' }),
+    field('text', { label: 'checklistTitle' }),
+    { summary: [
+      ['sumSec1', ['sumPlanType', 'sumStudent', 'sumPrevPlan', 'sumDuration', 'sumWeek', 'sumDate', 'sumGroup', 'sumTheme', 'sumForm', 'sumAreas', 'sumKindergarten', 'sumProfile', 'sumTeacher', 'sumGroupName', 'sumNote']],
+      ['sumSec2', ['sumChildCount', 'sumEnergy', 'sumPreschoolers', 'sumSpecialNeeds', 'sumGroupNote']],
+      ['sumSec3', ['sumTools', 'sumRequiredText', 'sumRequest', 'sumDetail']],
+      ['sumSec4', ['sumBlacklist', 'sumBackground', 'sumLiterature', 'sumIkt', 'sumProgression', 'sumFriday']]
+    ] },
+    lock('Generálás gomb, árazás, kupon és fizetés', 'Az árakat és a fizetést a szerver kezeli, ezért nem írható át.')
+  ] }
+];
 
 const DEFAULT_TEXTS = Object.fromEntries(Object.entries(TEXT_META).map(([key, meta]) => [key, meta[2]]));
 const TEXT_KEYS = Object.keys(DEFAULT_TEXTS);
@@ -252,6 +347,7 @@ function mixedGroupLabels(stored) {
 module.exports = {
   PlannerConfigError,
   TEXT_META,
+  PLANNER_LAYOUT,
   DEFAULT_TEXTS,
   TEXT_KEYS,
   OPTION_META,
